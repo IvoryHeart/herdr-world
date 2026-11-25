@@ -53,7 +53,7 @@ process.exit(Number(process.env.CLI_EXIT || 0));
         stdout: "pipe",
         stderr: "pipe",
       });
-    for (const version of ["0.3.8-rc.1", "0.3.8-rc.2", "0.3.8", ""]) {
+    for (const version of ["0.3.8-rc.1", "0.3.8-rc.2", "0.3.8", "0.4.0", ""]) {
       expect(run(version).exitCode).toBe(0);
       const args: string[] = JSON.parse(
         readFileSync(join(root, "args.json"), "utf8"),
@@ -70,6 +70,7 @@ process.exit(Number(process.env.CLI_EXIT || 0));
         readFileSync(option("--config-file"), "utf8"),
       );
       expect(manifestConfig.packages["."]["release-type"]).toBe("simple");
+      expect(manifestConfig.packages["."].versioning).toBe("always-bump-patch");
       expect(manifestConfig.packages["."]["extra-files"]).toContainEqual({
         type: "generic",
         path: "herdr-plugin.toml",

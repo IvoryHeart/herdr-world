@@ -16,4 +16,5 @@
 - [x] Add focused recovery/service/policy regressions and map native platform evidence.
 - [x] Prepare ready PR handoff against crew/1373.
 - [x] Repair exact dispatch overrides in manifest mode, regress workflow/config wiring and RC-to-final tag validation (#1404).
+- [x] Apply the owner's patch-by-default strategy, scope the tap token to the release environment, and regress workflow/config wiring (#1404 review).
 - [ ] Owner acceptance: independent review, hosted RC rehearsal and week-long measurements.

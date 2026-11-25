@@ -85,6 +85,13 @@ test("standard publishers consume the tested artifact and serialize channels", (
   expect(release.jobs["npm-publish"].permissions["id-token"]).toBe("write");
   expect(release.jobs["npm-publish"].needs).toContain("publish");
   expect(release.jobs["homebrew-pr"].needs).toContain("npm-publish");
+  expect(release.jobs["homebrew-pr"].environment).toBe("release");
+  for (const [name, job] of Object.entries(release.jobs) as [string, any][]) {
+    if (name !== "homebrew-pr") expect(job.environment).not.toBe("release");
+    if (JSON.stringify(job).includes("secrets.HOMEBREW_TAP_TOKEN"))
+      expect(name).toBe("homebrew-pr");
+  }
+  expect(release.jobs["npm-publish"].environment).toBeUndefined();
   const brew = release.jobs["homebrew-pr"].steps.find((s: any) =>
     s.uses?.includes("mislav/bump-homebrew-formula-action@"),
   );

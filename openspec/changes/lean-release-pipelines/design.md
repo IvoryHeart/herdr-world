@@ -8,9 +8,12 @@ The pinned release-please CLI's `release-pr` command preserves PR-only mode and
 passes a dispatched `release_as` through `--release-as` in manifest mode. The v4
 action reads that input but drops it in its manifest loader. Validate explicit
 versions with the publication version pattern before invoking the CLI; omit the
-flag for scheduled/default runs. Keep overrides ephemeral and leave pre-1.0
-bump policy unchanged. Direct workflow/config subprocess tests and upstream dry
-runs check version selection; the real tag-plan fixture checks RC promotion.
+flag for scheduled/default runs. Keep overrides ephemeral and configure the
+package with release-please's `versioning: "always-bump-patch"`: every release
+bumps the patch by default regardless of the fix/feat mix; minor and major
+versions require an explicit `release_as`. Direct workflow/config subprocess
+tests and upstream dry runs check version selection; the real tag-plan fixture
+checks RC promotion.
 After all channels publish, the tag workflow completes release-please's label
 lifecycle on the single merged release PR whose merge commit equals the validated
 tag commit. Pending and already-tagged labels permit an interrupted relabel to
@@ -30,7 +33,9 @@ Use softprops for GitHub assets, npm publish --provenance for tarballs and misla
 for the tap proposal. Mislav updates only the first URL. Our existing product
 Formula generator owns all four platform URLs and the launcher; the standard
 create-pull-request action completes mislav's same branch with those tested inputs
-and the tap's own install check. Find/reuse an existing proposal before invoking
+and the tap's own install check. Only `homebrew-pr` uses the tag-only `release`
+environment, where `HOMEBREW_TAP_TOKEN` lives; npm keeps OIDC trusted publishing
+without an environment. Find/reuse an existing proposal before invoking
 mislav; serialized release runs prevent duplicate proposals. Compare existing
 GitHub bytes/npm integrity before skipping them.
 Explicit job status conditions keep downstream publication running when a full

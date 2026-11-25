@@ -33,12 +33,12 @@
 - `server/src/testing/`
 - `web/src/features/`
 - `web/src/testing/`
-- `release-please-config.json`
+- `release-please-config.json` (patch increments by default; explicit dispatch overrides select minor/major releases)
 - `.release-please-manifest.json`
 - `version.txt`
 - `scripts/release-plan.ts`
 - `scripts/release-pr.test.ts` (actual workflow shell/config and ephemeral CLI version override; automatic same-repository CI dispatch)
-- `scripts/release-validation.test.ts`
+- `scripts/release-validation.test.ts` (publisher ordering and tag-only Homebrew release environment; npm keeps OIDC)
 - `scripts/release-publication.test.ts`
 - `scripts/release-seal.ts` (seal record of every contract job's result; Release reuses retained bytes only from an all-green record of the same run)
 - `herdr-plugin.toml`

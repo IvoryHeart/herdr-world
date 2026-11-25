@@ -13,7 +13,12 @@ Release-please SHALL keep one reviewed release PR current using the simple strat
 - **WHEN** the owner dispatches Release PR with a valid `release_as` such as `0.3.8-rc.1`, `0.3.8-rc.2` or `0.3.8`
 - **THEN** release-please opens or updates the release PR at exactly that version using its supported manifest override
 - **AND** the override applies only to that run, without a direct main commit or another owner step
-- **AND** an empty override retains normal conventional-commit version selection, while an invalid version fails before release preparation
+- **AND** an invalid version fails before release preparation
+
+#### Scenario: Patch by default
+- **WHEN** scheduled or dispatched release-please runs without `release_as` after `0.3.7`, including with merged `feat:` commits
+- **THEN** it opens or updates the release PR at `0.3.8`
+- **AND** minor and major bumps require an explicit `release_as`, such as `0.4.0`
 
 #### Scenario: Cross-platform release candidate
 - **WHEN** an owner-created `vX.Y.Z-rc.N` tag selects the reviewed version commit on main
@@ -67,6 +72,11 @@ Publication SHALL use standard GitHub Release actions, npm publish with provenan
 - **WHEN** a tag run stops after GitHub publication
 - **THEN** rerunning failed jobs or all jobs consumes its retained tested artifact, retains matching existing publications and completes npm, the same tap PR and the exact merged release PR's tagged label without duplication
 - **AND** skipping a publisher or label completion is reported as incomplete rather than successful
+
+#### Scenario: Tap credentials are scoped to release tags
+- **WHEN** an owner-created release tag reaches Homebrew publication
+- **THEN** only the Homebrew PR job uses the tag-only `release` environment to access its tap token
+- **AND** npm retains OIDC trusted publishing without that environment
 
 #### Scenario: Seal expired
 - **WHEN** a full rerun cannot retrieve its tested artifact
