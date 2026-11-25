@@ -11,9 +11,19 @@ import {
 import { tmpdir } from "node:os";
 import { basename, dirname, join } from "node:path";
 import { runProcessWithCodeTimeout, shQuote } from "../utils/process-utils";
-import { createUpdateHandlers, resolveUpdateTarget } from "./update";
+import {
+  createUpdateHandlers,
+  fetchLatestUpdateManifest,
+  renderUpdateInstallScript,
+  resolveUpdateTarget,
+} from "./update";
 
-function createUpdateFixture({ badDigest = false } = {}) {
+function createUpdateFixture({
+  badDigest = false,
+  packageVersion = "9.8.7",
+  binaryVersion = "9.8.7",
+  manifestPlatform = "",
+} = {}) {
   const target = resolveUpdateTarget(process.platform, process.arch);
   if (!target) {
     throw new Error(
@@ -30,12 +40,14 @@ function createUpdateFixture({ badDigest = false } = {}) {
   writeFileSync(installPath, "old executable\n", { mode: 0o755 });
   writeFileSync(
     join(packagePath, "herdr-world"),
-    '#!/bin/sh\n[ "${1:-}" = "--version" ] && { echo "herdr-world 9.8.7"; exit 0; }\nexit 1\n',
+    '#!/bin/sh\n[ "${1:-}" = "--version" ] && { echo "herdr-world ' +
+      binaryVersion +
+      '"; exit 0; }\nexit 1\n',
     { mode: 0o755 },
   );
   writeFileSync(
     join(packagePath, "VERSION"),
-    `herdr-world 9.8.7 ${target.platform}\n`,
+    `herdr-world ${packageVersion} ${target.platform}\n`,
   );
 
   const archive = join(assets, target.archiveName);
@@ -58,7 +70,7 @@ function createUpdateFixture({ badDigest = false } = {}) {
       schema: 1,
       name: "herdr-world",
       version: "9.8.7",
-      platform: target.platform,
+      platform: manifestPlatform || target.platform,
       archive: target.archiveName,
       sha256: badDigest ? "0".repeat(64) : archiveDigest,
     }),
@@ -79,6 +91,7 @@ function createUpdateFixture({ badDigest = false } = {}) {
   return {
     root,
     installPath,
+    target,
     baseUrl: `http://127.0.0.1:${server.port}`,
     cleanup() {
       server.stop(true);
@@ -203,35 +216,118 @@ describe("automatic update installation", () => {
     }
   });
 
-  test("keeps the old executable when the archive digest does not match", async () => {
-    const fixture = createUpdateFixture({ badDigest: true });
-    let exitScheduled = false;
-    try {
-      const handlers = createUpdateHandlers({
-        appVersion: "9.8.6",
-        runProcessWithCodeTimeout,
-        shQuote,
-        runtime: {
-          platform: process.platform,
-          arch: process.arch,
-          execPath: fixture.installPath,
-          argv: [fixture.installPath],
-        },
-        environment: {
-          HERDR_WORLD_UPDATE_BASE_URL: fixture.baseUrl,
-          HERDR_WORLD_RESTART_SUPERVISOR: "1",
-        },
-        scheduleProcessExit: () => {
-          exitScheduled = true;
-        },
-      });
+  test.each([
+    [
+      { badDigest: true },
+      "downloaded archive checksum does not match update manifest",
+    ],
+    [
+      { packageVersion: "9.8.5" },
+      "downloaded VERSION metadata does not match update manifest",
+    ],
+  ] as const)(
+    "in-app verification preserves the old executable for %j",
+    async (options, error) => {
+      const fixture = createUpdateFixture(options);
+      let exitScheduled = false;
+      try {
+        const handlers = createUpdateHandlers({
+          appVersion: "9.8.6",
+          runProcessWithCodeTimeout,
+          shQuote,
+          runtime: {
+            platform: process.platform,
+            arch: process.arch,
+            execPath: fixture.installPath,
+            argv: [fixture.installPath],
+          },
+          environment: {
+            HERDR_WORLD_UPDATE_BASE_URL: fixture.baseUrl,
+            HERDR_WORLD_RESTART_SUPERVISOR: "1",
+          },
+          scheduleProcessExit: () => {
+            exitScheduled = true;
+          },
+        });
 
-      const response = await handlers.handleUpdateInstall(installRequest());
-      expect(response.status).toBe(500);
-      expect(await response.json()).toMatchObject({
-        error: "downloaded archive checksum does not match update manifest",
-      });
-      expect(exitScheduled).toBe(false);
+        const response = await handlers.handleUpdateInstall(installRequest());
+        expect(response.status).toBe(500);
+        expect(await response.json()).toMatchObject({
+          error,
+        });
+        expect(exitScheduled).toBe(false);
+        expect(readFileSync(fixture.installPath, "utf8")).toBe(
+          "old executable\n",
+        );
+        expect(existsSync(`${fixture.installPath}.previous`)).toBe(false);
+      } finally {
+        fixture.cleanup();
+      }
+    },
+  );
+});
+
+describe("CLI update verifier executed against real archives", () => {
+  test.each([
+    [{}, null],
+    [{ badDigest: true }, "archive checksum"],
+    [{ packageVersion: "9.8.5" }, "VERSION metadata"],
+    [{ binaryVersion: "9.8.5" }, "binary version"],
+  ] as const)(
+    "checks release %j before replacing the installation",
+    async (options, error) => {
+      const fixture = createUpdateFixture(options);
+      try {
+        const manifest = await fetchLatestUpdateManifest({
+          baseUrl: fixture.baseUrl,
+          target: fixture.target,
+          runProcessWithCodeTimeout,
+        });
+        const script = renderUpdateInstallScript({
+          targetPath: fixture.installPath,
+          target: fixture.target,
+          manifest,
+          archiveUrl: `${fixture.baseUrl}/${fixture.target.archiveName}`,
+          curlTransport: "",
+          shQuote,
+        });
+        const result = await runProcessWithCodeTimeout(
+          ["sh", "-c", script],
+          20_000,
+        );
+        expect(result.code).toBe(error ? 1 : 0);
+        if (error) {
+          expect(result.stderr).toContain(error);
+          expect(readFileSync(fixture.installPath, "utf8")).toBe(
+            "old executable\n",
+          );
+          expect(existsSync(`${fixture.installPath}.previous`)).toBe(false);
+        } else {
+          expect(readFileSync(`${fixture.installPath}.previous`, "utf8")).toBe(
+            "old executable\n",
+          );
+          expect(
+            Bun.spawnSync([fixture.installPath, "--version"])
+              .stdout.toString()
+              .trim(),
+          ).toBe("herdr-world 9.8.7");
+        }
+      } finally {
+        fixture.cleanup();
+      }
+    },
+  );
+
+  test("refuses a manifest for another platform before installation", async () => {
+    const fixture = createUpdateFixture({ manifestPlatform: "other-cpu" });
+    try {
+      await expect(
+        fetchLatestUpdateManifest({
+          baseUrl: fixture.baseUrl,
+          target: fixture.target,
+          runProcessWithCodeTimeout,
+        }),
+      ).rejects.toThrow("platform");
       expect(readFileSync(fixture.installPath, "utf8")).toBe(
         "old executable\n",
       );

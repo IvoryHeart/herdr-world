@@ -12,6 +12,25 @@ function request(host: string | null, origin?: string) {
 }
 
 describe("privileged browser request admission", () => {
+  test("rejects an opaque null Origin while admitting an absent Origin", () => {
+    for (const [host, listener, publicOrigin] of [
+      ["localhost:8787", "127.0.0.1", undefined],
+      ["world.example", "0.0.0.0", undefined],
+      ["world.example", "127.0.0.1", "https://world.example"],
+    ] as const) {
+      expect(
+        browserRequestAdmissionError(
+          request(host, "null"),
+          listener,
+          publicOrigin,
+        )?.status,
+      ).toBe(403);
+      expect(
+        browserRequestAdmissionError(request(host), listener, publicOrigin),
+      ).toBeNull();
+    }
+  });
+
   test("normalizes one exact HTTP(S) proxy origin", () => {
     expect(normalizePublicOrigin(" https://world.example/ ")).toBe(
       "https://world.example",

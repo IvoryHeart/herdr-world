@@ -1,4 +1,4 @@
-import { afterAll, beforeAll, expect, test } from "bun:test";
+import { afterAll, beforeAll, expect, spyOn, test } from "bun:test";
 import { existsSync } from "node:fs";
 import { mkdir, mkdtemp, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
@@ -182,6 +182,19 @@ test("loopback requires login and forged forwarding headers cannot evade login c
     }
   });
 }, 20_000);
+
+test("loopback configuration binds only the loopback interface", async () => {
+  const serve = spyOn(Bun, "serve");
+  try {
+    await withAuthServer(async () => {
+      expect(serve.mock.results.at(-1)?.value).toMatchObject({
+        hostname: "127.0.0.1",
+      });
+    });
+  } finally {
+    serve.mockRestore();
+  }
+});
 
 test("development non-loopback binding still requires login", async () => {
   await withAuthServer(

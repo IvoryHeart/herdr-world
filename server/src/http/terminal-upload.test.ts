@@ -1,5 +1,7 @@
 import { afterEach, expect, jest, spyOn, test } from "bun:test";
 import {
+  chmod,
+  mkdir,
   mkdtemp,
   readdir,
   readFile,
@@ -17,6 +19,7 @@ import {
   remoteTerminalUploadScript,
   sanitizeTerminalUploadName,
   terminalUploadRequestBodyLimit,
+  TERMINAL_UPLOAD_TIMEOUT_MS,
 } from "./terminal-upload";
 
 import {
@@ -443,3 +446,59 @@ test.each(["upload", "cleanup"])(
     }
   },
 );
+
+test.skipIf(process.platform === "win32")(
+  "remote scripts refuse unsafe existing upload roots before sweeping or staging",
+  async () => {
+    for (const mode of [0o700, 0o770, 0o707]) {
+      const temp = await root();
+      const uploadRoot = join(temp, `herdr-world-uploads-${process.getuid!()}`);
+      const expired = join(uploadRoot, "upload-expired");
+      await mkdir(expired, { recursive: true, mode: 0o700 });
+      await chmod(uploadRoot, mode);
+      const sentinel = join(expired, "keep.txt");
+      await writeFile(sentinel, "untouched");
+      const old = new Date(Date.now() - 2 * 60 * 60 * 1000);
+      await utimes(expired, old, old);
+      // A synthetic stat observation tests a foreign uid without requiring root.
+      const foreignOwner =
+        mode === 0o700
+          ? `stat() { if [ "$1" = -c ] && [ "$2" = %u ]; then echo ${process.getuid!() + 1}; else command stat "$@"; fi; }\n`
+          : "";
+      for (const script of [
+        remoteTerminalCleanupScript(60),
+        remoteTerminalUploadScript("blocked.txt", 60),
+      ]) {
+        const proc = Bun.spawn(["sh", "-c", foreignOwner + script], {
+          env: { ...process.env, TMPDIR: temp },
+          stdin: "pipe",
+          stdout: "pipe",
+          stderr: "pipe",
+        });
+        proc.stdin.write("blocked");
+        proc.stdin.end();
+        const [code, stdout] = await Promise.all([
+          proc.exited,
+          new Response(proc.stdout).text(),
+        ]);
+        expect(code).toBe(1);
+        expect(stdout).toBe("");
+        expect(await readFile(sentinel, "utf8")).toBe("untouched");
+        expect(await readdir(uploadRoot)).toEqual(["upload-expired"]);
+      }
+    }
+  },
+);
+
+test("the exact upload size limit is accepted with the five-minute deadline", async () => {
+  expect(TERMINAL_UPLOAD_TIMEOUT_MS).toBe(300_000);
+  const temp = await root();
+  const handle = createTerminalUploadHandler({
+    sshHost: () => undefined,
+    tempRoot: () => temp,
+    maxBytes: 3,
+  });
+  const response = await handle(request("123"), "exact.txt");
+  expect(response.status).toBe(200);
+  expect(await readFile((await response.json()).path, "utf8")).toBe("123");
+});
