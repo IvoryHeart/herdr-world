@@ -1,5 +1,7 @@
 ### Fixed
 
-- Opening a found agent's terminal from the command box (or Open in Spaces in
-  Town and Board) works for an agent on the host Spaces already shows, instead
-  of focusing its tab and then saying it can't open it.
+- Opening a found agent's terminal from the command box (Shift+Enter or the
+  row's Open terminal) opens its window in the view you are in, for Herdr TUI
+  and herdr-core agents alike, instead of switching to Spaces and saying it
+  can't open it. A room's or table's row opens its Inspector there; an agent
+  World can't open says why.

@@ -3542,6 +3542,55 @@ async function run() {
         `${title} box did not close`,
       );
       check(worldFinder.get() === null, `${title} kept an unchosen search`);
+      // The row's Open terminal opens a Herdr TUI terminal on another host
+      // in this view's own window, on its own connection, and never changes
+      // the view or Spaces' host (#1356).
+      for (const close of document.querySelectorAll<HTMLButtonElement>(
+        'button[aria-label="Close Inspector window"]',
+      ))
+        close.click();
+      await waitFor(
+        () =>
+          !document.querySelector(
+            'button[aria-label="Close Inspector window"]',
+          ),
+        `${title} kept its windows open`,
+      );
+      namedButton("Find in World")?.click();
+      await waitFor(
+        () => !!document.querySelector(".command-popover input"),
+        `${title} search did not reopen`,
+      );
+      typeInBox("Needle beyond bounds");
+      await waitFor(() => !!findRow(needle), `${title} lost the needle`);
+      const focusedBeforeOpen = calls.filter(
+        (method) => method === "focus:beta",
+      ).length;
+      findRow(needle)!
+        .querySelector<HTMLButtonElement>(".command-item-secondary")!
+        .click();
+      await waitFor(
+        () =>
+          !!document.querySelector(
+            'button[aria-label="Close Inspector window"]',
+          ) &&
+          calls.filter((method) => method === "focus:beta").length >
+            focusedBeforeOpen,
+        `${title} Open terminal did not open its window in ${view}`,
+      );
+      check(
+        document.querySelector<HTMLSelectElement>(
+          'select[aria-label="World view"]',
+        )?.value === view,
+        `${title} Open terminal changed the view`,
+      );
+      check(
+        store.get().activeConnectionId === "alpha" &&
+          store.get().notice === null,
+        `${title} Open terminal changed Spaces' host or failed: ${JSON.stringify(store.get().notice)}`,
+      );
+      namedButton("End search")?.click();
+      await frame();
     }
     const viewSelect = document.querySelector<HTMLSelectElement>(
       'select[aria-label="World view"]',

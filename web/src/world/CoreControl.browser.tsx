@@ -293,9 +293,11 @@ async function startScene() {
 }
 
 /**
- * Cmd+K finds a herdr-core agent and opens it in Spaces (#1356), with real
- * input from the test (Chrome's own mouse and keys, so focus moves as it does
- * for a person): from Town, Board and Spaces, by a click and by Enter.
+ * Cmd+K finds a herdr-core agent and opens its terminal in the view it was
+ * opened in, never changing the view (#1356), with real input from the test
+ * (Chrome's own mouse and keys, so focus moves as it does for a person): in
+ * Town, Board and Desk by Shift+Enter and the row's Open terminal button, in
+ * Code by choosing it (Code cannot show it), and in Spaces by choosing it.
  */
 async function findScene() {
   const width = Number(await (await fetch("/viewport-ready")).text());
@@ -401,23 +403,43 @@ async function findScene() {
     "Town shows the core",
   );
   await settle(10);
+  const windowShows = (address: string) =>
+    document.querySelector(
+      `[data-window-id] [data-core-watch="${address}"]`,
+    ) !== null && store.get().notice === null;
+  const closeWindows = async () => {
+    for (const close of document.querySelectorAll<HTMLButtonElement>(
+      'button[aria-label="Close Inspector window"]',
+    ))
+      close.click();
+    await until(
+      () => !document.querySelector("[data-window-id] [data-core-watch]"),
+      "the windows close",
+    );
+  };
   for (const [where, how, name, address] of [
-    ["town", "click", "builder", "t2"],
-    ["town", "enter", "reviewer", "t1"],
-    ["board", "click", "builder", "t2"],
-    ["spaces", "click", "reviewer", "t1"],
+    ["town", "shift-enter", "builder", "t2"],
+    ["town", "button", "reviewer", "t1"],
+    ["board", "shift-enter", "reviewer", "t1"],
+    ["desk", "button", "builder", "t2"],
+    ["code", "enter", "reviewer", "t1"],
     ["spaces", "enter", "builder", "t2"],
   ] as const) {
     store.clearNotice();
     await setView(where);
     await settle(10);
+    if (where !== "spaces") await closeWindows();
     await find(name);
-    if (how === "click") await clickAt(row(name)!);
-    else await input({ key: "Enter" });
+    if (how === "button")
+      await clickAt(
+        row(name)!.querySelector<HTMLElement>(".command-item-secondary")!,
+      );
+    else await input({ key: how === "enter" ? "Enter" : "Shift+Enter" });
     await settle(20);
+    const shown = where === "spaces" ? spacesShows : windowShows;
     check(
-      spacesShows(address),
-      `${where}: ${how} on ${name} did not open it in Spaces (view ${view()}, Spaces shows ${document.querySelector(".spaces-core-name")?.textContent ?? "no core terminal"}, notice ${JSON.stringify(store.get().notice)})`,
+      view() === where && shown(address),
+      `${where}: ${how} on ${name} did not open its terminal in ${where} (view ${view()}, window ${document.querySelector("[data-window-id] [data-core-watch]")?.getAttribute("data-core-watch") ?? "none"}, Spaces shows ${document.querySelector(".spaces-core-name")?.textContent ?? "no core terminal"}, notice ${JSON.stringify(store.get().notice)})`,
     );
     if (document.querySelector(".command-popover"))
       await input({ key: "Escape" });

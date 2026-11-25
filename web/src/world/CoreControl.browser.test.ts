@@ -432,10 +432,11 @@ test.skipIf(!chrome).each([1440, 390])(
   120000,
 );
 
-// Cmd+K opens a found herdr-core agent in Spaces (#1356), with Chrome's own
-// mouse and keys: a click, Enter and the row's Open terminal button.
+// Cmd+K opens a found herdr-core agent's terminal in the view it was opened
+// in, never changing the view (#1356), with Chrome's own mouse and keys:
+// Shift+Enter, the row's Open terminal button and, in Code and Spaces, Enter.
 test.skipIf(!chrome)(
-  "core control: a found core agent opens in Spaces by click and by Enter",
+  "core control: a found core agent's terminal opens in the current view",
   async () => {
     const dir = await mkdtemp(join(tmpdir(), "core-control-find-"));
     const { assets } = await buildWorldBrowserBundle("CoreControl", dir);
@@ -449,10 +450,23 @@ test.skipIf(!chrome)(
     let driver: InputDriver | undefined;
     const KEYS: Record<
       string,
-      { code: string; keyCode: number; text?: string; modifiers?: number }
+      {
+        key?: string;
+        code: string;
+        keyCode: number;
+        text?: string;
+        modifiers?: number;
+      }
     > = {
       k: { code: "KeyK", keyCode: 75, modifiers: 2 },
       Enter: { code: "Enter", keyCode: 13, text: "\r" },
+      "Shift+Enter": {
+        key: "Enter",
+        code: "Enter",
+        keyCode: 13,
+        text: "\r",
+        modifiers: 8,
+      },
       Escape: { code: "Escape", keyCode: 27 },
     };
     const server = Bun.serve({
@@ -496,7 +510,7 @@ test.skipIf(!chrome)(
           if (body.key) {
             const key = KEYS[body.key]!;
             const common = {
-              key: body.key,
+              key: key.key ?? body.key,
               code: key.code,
               windowsVirtualKeyCode: key.keyCode,
               modifiers: key.modifiers ?? 0,

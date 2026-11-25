@@ -161,13 +161,23 @@
   selects it), Board and Desk select it. As it is typed, Town and Board light
   their matches; after a choice the view's toolbar keeps the search, with its
   count and an end button. In Spaces, in Code, or for a host the Hosts filter
-  hides (the row says "Opens in Spaces"), choosing opens it. **Shift+Enter**
-  or the row's **Open terminal** (**Open in Spaces** for a room, table or
-  host) opens what was found: a Herdr TUI agent, terminal,
-  table or room opens in Spaces on its own connection, with its tab focused
-  and pane selected, whether its host already was Spaces' host or another
-  was (`openWorldFind`, through the store's `activateQualifiedSpacesTarget`). A live
-  herdr-core agent or terminal opens in Spaces too: Spaces' terminal area
+  hides (the row says "Opens its window here"; in Spaces, "Opens in Spaces"),
+  choosing opens it. **Shift+Enter** or the row's **Open terminal** (**Open
+  Inspector** for a room or table; a host has no second action) opens what
+  was found, and nothing in the box changes the view (#1356). In Town, Board,
+  Desk or Code its window opens in that view, as the view's own windows do,
+  with the Terminal tab for an agent or terminal: `openWorldFindHere` sends
+  `worldFoundTarget`'s qualified connection, runtime generation, workspace
+  and pane through the Inspector's one admission
+  (`workspaceSurfaceSelectionRef`), on Herdr TUI and herdr-core alike;
+  `worldFindHereReason` says why it cannot (offline, reconnecting, a host,
+  a herdr-core terminal World only watches from another machine), and a
+  pane that moved says "no longer where World last saw it". In Spaces a
+  Herdr TUI agent, terminal, table or room opens in Spaces on its own
+  connection, with its tab focused and pane selected, whether its host
+  already was Spaces' host or another was (`openWorldFind`, through the
+  store's `activateQualifiedSpacesTarget`). A live herdr-core agent or
+  terminal chosen in Spaces opens there too: Spaces' terminal area
   shows World's watch of it (`SpacesCoreTerminal`, the same
   `coreInspectorTerminal` as the window's Terminal tab) under a bar with its
   name, `host › room › tab`, a **herdr-core** chip, its status mark and

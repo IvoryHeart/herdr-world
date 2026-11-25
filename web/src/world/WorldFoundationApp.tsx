@@ -75,6 +75,7 @@ import { HelpPanelHost } from "../help/HelpPanelHost";
 import { applyWhatsNewSwitch } from "../help/greetingNews";
 import {
   openWorldFind,
+  openWorldFindHere,
   withWorldViews,
   worldFindGroup,
   worldLeafColorTarget,
@@ -319,12 +320,14 @@ export default function WorldFoundationApp() {
     }
   };
 
-  // World's one search (#1329, #1355): the whole World object, in every
-  // view, on every connected host whatever the Hosts filter shows. Choosing a
-  // find goes to it in the current view, as clicking it there does (Town
-  // flies to it, and selects it when chosen again); the row's second action
-  // (Shift+Enter) opens its terminal in Spaces, whichever
-  // runtime runs it. Where the view cannot show it, choosing opens it.
+  // World's one search (#1329, #1355, #1356): the whole World object, in
+  // every view, on every connected host whatever the Hosts filter shows.
+  // Choosing a find goes to it in the current view, as clicking it there does
+  // (Town flies to it, and selects it when chosen again); the row's second
+  // action (Shift+Enter) opens its terminal in the current view, whichever
+  // runtime runs it: an Inspector window through the shared admission the
+  // World navigator uses, or in Spaces its terminal there. The box never
+  // changes the view. Where the view cannot show it, choosing opens it.
   const terminalColors = useTerminalColors();
   // Only the views that draw World's nodes can show one; Code and Spaces can't.
   const showNode =
@@ -358,27 +361,42 @@ export default function WorldFoundationApp() {
       search,
       {
         open: (node) =>
-          void openWorldFind(node, {
-            activateSpacesTarget: async (target) => {
-              const opened = await store.activateQualifiedSpacesTarget(target);
-              if (opened) setSpacesCore(null);
-              return opened;
-            },
-            activateHost: async (host) => {
-              await activateWorldNodeHost(host);
-              setSpacesCore(null);
-            },
-            openCoreInSpaces: (leaf) => {
-              showCoreInSpaces(leaf);
-              return true;
-            },
-            goToSpaces: () => {
-              setView("spaces");
-              revealSpacesTerminal();
-            },
-            notify: (message, detail) =>
-              store.notify({ kind: "error", message, detail }),
-          }),
+          void (view !== "spaces"
+            ? openWorldFindHere(node, {
+                openWindow: async (target, opens) =>
+                  (await workspaceSurfaceSelectionRef.current?.({
+                    connectionId: target.connectionId,
+                    runtimeGeneration: target.runtimeGeneration,
+                    workspaceId: target.workspaceId,
+                    ...(target.paneId ? { paneId: target.paneId } : {}),
+                    ...(opens ? { view: opens } : {}),
+                  })) ?? false,
+                notify: (message, detail) =>
+                  store.notify({ kind: "error", message, detail }),
+              })
+            : openWorldFind(node, {
+                activateSpacesTarget: async (target) => {
+                  const opened =
+                    await store.activateQualifiedSpacesTarget(target);
+                  if (opened) setSpacesCore(null);
+                  return opened;
+                },
+                activateHost: async (host) => {
+                  await activateWorldNodeHost(host);
+                  setSpacesCore(null);
+                },
+                openCoreInSpaces: (leaf) => {
+                  showCoreInSpaces(leaf);
+                  return true;
+                },
+                goToSpaces: () => {
+                  setView("spaces");
+                  revealSpacesTerminal();
+                },
+                notify: (message, detail) =>
+                  store.notify({ kind: "error", message, detail }),
+              })),
+        opensHere: view !== "spaces",
         ...(showNode
           ? {
               go: {
@@ -408,7 +426,7 @@ export default function WorldFoundationApp() {
               },
             }
           : {}),
-        ...(view === "spaces" ? {} : { opensNote: "Opens in Spaces" }),
+        ...(view === "spaces" ? {} : { opensNote: "Opens its window here" }),
         ...(view === "town" ? { extra: townLandmarkResults } : {}),
         colorOf: (leaf) =>
           terminalColor(terminalColors, worldLeafColorTarget(fullWorld, leaf)),
