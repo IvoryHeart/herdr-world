@@ -4,8 +4,9 @@
  * matching (worldSearch.ts), and the views to go to. Every view, Spaces
  * included, lists the same finds from the one World object. Choosing one
  * (Enter or a click) goes to it in the current view, as `/` always did: Town
- * flies to its table and keeps the list open, so choosing it again opens its
- * Inspector; Board and Desk select it, Spaces shows its terminal. The second
+ * flies to its table and Board pans to its card, each keeping the list open,
+ * so choosing it again opens its Inspector; Desk selects it, Spaces shows its
+ * terminal. The second
  * action (Shift+Enter, or the row's button) opens its terminal in the current
  * view, as that view opens an agent window: Town, Board, Desk and Code open its
  * Inspector window there (openWorldFindHere), Spaces shows it (openWorldFind).
@@ -316,7 +317,7 @@ export type WorldFindHandlers = {
    */
   go?: {
     shows?(node: WorldObjectNode): boolean;
-    /** Whether choosing it now leaves the box open (Town's first choice). */
+    /** Whether choosing it now leaves the box open (a map's first choice). */
     stays?(result: WorldSearchResult): boolean;
     run(result: WorldSearchResult): void;
   };

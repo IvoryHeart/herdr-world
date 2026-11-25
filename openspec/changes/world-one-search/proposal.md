@@ -14,7 +14,8 @@ typed in each did different things (#1355, finishing #159).
   stays the matcher), what only the current view has (Town's landmarks), the
   box's commands and the settings registry. Commands stay their own group.
 - Choosing a result goes to it in the current view, as `/` did: Town flies
-  to it (choosing it again selects it), Board and Desk select it. Where the
+  to it and Board pans to its card (choosing it again selects it), Desk
+  selects it. Where the
   view cannot show it (Spaces, Code, a host the Hosts filter hides) choosing
   opens it, and the row says so.
 - Shift+Enter, or the row's Open terminal (Open in Spaces for a room, table

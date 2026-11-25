@@ -3385,55 +3385,68 @@ async function run() {
       ).length;
       // Choosing goes to it in the view; it never opens its terminal.
       result.click();
-      if (view === "town") {
-        // Town flies there and keeps the list; choosing it again opens it.
+      // Town flies there and Board pans to its card, each keeping the list;
+      // choosing it again opens it (one choose path, #1356).
+      check(
+        worldFinder.get()?.chosen?.result.nodeId === needle,
+        `${title} did not go to the chosen result`,
+      );
+      check(
+        !!document.querySelector(".command-popover"),
+        `${title} closed the list on the first choice`,
+      );
+      check(
+        calls.filter((method) => method === "focus:beta").length ===
+          focusedBefore,
+        `${title} selected the result on the first choice`,
+      );
+      const selectedAnchor = (id: string) =>
+        [
+          ...document.querySelectorAll<HTMLElement>("[data-world-node-anchor]"),
+        ].find(
+          (element) =>
+            element.dataset.worldNodeAnchor === id &&
+            element.getAttribute("aria-pressed") === "true",
+        );
+      // The card Board marks: a long tab's card may not draw this pane's row
+      // until it is selected.
+      const foundCard = () =>
+        document.querySelectorAll<HTMLElement>(".board-card.board-found")
+          .length === 1
+          ? document.querySelector<HTMLElement>(".board-card.board-found")
+          : null;
+      let marked: string | undefined;
+      if (view === "board") {
+        await waitFor(
+          () => !!foundCard(),
+          `${title} did not mark the chosen card`,
+        );
+        marked = foundCard()!.dataset.key;
         check(
-          worldFinder.get()?.chosen?.result.nodeId === needle,
-          `${title} did not go to the chosen result`,
+          !selectedAnchor(needle),
+          `${title} selected the card on the first choice`,
         );
-        check(
-          !!document.querySelector(".command-popover"),
-          `${title} closed the list on the first choice`,
-        );
-        check(
-          calls.filter((method) => method === "focus:beta").length ===
-            focusedBefore,
-          `${title} selected the result on the first choice`,
-        );
-        findRow(needle)!.click();
+      }
+      findRow(needle)!.click();
+      await waitFor(
+        () => !document.querySelector(".command-popover"),
+        `${title} kept the box open when the shown find was chosen again`,
+      );
+      await waitFor(
+        () =>
+          calls.filter((method) => method === "focus:beta").length >
+          focusedBefore,
+        `${title} did not open the Inspector when chosen again`,
+      );
+      if (view === "board") {
         await waitFor(
-          () => !document.querySelector(".command-popover"),
-          `${title} kept the box open when the shown find was chosen again`,
-        );
-        await waitFor(
-          () =>
-            calls.filter((method) => method === "focus:beta").length >
-            focusedBefore,
-          `${title} did not open the Inspector when chosen again`,
-        );
-      } else {
-        await waitFor(
-          () => !document.querySelector(".command-popover"),
-          `${title} kept the box open after a choice`,
-        );
-        await waitFor(
-          () =>
-            calls.filter((method) => method === "focus:beta").length >
-            focusedBefore,
-          `${title} did not select the qualified search result`,
-        );
-        await waitFor(
-          () =>
-            [
-              ...document.querySelectorAll<HTMLElement>(
-                "[data-world-node-anchor]",
-              ),
-            ].some(
-              (element) =>
-                element.dataset.worldNodeAnchor === needle &&
-                element.getAttribute("aria-pressed") === "true",
-            ),
+          () => !!selectedAnchor(needle),
           `${title} did not reveal selected result`,
+        );
+        check(
+          selectedAnchor(needle)!.closest<HTMLElement>(".board-card")?.dataset
+            .key === marked,
+          `${title} marked another card than the chosen result's`,
         );
       }
       check(
@@ -3496,31 +3509,20 @@ async function run() {
           `${title} paging lost the later qualified match with colliding labels`,
         );
       laterResult.click();
-      // Town keeps the list after a first choice; closing keeps the choice.
-      if (view === "town")
-        document.querySelector<HTMLButtonElement>(".command-trigger")?.click();
+      // A map keeps the list after a first choice; closing keeps the choice.
+      document.querySelector<HTMLButtonElement>(".command-trigger")?.click();
       await waitFor(
         () => !document.querySelector(".command-popover"),
         `${title} kept the box open after choosing the paged match`,
       );
-      if (view === "town")
-        check(
-          worldFinder.get()?.chosen?.result.nodeId === later,
-          `${title} did not go to the later paged match`,
-        );
-      else
+      check(
+        worldFinder.get()?.chosen?.result.nodeId === later,
+        `${title} did not go to the later paged match`,
+      );
+      if (view === "board")
         await waitFor(
-          () =>
-            [
-              ...document.querySelectorAll<HTMLElement>(
-                "[data-world-node-anchor]",
-              ),
-            ].some(
-              (element) =>
-                element.dataset.worldNodeAnchor === later &&
-                element.getAttribute("aria-pressed") === "true",
-            ),
-          `${title} did not reveal the later paged match`,
+          () => !!foundCard(),
+          `${title} did not mark the later paged match`,
         );
       namedButton("End search")?.click();
       await frame();

@@ -157,8 +157,10 @@
   **Ctrl+F** (**Cmd+F** on a Mac), its own key, a view's search button and the
   phone's **Find or act** all open it, and no view keeps a search box of its
   own. **Enter** or a click goes to what was found in the current view, as
-  clicking it there does: Town flies its camera to it (choosing it again
-  selects it), Board and Desk select it. As it is typed, Town and Board light
+  clicking it there does: Town flies its camera to it and Board pans to its
+  card and marks it, unfolding its workspace (`useBoardSearch`,
+  `boardSearchKey`), each keeping the box open so choosing it again selects
+  it; Desk selects it at once. As it is typed, Town and Board light
   their matches; after a choice the view's toolbar keeps the search, with its
   count and an end button. In Spaces, in Code, or for a host the Hosts filter
   hides (the row says "Opens its window here"; in Spaces, "Opens in Spaces"),

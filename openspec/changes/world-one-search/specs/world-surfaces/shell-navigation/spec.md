@@ -24,6 +24,14 @@ SHALL change the view.
   no terminal opens, and the box stays open with its list of matches
 - **AND** choosing the same result again closes the box and opens its Inspector
 
+#### Scenario: Choose goes to the result in Board
+
+- **WHEN** the user in Board types part of an agent's name and chooses it
+- **THEN** Board pans to the agent's card, unfolding its workspace if folded, and marks
+  it, the view stays Board, no window opens, and the box stays open with its list
+- **AND** choosing the same result again closes the box and opens its Inspector, as in
+  Town; Desk and Code, which have no map, open it on the first choice
+
 #### Scenario: A click chooses as Enter does
 
 - **WHEN** the user clicks a found result

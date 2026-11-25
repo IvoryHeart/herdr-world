@@ -2548,6 +2548,33 @@ export default function BoardView({
     else camGoal.current = goal;
     invalidate("change");
   }
+  /**
+   * Go to a card World's search chose (useBoardSearch), as Town flies to a
+   * table: unfold its workspace if folded, and center it close enough that
+   * its tabs show.
+   */
+  function focusCard(key: string) {
+    const el = boardRef.current;
+    const m = latest.current.model;
+    const tab = m.tabByKey.get(key);
+    const space = tab ? m.workspaceByKey.get(tab.workspaceKey) : undefined;
+    if (space && latest.current.collapsed.has(space.key)) toggleFold(space);
+    // An unfolded tab springs out to its place in the layout.
+    const card =
+      (tab ? positions(m, layout.current, sizeOf).get(key) : undefined) ??
+      cards.current.get(key);
+    if (!el || !card) return;
+    const s = Math.max(0.85, OVERVIEW_OUT + 0.1);
+    const goal = {
+      s,
+      x: el.clientWidth / 2 - card.x * s,
+      y: el.clientHeight / 2 - card.y * s,
+    };
+    if (window.matchMedia("(prefers-reduced-motion: reduce)").matches)
+      cam.current = goal;
+    else camGoal.current = goal;
+    invalidate("change");
+  }
   /** Send every card to its place in the layout on a short tween. */
   const travelToLayout = (m: BoardModel) => {
     const reduce = window.matchMedia(
@@ -3376,7 +3403,17 @@ export default function BoardView({
 
   /* ---------- Search ---------- */
   const search = useBoardSearch(world, model);
-  const { matches } = search;
+  const { matches, chosen } = search;
+  // Each choice in the box goes to its card; one Board draws no card for
+  // (a host) opens as selecting it does, as Town does for what it can't map.
+  useEffect(() => {
+    if (!chosen) return;
+    if (chosen.key) focusCard(chosen.key);
+    else void latest.current.onSelect(chosen.nodeId);
+    // A new choice (seq) goes again; focusCard reads refs.
+    // oxlint-disable-next-line react-hooks/exhaustive-deps
+  }, [chosen?.seq]);
+  const foundKey = chosen?.key ?? null;
 
   const selectedKeys = useMemo(() => {
     const keys = new Set<string>();
@@ -3755,6 +3792,7 @@ export default function BoardView({
                       space.stale ? "board-stale" : "",
                       selectedKeys.has(space.key) ? "board-selected" : "",
                       matches && !matches.has(space.key) ? "board-dim" : "",
+                      foundKey === space.key ? "board-found" : "",
                     ].join(" ")}
                     onKeyDown={(event) => {
                       if (fromNestedControl(event)) return;
@@ -3896,6 +3934,7 @@ export default function BoardView({
                       tab.stale ? "board-stale" : "",
                       selectedKeys.has(tab.key) ? "board-selected" : "",
                       matches && !matches.has(tab.key) ? "board-dim" : "",
+                      foundKey === tab.key ? "board-found" : "",
                     ].join(" ")}
                     onKeyDown={(event) => {
                       if (fromNestedControl(event)) return;

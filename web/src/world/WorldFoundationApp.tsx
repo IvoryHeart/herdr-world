@@ -323,7 +323,8 @@ export default function WorldFoundationApp() {
   // World's one search (#1329, #1355, #1356): the whole World object, in
   // every view, on every connected host whatever the Hosts filter shows.
   // Choosing a find goes to it in the current view, as clicking it there does
-  // (Town flies to it, and selects it when chosen again); the row's second
+  // (Town flies to it and Board pans to its card, and each selects it when
+  // chosen again); the row's second
   // action (Shift+Enter) opens its terminal in the current view, whichever
   // runtime runs it: an Inspector window through the shared admission the
   // World navigator uses, or in Spaces its terminal there. The box never
@@ -401,24 +402,25 @@ export default function WorldFoundationApp() {
           ? {
               go: {
                 shows: (node) => topbarWorld.nodeById.has(node.id),
-                // Town's first choice keeps the list open; choosing the same
-                // find again closes it and opens its Inspector.
-                stays:
-                  view === "town"
-                    ? (result) =>
-                        !(
-                          chosenAgain(result) &&
-                          topbarWorld.nodeById.has(result.nodeId)
-                        )
-                    : undefined,
+                // On a map (Town, Board) the first choice keeps the list
+                // open; choosing the same find again closes it and opens its
+                // Inspector. Desk has no map and opens at once.
+                stays: lights
+                  ? (result) =>
+                      !(
+                        chosenAgain(result) &&
+                        topbarWorld.nodeById.has(result.nodeId)
+                      )
+                  : undefined,
                 run: (result) => {
                   const again = chosenAgain(result);
                   if (lights) worldFinder.choose(view, search, result);
-                  // Town flies to it on its map (useTownSearch) and selects it
-                  // when it is chosen again, as `/` did; the other views
-                  // select it at once. A landmark has no node to select.
+                  // Town flies to it on its map (useTownSearch), Board pans
+                  // to its card (useBoardSearch), and each selects it when it
+                  // is chosen again, as `/` did; Desk selects it at once. A
+                  // landmark has no node to select.
                   if (
-                    (view !== "town" || again) &&
+                    (!lights || again) &&
                     topbarWorld.nodeById.has(result.nodeId)
                   )
                     showNode(result.nodeId);
