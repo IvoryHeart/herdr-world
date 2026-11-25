@@ -15,4 +15,5 @@
 - [x] Update current release/contributor docs and consumer mappings.
 - [x] Add focused recovery/service/policy regressions and map native platform evidence.
 - [x] Prepare ready PR handoff against crew/1373.
+- [x] Repair exact dispatch overrides in manifest mode, regress workflow/config wiring and RC-to-final tag validation (#1404).
 - [ ] Owner acceptance: independent review, hosted RC rehearsal and week-long measurements.

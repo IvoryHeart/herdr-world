@@ -1,13 +1,19 @@
 ## MODIFIED Requirements
 
 ### Requirement: Reviewed release identity
-Release-please SHALL keep one reviewed release PR current using the simple strategy in PR-only mode (`skip-github-release: true`). It SHALL update CHANGELOG from squash-merged fix/feat titles and the plugin version through its generic marker updater. Only the owner SHALL create a release tag on the merged version commit; no automation SHALL create tags. The owner SHALL only merge the release PR, create its tag and merge the automatic tap PR.
+Release-please SHALL keep one reviewed release PR current using the simple strategy in PR-only mode (`release-pr`). It SHALL update CHANGELOG from squash-merged fix/feat titles and the plugin version through its generic marker updater. Only the owner SHALL create a release tag on the merged version commit; no automation SHALL create tags. The owner SHALL only merge the release PR, create its tag and merge the automatic tap PR.
 
 #### Scenario: Release preparation
 - **WHEN** scheduled or dispatched release-please runs
 - **THEN** it refreshes one release PR and automatically dispatches its checks without change fragments, a separate notes file or a manual run identifier
 - **AND** the owner tags the merged release before the next release-please run
 - **AND** successful publication automatically replaces that exact merged release PR's pending label with the tagged label so the next release PR needs no manual bookkeeping
+
+#### Scenario: Exact dispatched release version
+- **WHEN** the owner dispatches Release PR with a valid `release_as` such as `0.3.8-rc.1`, `0.3.8-rc.2` or `0.3.8`
+- **THEN** release-please opens or updates the release PR at exactly that version using its supported manifest override
+- **AND** the override applies only to that run, without a direct main commit or another owner step
+- **AND** an empty override retains normal conventional-commit version selection, while an invalid version fails before release preparation
 
 #### Scenario: Cross-platform release candidate
 - **WHEN** an owner-created `vX.Y.Z-rc.N` tag selects the reviewed version commit on main

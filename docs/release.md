@@ -7,7 +7,7 @@ PR titles. Its **simple** strategy owns `version.txt`, the release manifest and
 still read the plain version assignment. Development npm manifests remain at `0.0.0`.
 The [configuration](../release-please-config.json) and
 [workflow](../.github/workflows/release-pr.yml) run in PR-only mode:
-`skip-github-release: true`. Automation never creates tags.
+the pinned release-please CLI's `release-pr` command. Automation never creates tags.
 
 ## Three owner steps
 
@@ -15,6 +15,9 @@ The [configuration](../release-please-config.json) and
    **Delivery checks** and independent review. Automation opens or refreshes it
    weekly; **Actions → Release PR → Run workflow** can refresh it sooner.
    The optional `release_as` override accepts `0.3.8-rc.1` for the RC rehearsal.
+   It is passed to the CLI's `--release-as` flag for that run only; leaving it
+   empty uses normal conventional-commit versioning. For subsequent rehearsal
+   releases, use `0.3.8-rc.2`, then `0.3.8` for the final release.
    CI is automatically dispatched for the bot PR with the existing workflow token.
 2. **Create `vX.Y.Z` on that merge commit.** Only the owner creates tags, under
    the unchanged tag ruleset. Tag before the next release-please run; this is how
@@ -40,6 +43,15 @@ For `vX.Y.Z-rc.N`, GitHub marks a prerelease, npm uses `next`, and Homebrew uses
 `herdr-world-rc`; stable Latest stays unchanged. Rehearse with `0.3.8-rc.1`.
 After the tap merge, upgrade on a Mac with the prior service running and confirm
 the new served version, preserved data and a healthy restart after keg cleanup.
+
+The pinned v4 action reads `release-as` but omits it from its manifest-mode
+[`Manifest.fromManifest` call](https://github.com/googleapis/release-please-action/blob/5c625bfb5d1ff62eadeeb3772007f7f66fdcf071/src/index.ts#L89-L140).
+That input is ignored in manifest mode, rather than overridden by `feat:` commits.
+The [CLI passes the override through](https://github.com/googleapis/release-please/blob/v17.3.0/src/bin/release-please.ts#L496-L507),
+preserving the manifest's simple strategy and extra-file updater. The supported
+[`release-as` configuration](https://github.com/googleapis/release-please/blob/v17.3.0/docs/manifest-releaser.md#configfile)
+also accepts a package override, but the CLI flag avoids persisting a one-run
+version in the repository. No pre-1.0 bump policy is changed.
 
 ## What blocks publication
 

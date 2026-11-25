@@ -98,10 +98,9 @@ test("standard publishers consume the tested artifact and serialize channels", (
 
 test("release-please owns version/changelog preparation and never creates a tag", () => {
   const steps = workflow("release-pr").jobs.prepare.steps;
-  const action = steps.find((s: any) =>
-    s.uses?.startsWith("googleapis/release-please-action@"),
-  );
-  expect(action.with["skip-github-release"]).toBe(true);
+  const prepare = steps.find((s: any) => s.name === "Prepare the release PR");
+  expect(prepare.run).toContain("release-please@17.3.0 release-pr");
+  expect(prepare.run).not.toContain("github-release");
   const config = JSON.parse(readFileSync("release-please-config.json", "utf8"));
   expect(config.packages["."]["release-type"]).toBe("simple");
   expect(config.packages["."]["extra-files"]).toContainEqual({

@@ -37,6 +37,7 @@
 - `.release-please-manifest.json`
 - `version.txt`
 - `scripts/release-plan.ts`
+- `scripts/release-pr.test.ts` (actual workflow shell/config and ephemeral CLI version override; automatic same-repository CI dispatch)
 - `scripts/release-validation.test.ts`
 - `scripts/release-publication.test.ts`
 - `scripts/release-seal.ts` (seal record of every contract job's result; Release reuses retained bytes only from an all-green record of the same run)

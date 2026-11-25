@@ -3,7 +3,14 @@
 Use release-please's standard simple strategy and generic annotated TOML updater,
 in PR-only mode. Squash-merged fix/feat titles replace fragments. The owner tags
 before the next release-please run. GITHUB_TOKEN-created PR checks are dispatched
-automatically using the action output.
+automatically by resolving its same-repository standard manifest PR branch.
+The pinned release-please CLI's `release-pr` command preserves PR-only mode and
+passes a dispatched `release_as` through `--release-as` in manifest mode. The v4
+action reads that input but drops it in its manifest loader. Validate explicit
+versions with the publication version pattern before invoking the CLI; omit the
+flag for scheduled/default runs. Keep overrides ephemeral and leave pre-1.0
+bump policy unchanged. Direct workflow/config subprocess tests and upstream dry
+runs check version selection; the real tag-plan fixture checks RC promotion.
 After all channels publish, the tag workflow completes release-please's label
 lifecycle on the single merged release PR whose merge commit equals the validated
 tag commit. Pending and already-tagged labels permit an interrupted relabel to
