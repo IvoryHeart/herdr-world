@@ -249,8 +249,7 @@ function InspectorResources({
         workspaces: core.snapshot?.workspaces ?? [],
         tabs: core.snapshot?.tabs ?? [],
         panes: core.snapshot?.panes ?? [],
-        // Its own core's state, never the Herdr session's.
-        status: coreLive ? ("connected" as const) : ("disconnected" as const),
+        status: coreLive ? ("connected" as const) : ("disconnected" as const), // its core's, not Herdr's
         catalogueReady: coreLive,
       }
     : hostTopology;

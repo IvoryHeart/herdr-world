@@ -8,7 +8,7 @@ export type AgentAddress = {
   terminal_id: string;
   color_key: string;
 };
-export type AgentMoveDestination = {
+type AgentMoveDestination = {
   connection_id: string;
   generation: number;
   workspace_id: string;

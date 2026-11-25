@@ -82,7 +82,7 @@ export type MoveSide = {
 };
 
 /** One structured line per move step (server log, scope agent-move). */
-export type MoveLog = (step: string, fields: Record<string, unknown>) => void;
+type MoveLog = (step: string, fields: Record<string, unknown>) => void;
 
 export type AgentMoveDeps = {
   side(connectionId: string, generation: number): MoveSide | null;
@@ -111,7 +111,7 @@ export type AgentMoveResult = AgentMoveOutcome;
  * re-attaches to the same session, so Claude starts first and a copy that
  * reports another session is taken as a fork (moveAgentAcross).
  */
-export const CLOSE_FIRST_HARNESSES: ReadonlySet<string> = new Set(["codex"]);
+const CLOSE_FIRST_HARNESSES: ReadonlySet<string> = new Set(["codex"]);
 
 const text = (value: unknown) => (typeof value === "string" ? value : "");
 const locks = new Set<string>();

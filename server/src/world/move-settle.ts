@@ -6,9 +6,9 @@
  * in that window would act on an address that no longer exists.
  */
 
-export const MOVE_SETTLE_MS = 20_000;
+const MOVE_SETTLE_MS = 20_000;
 
-export type MoveSettleKey = {
+type MoveSettleKey = {
   connection_id: string;
   tab_id?: string;
   terminal_id?: string;
