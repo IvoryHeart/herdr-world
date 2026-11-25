@@ -26,11 +26,11 @@ export const WORLD_HELP: readonly HelpEntry[] = [
     id: "world.command-box",
     title: "Find or act",
     summary:
-      "One search finds agents, rooms and actions on every host and runtime, from every view.",
+      "One box finds agents, rooms and actions on every host and runtime, from every view.",
     steps: [
-      "Press /, Ctrl+F or Ctrl+K (Cmd+K on a Mac), or a view's search button; on a phone, open the views menu and choose Find or act.",
-      "Type a few letters of a name, room, machine, harness (Claude Code, Codex), status (needs you) or task, or of an action such as new workspace.",
-      "Press Enter to go to it in the view you are in, or to do the action; Shift+Enter or the row's Open terminal button opens its terminal instead.",
+      "Press Ctrl+K (Cmd+K on a Mac) or the ⌘ button beside the views; on a phone, open the views menu and choose Find or act.",
+      "Type a few letters of a name, room, machine, harness (Claude Code, Codex), status (needs you) or task, or of an action.",
+      "Press Enter to open an agent's terminal or do the action; in Town, Board or Desk, Shift+Enter or the row's Show button shows it in that view instead.",
     ],
     place: "world",
     where: "Beside the views at the top; on a phone, in the views menu",

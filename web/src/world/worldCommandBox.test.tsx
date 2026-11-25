@@ -4,7 +4,6 @@ import { renderToStaticMarkup } from "react-dom/server";
 import type { WorldRuntimeConnection } from "./runtimeStore";
 import { TERMINAL_COLOR_HEX } from "./terminalColor";
 import { townScaleConnections } from "./town/townScaleScene";
-import { townLandmarkResults } from "./town/townSearch";
 import { spacesCoreChoice, spacesCoreLeaf } from "./spacesCore";
 import { SpacesCoreTerminal } from "./SpacesCoreTerminal";
 import {
@@ -71,26 +70,13 @@ describe("the command box finds what the views' search finds", () => {
     const results = worldSearchResults(world, "harbor");
     expect(results.length).toBeGreaterThan(WORLD_COMMAND_FINDS);
     expect(group.heading).toBe("In World");
-    // A page of finds; the box pages through the rest.
-    expect(group.actions).toHaveLength(WORLD_COMMAND_FINDS);
-    expect(group.page).toEqual({
-      from: 0,
-      size: WORLD_COMMAND_FINDS,
-      total: results.length,
-    });
-    // The next page holds the matches after it, ending with the last one.
-    const lastFrom =
-      Math.floor((results.length - 1) / WORLD_COMMAND_FINDS) *
-      WORLD_COMMAND_FINDS;
-    const last = worldFindGroup(world, "harbor", none, lastFrom)!;
-    expect(last.page!.from).toBe(lastFrom);
-    expect(last.actions[last.actions.length - 1]!.key).toBe(
-      `world-find-${results[results.length - 1]!.id}`,
+    // A page of finds, then how many more a narrower search would show.
+    expect(group.actions).toHaveLength(WORLD_COMMAND_FINDS + 1);
+    const more = group.actions[WORLD_COMMAND_FINDS]!;
+    expect(more.title).toBe(
+      `${results.length - WORLD_COMMAND_FINDS} more in World`,
     );
-    // A page past the end, as after a narrower search, is the last page.
-    expect(worldFindGroup(world, "harbor", none, 10_000)!.page!.from).toBe(
-      lastFrom,
-    );
+    expect(more.disabledReason).toBe("Add a word to narrow the search");
     const [room] = group.actions;
     expect(room!.title).toBe("harbor");
     expect(room!.detail).toBe("Room · atlas");
@@ -99,7 +85,7 @@ describe("the command box finds what the views' search finds", () => {
     expect(group.actions[1]!.score).toBe(0.8);
     room!.run();
     expect(chosen).toEqual([results[0]!.nodeId]);
-    // Without a view to go to it in, choosing opens it: no second action.
+    // Without a view to show it in (Spaces), there is no second action.
     expect(room!.secondary).toBeUndefined();
   });
 
@@ -131,70 +117,21 @@ describe("the command box finds what the views' search finds", () => {
     expect(trailing).toContain("Needs you");
   });
 
-  test("choosing goes to the find in the current view; the second action opens it", () => {
-    const went: string[] = [];
+  test("the second action shows the node in the current view", () => {
+    const shown: string[] = [];
     const opened: string[] = [];
-    const handlers = {
-      open: (node: { id: string }) => opened.push(node.id),
-      go: { run: (result: { nodeId: string }) => went.push(result.nodeId) },
-      opensNote: "Opens in Spaces",
-    };
-    const room = worldFindGroup(world, "harbor", handlers)!.actions[0]!;
-    room.run();
-    expect(went).toEqual([worldSearchResults(world, "harbor")[0]!.nodeId]);
-    expect(opened).toEqual([]);
-    // A room opens in Spaces; an agent or terminal opens its terminal.
-    expect(room.secondary?.label).toBe("Open in Spaces");
-    room.secondary!.run();
-    expect(opened).toEqual([went[0]]);
-    expect(room.detail).not.toContain("Opens in Spaces");
-    const agent = worldFindGroup(world, "harbor migration", handlers)!
-      .actions[0]!;
-    expect(agent.secondary?.label).toBe("Open terminal");
-  });
-
-  test("the view says when choosing a find leaves the box open", () => {
-    let shown = "";
-    const handlers = {
-      open: () => {},
-      go: {
-        stays: (result: { id: string }) => shown !== result.id,
-        run: (result: { id: string }) => {
-          shown = result.id;
-        },
-      },
-    };
-    const room = worldFindGroup(world, "harbor", handlers)!.actions[0]!;
-    const stay = room.stay as () => boolean;
-    expect(stay()).toBe(true);
-    room.run();
-    expect(stay()).toBe(false);
-    // A view that says nothing closes the box as each find is chosen.
-    const plain = worldFindGroup(world, "harbor", {
-      open: () => {},
-      go: { run: () => {} },
-    })!.actions[0]!;
-    expect(plain.stay).toBeUndefined();
-  });
-
-  test("a view's own result goes there and has nothing to open", () => {
-    const went: string[] = [];
-    const group = worldFindGroup(world, "warehouse", {
-      open: () => {
-        throw new Error("a landmark is never opened");
-      },
-      go: { run: (result) => went.push(result.id) },
-      extra: townLandmarkResults,
+    const group = worldFindGroup(world, "harbor", {
+      open: (node) => opened.push(node.id),
+      show: { label: "Show in Town", run: (node) => shown.push(node.id) },
     })!;
-    const found = group.actions[0]!;
-    expect(found.title).toContain("Warehouse");
-    expect(found.secondary).toBeUndefined();
-    expect(found.trailing).toBeUndefined();
-    found.run();
-    expect(went).toEqual([townLandmarkResults("warehouse")[0]!.id]);
+    const room = group.actions[0]!;
+    expect(room.secondary?.label).toBe("Show in Town");
+    room.secondary!.run();
+    expect(shown).toEqual([worldSearchResults(world, "harbor")[0]!.nodeId]);
+    expect(opened).toEqual([]);
   });
 
-  test("finds every connected host's agents whatever Hosts shows; goes only to what the view shows", () => {
+  test("finds every connected host's agents whatever Hosts shows; shows only what the view shows", () => {
     const [shownHost, otherHost] = world.hosts;
     const shownWorld = worldObjectForHosts(world, [shownHost!.connectionId]);
     const other = world.leaves.find(
@@ -202,39 +139,34 @@ describe("the command box finds what the views' search finds", () => {
         leaf.kind === "agent" && leaf.connectionId === otherHost!.connectionId,
     )!;
     expect(shownWorld.nodeById.has(other.id)).toBe(false);
-    const went: string[] = [];
-    const opened: string[] = [];
-    const handlers = {
-      open: (node: { id: string }) => opened.push(node.id),
-      go: {
-        shows: (node: { id: string }) => shownWorld.nodeById.has(node.id),
-        run: (result: { nodeId: string }) => went.push(result.nodeId),
+    const group = worldFindGroup(world, `${other.label} ${other.hostLabel}`, {
+      open: () => {},
+      show: {
+        label: "Show in Town",
+        shows: (node) => shownWorld.nodeById.has(node.id),
+        run: () => {},
       },
-      opensNote: "Opens in Spaces",
-    };
-    const group = worldFindGroup(
-      world,
-      `${other.label} ${other.hostLabel}`,
-      handlers,
-    )!;
+    })!;
     const found = group.actions.find(
       (action) => action.key === `world-find-${other.id}`,
-    )!;
-    // The view hides its host: choosing opens it, and the row says so.
-    expect(found.detail).toMatch(/ · Opens in Spaces$/);
-    expect(found.secondary).toBeUndefined();
-    found.run();
-    expect(opened).toEqual([other.id]);
-    expect(went).toEqual([]);
+    );
+    expect(found).toBeDefined();
+    // Enter opens it; the view hides its host, so it isn't shown there.
+    expect(found!.secondary).toBeUndefined();
     const shown = shownWorld.leaves.find((leaf) => leaf.kind === "agent")!;
-    const shownFind = worldFindGroup(
-      world,
-      shown.label,
-      handlers,
-    )!.actions.find((action) => action.key === `world-find-${shown.id}`)!;
-    expect(shownFind.secondary?.label).toBe("Open terminal");
-    shownFind.run();
-    expect(went).toEqual([shown.id]);
+    const shownGroup = worldFindGroup(world, shown.label, {
+      open: () => {},
+      show: {
+        label: "Show in Town",
+        shows: (node) => shownWorld.nodeById.has(node.id),
+        run: () => {},
+      },
+    })!;
+    expect(
+      shownGroup.actions.find(
+        (action) => action.key === `world-find-${shown.id}`,
+      )?.secondary?.label,
+    ).toBe("Show in Town");
   });
 
   test("finds agents by their harness's full name", () => {

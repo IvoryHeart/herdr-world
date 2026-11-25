@@ -1,7 +1,7 @@
 import { describe, expect, test } from "bun:test";
 import type { WorldRuntimeConnection } from "./runtimeStore";
 import { buildWorldObject, worldObjectForConnection } from "./worldObject";
-import { worldSearchMatches } from "./worldSearch";
+import { worldSearchMatches } from "./WorldViewToolbar";
 
 function connection(
   connectionId: string,

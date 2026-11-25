@@ -3,7 +3,7 @@
 // subject at all. Chrome reevaluates such a rule on DOM changes anywhere
 // below it, so each typed key, streamed message or terminal line can restyle
 // thousands of elements (#1231). Flag the state on <html> from JavaScript
-// instead (see web/src/terminalInputFocus.ts).
+// instead (see web/src/rootFlag.ts and web/src/terminalInputFocus.ts).
 import { readFileSync } from "node:fs";
 import { join, relative } from "node:path";
 
@@ -34,6 +34,8 @@ export const ALLOWED: readonly { file: string; has: string }[] = [
     file: "web/src/styles/layout/topbar.css",
     has: ".world-foundation-shell:has(.zen-island:focus-within)",
   },
+  // One custom property on body; nothing below restyles.
+  { file: "web/src/world/world-stage.css", has: "body:has(.app.zen)" },
   // Phone shortcuts dialog: a scroll lock on html.
   {
     file: "web/src/components/MobileTerminalShortcutsDialog.css",

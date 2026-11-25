@@ -16,6 +16,7 @@ import { useCreationProgress } from "../creationRequests";
 import { isMobileLayout } from "../layoutPreferences";
 import { useSystemBack } from "../systemBack";
 import { useTownFinished, withTownFinished } from "./town/townFinished";
+import { WorldSearchResults } from "./WorldSearchResults";
 import { DEVTOOLS, NO_TRACE } from "./devtools/flag";
 import { openTrace, rememberTrace, TRACE_TOGGLE_EVENT } from "./devtools/trace";
 import { TraceOverlay } from "./devtools/TraceOverlay";
@@ -764,6 +765,11 @@ export default function TownView({
   return (
     <TownContexts outbox={townSummary.openOutbox} lenses={lenses}>
       {toolbarPortal ? createPortal(toolbar, toolbarPortal) : toolbar}
+      <WorldSearchResults
+        world={world}
+        onSelect={onSelect}
+        {...search.results}
+      />
       {townSummary.window}
       <div
         className={`world-office-shell world-stage-shell town-view-shell`}

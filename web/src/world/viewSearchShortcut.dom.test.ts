@@ -1,7 +1,7 @@
 import { expect, test } from "bun:test";
 
 if (process.env.VIEW_SEARCH_SHORTCUT_DOM !== "1") {
-  test("the one search's keys in an isolated React DOM", async () => {
+  test("the view search shortcut in an isolated React DOM", async () => {
     const child = Bun.spawn(
       [
         process.execPath,
@@ -38,15 +38,12 @@ if (process.env.VIEW_SEARCH_SHORTCUT_DOM !== "1") {
       configurable: true,
       writable: true,
     });
-  const { act, createElement } = await import("react");
+  const { act, createElement, useState } = await import("react");
   const { createRoot } = await import("react-dom/client");
   const { getShortcutSnapshot, selectShortcutPreset, updateShortcut } =
     await import("../shortcutPreferences");
   const { WorldViewToolbar } = await import("./WorldViewToolbar");
-  const { keyTakenByViewSearch, useViewSearchShortcut } = await import(
-    "./viewSearchShortcut"
-  );
-  const { COMMAND_BOX_OPEN_EVENT } = await import("../commandBoxKey");
+  const { keyTakenByViewSearch } = await import("./viewSearchShortcut");
 
   // Ctrl+F, or Cmd+F where this DOM reports a Mac.
   const findModifier = getShortcutSnapshot().preset.bindings[
@@ -68,21 +65,39 @@ if (process.env.VIEW_SEARCH_SHORTCUT_DOM !== "1") {
     return event.defaultPrevented;
   };
 
-  /** The one search's key listener, as the command box mounts it. */
-  function mount(enabled = true) {
+  function mount() {
     const element = document.createElement("div");
     document.body.append(element);
     const root = createRoot(element);
-    let opened = 0;
-    function Box() {
-      useViewSearchShortcut(() => {
-        opened += 1;
-      }, enabled);
-      return null;
+    function Town() {
+      const [query, setQuery] = useState("");
+      return createElement(WorldViewToolbar, {
+        viewLabel: "Town",
+        query,
+        onQueryChange: setQuery,
+        onClear: () => setQuery(""),
+      });
     }
-    act(() => root.render(createElement(Box)));
+    act(() => root.render(createElement(Town)));
+    const input = () =>
+      document.querySelector<HTMLInputElement>("input[type=search]");
+    const icon = () =>
+      element.querySelector<HTMLButtonElement>(
+        'button[aria-label="Search Town"]',
+      );
     return {
-      opened: () => opened,
+      input,
+      icon,
+      type: (value: string) =>
+        act(() => {
+          const field = input()!;
+          Object.getOwnPropertyDescriptor(
+            HTMLInputElement.prototype,
+            "value",
+          )!.set!.call(field, value);
+          field.dispatchEvent(new Event("input", { bubbles: true }));
+        }),
+      focused: () => document.activeElement === input(),
       unmount: () => {
         act(() => root.unmount());
         element.remove();
@@ -90,29 +105,55 @@ if (process.env.VIEW_SEARCH_SHORTCUT_DOM !== "1") {
     };
   }
 
-  test("/ and the find key open the one search", () => {
-    const box = mount();
+  test("/ and the find key put the cursor in the view's search", () => {
+    const town = mount();
     expect(press(document.body, "/")).toBe(true);
-    expect(box.opened()).toBe(1);
+    expect(town.focused()).toBe(true);
+    act(() => town.input()!.blur());
     const button = document.createElement("button");
     document.body.append(button);
     button.focus();
     // The browser's find stays closed.
     expect(press(button, "f")).toBe(true);
-    expect(box.opened()).toBe(2);
+    expect(town.focused()).toBe(true);
     button.remove();
-    box.unmount();
+    town.unmount();
   });
 
-  test("with the shortcuts off, the keys do nothing", () => {
-    const box = mount(false);
-    expect(press(document.body, "/")).toBe(false);
-    expect(box.opened()).toBe(0);
-    box.unmount();
+  test("on desktop the search rests as an icon and unfolds into the box", () => {
+    const town = mount();
+    expect(town.input()).toBeNull();
+    expect(town.icon()!.title).toMatch(/^Search Town \(\/ or (Ctrl|Cmd)\+F\)$/);
+    act(() => town.icon()!.click());
+    expect(town.icon()).toBeNull();
+    expect(town.focused()).toBe(true);
+    // Empty, it folds back when the cursor leaves.
+    act(() => town.input()!.blur());
+    expect(town.input()).toBeNull();
+    expect(town.icon()).not.toBeNull();
+    // A query keeps it open after the cursor leaves.
+    expect(press(document.body, "/")).toBe(true);
+    town.type("harbor");
+    act(() => town.input()!.blur());
+    expect(town.input()!.value).toBe("harbor");
+    // Escape empties it and folds it, leaving the cursor on the icon.
+    act(() => town.input()!.focus());
+    act(() => {
+      town.input()!.dispatchEvent(
+        new KeyboardEvent("keydown", {
+          key: "Escape",
+          bubbles: true,
+          cancelable: true,
+        }),
+      );
+    });
+    expect(town.input()).toBeNull();
+    expect(document.activeElement).toBe(town.icon());
+    town.unmount();
   });
 
   test("keys typed into a terminal, composer or field stay there", () => {
-    const box = mount();
+    const town = mount();
     const terminal = document.createElement("div");
     terminal.className = "xterm";
     const terminalInput = document.createElement("textarea");
@@ -123,21 +164,19 @@ if (process.env.VIEW_SEARCH_SHORTCUT_DOM !== "1") {
     editable.contentEditable = "true";
     document.body.append(terminal, composer, field, editable);
     for (const target of [terminal, terminalInput, composer, field, editable])
-      for (const key of ["/", "f"] as const)
+      for (const key of ["/", "f"] as const) {
         expect(press(target, key)).toBe(false);
-    expect(box.opened()).toBe(0);
-    // An open dialog, menu or the search box itself owns the keyboard too.
-    for (const owner of ['[role="menu"]', ".command-popover"]) {
-      const node = document.createElement("div");
-      if (owner.startsWith("[")) node.setAttribute("role", "menu");
-      else node.className = "command-popover";
-      document.body.append(node);
-      expect(press(document.body, "/")).toBe(false);
+        expect(town.focused()).toBe(false);
+      }
+    // An open dialog or menu owns the keyboard too.
+    const menu = document.createElement("div");
+    menu.setAttribute("role", "menu");
+    document.body.append(menu);
+    expect(press(document.body, "/")).toBe(false);
+    expect(town.focused()).toBe(false);
+    for (const node of [terminal, composer, field, editable, menu])
       node.remove();
-    }
-    expect(box.opened()).toBe(0);
-    for (const node of [terminal, composer, field, editable]) node.remove();
-    box.unmount();
+    town.unmount();
   });
 
   test("a search key never also runs a view's own key handler", () => {
@@ -148,7 +187,7 @@ if (process.env.VIEW_SEARCH_SHORTCUT_DOM !== "1") {
     };
     const before = view("before");
     window.addEventListener("keydown", before);
-    const box = mount();
+    const town = mount();
     const after = view("after");
     window.addEventListener("keydown", after);
     act(() => updateShortcut("view.search", ["J"]));
@@ -164,69 +203,30 @@ if (process.env.VIEW_SEARCH_SHORTCUT_DOM !== "1") {
       });
     };
     pressJ("j");
-    expect(box.opened()).toBe(1);
+    expect(town.focused()).toBe(true);
     expect(seen).toEqual([]);
+    act(() => town.input()!.blur());
     // Other keys still reach the view.
     pressJ("k");
     expect(seen).toEqual(["before k", "after k"]);
     act(() => selectShortcutPreset("auto"));
     window.removeEventListener("keydown", before);
     window.removeEventListener("keydown", after);
-    box.unmount();
+    town.unmount();
   });
 
-  test("a view's toolbar opens the one search and shows the running one", () => {
-    const element = document.createElement("div");
-    document.body.append(element);
-    const root = createRoot(element);
-    const opens: boolean[] = [];
-    const onOpen = (event: Event) => {
-      opens.push((event as CustomEvent<{ resume: boolean }>).detail.resume);
-    };
-    window.addEventListener(COMMAND_BOX_OPEN_EVENT, onOpen);
-    let ended = 0;
-    const render = (query: string) =>
-      act(() =>
-        root.render(
-          createElement(WorldViewToolbar, {
-            viewLabel: "Town",
-            query,
-            resultLabel: query ? "2 matches" : undefined,
-            onClear: () => {
-              ended += 1;
-            },
-          }),
-        ),
-      );
-    render("");
-    // No box of its own: the view's search is the one search.
-    expect(element.querySelector("input")).toBeNull();
-    const toggle = element.querySelector<HTMLButtonElement>(
-      'button[aria-label="Find in World"]',
-    )!;
-    expect(toggle.title).toMatch(/^Find in World \(\/ or (Ctrl|Cmd)\+F\)$/);
-    act(() => toggle.click());
-    // The button opens it empty; the running search's chip resumes it.
-    expect(opens).toEqual([false]);
-    render("harbor");
-    const search = element.querySelector('[role="search"]')!;
-    expect(search.getAttribute("aria-label")).toBe("Town search");
-    expect(search.textContent).toContain("harbor");
-    expect(search.textContent).toContain("2 matches");
-    act(() =>
-      element
-        .querySelector<HTMLButtonElement>(".world-view-search-query")!
-        .click(),
-    );
-    expect(opens).toEqual([false, true]);
-    act(() =>
-      element
-        .querySelector<HTMLButtonElement>('button[aria-label="End search"]')!
-        .click(),
-    );
-    expect(ended).toBe(1);
-    window.removeEventListener(COMMAND_BOX_OPEN_EVENT, onOpen);
-    act(() => root.unmount());
-    element.remove();
+  test("on a phone the key opens the search the search icon opens", () => {
+    browser.happyDOM.setViewport({ width: 400 });
+    const town = mount();
+    expect(town.input()).toBeNull();
+    expect(press(document.body, "/")).toBe(true);
+    expect(town.input()).not.toBeNull();
+    expect(town.focused()).toBe(true);
+    act(() => town.input()!.blur());
+    // Pressed again while it is open, it returns the cursor to it.
+    expect(press(document.body, "f")).toBe(true);
+    expect(town.focused()).toBe(true);
+    town.unmount();
+    browser.happyDOM.setViewport({ width: 1024 });
   });
 }

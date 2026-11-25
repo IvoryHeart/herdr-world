@@ -1,5 +1,6 @@
 import { expect, test } from "bun:test";
 import { Window } from "happy-dom";
+import { holdRootFlag } from "./rootFlag";
 import {
   TERMINAL_INPUT_FOCUS_ATTRIBUTE,
   installTerminalInputFocusFlag,
@@ -73,5 +74,19 @@ test("the focus flag stays while another App still has it installed", async () =
     expect(flag()).toBe("composer");
     second();
     expect(flag()).toBeNull();
+  });
+});
+
+test("a root flag holds while any holder does", async () => {
+  await withDocument(() => {
+    const root = document.documentElement;
+    const overlay = holdRootFlag("data-world-search-overlay");
+    const again = holdRootFlag("data-world-search-overlay");
+    expect(root.hasAttribute("data-world-search-overlay")).toBe(true);
+    overlay();
+    overlay();
+    expect(root.hasAttribute("data-world-search-overlay")).toBe(true);
+    again();
+    expect(root.hasAttribute("data-world-search-overlay")).toBe(false);
   });
 });

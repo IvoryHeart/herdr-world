@@ -248,9 +248,7 @@ function PhoneViewPicker({
             role="menuitem"
             data-help="world.command-box"
             // After the menu hands focus back, so the box keeps it.
-            onClick={() =>
-              choose(() => window.setTimeout(() => openCommandBox()))
-            }
+            onClick={() => choose(() => window.setTimeout(openCommandBox))}
           >
             <Command size={18} aria-hidden />
             Find or act
@@ -304,7 +302,7 @@ function CommandBoxButton() {
       data-help="world.command-box"
       aria-label={title}
       title={title}
-      onClick={() => openCommandBox()}
+      onClick={openCommandBox}
     >
       <Command size={14} aria-hidden />
     </button>

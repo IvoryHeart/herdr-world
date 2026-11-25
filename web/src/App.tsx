@@ -4185,10 +4185,8 @@ export default function App({
             extension={
               operationalShortcutsEnabled ? undefined : visualActionExtension
             }
-            // World's one search in every view, Spaces included (#1329,
-            // #1355): its finds and the search it shares with the view.
+            // World's finds in every view, Spaces included (#1329).
             find={visualActionExtension?.find}
-            finderSearch={visualActionExtension?.finderSearch}
             onOpenFileExplorer={openFileExplorer}
             onOpenFile={openFileExplorerFile}
             onOpenDiffViewer={openDiffViewer}

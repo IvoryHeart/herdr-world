@@ -153,17 +153,7 @@
   tab colour, its name, `host › room › table`, a runtime icon (server for
   Herdr TUI, chip for herdr-core) and its status mark, so two agents of one
   name differ by place and machine.
-- It is World's one search (`web/src/world/worldFinder.ts`): **/** and
-  **Ctrl+F** (**Cmd+F** on a Mac), its own key, a view's search button and the
-  phone's **Find or act** all open it, and no view keeps a search box of its
-  own. **Enter** or a click goes to what was found in the current view, as
-  clicking it there does: Town flies its camera to it (choosing it again
-  selects it), Board and Desk select it. As it is typed, Town and Board light
-  their matches; after a choice the view's toolbar keeps the search, with its
-  count and an end button. In Spaces, in Code, or for a host the Hosts filter
-  hides (the row says "Opens in Spaces"), choosing opens it. **Shift+Enter**
-  or the row's **Open terminal** (**Open in Spaces** for a room, table or
-  host) opens what was found: a Herdr TUI agent, terminal,
+- **Enter** or a click opens what was found: a Herdr TUI agent, terminal,
   table or room opens in Spaces on its own connection, with its tab focused
   and pane selected, even when another host was Spaces' host
   (`openWorldFind`, through the store's qualified Spaces target). A live
@@ -178,7 +168,9 @@
   rather than follow a reconnected core. Choosing a core agent in Spaces'
   navigator opens it the same way. An agent on an
   offline, stale or reconnecting host stays listed with its Offline mark,
-  and opening it says why it cannot. `worldFoundTarget` is the one place a found
+  and opening it says why it cannot. In Town, Board and Desk, **Shift+Enter**
+  or the row's **Show in …** button selects it in that view instead, as
+  clicking it there does; a host the Hosts filter hides has no Show button. `worldFoundTarget` is the one place a found
   agent's target is made (qualified pane identity today; #1309 can swap it).
   The box also goes to another view. In Zen it opens from the **⌘** button
   beside the view buttons; on a phone, from **Find or act** in the corner

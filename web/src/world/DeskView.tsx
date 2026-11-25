@@ -47,9 +47,16 @@ import { DeskOtherHosts, deskHostLabel } from "./DeskOtherHosts";
 import { useHostGroupOf } from "./useHostGroups";
 import { leafPinnedBy, useDeskPins } from "./useDeskPins";
 import { useGreetingAnchor } from "./townMasterGreeting";
-import { keyTakenByViewSearch } from "./viewSearchShortcut";
-import { useFoldingSearch, usePhoneViewport } from "./useFoldingSearch";
-import { ListFilter } from "lucide-react";
+import {
+  keyTakenByViewSearch,
+  useViewSearchShortcut,
+} from "./viewSearchShortcut";
+import {
+  useFoldingSearch,
+  usePhoneViewport,
+  useViewSearchTitle,
+} from "./useFoldingSearch";
+import { Search } from "lucide-react";
 export { otherHostSummaries } from "./DeskOtherHosts";
 import "./DeskView.css";
 import { MadeSummary, artefactsMade, useAgentArtefacts } from "./MadeSummary";
@@ -283,9 +290,10 @@ export function DeskBoard({
   };
   const [query, setQuery] = useState("");
   const [toast, setToast] = useState<{ id: string; name: string } | null>(null);
-  // Desk's filter narrows its lanes; finding goes through World's one search
-  // (`/`, Cmd+K). On desktop the filter rests as an icon; a phone keeps it.
+  // On desktop the search rests as an icon; a phone keeps the box.
   const search = useFoldingSearch(query, !usePhoneViewport());
+  const searchTitle = useViewSearchTitle("Search Desk");
+  useViewSearchShortcut(search.expand);
   const [expanded, setExpanded] = useState<string | null>(null);
   const [fullReports, setFullReports] = useState<Map<string, string>>(
     () => new Map(),
@@ -922,21 +930,21 @@ export function DeskBoard({
               ref={search.toggleRef}
               type="button"
               className="desk-search-toggle"
-              aria-label="Filter Desk"
-              title="Filter Desk"
+              aria-label="Search Desk"
+              title={searchTitle}
               onClick={search.expand}
             >
-              <ListFilter size={16} aria-hidden="true" />
+              <Search size={16} aria-hidden="true" />
             </button>
           ) : (
             <label className="desk-search" {...search.boxProps}>
-              <span className="desk-search-label">Filter</span>
+              <span className="desk-search-label">Find</span>
               <input
                 ref={search.inputRef}
                 type="search"
                 value={query}
                 placeholder="Agent, workspace, tab, folder or request"
-                aria-label="Filter Desk"
+                aria-label="Find an agent"
                 onChange={(event) => setQuery(event.target.value)}
                 onKeyDown={(event) => {
                   if (event.key === "Escape") {

@@ -50,8 +50,6 @@ import WorldFoundationApp from "./WorldFoundationApp";
 import TownView from "./TownView";
 import WorldInspectorConversationView from "./WorldInspectorConversation";
 import { buildWorldObject, worldObjectId } from "./worldObject";
-import { worldFinder } from "./worldFinder";
-import { WORLD_COMMAND_FINDS } from "./worldCommandBox";
 import type { WorldCanvasAnchor } from "./worldConnectorGeometry";
 import "../styles/tokens.css";
 import "../styles/base.css";
@@ -3335,93 +3333,48 @@ async function run() {
         ).length === 1,
         `${title} navigator lost the filter`,
       );
-      // World's one search: the command box, opened from the view's search.
-      namedButton("Find in World")?.click();
+      namedButton(`Search ${title}`)?.click();
+      await frame();
+      const input = document.querySelector<HTMLInputElement>(
+        `input[placeholder="Search ${title}"]`,
+      )!;
+      Object.getOwnPropertyDescriptor(
+        HTMLInputElement.prototype,
+        "value",
+      )!.set!.call(input, "Needle beyond bounds");
+      input.dispatchEvent(new InputEvent("input", { bubbles: true }));
       await waitFor(
-        () => !!document.querySelector(".command-popover input"),
-        `${title} search did not open World's one search`,
-      );
-      // The box mounts a new input each time it opens.
-      const typeInBox = (value: string) => {
-        const boxInput = document.querySelector<HTMLInputElement>(
-          ".command-popover input",
-        )!;
-        Object.getOwnPropertyDescriptor(
-          HTMLInputElement.prototype,
-          "value",
-        )!.set!.call(boxInput, value);
-        boxInput.dispatchEvent(new InputEvent("input", { bubbles: true }));
-      };
-      const finds = () =>
-        [...document.querySelectorAll<HTMLElement>("[cmdk-item]")].filter(
-          (item) => item.dataset.value?.includes("world-find-"),
-        );
-      const findRow = (id: string) =>
-        finds().find((item) =>
-          item.dataset.value
-            ?.toLowerCase()
-            .endsWith(`world-find-${id}`.toLowerCase()),
-        );
-      typeInBox("Needle beyond bounds");
-      await waitFor(
-        () => !!findRow(needle),
+        () =>
+          !![
+            ...document.querySelectorAll<HTMLElement>(
+              "[data-world-search-result]",
+            ),
+          ].find((element) => element.dataset.worldSearchResult === needle),
         `${title} cannot find an observed omitted leaf`,
       );
-      const result = findRow(needle)!;
+      const result = [
+        ...document.querySelectorAll<HTMLElement>("[data-world-search-result]"),
+      ].find((element) => element.dataset.worldSearchResult === needle)!;
       check(
         result.textContent?.includes("Synthetic beta") ?? false,
         `${title} search result is not qualified`,
       );
-      // While it is typed, the view's toolbar shows the running search.
-      await waitFor(
-        () =>
-          document
-            .querySelector(`[aria-label="${title} search"]`)
-            ?.textContent?.includes("Needle beyond bounds") ?? false,
-        `${title} does not show the box's running search`,
-      );
       const focusedBefore = calls.filter(
         (method) => method === "focus:beta",
       ).length;
-      // Choosing goes to it in the view; it never opens its terminal.
       result.click();
+      // Town's first choice shows the result on the map; the second opens it.
       if (view === "town") {
-        // Town flies there and keeps the list; choosing it again opens it.
-        check(
-          worldFinder.get()?.chosen?.result.nodeId === needle,
-          `${title} did not go to the chosen result`,
-        );
-        check(
-          !!document.querySelector(".command-popover"),
-          `${title} closed the list on the first choice`,
-        );
-        check(
-          calls.filter((method) => method === "focus:beta").length ===
-            focusedBefore,
-          `${title} selected the result on the first choice`,
-        );
-        findRow(needle)!.click();
-        await waitFor(
-          () => !document.querySelector(".command-popover"),
-          `${title} kept the box open when the shown find was chosen again`,
-        );
-        await waitFor(
-          () =>
-            calls.filter((method) => method === "focus:beta").length >
-            focusedBefore,
-          `${title} did not open the Inspector when chosen again`,
-        );
-      } else {
-        await waitFor(
-          () => !document.querySelector(".command-popover"),
-          `${title} kept the box open after a choice`,
-        );
-        await waitFor(
-          () =>
-            calls.filter((method) => method === "focus:beta").length >
-            focusedBefore,
-          `${title} did not select the qualified search result`,
-        );
+        await frame();
+        result.click();
+      }
+      await waitFor(
+        () =>
+          calls.filter((method) => method === "focus:beta").length >
+          focusedBefore,
+        `${title} did not select the qualified search result`,
+      );
+      if (view !== "town")
         await waitFor(
           () =>
             [
@@ -3435,80 +3388,55 @@ async function run() {
             ),
           `${title} did not reveal selected result`,
         );
-      }
+      await frame();
+      if (view !== "town")
+        check(
+          [
+            ...document.querySelectorAll<HTMLElement>(
+              "[data-world-node-anchor]",
+            ),
+          ].some(
+            (element) =>
+              element.dataset.worldNodeAnchor === needle &&
+              element.getAttribute("aria-pressed") === "true",
+          ),
+          `${title} selected omitted result was not revealed`,
+        );
       check(
         store.get().activeConnectionId === "alpha",
         `${title} selection replaced another operational context`,
       );
-      // The chosen search stays in the view until its end.
-      check(
-        !!document.querySelector(`[aria-label="${title} search"]`),
-        `${title} ended the search on a choice`,
-      );
-      namedButton("End search")?.click();
+      Object.getOwnPropertyDescriptor(
+        HTMLInputElement.prototype,
+        "value",
+      )!.set!.call(input, "Repeated synthetic agent");
+      input.dispatchEvent(new InputEvent("input", { bubbles: true }));
       await frame();
-      check(
-        !document.querySelector(`[aria-label="${title} search"]`) &&
-          worldFinder.get() === null,
-        `${title} search did not end`,
-      );
-      // Many matches stay a bounded page; its Next row pages to the rest,
-      // so a later match whose label repeats is still reachable and chosen.
-      namedButton("Find in World")?.click();
-      await waitFor(
-        () => !!document.querySelector(".command-popover input"),
-        `${title} search did not reopen`,
-      );
-      typeInBox("Repeated synthetic agent");
-      await waitFor(
-        () => finds().length > 0,
-        `${title} found no repeated agents`,
-      );
       const later = worldObjectId("beta", "terminal", "shared-39");
-      const nextPage = () =>
-        [...document.querySelectorAll<HTMLElement>("[cmdk-item]")].find(
-          (item) => item.dataset.value?.includes("find-page-next"),
+      check(
+        document.querySelectorAll("[data-world-search-result]").length <= 32,
+        `${title} search DOM is unbounded`,
+      );
+      const next = namedButton("Next search results");
+      if (!next)
+        throw new Error(
+          `${title} has no path to matching observations beyond the first 32`,
         );
-      for (let page = 0; page < 5 && !findRow(later); page += 1) {
-        check(
-          finds().length <= WORLD_COMMAND_FINDS,
-          `${title} search DOM is unbounded`,
-        );
-        const next = nextPage();
-        if (!next)
-          throw new Error(
-            `${title} has no path to matching observations beyond the first page`,
-          );
-        const shown = finds()[0]?.dataset.value;
-        next.click();
-        await waitFor(
-          () => finds()[0]?.dataset.value !== shown,
-          `${title} Next did not page the search`,
-        );
-        check(
-          !!document.querySelector(".command-popover"),
-          `${title} paging closed the box`,
-        );
-      }
-      const laterResult = findRow(later);
+      next.click();
+      await frame();
+      const laterResult = [
+        ...document.querySelectorAll<HTMLElement>("[data-world-search-result]"),
+      ].find((element) => element.dataset.worldSearchResult === later);
       if (!laterResult)
         throw new Error(
           `${title} paging lost the later qualified match with colliding labels`,
         );
       laterResult.click();
-      // Town keeps the list after a first choice; closing keeps the choice.
-      if (view === "town")
-        document.querySelector<HTMLButtonElement>(".command-trigger")?.click();
-      await waitFor(
-        () => !document.querySelector(".command-popover"),
-        `${title} kept the box open after choosing the paged match`,
-      );
-      if (view === "town")
-        check(
-          worldFinder.get()?.chosen?.result.nodeId === later,
-          `${title} did not go to the later paged match`,
-        );
-      else
+      if (view === "town") {
+        await frame();
+        laterResult.click();
+      }
+      if (view !== "town")
         await waitFor(
           () =>
             [
@@ -3520,28 +3448,22 @@ async function run() {
                 element.dataset.worldNodeAnchor === later &&
                 element.getAttribute("aria-pressed") === "true",
             ),
+          `${title} did not reveal paged result`,
+        );
+      await frame();
+      if (view !== "town")
+        check(
+          [
+            ...document.querySelectorAll<HTMLElement>(
+              "[data-world-node-anchor]",
+            ),
+          ].some(
+            (element) =>
+              element.dataset.worldNodeAnchor === later &&
+              element.getAttribute("aria-pressed") === "true",
+          ),
           `${title} did not reveal the later paged match`,
         );
-      namedButton("End search")?.click();
-      await frame();
-      check(worldFinder.get() === null, `${title} paged search did not end`);
-      namedButton("Find in World")?.click();
-      await waitFor(
-        () => !!document.querySelector(".command-popover input"),
-        `${title} search did not reopen`,
-      );
-      typeInBox("Repeated synthetic agent");
-      await waitFor(
-        () => finds().length > 0,
-        `${title} found no repeated agents`,
-      );
-      // Closing the box without a choice ends the search.
-      document.querySelector<HTMLButtonElement>(".command-trigger")?.click();
-      await waitFor(
-        () => !document.querySelector(".command-popover"),
-        `${title} box did not close`,
-      );
-      check(worldFinder.get() === null, `${title} kept an unchosen search`);
     }
     const viewSelect = document.querySelector<HTMLSelectElement>(
       'select[aria-label="World view"]',

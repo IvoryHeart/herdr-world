@@ -101,35 +101,22 @@ function enterSearch(input: HTMLInputElement, value: string) {
   )?.set?.call(input, value);
   input.dispatchEvent(new InputEvent("input", { bubbles: true }));
 }
-/**
- * World's one search, opened from a view's search button in `scope`, or from
- * the toolbar's running search, which takes the button's place.
- */
-async function openOneSearch(scope: string) {
-  document
-    .querySelector<HTMLButtonElement>(
-      `${scope} button[aria-label="Find in World"], ${scope} button.world-view-search-query`,
-    )
-    ?.click();
+/** A view's desktop search, unfolded from its icon as a click does. */
+async function openViewSearch(scope: string, label: string) {
+  const selector = `${scope} input[placeholder="Search ${label}"]`;
+  const open = document.querySelector<HTMLInputElement>(selector);
+  if (open) open.focus();
+  else
+    document
+      .querySelector<HTMLButtonElement>(
+        `${scope} button[aria-label="Search ${label}"]`,
+      )
+      ?.click();
   await until(
-    () => document.activeElement?.matches(".command-popover input"),
-    "World's one search open with the cursor in it",
+    () => document.activeElement?.matches(selector),
+    `${label}'s search unfolding with the cursor in it`,
   );
-  return document.querySelector<HTMLInputElement>(".command-popover input")!;
-}
-/** Close the one search with Escape, as a user does. */
-async function closeOneSearch(input: HTMLInputElement) {
-  input.dispatchEvent(
-    new KeyboardEvent("keydown", {
-      key: "Escape",
-      bubbles: true,
-      cancelable: true,
-    }),
-  );
-  await until(
-    () => !document.querySelector(".command-popover"),
-    "Escape closing World's one search",
-  );
+  return document.querySelector<HTMLInputElement>(selector)!;
 }
 let renderError: unknown = null;
 window.addEventListener("error", (event) => {
@@ -944,20 +931,38 @@ async function run() {
     worldLocalStorage.getItem("zenMode.world") === null,
     "World's default Zen was stored as if the user had chosen it",
   );
-  // Zen parks the topbar off screen, so Town's search button sits in the Zen
-  // dock, in sight, and moves back to the topbar when Zen ends. It opens
-  // World's one search.
+  // Zen parks the topbar off screen, so Town's search sits in the Zen dock,
+  // in sight, and moves back to the topbar when Zen ends. It rests as an
+  // icon and unfolds into the box.
   await until(() => {
     const rect = document
       .querySelector<HTMLElement>(
-        '.zen-dock .world-zen-search button[aria-label="Find in World"]',
+        '.zen-dock .world-zen-search button[aria-label="Search Town"]',
       )
       ?.getBoundingClientRect();
     return Boolean(rect && rect.width > 0 && rect.top >= 0);
-  }, "Town's search button in sight beside the views in Zen");
-  await closeOneSearch(await openOneSearch(".zen-dock .world-zen-search"));
+  }, "Town's search icon in sight beside the views in Zen");
+  {
+    const zenSearch = await openViewSearch(
+      ".zen-dock .world-zen-search",
+      "Town",
+    );
+    await until(
+      () => zenSearch.getBoundingClientRect().width > 100,
+      () =>
+        `Town's unfolded search too narrow in Zen: ${zenSearch.getBoundingClientRect().width}`,
+    );
+    zenSearch.blur();
+    await until(
+      () =>
+        document.querySelector(
+          '.zen-dock .world-zen-search button[aria-label="Search Town"]',
+        ),
+      "Town's empty search folding back to its icon",
+    );
+  }
   check(
-    !document.querySelector('.topbar [aria-label="Find in World"]'),
+    !document.querySelector('.topbar [aria-label="Search Town"]'),
     "Town's search stayed in the hidden topbar during Zen",
   );
   document.querySelector<HTMLButtonElement>(".zen-dock .zen-island")?.click();
@@ -971,7 +976,7 @@ async function run() {
   );
   await until(
     () =>
-      document.querySelector('.topbar button[aria-label="Find in World"]') !==
+      document.querySelector('.topbar button[aria-label="Search Town"]') !==
       null,
     "Town's search back in the topbar after Zen",
   );
@@ -1316,15 +1321,18 @@ async function run() {
   );
   await setShellActionsOpen(false);
   {
-    // Town's search in the topbar sits beside the summary and opens the box.
-    const button = document.querySelector<HTMLElement>(
-      '.topbar button[aria-label="Find in World"]',
+    // Unfolded, the topbar's search keeps a usable width beside the summary.
+    const topbarSearch = await openViewSearch(".topbar", "Town");
+    await until(
+      () => topbarSearch.getBoundingClientRect().width >= 180,
+      () =>
+        `top-bar summary crowded search: ${JSON.stringify({ searchWidth: topbarSearch.getBoundingClientRect().width, statusWidth: topbarDetails?.getBoundingClientRect().width, viewport: window.innerWidth })}`,
     );
-    check(
-      (button?.getBoundingClientRect().width ?? 0) > 0,
-      "the top-bar summary crowded out Town's search button",
+    topbarSearch.blur();
+    await until(
+      () => document.querySelector('.topbar button[aria-label="Search Town"]'),
+      "Town's empty topbar search folding back to its icon",
     );
-    await closeOneSearch(await openOneSearch(".topbar"));
   }
   check(
     document
@@ -1490,22 +1498,15 @@ async function run() {
     document.querySelector(".sidebar") === sharedNavigator,
     "Board replaced the shared workspace navigator",
   );
-  // Board's search is World's one search: typed in the box, it lights
-  // Board's matches and the box lists them, in sight over the board.
-  const boardSearch = await openOneSearch("");
+  // Board fills its stage, so its search results float over it, in sight
+  // and taking a click, rather than drawn under the board.
+  const boardSearch = await openViewSearch("", "Board");
   enterSearch(boardSearch, "Builder");
   const boardResultRow = () =>
-    [...document.querySelectorAll<HTMLElement>("[cmdk-item]")].find((item) =>
-      item.dataset.value?.includes("world-find-"),
+    document.querySelector<HTMLElement>(
+      ".board-search-results [data-world-search-result]",
     );
-  await until(boardResultRow, "Board search results in the one search");
-  await until(
-    () =>
-      document
-        .querySelector('[aria-label="Board search"]')
-        ?.textContent?.includes("Builder"),
-    "Board showing the box's running search",
-  );
+  await until(boardResultRow, "Board search results");
   {
     const boardResult = boardResultRow()!;
     const box = boardResult.getBoundingClientRect();
@@ -1518,11 +1519,16 @@ async function run() {
       `Board search result is covered by ${hit?.tagName}.${hit?.className}`,
     );
   }
-  // Closing the box without a choice ends Board's search.
-  await closeOneSearch(boardSearch);
+  boardSearch.dispatchEvent(
+    new KeyboardEvent("keydown", {
+      key: "Escape",
+      bubbles: true,
+      cancelable: true,
+    }),
+  );
   await until(
-    () => !document.querySelector('[aria-label="Board search"]'),
-    "closing the one search ends Board's search",
+    () => !document.querySelector(".board-search-results"),
+    "Escape ends Board's search",
   );
   viewSelect.value = "town";
   viewSelect.dispatchEvent(new Event("change", { bubbles: true }));
@@ -2051,47 +2057,22 @@ async function run() {
         ?.classList.contains("has-inspector"),
     "close shared navigator Inspector",
   );
-  // World's one search in Town: the first choice goes to the result on the
-  // map and keeps the list open; choosing it again closes the box and selects
-  // it, as `/` did.
-  const box = await openOneSearch("");
-  enterSearch(box, "Local");
-  await until(
-    () => document.querySelector("[cmdk-item][data-selected=true]"),
-    "Town's one search finding Local",
-  );
-  const chooseLocal = () =>
-    document
-      .querySelector<HTMLInputElement>(".command-popover input")!
+  const officeSearch = await openViewSearch("", "Town");
+  enterSearch(officeSearch, "Local");
+  const submitTownSearch = () =>
+    officeSearch
+      .closest("form")!
       .dispatchEvent(
-        new KeyboardEvent("keydown", {
-          key: "Enter",
-          bubbles: true,
-          cancelable: true,
-        }),
+        new SubmitEvent("submit", { bubbles: true, cancelable: true }),
       );
-  chooseLocal();
-  await until(
-    () =>
-      document
-        .querySelector('[aria-label="Town search"]')
-        ?.textContent?.includes("Local") === true,
-    "Town keeps the chosen search",
-  );
+  // The first Enter shows the result on the map; the second opens it.
+  submitTownSearch();
   await settle();
   check(
-    !!document.querySelector(".command-popover [cmdk-item]"),
-    "Town's first search choice keeps the list open",
-  );
-  check(
     !document.querySelector('.world-selection-panel[data-kind="host"]'),
-    "first Town search choice only goes to the result",
+    "first Town search Enter only shows the result",
   );
-  chooseLocal();
-  await until(
-    () => !document.querySelector(".command-popover"),
-    "choosing again closing the one search",
-  );
+  submitTownSearch();
   await until(
     () =>
       document

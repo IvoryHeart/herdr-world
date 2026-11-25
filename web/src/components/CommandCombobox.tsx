@@ -26,9 +26,6 @@ import {
 } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
 import { COMMAND_BOX_OPEN_EVENT, commandBoxKey } from "../commandBoxKey";
-import { useViewSearchShortcut } from "../world/viewSearchShortcut";
-import { type FinderSearch, useFinderBoxClosed } from "../world/worldFinder";
-import { findPages } from "./commandFindPages";
 import { luckyWorktreeBranchName } from "../luckyName";
 import { normalizeSearchText } from "../searchText";
 import { SHORTCUT_NUMBERS } from "../shortcutBindings";
@@ -54,7 +51,7 @@ import {
 import type { FileExplorerEntry, Pane, Tab, Workspace } from "../types";
 import { shortId } from "../utils";
 import { canCreateWorktree, worktreeCreationSource } from "../worktree";
-import { ActionItem, runSecondaryKey } from "./CommandActionItem";
+import { ActionItem } from "./CommandActionItem";
 import { CreateWorkspaceDialog } from "./CreateWorkspaceDialog";
 import { ConfirmDialog, TextInputDialog } from "./ModalDialogs";
 import {
@@ -100,23 +97,15 @@ export type ActionDefinition = {
   trailing?: React.ReactNode;
   /**
    * A second way to choose it: Shift+Enter, or the row's button (World's
-   * finds: open its terminal instead of going to it in the current view).
+   * finds: show it in the current view instead of opening it).
    */
   secondary?: { label: string; run: () => void };
-  /**
-   * Runs with the box left open: always (paging through finds), or when the
-   * function says so as it is chosen (a find the view only showed, so
-   * choosing it again opens it).
-   */
-  stay?: boolean | (() => boolean);
   run: () => void;
 };
 
 export type ActionGroupDefinition = {
   heading: string;
   actions: ActionDefinition[];
-  /** A page of a longer list of finds, alike rows distinct (commandFindPages). */
-  page?: { from: number; size: number; total: number };
 };
 
 export type CommandExtension = {
@@ -128,17 +117,12 @@ export type CommandExtension = {
    * terminals on every runtime. The shell gives it to the box in every view,
    * Spaces included (#1329).
    */
-  find?: (search: string, from: number) => ActionGroupDefinition | null;
+  find?: (search: string) => ActionGroupDefinition | null;
   /**
    * A visual view's own select for a World node, as clicking it there does:
-   * what choosing a find does there. The box itself never calls it.
+   * the finds' second action. The box itself never calls it.
    */
   showNode?: (nodeId: string) => void;
-  /**
-   * The search the box shares with the current view (world/worldFinder.ts):
-   * the text it resumes with, each change as it is typed, and its closing.
-   */
-  finderSearch?: FinderSearch;
   placeholder?: string;
 };
 
@@ -305,7 +289,6 @@ function OwnedCommandCombobox({
   arrangementControl,
   extension = EMPTY_COMMAND_EXTENSION,
   find,
-  finderSearch,
   onShowShortcuts,
 }: {
   operationalShortcutsEnabled?: boolean;
@@ -317,8 +300,6 @@ function OwnedCommandCombobox({
   extension?: CommandExtension;
   /** World's finds (CommandExtension.find), in every view. */
   find?: CommandExtension["find"];
-  /** The search shared with the current view (CommandExtension.finderSearch). */
-  finderSearch?: FinderSearch;
   onShowShortcuts?: () => void;
 }) {
   useCreationProgress();
@@ -342,7 +323,6 @@ function OwnedCommandCombobox({
     useState<CommandExtension | null>(null);
   useCloseGlobalMenuForDialog(open, setOpen);
   const [search, setSearch] = useState("");
-  const [findFrom, setFindFrom] = useState(0);
   const [selectedActionValue, setSelectedActionValue] = useState("");
   const [selectedActionSearch, setSelectedActionSearch] = useState("");
   const [createWorkspaceOpen, setCreateWorkspaceOpen] = useState(false);
@@ -461,12 +441,14 @@ function OwnedCommandCombobox({
       if (open) {
         setOpen(false);
         setSearch("");
-      } else openBox();
+      } else {
+        setCapturedExtension(extension);
+        setOpen(true);
+      }
     };
-    const onOpen = (event: Event) => {
-      const resume =
-        event instanceof CustomEvent && event.detail?.resume === true;
-      if (!open) openBox(resume);
+    const onOpen = () => {
+      setCapturedExtension(extension);
+      setOpen(true);
     };
     window.addEventListener("keydown", onKey, true);
     window.addEventListener(COMMAND_BOX_OPEN_EVENT, onOpen);
@@ -475,39 +457,12 @@ function OwnedCommandCombobox({
       window.removeEventListener(COMMAND_BOX_OPEN_EVENT, onOpen);
     };
   }, [extension, open, operationalShortcutsEnabled]);
-  // `/` and Ctrl+F (`view.search`) open the same box, outside text and
-  // terminals (viewSearchShortcut.ts); inside it they type.
-  useViewSearchShortcut(() => {
-    if (!open) openBox();
-  }, operationalShortcutsEnabled);
-
-  /**
-   * Open the box, empty, or with the search the current view still shows when
-   * `resume` (its search chip). A search chosen before stays in the view until
-   * something new is typed.
-   */
-  function openBox(resume = false) {
-    setCapturedExtension(extension);
-    setSearch(resume ? (finderSearch?.seed() ?? "") : "");
-    setFindFrom(0);
-    setOpen(true);
-  }
-  useFinderBoxClosed(open, finderSearch);
 
   const run = (fn: () => void) => {
     setOpen(false);
     setSearch("");
     if (!operationalShortcutsEnabled) return;
     fn();
-  };
-  // Choosing a row closes the box unless the row stays. A click left the
-  // input; it gets focus back, so Enter chooses again from the same list.
-  const choose = (action: ActionDefinition) => {
-    if (action.disabledReason) return;
-    const { stay } = action;
-    if (!(typeof stay === "function" ? stay() : stay)) return run(action.run);
-    action.run();
-    document.querySelector<HTMLElement>(".command-popover input")?.focus();
   };
 
   const submitTextAction = (value: string) => {
@@ -1068,7 +1023,9 @@ function OwnedCommandCombobox({
         },
       )
     : [];
-  const findGroups = findPages(find, search, findFrom, setFindFrom);
+  const findGroups = (search.trim() ? [find?.(search)] : []).filter(
+    (group): group is ActionGroupDefinition => Boolean(group),
+  );
   const actionGroups: ActionGroupDefinition[] = [
     ...(!extension.groups.length || extension.context
       ? [
@@ -1140,17 +1097,15 @@ function OwnedCommandCombobox({
   const rankedActions = normalizedSearch
     ? (() => {
         const seen = new Set<string>();
-        // Paging rows stay with the results they page; alike finds stay apart.
         return actionGroups
           .flatMap((group) =>
             group.actions.map((action) => ({
               action,
               group: group.heading,
               score: rankAction(action, search),
-              distinct: Boolean(group.page),
             })),
           )
-          .filter((entry) => entry.score > 0 && entry.action.stay !== true)
+          .filter((entry) => entry.score > 0)
           .sort(
             (a, b) =>
               b.score - a.score ||
@@ -1158,7 +1113,6 @@ function OwnedCommandCombobox({
               a.action.title.localeCompare(b.action.title),
           )
           .filter((entry) => {
-            if (entry.distinct) return true;
             const signature = actionDisplaySignature(entry.action);
             if (seen.has(signature)) return false;
             seen.add(signature);
@@ -1187,7 +1141,6 @@ function OwnedCommandCombobox({
           if (topActionKeys.has(action.key)) return false;
           if (!normalizedSearch) return true;
           if (rankAction(action, search) <= 0) return false;
-          if (group.page) return true; // Alike finds are different things.
           const signature = actionDisplaySignature(action);
           if (displayedSignatures.has(signature)) return false;
           displayedSignatures.add(signature);
@@ -1227,8 +1180,8 @@ function OwnedCommandCombobox({
 
   const setCommandOpen = (next: boolean) => {
     if (next && !operationalShortcutsEnabled) return;
-    if (next && !open) openBox();
-    else setOpen(next);
+    if (next && !open) setCapturedExtension(extension);
+    setOpen(next);
     if (!next) setSearch("");
   };
 
@@ -1243,8 +1196,8 @@ function OwnedCommandCombobox({
             type="button"
             disabled={!operationalShortcutsEnabled}
             className={`topbar-button command-trigger ${open ? "is-active" : ""}`}
-            aria-label="Find or act"
-            title={shortcutTitle("Find or act", "command.menu")}
+            aria-label="Open command menu"
+            title={shortcutTitle("Open command menu", "command.menu")}
           >
             <Keyboard size={15} />
             <span>Actions</span>
@@ -1260,13 +1213,32 @@ function OwnedCommandCombobox({
           }}
           onKeyDownCapture={(event) => {
             if (!operationalShortcutsEnabled) return;
-            const selected = displayedActionGroups
-              .flatMap((group) => group.actions)
-              .find(
-                (action) => actionCommandValue(action) === commandSelectedValue,
-              );
-            if (!runSecondaryKey(event, selected, run))
-              runCommandNumberShortcut(event, numberedActions, choose);
+            if (
+              event.key === "Enter" &&
+              event.shiftKey &&
+              !event.altKey &&
+              !event.ctrlKey &&
+              !event.metaKey &&
+              !event.nativeEvent.isComposing
+            ) {
+              const chosen = displayedActionGroups
+                .flatMap((group) => group.actions)
+                .find(
+                  (action) =>
+                    actionCommandValue(action) === commandSelectedValue,
+                );
+              if (chosen?.secondary && !chosen.disabledReason) {
+                event.preventDefault();
+                event.stopPropagation();
+                run(chosen.secondary.run);
+                return;
+              }
+            }
+            runCommandNumberShortcut(
+              event,
+              numberedActions,
+              (action) => !action.disabledReason && run(action.run),
+            );
           }}
         >
           <Command
@@ -1280,11 +1252,7 @@ function OwnedCommandCombobox({
           >
             <CommandInput
               value={search}
-              onValueChange={(value) => {
-                setSearch(value);
-                setFindFrom(0);
-                finderSearch?.change(value);
-              }}
+              onValueChange={setSearch}
               placeholder={
                 extension.placeholder ?? "Search actions or enter file path..."
               }
@@ -1319,7 +1287,13 @@ function OwnedCommandCombobox({
                             }
                           : undefined
                       }
-                      onSelect={() => choose(action)}
+                      onSelect={() => {
+                        if (
+                          operationalShortcutsEnabled &&
+                          !action.disabledReason
+                        )
+                          run(action.run);
+                      }}
                     />
                   ))}
                 </CommandGroup>
