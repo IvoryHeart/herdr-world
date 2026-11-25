@@ -233,6 +233,12 @@ export const rpcVerbs = [
   rpc("worktree.list", "read", "runtime"),
   rpc("worktree.open", "reconcilable", "runtime"),
   rpc("worktree.remove", "reconcilable", "runtime"),
+  rpc(
+    "world.agent.move",
+    "opaque",
+    "world",
+    object({ source: Type.Unknown(), destination: Type.Unknown() }),
+  ),
   rpc("world.appearance.patch", "reconcilable", "world"),
   rpc("world.appearance.rename", "reconcilable", "world"),
   rpc("world.ask.answer", "reconcilable", "world"),

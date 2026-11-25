@@ -87,7 +87,11 @@ export function* constructRoom(
       ...(leaves.some(isCoreResourceNode) ? { coreOpen: true as const } : {}),
       completionAgentKeys: [],
       paneDevices: [],
-      observedPaneCount: Math.max(tab.pane_count, leaves.length),
+      // A runtime whose tab rows carry no count (an older core) would give NaN.
+      observedPaneCount: Math.max(
+        Number.isFinite(tab.pane_count) ? tab.pane_count : 0,
+        leaves.length,
+      ),
       omittedPaneCount: 0,
     });
     yield;
@@ -152,6 +156,7 @@ export function* constructRoom(
       order: space.workspace.number,
       stale: space.stale,
       canOpenInSpaces: operational,
+      ...(space.coreControl && !space.stale ? { coreOpen: true as const } : {}),
     },
     desks,
     agents,

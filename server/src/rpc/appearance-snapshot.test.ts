@@ -76,6 +76,7 @@ for (const mode of [
           warn: (_message: string, error: unknown) => warnings.push(error),
         },
         connectionManager: {
+          has: (id: string) => id === "alpha",
           // As the real manager: an ID it does not own (herdr-core) throws.
           readyRuntimeLease: (id: string) => {
             if (id !== "alpha") throw new Error(`unknown connection: ${id}`);

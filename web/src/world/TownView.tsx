@@ -845,6 +845,7 @@ export default function TownView({
                   }
                 : null
             }
+            onMove={(deskKey) => setMoveFlow({ step: "room", deskKey })}
             quiet={quiet.text(peekAgent.key)}
             onNext={
               reception.step(peekAgent.key, peek!.anchor) ??

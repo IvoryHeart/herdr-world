@@ -5,6 +5,7 @@ import { CHAT_KEY } from "../../../shared/chatKeys";
 import { createAgentSessionHandlers } from "../agent/agent-sessions";
 import { normalizeAgentName } from "../agent/chat-harnesses";
 import { claudeConfigDirectory } from "../agent/claude-process-session";
+import { codexRolloutId } from "../agent/process-transcript";
 import { createCodexSessionLinker } from "../agent/codex-session-link";
 import type {
   ConversationKeyResult,
@@ -552,10 +553,16 @@ export function createCoreAgentSessions(args: {
       view.occupancy(address) ?? 0,
       typeof pid === "number" ? pid : null,
     ]);
+    // Codex's process record names its open rollout file, not an ID: the
+    // ID is in the file name (a move resumes it with `codex resume <id>`).
     const idOf = (session: Row | undefined) =>
-      session?.kind === "id" && typeof session.value === "string"
-        ? session.value
-        : null;
+      typeof session?.value !== "string"
+        ? null
+        : session.kind === "id"
+          ? session.value
+          : session.kind === "path" && normalizeAgentName(agent) === "codex"
+            ? codexRolloutId(session.value)
+            : null;
     const link = idOf(linked(address));
     if (link) return { id: link, holder };
     const cached = known.get(address);
