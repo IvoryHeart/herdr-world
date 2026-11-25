@@ -2,14 +2,11 @@
 
 ### Requirement: App notification stream
 
-World SHALL offer a read-only `GET /api/notifications/stream` event stream behind its
-existing admission and login cookie. It SHALL carry the same notifications, with the
-same payload, that World's notification fan-out sends to Web Push devices, after the
-same currency check, filtered by the stream's completed and blocked preferences
-through the same mapping Web Push devices use. It SHALL keep no history and persist
-nothing, SHALL bound the number of open streams, SHALL send a heartbeat, and SHALL
-close the streams of a session when that session logs out. It SHALL NOT change
-World's login, cookie, origin or listener policy.
+World SHALL offer a read-only `GET /api/notifications/stream` behind its login
+cookie, carrying the payloads its notification fan-out sends to Web Push devices,
+after the same currency check and preference mapping. It SHALL persist nothing,
+bound open streams, send a heartbeat and close a session's streams at its logout.
+It SHALL NOT change World's login, cookie, origin or listener policy.
 
 #### Scenario: One decision for every device
 
