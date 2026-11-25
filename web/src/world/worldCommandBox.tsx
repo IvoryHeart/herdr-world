@@ -128,7 +128,6 @@ export function coreSpacesLeaf(
 /**
  * Why Enter cannot open a found node, or null when it can. An offline or
  * reconnecting host's agents stay listed, marked, and opening one says this.
- * @internal Exported for its unit tests.
  */
 export function worldFindOpenReason(node: WorldObjectNode): string | null {
   if (node.hostState === "reconnecting")
