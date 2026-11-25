@@ -1,4 +1,5 @@
 import { libraryAvailable } from "../memory/memoryTargets";
+import { useMemoryStore } from "../memory/memoryClient";
 /**
  * Board's hub beside the bin: the town center's actions (useTownCenter.ts)
  * as compact buttons. **+** launches an agent, the crown opens the Town
@@ -222,6 +223,8 @@ export function BoardHub({
   // The Town Master's greeting opens at the hub on wide screens.
   const greetingAnchor = useGreetingAnchor();
   const residents = useApartments().residents.length;
+  // Memory appears as a host's Library becomes available (#1342).
+  useMemoryStore();
   const actions = boardHubActions({
     residents,
     world,

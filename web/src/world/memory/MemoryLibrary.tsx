@@ -20,8 +20,14 @@ import {
   requestArtefactShelf,
   useArtefactShelves,
 } from "./artefactShelfClient";
-import { readerArtefacts, searchArtefacts } from "./artefactShelfModel";
 import {
+  artefactMaker,
+  readerArtefacts,
+  searchArtefacts,
+} from "./artefactShelfModel";
+import {
+  hostHasMemory,
+  libraryHosts,
   memoryCatalogState,
   memoryClient,
   memoryErrorText,
@@ -58,6 +64,10 @@ import "./memoryLibrary.css";
  * when its connection goes away the Library says so and never falls through
  * to another host, whose agents may share native IDs. Any host or reader
  * change retires replies still in flight (catalog, search, book).
+ *
+ * A host where no agent that keeps memory runs (every agent stopped, #1342)
+ * shows only what agents made: its memory is not read, and search looks
+ * through the made things alone. Memory returns when such an agent starts.
  */
 
 type Pane = "shelves" | "book";
@@ -85,20 +95,25 @@ export function MemoryLibrary({
 }) {
   useMemoryStore();
   useArtefactShelves();
-  const hosts = memoryHosts();
+  const offered = libraryHosts();
   // Only an open with no host named, before any host is known, takes the
   // first one to appear; a named or picked host is never replaced silently.
   // The testing switch has one synthetic host, which stands for any named one.
   const [hostId, setHostId] = useState<string | null>(() =>
     memoryFixtureOn()
-      ? (hosts[0]?.connection_id ?? null)
-      : (request.connectionId ?? hosts[0]?.connection_id ?? null),
+      ? (offered[0]?.connection_id ?? null)
+      : (request.connectionId ?? offered[0]?.connection_id ?? null),
   );
   useEffect(() => {
-    if (hostId === null && hosts[0]) setHostId(hosts[0].connection_id);
-  }, [hostId, hosts]);
+    if (hostId === null && offered[0]) setHostId(offered[0].connection_id);
+  }, [hostId, offered]);
+  // The chosen host stays while it is connected, even if it stops being
+  // offered (its last made thing deleted); only a lost connection ends it.
   const host =
-    hosts.find((candidate) => candidate.connection_id === hostId) ?? null;
+    memoryHosts().find((candidate) => candidate.connection_id === hostId) ??
+    null;
+  const hosts = host && !offered.includes(host) ? [host, ...offered] : offered;
+  const hasMemory = host ? hostHasMemory(host) : false;
   const hostLabel = useRef<string | null>(null);
   if (host) hostLabel.current = host.label;
   const hostKey = host ? memoryTargetKey(host) : null;
@@ -136,10 +151,14 @@ export function MemoryLibrary({
     setMadeFound(null);
     setSearch(null);
     setPane("shelves");
-    if (host) void requestMemoryCatalog(host, { force: true });
     if (host) void requestArtefactShelf(host, { force: true });
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [hostKey]);
+  // Memory is read only while an agent that keeps it runs there (#1342).
+  useEffect(() => {
+    if (host && hasMemory) void requestMemoryCatalog(host, { force: true });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [hostKey, hasMemory]);
 
   // Another reader (picked, or a gone one replaced) retires a search still
   // under way, so its matches never show under the new reader.
@@ -173,8 +192,13 @@ export function MemoryLibrary({
     shelfStatus === "failed" ||
     shelfStatus === "none";
   useEffect(() => {
-    if (!catalog || reader.kind === "all" || !shelfRead) return;
+    if (reader.kind === "all" || !shelfRead) return;
     if (readerArtefacts(shelf?.artefacts ?? [], reader).length) return;
+    if (!hasMemory) {
+      setReader(ALL_READERS);
+      return;
+    }
+    if (!catalog) return;
     const known =
       reader.kind === "project"
         ? catalog.agents.some(
@@ -190,7 +214,7 @@ export function MemoryLibrary({
         ? { kind: "agent", id: first.id }
         : ALL_READERS,
     );
-  }, [catalog, reader, shelf, shelfRead]);
+  }, [catalog, reader, shelf, shelfRead, hasMemory]);
 
   // A book whose file left the catalog (deleted elsewhere) closes.
   const live = useMemo(() => {
@@ -204,9 +228,10 @@ export function MemoryLibrary({
 
   const refresh = () => {
     if (!host) return;
-    void requestMemoryCatalog(host, { force: true });
+    if (hasMemory) void requestMemoryCatalog(host, { force: true });
     void requestArtefactShelf(host, { force: true });
   };
+  const reading = (hasMemory ? state?.status : shelfStatus) === "loading";
   const project = (id: string | null) =>
     id === null
       ? null
@@ -228,6 +253,13 @@ export function MemoryLibrary({
     event.preventDefault();
     const words = query.trim();
     if (!host || !words) return;
+    if (!hasMemory) {
+      // Only what agents made is here: it is searched in place.
+      setSearch(null);
+      setMadeFound(words);
+      setPane("shelves");
+      return;
+    }
     const filter: MemoryFilter =
       reader.kind === "agent"
         ? { agent_id: reader.id }
@@ -266,6 +298,24 @@ export function MemoryLibrary({
     setPane("book");
   };
   const banner = useMemo(() => townLibraryBanner(), []);
+  const madeReader =
+    host && made ? (
+      <ArtefactReader
+        target={host}
+        artefact={made}
+        names={host.names}
+        project={project}
+        route={route}
+        onBack={() => {
+          setPane("shelves");
+          setMadeId(null);
+        }}
+      />
+    ) : null;
+  const shelfError =
+    host && shelfStatus === "failed"
+      ? (artefactShelfState(host) as { error?: string } | null)?.error
+      : undefined;
 
   return (
     <PlaceWindow
@@ -346,8 +396,14 @@ export function MemoryLibrary({
                 type="search"
                 value={query}
                 maxLength={200}
-                placeholder="Search memory and what agents made"
-                aria-label="Search memory"
+                placeholder={
+                  hasMemory
+                    ? "Search memory and what agents made"
+                    : "Search what agents made"
+                }
+                aria-label={
+                  hasMemory ? "Search memory" : "Search what agents made"
+                }
                 onChange={(event) => setQuery(event.target.value)}
               />
               <button
@@ -362,20 +418,18 @@ export function MemoryLibrary({
               type="button"
               className="ghost memory-refresh"
               onClick={refresh}
-              disabled={state?.status === "loading"}
+              disabled={reading}
               aria-label="Read again"
               title="Read again from the host"
             >
               <RefreshCw
                 size={14}
                 aria-hidden="true"
-                className={
-                  state?.status === "loading" ? "is-spinning" : undefined
-                }
+                className={reading ? "is-spinning" : undefined}
               />
             </button>
           </div>
-          {state?.status === "failed" ? (
+          {hasMemory && state?.status === "failed" ? (
             <div className="memory-notice is-error" role="alert">
               <span>Couldn't read this host's memory: {state.error}</span>
               <button type="button" onClick={refresh}>
@@ -388,7 +442,75 @@ export function MemoryLibrary({
               <span>Search failed: {searchError}</span>
             </div>
           ) : null}
-          {!catalog ? (
+          {!hasMemory && shelfError !== undefined ? (
+            <div className="memory-notice is-error" role="alert">
+              <span>Couldn't read what agents made here: {shelfError}</span>
+              <button type="button" onClick={refresh}>
+                Try again
+              </button>
+            </div>
+          ) : null}
+          {!hasMemory ? (
+            <div className="memory-body is-made-only">
+              <div className="memory-middle">
+                <p className="memory-hint library-made-only" role="status">
+                  No agent that keeps memory is running on {host.label}, so only
+                  what agents made is here. Memory shows again when one starts.
+                </p>
+                {reader.kind !== "all" ? (
+                  <p className="library-made-filter">
+                    <span>
+                      {reader.kind === "agent"
+                        ? `Made by ${shelved[0] ? artefactMaker(shelved[0], host.names) : (host.names[reader.id] ?? "one agent")}`
+                        : `Made in ${project(reader.id) ?? "one project"}`}
+                    </span>
+                    <button
+                      type="button"
+                      className="ghost"
+                      onClick={() => setReader(ALL_READERS)}
+                    >
+                      Show everything
+                    </button>
+                  </p>
+                ) : null}
+                {madeFound !== null ? (
+                  <p className="library-made-filter">
+                    <span>
+                      {madeMatches.length} found for “{madeFound}”
+                    </span>
+                    <button
+                      type="button"
+                      className="ghost"
+                      onClick={() => setMadeFound(null)}
+                    >
+                      Clear
+                    </button>
+                  </p>
+                ) : null}
+                <ArtefactShelfList
+                  artefacts={madeFound !== null ? madeMatches : shelved}
+                  names={host.names}
+                  project={project}
+                  selected={made?.id ?? null}
+                  onOpen={openMade}
+                  empty={
+                    madeFound !== null
+                      ? "Nothing made here matches."
+                      : shelf
+                        ? "Nothing made here yet. Reports, pages, images and links agents make show up here."
+                        : "Reading what agents made…"
+                  }
+                />
+              </div>
+              <div className="memory-right">
+                {madeReader ?? (
+                  <p className="memory-empty-state memory-pick">
+                    Pick something an agent made to read it.
+                  </p>
+                )}
+              </div>
+            </div>
+          ) : !catalog ? (
             <p className="memory-empty-state" aria-busy="true">
               {state?.status === "failed" ? "" : "Reading the shelves…"}
             </p>
@@ -481,18 +603,8 @@ export function MemoryLibrary({
                 )}
               </div>
               <div className="memory-right">
-                {made ? (
-                  <ArtefactReader
-                    target={host}
-                    artefact={made}
-                    names={host.names}
-                    project={project}
-                    route={route}
-                    onBack={() => {
-                      setPane("shelves");
-                      setMadeId(null);
-                    }}
-                  />
+                {madeReader ? (
+                  madeReader
                 ) : live ? (
                   <MemoryBook
                     target={host}
@@ -535,7 +647,7 @@ export function MemoryLibrary({
               </div>
             </div>
           )}
-          {catalog ? (
+          {hasMemory && catalog ? (
             <footer className="memory-foot">
               <span>
                 Read {formatAge(Date.now() - catalog.observed_at)} from{" "}

@@ -16,10 +16,12 @@ const MemoryLibrary = lazyWithReload("world-memory", () =>
 /**
  * How the Library reaches a made file (#1327) through World's live agents
  * on its host: its maker while it runs (else an agent in its room, else
- * any) reads it and, in its Inspector's Files, opens it.
+ * any) reads it and, in its Inspector's Files, opens it. With every agent
+ * there gone (#1342), the maker's room is still read through, else any
+ * room World shows on that host.
  */
 function artefactRoute(
-  world: Pick<WorldObject, "leaves">,
+  world: Pick<WorldObject, "leaves" | "spaces">,
   onOpen: FeatureSlotProps["dialogs"]["onOpen"],
   onOpened: () => void,
 ): ArtefactRoute {
@@ -43,8 +45,23 @@ function artefactRoute(
     );
     return [maker, room, ...live].filter((leaf) => leaf !== undefined);
   };
+  const roomOf = (artefact: Parameters<ArtefactRoute["workspace"]>[0]) => {
+    const rooms = world.spaces.filter(
+      (space) =>
+        !space.stale &&
+        space.capabilities.files &&
+        space.connectionId === artefact.made_by.connection_id,
+    );
+    return (
+      rooms.find(
+        (space) =>
+          space.workspace.workspace_id === artefact.made_by.workspace_id,
+      ) ?? rooms[0]
+    )?.workspace.workspace_id;
+  };
   return {
-    workspace: (artefact) => via(artefact)[0]?.workspaceId ?? null,
+    workspace: (artefact) =>
+      via(artefact)[0]?.workspaceId ?? roomOf(artefact) ?? null,
     openInFiles(artefact) {
       if (artefact.where.type !== "file") return null;
       const path = artefact.where.path;

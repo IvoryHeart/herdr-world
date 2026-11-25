@@ -13,3 +13,4 @@
 - [x] Chat cards for artefacts made in a turn.
 - [x] No Board artefact element or CLI.
 - [x] Unit coverage for discovery, presence, desk reads, the shelf, search and the sign.
+- [x] Library and Town sign on a host whose agents have all stopped (#1342).
