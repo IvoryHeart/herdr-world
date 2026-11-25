@@ -134,6 +134,7 @@ export function WorkspaceTree({
   agentsFirst = false,
   focusOnSelect = true,
   includeTerminals = false,
+  selectOnly = false,
   observedTopology,
   onSelect,
   onBrowseFiles,
@@ -146,6 +147,11 @@ export function WorkspaceTree({
   agentsFirst?: boolean;
   focusOnSelect?: boolean;
   includeTerminals?: boolean;
+  /**
+   * Rows only choose (a herdr-core host, #1390): no menus, dragging or
+   * workspace creation, which are Herdr TUI operations.
+   */
+  selectOnly?: boolean;
   observedTopology?: { workspaces: Workspace[]; tabs: Tab[]; panes: Pane[] };
   onSelect?: (workspace: Workspace) => void;
   onBrowseFiles?: (workspace: Workspace) => void;
@@ -596,7 +602,7 @@ export function WorkspaceTree({
               }}
             />
           ) : null}
-          {focusedRepoWorkspace ? (
+          {focusedRepoWorkspace && !selectOnly ? (
             <button
               type="button"
               className="panel-add panel-action-icon"
@@ -609,13 +615,15 @@ export function WorkspaceTree({
               <GitBranch size={14} />
             </button>
           ) : null}
-          <button
-            className="panel-add panel-action-icon"
-            title="New workspace"
-            onClick={() => setCreateOpen(true)}
-          >
-            <Plus size={14} />
-          </button>
+          {selectOnly ? null : (
+            <button
+              className="panel-add panel-action-icon"
+              title="New workspace"
+              onClick={() => setCreateOpen(true)}
+            >
+              <Plus size={14} />
+            </button>
+          )}
         </div>
       </div>
       <div
@@ -706,19 +714,27 @@ export function WorkspaceTree({
               focusOnSelect={focusOnSelect}
               onSelect={onSelect}
               onSelectAgent={onSelectAgent}
-              onAgentContextMenu={(pane, x, y) => setAgentMenu({ pane, x, y })}
-              onContextMenu={(w, x, y) => setMenu({ workspace: w, x, y })}
-              workspaceDrag={{
-                isDragging: draggedWorkspaceId === w.workspace_id,
-                dropPosition:
-                  workspaceDropTarget?.workspaceId === w.workspace_id
-                    ? workspaceDropTarget.position
-                    : null,
-                onDragStart: (e) => onWorkspaceDragStart(w, e),
-                onDragOver: (e) => onWorkspaceDragOver(w, e),
-                onDrop: (e) => onWorkspaceDrop(w, e),
-                onDragEnd: clearWorkspaceDrag,
-              }}
+              onAgentContextMenu={(pane, x, y) =>
+                selectOnly ? undefined : setAgentMenu({ pane, x, y })
+              }
+              onContextMenu={(w, x, y) =>
+                selectOnly ? undefined : setMenu({ workspace: w, x, y })
+              }
+              workspaceDrag={
+                selectOnly
+                  ? undefined
+                  : {
+                      isDragging: draggedWorkspaceId === w.workspace_id,
+                      dropPosition:
+                        workspaceDropTarget?.workspaceId === w.workspace_id
+                          ? workspaceDropTarget.position
+                          : null,
+                      onDragStart: (e) => onWorkspaceDragStart(w, e),
+                      onDragOver: (e) => onWorkspaceDragOver(w, e),
+                      onDrop: (e) => onWorkspaceDrop(w, e),
+                      onDragEnd: clearWorkspaceDrag,
+                    }
+              }
             />
           ))}
       </div>
@@ -857,16 +873,19 @@ export function WorkspaceTree({
                           }
                           focusOnSelect={focusOnSelect}
                           onSelect={onSelectAgent}
-                          onOpenMenu={(x, y) =>
-                            setAgentMenu({
-                              pane,
-                              x,
-                              y,
-                              source: source ?? undefined,
-                            })
+                          onOpenMenu={
+                            selectOnly
+                              ? undefined
+                              : (x, y) =>
+                                  setAgentMenu({
+                                    pane,
+                                    x,
+                                    y,
+                                    source: source ?? undefined,
+                                  })
                           }
                           drag={
-                            !allServers && manualAgentOrder
+                            !allServers && manualAgentOrder && !selectOnly
                               ? {
                                   isDragging:
                                     draggedAgentPaneId === pane.pane_id,

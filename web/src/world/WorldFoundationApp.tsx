@@ -88,8 +88,14 @@ import { NeedsYouCounter } from "./NeedsYouTab";
 import { needsYouInTopbar } from "./needsYou";
 import { WorldControlPlane } from "./WorldControlPlane";
 import { SpacesCoreTerminal } from "./SpacesCoreTerminal";
-import { spacesCoreChoice, type SpacesCoreChoice } from "./spacesCore";
-import { coreSpacesLeaf } from "./worldCommandBox";
+import {
+  spacesCoreChoice,
+  spacesCoreStrip,
+  spacesCoreStripStep,
+  type SpacesCoreChoice,
+} from "./spacesCore";
+import { SpacesCoreStrip } from "./SpacesCoreStrip";
+import { coreSpacesLeaf, worldFindOpenReason } from "./worldCommandBox";
 import {
   WorldPanelsContext,
   useWorldPanelRegistry,
@@ -193,6 +199,17 @@ export default function WorldFoundationApp() {
     () => worldObjectForHosts(fullWorld, hostsFilter.ids),
     [fullWorld, hostsFilter.ids],
   );
+  // The strip of the shown core terminal's host (#1390), live from World.
+  const spacesCoreGroups = useMemo(
+    () => (spacesCore ? spacesCoreStrip(fullWorld, spacesCore) : []),
+    [fullWorld, spacesCore],
+  );
+  // Choosing in the strip, by click or tab key, only changes what Spaces
+  // shows: herdr-core has no focus to send.
+  const chooseSpacesCore = (choice: SpacesCoreChoice) =>
+    setSpacesCore((current) =>
+      current ? { ...choice, opened: current.opened } : current,
+    );
   const conversationStatus = useStoreSelector((snapshot) => snapshot.status);
   const workspaceSurfaceInspectorConversation = inspectorConversations.find(
     (conversation) =>
@@ -569,7 +586,14 @@ export default function WorldFoundationApp() {
                     onSelectionAdmitted();
                     return;
                   }
-                  if (!node.coreControl) setSpacesCore(null);
+                  // A core node with no live terminal says why, as Cmd+K
+                  // does; it has no Herdr host to make Spaces' own.
+                  if (node.coreControl)
+                    throw new Error(
+                      worldFindOpenReason(node) ??
+                        `${node.label} has no live terminal on herdr-core.`,
+                    );
+                  setSpacesCore(null);
                   if (store.get().activeConnectionId !== node.connectionId)
                     await activateWorldNodeHost(node);
                   const resourceView =
@@ -758,6 +782,21 @@ export default function WorldFoundationApp() {
                       onClose={() => setSpacesCore(null)}
                     />
                   ),
+                  tabs: (
+                    <SpacesCoreStrip
+                      groups={spacesCoreGroups}
+                      choice={spacesCore}
+                      onChoose={chooseSpacesCore}
+                    />
+                  ),
+                  selectTab: (step: "previous" | "next" | number) => {
+                    const next = spacesCoreStripStep(
+                      spacesCoreGroups,
+                      spacesCore.nodeId,
+                      step,
+                    );
+                    if (next) chooseSpacesCore(next);
+                  },
                 }
               : null
           }
