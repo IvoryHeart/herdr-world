@@ -5,6 +5,8 @@ on:
         branches: [main]
         paths:
             - site/**
+            - herdr-plugin.toml
+            - CHANGELOG.md
             - openspec/specs/**
             - openspec/changes/**
             - scripts/pages-features.ts

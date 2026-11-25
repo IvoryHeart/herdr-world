@@ -1,275 +1,220 @@
 import { expect, test } from "bun:test";
-import { readFileSync } from "node:fs";
+import { existsSync, readFileSync } from "node:fs";
 
-type Step = {
-  name?: string;
-  run?: string;
-  env?: Record<string, string>;
-  "continue-on-error"?: boolean;
-};
-type Job = {
-  uses?: string;
-  "runs-on"?: string;
-  needs?: string | string[];
-  if?: string;
-  env?: Record<string, string>;
-  "continue-on-error"?: boolean;
-  steps?: Step[];
-};
-type Workflow = {
-  env?: Record<string, string>;
-  jobs: Record<string, Job>;
-};
-
-function readWorkflow(name: string): Workflow {
-  return Bun.YAML.parse(
-    readFileSync(
-      new URL(`../.github/workflows/${name}`, import.meta.url),
-      "utf8",
-    ),
-  ) as Workflow;
-}
-
-test.each([
-  [
-    "ci.yml",
-    "unit-tests",
-    "bun scripts/ci-tests.ts unit ${{ matrix.shard }}/2",
-    true,
-  ],
-  ["release.yml", "validate", "bun run check:source", true],
-  ["prepare-release.yml", "prepare", "bun run check:source", false],
-] as const)(
-  "%s uses conservative file concurrency and preserves its World coverage",
-  (name, jobName, command, separateWorld) => {
-    const workflow = readWorkflow(name);
-    const job = workflow.jobs[jobName]!;
-    const step = job.steps?.find((step) => step.run === command);
-    expect(step).toBeDefined();
-    expect(step?.["continue-on-error"] ?? false).toBe(false);
-    const env = { ...workflow.env, ...job.env, ...step?.env };
-    expect(env.HERDR_TEST_PARALLEL).toBe("1");
-    expect(env.HERDR_TEST_MAX_CONCURRENCY).toBe("2");
-    if (separateWorld) expect(env.HERDR_TEST_EXCLUDE_WORLD_BROWSER).toBe("1");
-    else expect(env.HERDR_TEST_EXCLUDE_WORLD_BROWSER).not.toBe("1");
-  },
-);
-
-test("PR and release validation call the same World workflow", () => {
-  const ci = readWorkflow("ci.yml");
-  const release = readWorkflow("release.yml");
-  expect(ci.jobs["world-browser"]?.uses).toBe(
-    "./.github/workflows/world-browser.yml",
-  );
-  expect(release.jobs["world-browser"]).toMatchObject({
-    uses: ci.jobs["world-browser"]!.uses,
-    needs: "validate",
-  });
-  expect(release.jobs["world-browser"]?.if).toBeUndefined();
-});
-
-test("release packaging and publication require repository validation and every World shard", () => {
-  const workflow = readWorkflow("release.yml");
-  expect(workflow.jobs.package?.needs).toEqual(["validate", "world-browser"]);
-  function ancestors(name: string): Set<string> {
-    const job = workflow.jobs[name]!;
-    expect(job["continue-on-error"] ?? false).toBe(false);
-    expect(job.if ?? "").not.toContain("always()");
-    const dependencies = [job.needs ?? []].flat();
-    return new Set([
-      ...dependencies,
-      ...dependencies.flatMap((dependency) => [...ancestors(dependency)]),
+const workflow = (name: string): any =>
+  Bun.YAML.parse(readFileSync(`.github/workflows/${name}.yml`, "utf8"));
+function ancestors(jobs: any, name: string): string[] {
+  return [jobs[name].needs ?? []]
+    .flat()
+    .flatMap((dependency: string) => [
+      dependency,
+      ...ancestors(jobs, dependency),
     ]);
-  }
-  for (const name of [
-    "package",
-    "publish",
-    "npm-publish",
-    "homebrew-pr",
-    "deploy-pages",
-  ]) {
-    const required = ancestors(name);
-    expect(required.has("validate")).toBe(true);
-    expect(required.has("world-browser")).toBe(true);
-  }
-});
-
-test("Prepare Release validates the generated working tree before opening its PR", () => {
-  const steps = readWorkflow("prepare-release.yml").jobs.prepare!.steps!;
-  const prepare = steps.findIndex(
-    (step) => step.name === "Prepare release files",
-  );
-  const validate = steps.findIndex(
-    (step) => step.name === "Validate prepared release",
-  );
-  const publish = steps.findIndex((step) => step.name === "Create release PR");
-  expect(prepare).toBeGreaterThan(-1);
-  expect(validate).toBeGreaterThan(prepare);
-  expect(publish).toBeGreaterThan(validate);
-});
-
-test("release packages and labeled previews share one verification and image", () => {
-  const release = readWorkflow("release.yml").jobs.package!;
-  const preview = readWorkflow("ci.yml").jobs["release-preview"]!;
-  const verification = (job: Job) =>
-    job.steps?.find((step) =>
-      step.run?.startsWith("scripts/verify-release-package.sh "),
-    );
-  expect(verification(release)?.run).toBe(
-    'scripts/verify-release-package.sh "$RELEASE_VERSION" "${{ matrix.platform }}"',
-  );
-  expect(verification(preview)?.run).toBe(
-    'scripts/verify-release-package.sh "0.0.0-rc.$GITHUB_RUN_NUMBER" "${{ matrix.platform }}"',
-  );
-  // A floating image label changed file(1) between two releases (#247).
-  expect(release["runs-on"]).toMatch(/^ubuntu-\d+\.\d+$/);
-  expect(preview["runs-on"]).toBe(release["runs-on"]);
-});
-
-function homebrewInstallScript(): string {
-  const job = readWorkflow("release.yml").jobs["homebrew-smoke"];
-  const script = job?.steps?.find((step) =>
-    step.run?.includes("brew install --formula"),
-  )?.run;
-  if (!script) throw new Error("Missing native Homebrew installation consumer");
-  return script;
 }
 
-test("Release checks missing and existing external Herdr through the installed launcher", () => {
-  const script = homebrewInstallScript();
-  expect(script.indexOf("brew update")).toBeLessThan(
-    script.indexOf("brew install --formula"),
+test("only tags and nightly build native bytes; every channel contract precedes the seal", () => {
+  const ci = workflow("ci");
+  expect(ci.jobs["release-candidate"]).toBeUndefined();
+  expect(ci.jobs["installer-upgrade"]).toBeUndefined();
+  expect(workflow("release").jobs.candidate.uses).toBe(
+    "./.github/workflows/release-candidate.yml",
   );
-  expect(script).not.toContain("brew info --json=v2 herdr");
-  const before = script.indexOf(
-    "ruby tap/.github/scripts/check-homebrew-runtime.rb",
-  );
-  const reinstall = script.indexOf("brew reinstall --formula");
-  const after = script.lastIndexOf(
-    "ruby tap/.github/scripts/check-homebrew-runtime.rb",
-  );
-  expect(before).toBeGreaterThan(script.indexOf("brew install --formula"));
-  expect(reinstall).toBeGreaterThan(before);
-  expect(after).toBeGreaterThan(reinstall);
-});
-
-test("Native runtime acceptance uses signed core on macOS and a fake only on Linux", () => {
-  const check = readFileSync(
-    new URL("./check-homebrew-runtime.rb", import.meta.url),
-    "utf8",
-  );
-  expect(check).toContain('RUBY_PLATFORM.include?("darwin")');
-  expect(check).toContain("unless macos");
-  expect(check).toContain('File.join(fake_bin, "curl")');
-  expect(check).toContain('File.join(fake_bin, "systemctl")');
-  expect(check).toContain('"HC_INSTALL_DIR" => nil');
-  expect(check).toContain('"/usr/bin/codesign", "--verify", "--strict"');
-  expect(check).toContain('"server", "stop"');
-  expect(check).toContain("UNIXSocket.open");
-});
-
-test("Homebrew native acceptance covers both Macs against the published 0.3.5 Formula", () => {
-  const workflow = readWorkflow("homebrew-runtime.yml");
-  expect(workflow.jobs.ownership).toMatchObject({
-    strategy: {
-      "fail-fast": false,
-      matrix: { runner: ["macos-15", "macos-15-intel"] },
-    },
-  });
-  const script = workflow.jobs
-    .ownership!.steps!.map((step) => step.run ?? "")
-    .join("\n");
-  expect(script).toContain("7078346510e49fc33c77764a803ca680e6adb8fa");
-  expect(script).toContain('= "herdr-world 0.3.5"');
-  expect(script).toContain("ruby scripts/check-homebrew-runtime.rb");
-  for (const source of [
-    script,
-    homebrewInstallScript(),
-    readFileSync(
-      new URL("./homebrew-tap-workflow.yml", import.meta.url),
-      "utf8",
+  const candidate = workflow("release-candidate");
+  const all = JSON.stringify(candidate);
+  expect(all).not.toContain("check:source");
+  expect(all).not.toContain("world-browser.yml");
+  expect(
+    candidate.jobs.package.strategy.matrix.include.map(
+      (row: any) => row.platform,
     ),
-  ]) {
-    expect(source).toContain("mktemp -d /tmp/hw.XXXXXX");
-    expect(source).toContain("trap 'rm -rf \"$fixture_home\"' EXIT");
-  }
+  ).toEqual([
+    "linux-x64",
+    "linux-arm64",
+    "darwin-x64",
+    "darwin-arm64",
+    "windows-x64",
+    "windows-arm64",
+  ]);
+  const steps = candidate.jobs.package.steps;
+  expect(
+    steps.filter((step: any) =>
+      step.run?.includes("bash scripts/package-release.sh"),
+    ),
+  ).toHaveLength(1);
+  expect(
+    steps.some(
+      (step: any) => step.run === "bun scripts/installer-upgrade.ts verify",
+    ),
+  ).toBe(true);
+  expect(candidate.jobs["release-walk"].with.package_artifacts).toBe(true);
+  for (const required of [
+    "package",
+    "archives",
+    "npm-stage",
+    "npm-smoke",
+    "homebrew-formula",
+    "homebrew-smoke",
+    "release-walk",
+    "validate",
+  ])
+    expect(ancestors(candidate.jobs, "verify")).toContain(required);
+  expect(
+    candidate.jobs.validate.steps.some(
+      (step: any) => step.run === "bun run security:check",
+    ),
+  ).toBe(true);
+  expect(candidate.jobs["npm-smoke"].strategy.matrix.runner).toHaveLength(6);
+  expect(candidate.jobs["homebrew-smoke"].strategy.matrix.runner).toHaveLength(
+    4,
+  );
 });
 
-// No channel may become public until every artifact and native tap input passes.
-test("every publisher waits for every release verification job", () => {
-  const workflow = readWorkflow("release.yml");
-  const ancestors = (name: string): string[] => {
-    const job = workflow.jobs[name]!;
-    expect(job).toBeDefined();
-    expect(job["continue-on-error"] ?? false).toBe(false);
-    return [job.needs ?? []]
-      .flat()
-      .flatMap((dependency) => [dependency, ...ancestors(dependency)]);
-  };
-  for (const publisher of ["publish", "npm-publish", "homebrew-pr"]) {
-    const required = ancestors(publisher);
-    for (const verification of [
-      "package",
-      "archives",
-      "npm-stage",
-      "homebrew-formula",
-      "homebrew-smoke",
-      "verify",
+test("standard publishers consume the tested artifact and serialize channels", () => {
+  const release = workflow("release");
+  expect(release.on).toEqual({ push: { tags: ["v*"] } });
+  expect(release.jobs.candidate.needs).toBe("validate");
+  for (const name of ["publish", "npm-publish", "homebrew-pr"]) {
+    expect(ancestors(release.jobs, name)).toContain("candidate");
+    expect(JSON.stringify(release.jobs[name])).not.toContain("npm pack ");
+  }
+  expect(JSON.stringify(release.jobs.publish)).toContain(
+    "softprops/action-gh-release@",
+  );
+  expect(JSON.stringify(release.jobs["npm-publish"])).toContain("npm publish");
+  expect(JSON.stringify(release.jobs["npm-publish"])).toContain("--provenance");
+  expect(release.jobs["npm-publish"].permissions["id-token"]).toBe("write");
+  expect(release.jobs["npm-publish"].needs).toContain("publish");
+  expect(release.jobs["homebrew-pr"].needs).toContain("npm-publish");
+  const brew = release.jobs["homebrew-pr"].steps.find((s: any) =>
+    s.uses?.includes("mislav/bump-homebrew-formula-action@"),
+  );
+  expect(brew.with["create-pullrequest"]).toBe(true);
+  expect(brew.env.COMMITTER_TOKEN).toBe("${{ secrets.HOMEBREW_TAP_TOKEN }}");
+  expect(JSON.stringify(release)).not.toMatch(
+    /publish-(?:github|npm)-release|open-homebrew-pr|release-walk-gate|release-bundle/,
+  );
+  expect(release.jobs["deploy-pages"].needs).not.toContain("homebrew-pr");
+});
+
+test("release-please owns version/changelog preparation and never creates a tag", () => {
+  const steps = workflow("release-pr").jobs.prepare.steps;
+  const action = steps.find((s: any) =>
+    s.uses?.startsWith("googleapis/release-please-action@"),
+  );
+  expect(action.with["skip-github-release"]).toBe(true);
+  const config = JSON.parse(readFileSync("release-please-config.json", "utf8"));
+  expect(config.packages["."]["release-type"]).toBe("simple");
+  expect(config.packages["."]["extra-files"]).toContainEqual({
+    type: "generic",
+    path: "herdr-plugin.toml",
+  });
+  expect(readFileSync("herdr-plugin.toml", "utf8")).toMatch(
+    /^# x-release-please-start-version\nversion = "[^"]+"\n# x-release-please-end$/m,
+  );
+  expect(JSON.stringify(steps)).toContain("workflow run ci.yml");
+  for (const removed of [
+    "scripts/prepare-release.ts",
+    "scripts/changelog-fragments.ts",
+    "scripts/open-homebrew-pr.sh",
+  ])
+    expect(existsSync(removed)).toBe(false);
+});
+
+test("retained-artifact reruns continue every publisher despite the skipped candidate", () => {
+  const jobs = workflow("release").jobs;
+  for (const candidate of ["success", "skipped"]) {
+    const results: Record<string, any> = {
+      validate: {
+        result: "success",
+        outputs: { retained: candidate === "skipped" ? "true" : "false" },
+      },
+      candidate: { result: candidate },
+      publish: { result: "success" },
+      "npm-publish": { result: "success" },
+      "homebrew-pr": { result: "success" },
+    };
+    for (const name of [
+      "publish",
+      "npm-publish",
+      "homebrew-pr",
+      "release-label",
     ]) {
-      expect(required).toContain(verification);
+      expect(jobs[name]).toBeDefined();
+      const condition =
+        jobs[name]?.if?.replace(/^\$\{\{\s*|\s*\}\}$/g, "") ?? "success()";
+      const success = () =>
+        ancestors(jobs, name).every(
+          (parent) => results[parent]?.result === "success",
+        );
+      const evaluate = new Function(
+        "needs",
+        "cancelled",
+        "success",
+        `return (${condition.replace(/needs\.([\w-]+)/g, 'needs["$1"]')});`,
+      );
+      expect(evaluate(results, () => false, success)).toBe(true);
+      // Each publisher must stop when its direct predecessor failed or skipped.
+      const parent = [jobs[name].needs].flat().at(-1);
+      for (const result of ["failure", "cancelled", "skipped"]) {
+        const prior = results[parent];
+        results[parent] = { result };
+        if (
+          parent !== "candidate" ||
+          result !== "skipped" ||
+          candidate !== "skipped"
+        )
+          expect(evaluate(results, () => false, success)).toBe(false);
+        results[parent] = prior;
+      }
     }
   }
-  for (const verification of [
-    "archives",
-    "npm-stage",
-    "homebrew-formula",
-    "homebrew-smoke",
-    "verify",
+});
+
+test("PR test steps retry once inside their Linux job; main runs no heavy jobs", () => {
+  const ci = workflow("ci");
+  for (const name of ["static", "unit-tests", "dependency-security"])
+    expect(ci.jobs[name].if).toContain("'hold'");
+  for (const [file, name, needle] of [
+    ["ci", "unit-tests", "ci-tests.ts unit"],
+    ["world-browser", "world-browser", "ci-tests.ts world"],
+    ["world-browser", "web-shards", "ci-tests.ts web"],
+    ["behavioral-verification", "shards", "verification:resources"],
   ]) {
-    const required = ancestors(verification);
-    for (const publisher of ["publish", "npm-publish", "homebrew-pr"])
-      expect(required).not.toContain(publisher);
+    const job = workflow(file).jobs[name];
+    expect(job["runs-on"]).toMatch(/^ubuntu-/);
+    const steps = job.steps.filter((s: any) => s.run?.includes(needle));
+    expect(steps).toHaveLength(2);
+    expect(steps[0]["continue-on-error"]).toBe(true);
+    expect(steps[1].if).toContain(".outcome == 'failure'");
   }
 });
 
-test("dispatch rehearses the full graph and all publishers check sealed input", () => {
-  const workflow = readWorkflow("release.yml") as Workflow & {
-    on: { workflow_dispatch: { inputs: { dry_run: { default: boolean } } } };
-  };
-  expect(workflow.on.workflow_dispatch.inputs.dry_run.default).toBe(true);
-  for (const name of [
-    "package",
-    "archives",
-    "npm-stage",
-    "homebrew-formula",
-    "homebrew-smoke",
-    "verify",
-  ]) {
-    expect(workflow.jobs[name]?.if).toBeUndefined();
-  }
-  for (const name of ["publish", "npm-publish", "homebrew-pr"]) {
-    const job = workflow.jobs[name]!;
-    expect(job.if).toBe("needs.validate.outputs.dry_run == 'false'");
-    const steps = job.steps!;
-    const check = steps.findIndex((step) =>
-      step.run?.includes("release-bundle.mjs verify"),
-    );
-    expect(check).toBeGreaterThan(-1);
-    expect(check).toBeLessThan(steps.length - 1);
-    expect(steps.map((step) => step.run ?? "").join("\n")).not.toContain(
-      "npm pack",
-    );
-  }
-  const prepare = workflow.jobs["homebrew-formula"]!.steps!.map(
-    (step) => step.run ?? "",
-  ).join("\n");
-  expect(prepare).toContain("check-homebrew-formula-stage.rb");
-  expect(prepare).toContain('--dry-run "$PWD/tap"');
-  expect(workflow.jobs["homebrew-pr"]!.steps!.at(-1)?.run).toContain(
-    '--prepared "$PWD/candidate/tap"',
-  );
-  expect(workflow.jobs["publication-status"]?.if).toBe("always()");
+test("channel upgrades exercise a running previous release and verify persisted stable path", () => {
+  const script = readFileSync("scripts/release-channel-upgrade.py", "utf8");
+  for (const boundary of [
+    "'service', 'install'",
+    "'brew', 'upgrade'",
+    "'brew', 'cleanup'",
+    "health(base, version)",
+    "marker.read_text()",
+    "'/Cellar/' not in definition.read_text()",
+  ])
+    expect(script).toContain(boundary);
   expect(
-    readWorkflow("publish-release.yml").jobs.publish!.steps!.at(-1)?.run,
-  ).toContain("-f dry_run=false");
+    JSON.stringify(workflow("release-candidate").jobs["homebrew-smoke"]),
+  ).toContain("release-channel-upgrade.py");
+  const tap = workflow("homebrew-runtime");
+  expect(tap.jobs.ownership.strategy.matrix.runner).toEqual([
+    "macos-15",
+    "macos-15-intel",
+  ]);
+  expect(readFileSync("scripts/homebrew-tap-workflow.yml", "utf8")).toContain(
+    "check-homebrew-runtime.rb",
+  );
+});
+
+test("nightly alerts serialize to one issue even when dispatch overlaps the schedule", () => {
+  const nightly = workflow("nightly-native");
+  expect(nightly.concurrency.group).toBe("nightly-native");
+  expect(nightly.concurrency["cancel-in-progress"]).toBe(false);
 });

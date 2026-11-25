@@ -325,6 +325,30 @@ function pushBaseline(cwd: string, before: string, after: string): string[] {
 }
 type PrivacyRange = [string | string[] | null, string];
 type PrivacyRequest = { ranges: PrivacyRange[]; findings?: PrivacyFinding[] };
+/** Pre-push scans the intended description (`HERDR_WORLD_PR_BODY`) or the
+ * existing PR's, plus the existing title. With no PR or no `gh` access there is
+ * nothing remote to scan; Privacy CI rescans metadata on every PR event. */
+function prePushMetadata(cwd: string): PrivacyFinding[] {
+  let pull: { title?: string; body?: string } = {};
+  try {
+    pull = JSON.parse(
+      execFileSync("gh", ["pr", "view", "--json", "title,body"], {
+        cwd,
+        encoding: "utf8",
+        timeout: 15_000,
+        stdio: ["ignore", "pipe", "ignore"],
+      }),
+    );
+  } catch {}
+  const file = process.env.HERDR_WORLD_PR_BODY;
+  return [
+    ...scanPrivacyText(pull.title ?? "", "PR title"),
+    ...scanPrivacyText(
+      file ? readFileSync(file, "utf8") : (pull.body ?? ""),
+      "PR body",
+    ),
+  ];
+}
 function request(cwd: string, args: string[]): PrivacyRequest {
   if (!args.length) return { ranges: [[mainBaseline(cwd), "HEAD"]] };
   if (args[0] === "--range" && args.length === 3)
@@ -352,15 +376,18 @@ function request(cwd: string, args: string[]): PrivacyRequest {
   }
   if (args[0] === "--pre-push" && args.length === 2) {
     const rows = readFileSync(args[1], "utf8").trim();
-    if (!rows) return { ranges: [[mainBaseline(cwd), "HEAD"]] };
-    const ranges = rows.split("\n").flatMap((row): PrivacyRange[] => {
-      const fields = row.trim().split(/\s+/);
-      if (fields.length !== 4) throw new Error("Invalid push input");
-      const after = exactSha(fields[1]);
-      const before = exactSha(fields[3]);
-      return after === zero ? [] : [[pushBaseline(cwd, before, after), after]];
-    });
-    return { ranges };
+    const ranges: PrivacyRange[] = !rows
+      ? [[mainBaseline(cwd), "HEAD"]]
+      : rows.split("\n").flatMap((row): PrivacyRange[] => {
+          const fields = row.trim().split(/\s+/);
+          if (fields.length !== 4) throw new Error("Invalid push input");
+          const after = exactSha(fields[1]);
+          const before = exactSha(fields[3]);
+          return after === zero
+            ? []
+            : [[pushBaseline(cwd, before, after), after]];
+        });
+    return { ranges, findings: prePushMetadata(cwd) };
   }
   throw new Error("Invalid arguments");
 }

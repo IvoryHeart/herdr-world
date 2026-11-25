@@ -23,7 +23,7 @@
 - `web/src/world/town/townObservatory.test.ts`
 - `web/src/world/usage/UsageLens.browser.tsx`
 - `web/src/world/TownView.tsx`
-- `web/src/world/town/TownCanvas.tsx`; frames: `web/src/world/town/townWorldTransform.ts` (overlay, zoom readers), `web/src/world/town/townHostRect.ts`, `web/src/world/worldFrameScheduler.ts` (typing quiet); town center: `web/src/world/town/TownCenterMenu.tsx`, `web/src/world/town/townCenterBuildings.ts`
+- `web/src/world/town/TownCanvas.tsx`; frames: `web/src/world/town/townWorldTransform.ts` (overlay, zoom readers), `web/src/world/town/townHostRect.ts`, `web/src/world/testing/frameTrace.ts`, `web/src/world/worldFrameScheduler.ts` (typing quiet); town center: `web/src/world/town/TownCenterMenu.tsx`, `web/src/world/town/townCenterBuildings.ts`
 - Room placement authority and Tidy/Undo: `web/src/world/town/townRoomMovability.ts`, `web/src/world/town/townMoveActions.tsx`, `web/src/world/town/townRoomPlace.ts`, `web/src/world/town/townRoomPins.ts`.
 - Room drag admission/preview: `web/src/world/town/townDrag.ts`, `web/src/world/town/scene/townInteraction.ts`.
 - Saved room spots: existing `room_pins` in `web/src/world/board/boardDocument.ts`; TUI order: `web/src/world/town/townMoves.ts`.
@@ -964,3 +964,9 @@
     `web/src/world/worldFinder.ts`; Town reads it in
     `web/src/world/town/useTownSearch.ts`.
   See the [Town exercise](../../../../docs/TUTORIAL.md#town).
+
+The overlay's initial 3D translation establishes its compositor layer before
+input moves it. The motion-only raster hint is removed at rest so text can
+rerasterize at the settled zoom. Frame acceptance records explicit gesture
+boundaries and still refuses presented missing content; two-CPU runs expose the
+first-pan promotion race without changing the assertions.

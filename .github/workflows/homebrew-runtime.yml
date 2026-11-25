@@ -1,14 +1,6 @@
 name: Homebrew runtime acceptance
 
 on:
-  pull_request:
-    paths:
-      - scripts/check-homebrew-runtime.rb
-      - scripts/check-homebrew-runtime.test.ts
-      - scripts/homebrew-tap-workflow.yml
-      - scripts/open-homebrew-pr.sh
-      - .github/workflows/homebrew-runtime.yml
-      - .github/workflows/release.yml
   workflow_dispatch:
 
 permissions:

@@ -6,7 +6,6 @@ import {
   assessSpecEdits,
   changedPathsBetween,
 } from "./check-knowledge-map";
-import { assessPullRequest, readFragments } from "./changelog-fragments";
 import { readCoverageScope } from "./coverage-scope";
 import { readCapabilityNotes } from "./openspec-notes";
 import { coverageDirectory } from "./coverage";
@@ -110,38 +109,6 @@ export function assessContractImpacts(
   return problems;
 }
 
-/**
- * Help ships with the feature (#1025): a changelog fragment that adds
- * something (`### Added`) comes with a changed `*.help.ts` declaration
- * (web/src/help/helpEntry.ts), or the description says why it needs none.
- */
-export function assessHelpImpact(
-  paths: readonly string[],
-  fragment: (path: string) => string | undefined,
-  body: string,
-): string[] {
-  const adding = paths.filter(
-    (path) =>
-      /^changes\/[a-z0-9-]+\.md$/.test(path) &&
-      /^### Added[ \t]*$/m.test(fragment(path) ?? ""),
-  );
-  if (!adding.length || paths.some((path) => path.endsWith(".help.ts")))
-    return [];
-  const answers = descriptionLines(body).flatMap((line) => {
-    const match = /^[ \t]*(?:-[ \t]+)?Help:[ \t]*(.*)$/i.exec(line);
-    return match ? [match[1].trim()] : [];
-  });
-  const reason =
-    answers.length === 1
-      ? /^none[ \t]*[-–—:][ \t]*(.+)$/i.exec(answers[0])?.[1]
-      : undefined;
-  return reason && /[\p{L}\p{N}]/u.test(reason) && !/<[^>]+>/.test(reason)
-    ? []
-    : [
-        `${adding.join(", ")} adds something: declare its help in a *.help.ts file beside it (web/src/help/helpEntry.ts), or include \`Help: none — <specific reason>\`.`,
-      ];
-}
-
 /** Use CI's policy functions and the committed PR diff, before publication. */
 export function checkPrBody(
   file: string,
@@ -162,18 +129,12 @@ export function checkPrBodyText(
   const base = git("rev-parse", "--verify", `${baseRef}^{commit}`);
   const head = git("rev-parse", "--verify", `${headRef}^{commit}`);
   const paths = changedPathsBetween(cwd, base, head);
-  readFragments(cwd);
   const sourcePaths = changedPathsBetween(cwd, base, head, {
     includeDeleted: false,
   });
   const knowledge = assessKnowledgeMapImpact(
     sourcePaths,
     readCapabilityNotes(cwd),
-  );
-  const changelog = assessPullRequest(
-    paths,
-    new Set(paths.filter((path) => existsSync(join(cwd, path)))),
-    body,
   );
   return [
     ...scanPrivacyText(body, "PR body").map(formatPrivacyFinding),
@@ -188,19 +149,6 @@ export function checkPrBodyText(
     ...(!knowledge.ok
       ? [
           `Source files without a capability notes.md Code path: ${knowledge.uncovered.join(", ")}`,
-        ]
-      : []),
-    ...assessHelpImpact(
-      paths,
-      (path) =>
-        existsSync(join(cwd, path))
-          ? readFileSync(join(cwd, path), "utf8")
-          : undefined,
-      body,
-    ),
-    ...(!changelog.ok
-      ? [
-          "Add a valid changes/<slug>.md fragment, or include `Changelog: none — <specific reason>`.",
         ]
       : []),
   ];

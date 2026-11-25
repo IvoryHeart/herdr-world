@@ -161,7 +161,6 @@ test("the static lane retains all checks and builds production assets once", () 
     "features:check",
     "notices:check",
     "check:dead",
-    "changelog:check",
     "check:size",
     "check:commit",
     "typecheck:quick",
@@ -181,7 +180,7 @@ test("the static lane retains all checks and builds production assets once", () 
   ).toEqual({ status: 1, commands: commands.slice(0, 3) });
   expect(
     exercise(["scripts/check-delivery.ts", "--static"], "typecheck:quick"),
-  ).toEqual({ status: 1, commands: commands.slice(0, 7) });
+  ).toEqual({ status: 1, commands: commands.slice(0, 6) });
   expect(
     exercise(
       ["scripts/check-delivery.ts", "--static"],
@@ -235,7 +234,6 @@ test("a changed gate always runs CI static checks and blocks size failures befor
     "run features:check",
     "run notices:check",
     "run check:dead",
-    "run changelog:check",
     "run check:size",
   ]);
 });
@@ -352,7 +350,6 @@ test("static failures report while all heavy check slots are held, regardless of
       "run features:check",
       "run notices:check",
       "run check:dead",
-      "run changelog:check",
       "run check:size",
     ]);
   } finally {
