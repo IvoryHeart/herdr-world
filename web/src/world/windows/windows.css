@@ -496,12 +496,7 @@
 .is-town-skin .workspace-inspector-location {
   font-size: 12px;
 }
-.is-town-skin
-  :is(
-    .world-window-back,
-    .world-window-controls > button,
-    .workspace-inspector-tabs-more
-  ) {
+.is-town-skin :is(.world-window-back, .world-window-controls > button) {
   min-width: 40px;
   min-height: 40px;
   border: 2px solid var(--town-edge);

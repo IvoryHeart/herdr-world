@@ -49,6 +49,7 @@ export function BoardPeek({
   deskStore = sharedDeskStore(),
   onOpen,
   onFiles,
+  moveTo = [],
   onClose,
   onHold,
 }: {
@@ -60,6 +61,8 @@ export function BoardPeek({
    */
   onOpen(): void;
   onFiles?: () => void;
+  /** Rooms on another runtime the agent can move to: it resumes there. */
+  moveTo?: readonly { key: string; label: string; onChoose(): void }[];
   onClose(): void;
   /** The pointer is over the peek: keep it while it is. */
   onHold(hold: boolean): void;
@@ -99,6 +102,7 @@ export function BoardPeek({
   const [placed, setPlaced] = useState<{ left: number; top: number } | null>(
     null,
   );
+  const [moving, setMoving] = useState(false);
   useEffect(() => {
     if (!card.current) return;
     // A phone shows the peek as a sheet; CSS places it.
@@ -291,7 +295,26 @@ export function BoardPeek({
             <span>{done ? "Follow up" : "Open"}</span>
           </button>
         ) : null}
+        {moveTo.length ? (
+          <button
+            type="button"
+            aria-expanded={moving}
+            title="Move to a room on another runtime: it resumes there"
+            onClick={() => setMoving(!moving)}
+          >
+            <span>Move to…</span>
+          </button>
+        ) : null}
       </div>
+      {moving ? (
+        <div className="board-peek-actions" role="group" aria-label="Move to">
+          {moveTo.map((room) => (
+            <button key={room.key} type="button" onClick={room.onChoose}>
+              <span>{room.label}</span>
+            </button>
+          ))}
+        </div>
+      ) : null}
     </div>
   );
 }

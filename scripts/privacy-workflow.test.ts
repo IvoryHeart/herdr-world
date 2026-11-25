@@ -38,7 +38,7 @@ test("privacy CI scans every PR change once without scope or metadata bypasses",
   ) as Workflow;
   expect(workflow.on.push).toBeUndefined();
   expect(workflow.on.pull_request).toEqual({
-    types: ["opened", "synchronize", "reopened"],
+    types: ["opened", "synchronize", "reopened", "edited"],
   });
   expect(workflow.permissions).toEqual({ contents: "read" });
   expect(workflow.concurrency).toBeUndefined();

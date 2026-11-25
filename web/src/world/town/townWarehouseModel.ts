@@ -9,8 +9,7 @@ import type {
   WorkItem,
   WorldSourcesSnapshot,
 } from "../../../../shared/worldSources";
-import { TOWN_CENTER_FRIEZE_Y, type TownCenterLot } from "./townCenter";
-import { TOWN_TILE, type TownLayout } from "./townLayout";
+import type { TownLayout } from "./townLayout";
 import { townHarbourLot } from "./townHarbour";
 import type { TownWarehouseLot } from "./townHarbourLot";
 
@@ -269,27 +268,11 @@ export const TOWN_WAREHOUSE_INSET = { x: 6, y: 6 } as const;
 
 /**
  * The warehouse's lot: on the harbour shore at the first street's end,
- * outside the building grid (townHarbourLot.ts), on every form factor; a
- * narrow (stacked) town also hangs its folded sign on the town center. The
+ * outside the building grid (townHarbourLot.ts), on every form factor. The
  * landscape keeps its lot clear.
  */
 export function townWarehouseLot(layout: TownLayout): TownWarehouseLot {
   return townHarbourLot(layout).warehouse;
-}
-
-/**
- * Where a narrow town's folded warehouse sign hangs, in world pixels: on
- * the town center's right wing, under its windows and level with the doors.
- * A phone's home view keeps the center from just above its plaque down, so
- * the sign stays in view there; the roofs and tower above it are cropped.
- */
-export function townWarehouseFoldAt(center: TownCenterLot) {
-  return {
-    // Far enough in that a phone whose center stands right of the post
-    // office (townLots.ts) keeps the whole sign on screen.
-    x: (center.x + center.w) * TOWN_TILE - 80,
-    y: center.y * TOWN_TILE + TOWN_CENTER_FRIEZE_Y + 40,
-  };
 }
 
 /** Slot `index`'s top-left in the yard, in pixels. */

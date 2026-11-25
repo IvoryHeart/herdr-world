@@ -80,6 +80,18 @@ Inspector, gestures and runtime effects retain their existing tests. The isolate
 canvas does not publish Library hosts, so it shows no Library sign; supported-host
 signs and unsupported-host absence are covered by the Library tests.
 
+The phone, portrait and linux-half viewports and the seven phone weather scenes
+render a narrow Town. Since
+[#1351](https://github.com/IvoryHeart/herdr-world/issues/1351) a narrow Town
+stands the Library, Observatory, Post Office, Shipyard and Warehouse as buildings
+with their full signs, instead of folding them into small signs on the Town
+center's wings and a one-line Post Office sign. Their references were redrawn for
+that change: in CI run
+[45367851102](https://github.com/IvoryHeart/herdr-world/actions/runs/45367851102)
+16,085 phone, 53,222 portrait, 46,470 linux-half and 15,885–27,543 pixels per
+phone weather scene differed from the folded references. The wide references
+(linux-wide, mac-laptop and the laptop weather scenes) are unchanged.
+
 The fixture fixes its random seed, wall clock, 16 ms frame clock, dark theme,
 100% interface scale and DPR 1. Motion stays enabled. Fonts load before layout;
 WebGL initializes before mounting, then the production scene runs for 6,000 ms of

@@ -9,7 +9,7 @@ import {
   setMemoryClientForTests,
   memoryClientOver,
 } from "../memory/memoryClient";
-import { memoryHostsOf } from "../memory/memoryTargets";
+import { libraryAvailable, memoryHostsOf } from "../memory/memoryTargets";
 import {
   requestArtefactShelf,
   setArtefactShelfClientForTests,
@@ -77,7 +77,7 @@ test("the sign counts files, stale files and shared shelves over its hosts", asy
   expect(townLibrarySignText(townLibraryCounts())).toBe("unavailable");
 });
 
-test("the Library reads live hosts only, at their current generation, with World's names", () => {
+test("the Library reads live hosts only, at their current generation, with World's names, marking those without memory", () => {
   const world = {
     hosts: [
       {
@@ -108,6 +108,13 @@ test("the Library reads live hosts only, at their current generation, with World
         label: "Waiting",
         stale: false,
         actionable: false,
+      },
+      {
+        connectionId: "c5",
+        connection: { generation: 4 },
+        label: "Quiet",
+        stale: false,
+        actionable: true,
       },
     ],
     leaves: [
@@ -150,10 +157,18 @@ test("the Library reads live hosts only, at their current generation, with World
       names: { t9: "helper" },
       rooms: { w9: "notes" },
     },
+    {
+      connection_id: "c5",
+      connection_generation: 4,
+      label: "Quiet",
+      names: {},
+      rooms: {},
+      memory: false,
+    },
   ]);
 });
 
-test("unsupported-only hosts publish no Library and render no sign or agent entry", () => {
+test("unsupported-only hosts offer no Library, sign or agent entry until agents made something", async () => {
   const world = {
     hosts: [
       {
@@ -174,6 +189,7 @@ test("unsupported-only hosts publish no Library and render no sign or agent entr
   } as unknown as WorldObject;
   publishMemoryHosts(memoryHostsOf(world));
   expect(townLibraryCounts()).toEqual({ status: "none" });
+  expect(libraryAvailable(world)).toBe(false);
   expect(
     renderToStaticMarkup(
       createElement(AgentMemoryLink, {
@@ -192,4 +208,52 @@ test("unsupported-only hosts publish no Library and render no sign or agent entr
       }),
     ),
   ).toContain("Memory");
+});
+
+test("a host whose agents have all stopped keeps its Library and counts only what they made", async () => {
+  // No agents at all: every one on the host has stopped.
+  const world = {
+    hosts: [
+      {
+        connectionId: "quiet",
+        connection: { generation: 2 },
+        label: "Example",
+        actionable: true,
+      },
+      {
+        connectionId: "empty",
+        connection: { generation: 1 },
+        label: "Nothing made",
+        actionable: true,
+      },
+    ],
+    leaves: [],
+  } as unknown as WorldObject;
+  let catalogReads = 0;
+  setMemoryClientForTests(
+    memoryClientOver(async () => {
+      catalogReads += 1;
+      return catalog(1, 0);
+    }),
+  );
+  setArtefactShelfClientForTests({
+    list: async (target) =>
+      target.connection_id === "empty"
+        ? { ...artefactFixtureShelf(target, 0, true), artefacts: [] }
+        : artefactFixtureShelf(target, 0, true),
+    read: async () => Promise.reject(new Error("unused")),
+  });
+  publishMemoryHosts(memoryHostsOf(world));
+  expect(townLibraryCounts()).toEqual({ status: "none" });
+  expect(libraryAvailable(world, { connectionId: "quiet" })).toBe(false);
+  await Promise.all(
+    memoryHostsOf(world).map((one) => requestArtefactShelf(one)),
+  );
+  const counts = townLibraryCounts();
+  expect(counts).toMatchObject({ status: "ready", made: 5, memory: false });
+  expect(townLibrarySignText(counts)).toBe("5 made");
+  expect(libraryAvailable(world)).toBe(true);
+  expect(libraryAvailable(world, { connectionId: "quiet" })).toBe(true);
+  expect(libraryAvailable(world, { connectionId: "empty" })).toBe(false);
+  expect(catalogReads).toBe(0);
 });

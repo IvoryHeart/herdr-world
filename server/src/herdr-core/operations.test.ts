@@ -192,6 +192,8 @@ describe("launching in herdr-core (M2, M3)", () => {
         workspace_id: room.workspace_id,
         label: "Reviewer",
         tab_id: outcome.status === "sent" ? outcome.tab_id : "",
+        // Town hands a desk to another runtime only when it counts one pane.
+        pane_count: 1,
       }),
     ]);
     expect(panes).toEqual([

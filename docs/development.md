@@ -314,12 +314,10 @@ selects another accessible repository. Run it again after delivery to compare th
 same window definition; do not infer an improvement from a different sample size.
 The [pipeline guide](ci-pipelines.md#health-and-delivery-measures) defines the
 request caps, sampling and missing incident links. Save an intended PR description
-before the first push when it contains policy exemptions:
-`HERDR_WORLD_PR_BODY=/tmp/pr-body.md git push`. The hook checks the complete PR diff
-against that body and the existing PR’s immutable base (including stacks), or
-the newer `origin/<base branch>` commit that base leads to, before
-running the delivery gate; `check:pr-body` remains the
-explicit check before opening the PR.
+before pushing: `HERDR_WORLD_PR_BODY=/tmp/pr-body.md git push`. The pre-push
+privacy step scans that body (or the existing PR's description) and the existing
+PR title; description policy runs in CI, and `check:pr-body` remains the explicit
+check before opening the PR.
 
 The runner creates HOME and every XDG directory before launching Bun (a preload
 cannot change Bun's cached home), removes inherited runtime/account settings and

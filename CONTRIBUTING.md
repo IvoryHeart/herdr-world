@@ -136,16 +136,30 @@ Run `bun run check:privacy` after committing and before every push, especially
 when copying anything out of `.agents/` into tracked paths. The command scans
 each commit introduced since `origin/main`; `bun run check:privacy --range
 <base-ref> <head-ref>` selects another range. The pre-push hook scans every actual
-pushed ref, including tags and multiple refs. The independent **Privacy guard**
-CI check runs once per PR change; explicit bot dispatches cover token-created PRs.
-It no longer duplicates every branch push.
+pushed ref, including tags and multiple refs. Before pushing, save the intended
+description and set `HERDR_WORLD_PR_BODY=<file>`; the same privacy step scans that
+file, or the existing PR description when no file is supplied, and the existing PR
+title. The independent **Privacy guard** CI check runs once per PR change,
+including title/description edits, which it scans from the event payload;
+explicit bot dispatches cover token-created PRs. It no longer duplicates every
+branch push. `bun run check:pr-body <file>` also checks description privacy,
+including hidden Markdown comments and code blocks.
 
-The guard checks added lines in every introduced commit, so deleting a leak in a
-later commit of the same push does not hide it. It rejects private/CGNAT IPv4,
+The guard checks full messages and added lines in every introduced commit, so
+deleting a leak in a later commit of the same push does not hide it. It rejects
+Claude code session links, session trailers, Claude Code generation footers and
+Claude coauthor trailers alongside private/CGNAT IPv4,
 Tailscale IPv6 and `*.ts.net` hosts, absolute home paths, plausible login tokens
 and session secrets, literal World passwords, and non-reserved email addresses.
-It prints file, line and rule only; matched values and Git error details are
-suppressed. A missing or rewritten previous push head falls back to `origin/main`
+It prints only the location, line and rule, with a commit SHA for commit findings;
+matched values and Git error details are suppressed. Email attribution exceptions
+for generated dependency licenses never apply to messages or PR metadata.
+Commit and PR metadata allow GitHub's public support identity and email addresses
+on the exact `users.noreply.github.com` domain, so bot signoffs and human coauthors
+pass. This exception permits only those email values; all other privacy rules
+still apply, including Claude coauthor detection. Added file content retains its
+existing email policy.
+A missing or rewritten previous push head falls back to `origin/main`
 (or all history if main is unavailable); an unavailable requested head fails.
 Branch pushes exclude published main history. Merge commits scan lines absent
 from every parent, so syncing main does not reattribute published content.
@@ -417,8 +431,8 @@ the rules they adjust; do not create a separate mobile stylesheet.
 Do not hang `:has()` on the page or World shell (`body`, `html`, `:root`,
 `.app`, `.world-foundation-shell`, `.world-view-layout`): Chrome then restyles
 most of the page on each typed key or streamed line. Set the state as an
-`<html>` attribute from JavaScript instead (`web/src/rootFlag.ts`,
-`web/src/terminalInputFocus.ts`). `bun run lint` refuses new ones
+`<html>` attribute from JavaScript instead (as
+`web/src/terminalInputFocus.ts` does). `bun run lint` refuses new ones
 ([check](scripts/check-has-selectors.ts)), and
 `web/src/world/ComposerTypingStyle.browser.test.ts` traces how many elements
 each composer key restyles.

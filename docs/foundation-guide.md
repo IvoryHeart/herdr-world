@@ -509,8 +509,8 @@ through the public `web/src/store.ts` entry, with
 Every host list and choice (Hosts menu, its filter, New room's destination)
 reads [one catalogue of both runtimes](../web/src/worldHosts.ts).
 The persisted `hostsFilter.ts` affects visibility only;
-`spaceAdmission.ts` shares the navigator's capacity fairly and `WorldSearchResults.tsx`
-pages full-observation matches beyond renderer bounds.
+`spaceAdmission.ts` shares the navigator's capacity fairly, and World's one search
+(`worldFinder.ts`) finds matches across the whole observation.
 
 Local pre-push runs formatting/privacy only. Explicit local gates use
 [the lane runner](../scripts/check-delivery.ts); CI owns static, unit, browser and

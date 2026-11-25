@@ -119,9 +119,25 @@ at Files on that path on its own connection, and **Open link** for a link,
 which opens a new tab without an opener. Town's Library sign SHALL count the
 artefacts on its shelves.
 
+A live host with no agent whose harness has a memory adapter (every agent on
+it stopped) SHALL still offer the Library while its shelf holds something
+agents made: Town's sign (counting only what was made), the town center's and
+Board's Library entries, Settings and the command box SHALL open it on that
+wing alone, without reading or offering to edit the host's memory, and its
+search SHALL look through the made things only. A made file SHALL be read
+through its maker's room when no agent there runs. Memory SHALL return when
+an agent with a memory adapter starts on the host. A host with neither SHALL
+offer no Library.
+
 #### Scenario: Search finds a report
 - **WHEN** the owner searches the Library for words in a report's title
 - **THEN** the report SHALL be listed under "Made by agents" and open in the reader
+
+#### Scenario: Every agent on the host has stopped
+- **WHEN** a Claude Code agent wrote a report and then every agent on its host stopped
+- **THEN** the Library SHALL still open from Town and the command box
+- **AND** its "Made by agents" shelf SHALL list the report with its maker named as gone
+- **AND** Town's Library sign SHALL count what was made
 
 #### Scenario: A link is opened
 - **WHEN** the owner opens a published link from the Library

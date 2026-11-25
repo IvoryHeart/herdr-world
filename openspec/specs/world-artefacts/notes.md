@@ -11,7 +11,8 @@
 - Desk cards, Town peeks and Chat show a **Made N** summary with the latest one or two titles; it opens the Library on that agent. Desk rows show "N made".
 - Chat shows each artefact as a small card (kind, title, Open) at the time it was made; Open opens it in the Library.
 - herdr-core agents show artefacts too: core answers `agent_quest.list`.
-- Testing switch: `?memoryFixture` adds a synthetic shelf with a report, a published link, a guessed link, a deleted file and an image whose maker has gone.
+- A host whose agents have all stopped keeps its Library while they made something: Town's sign reads "N made", the town center, Board, Settings and Cmd+K open it, and it shows only **Made by agents** (a note says memory shows again when an agent with memory starts; search looks through the made things only). A file is read through its maker's room, else any room World shows on that host.
+- Testing switch: `?memoryFixture` adds a synthetic shelf with a report, a published link, a guessed link, a deleted file and an image whose maker has gone. `?memoryFixture=gone` is the same host after every agent stopped: no memory, every maker gone.
 
 **Code:**
 
@@ -29,6 +30,8 @@
 - `web/src/world/memory/LibraryArtefacts.tsx`, `libraryArtefacts.css` (rows and reader)
 - `web/src/world/memory/MemoryLibrary.tsx` (the tab, search and reader wiring)
 - `web/src/world/memory/MemoryLibraryHost.tsx` (`artefactRoute`: room to read, Open in Files)
+- `web/src/world/memory/memoryTargets.ts` (`memoryHostsOf`: hosts without memory marked `memory: false`; their shelves read by the publisher; `libraryAvailable`)
+- `web/src/world/memory/memoryClient.ts` (`libraryHosts`, `noteHostMade`: which hosts the Library offers)
 - `web/src/world/memory/artefactFixture.ts` (`?memoryFixture` shelf)
 - `web/src/world/town/TownLibrary.tsx` (sign count)
 - `web/src/world/MadeSummary.tsx`, `madeSummary.css` (Desk and Town summary)
@@ -44,8 +47,8 @@
 - `server/src/world/artefact-shelf.test.ts`
 - `web/src/world/agentQuests.test.ts`
 - `web/src/world/memory/artefactShelf.test.ts`
-- `web/src/world/memory/libraryArtefactReader.dom.test.tsx` (reader follows the current record)
-- `web/src/world/town/townLibrary.test.ts` (sign)
+- `web/src/world/memory/libraryArtefactReader.dom.test.tsx` (reader follows the current record; a host with no memory agent shows only what was made)
+- `web/src/world/town/townLibrary.test.ts` (sign; a host whose agents all stopped)
 
 **Pitfalls:**
 
@@ -55,7 +58,7 @@
 - Relative paths resolve against the cwd recorded for that call, never the latest one.
 - The creator room is first-seen in memory per transcript; after a service restart a moved agent's artefact takes its current room.
 - Gone makers come from Apartments' residents (newest 40 per host); an agent World never saw run leaves nothing.
-- The Library opens only while a live agent with memory support runs on that host, as for memory.
+- The Library opens on a host while a live agent with memory support runs there, or while its shelf holds something made. Every host without memory has its shelf read (once a minute at most, four hosts at a time) so every entry point knows.
 - Remote hosts and links are never probed, so their presence is unknown, not gone.
 - Apartments records a gone maker's room by label. The shelf names the one room with that label now; when none or several have it, the room is unknown and the row shows the label as it was.
 - A view that asks for a fresh shelf is owed one read when the minute is up, so Chat's finished turn shows what it made without another change.

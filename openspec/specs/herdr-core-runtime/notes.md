@@ -19,6 +19,15 @@
 - `server/src/herdr-core/headless-chat.test.ts`
 - `server/src/herdr-core/harness.ts`
 - `server/src/herdr-core/history.test.ts`
+- `server/src/world/agent-move.ts`
+- `server/src/world/agent-move.test.ts`
+- `server/src/world/agent-move-views.test.ts` (two connections of one Herdr
+  through the real TUI side)
+- `server/src/world/agent-move-sides.ts`
+- `server/src/world/move-settle.ts`
+- `server/src/world/agent-rehome.ts`
+- `server/src/rpc/agent-move.ts`
+- `shared/agentMove.ts`
 - `server/src/herdr-core/shared-state.ts` (`waitsWithoutResult`: started-harness readiness)
 - `server/src/herdr-core/harness-start.test.ts`
 - `server/src/herdr-core/testing/capture-harness-start.ts`
@@ -152,6 +161,59 @@ no control for it. Platform and harness limits apply across the table.
   never retried automatically. Core has no native desk-order operation;
   unpinned reordering explains that limit, while pinned desks retain World's
   saved ordering among their room's pinned seats.
+- **Move agents between runtimes:** drag a desk into a room of the other
+  runtime (Herdr TUI ↔ herdr-core), or choose **Move to…** on its Town peek,
+  in Town's **M** chooser (rooms marked "another runtime") or on its Board
+  peek; on Board, dropping a single-terminal card on another runtime's tab
+  works too. World starts the agent's harness in that room with its
+  conversation resumed (`claude --resume`, `codex resume`) in the agent's
+  folder. For a core agent World finds the conversation from a session linked
+  in its Chat, Claude's process record, the rollout file Codex holds open
+  (its name carries the session ID), or the launch arguments; a Codex that
+  no longer holds its rollout open needs its session linked in Chat first.
+  With nothing to resume (a plain terminal, or an agent World cannot
+  find a conversation for) World first says the conversation won't continue;
+  once you confirm, it starts a new shell, or the same harness fresh, in the
+  same folder. It waits until the new one is
+  ready, carries the desk's colour, pin, Board place, strings and spawn lines
+  to the new desk, then closes the original. Moves within one runtime still
+  use that runtime's own move and keep the agent running. A pinned desk moves
+  to any room it can go to, on either runtime, and stays pinned there, so a
+  desk moved in from Herdr TUI (pinned) moves on again. Refused, with the
+  reason, and nothing started: a working agent or one waiting for an answer,
+  a plain terminal running a program, a desk with more than one terminal, a
+  core agent whose own
+  spawned agents would end with it, a runtime on another machine, or a stale
+  or reconnected host. If the new agent does not start within a minute, the
+  half-started one is closed and the original keeps running. If the original
+  starts working, splits or starts agents of its own before it closes, the new
+  one is closed and the original stays, desk and all. When a runtime
+  does not confirm that an agent ended, or a reply is lost, World says which
+  one may still be running instead of reporting a move: a lost start keeps the
+  original and names the new one; a lost close that leaves the original
+  unreadable keeps the new one and its desk.
+  Codex keeps one conversation open at a time, so a Codex agent closes first
+  and then resumes in the new room; if it doesn't start there it resumes back
+  in its own room, and if that fails too the message says which `codex
+  resume` command continues it. A Claude copy that reports a new
+  conversation instead of its own is closed and the move goes the same way.
+  Two connections that reach the same Herdr are one runtime: Move to…
+  doesn't offer the other's rooms as another runtime, and a move between them
+  is Herdr's own. A core desk moved to another core room keeps running and
+  keeps its Board colour, pin and links. Each move step is logged by the
+  service under `agent-move` (`move admit`, `move start`, `move recheck`,
+  `move rehome`, `move close`, `move unpin`, `move outcome`), and a refused
+  move's toast shows the reason. A Herdr TUI original counts as closed only
+  once Herdr stops showing it (about five seconds), else the move says it may
+  still be running; a pin kept under the other connection of the same Herdr
+  goes only then. A moved agent can't
+  move again for about 20 seconds ("still settling"). A move outlives the
+  page's socket: each move carries a `move_id`, and a page whose socket
+  closed mid-move asks again with `follow` once it reconnects and gets that
+  move's outcome (`server/src/rpc/agent-move.ts`, kept in memory ten minutes;
+  `move reply lost` and `move follow` in the log). The page's heartbeat keeps
+  a slow socket that still delivers (`web/src/api.ts`), so a remote link
+  doesn't close it mid-move.
 - **Core agent environment (Unix):** New agent finds and starts the harness
   through the core host's `$SHELL` (`/bin/sh` when unset): interactive on Linux,
   login and interactive on macOS. Supported shells are sh, bash, zsh, dash,

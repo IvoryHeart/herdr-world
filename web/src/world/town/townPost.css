@@ -29,6 +29,20 @@
   image-rendering: pixelated;
 }
 
+/* A narrow (phone) town's sign stands at the ridge's middle and grows
+   straight up, its counts one to a line, so it stays about its house's
+   width and inside a phone's view (#1351). */
+.town-world .town-post-sign[data-narrow] {
+  min-width: 0;
+  transform: translate(-50%, -100%) scale(clamp(0.5, var(--iz), 2.4));
+  transform-origin: 50% 100%;
+}
+
+.town-world .town-post-sign[data-narrow] .town-post-counts {
+  flex-direction: column;
+  align-items: center;
+}
+
 /* Anything waiting on you lights the plate's rim gold. */
 .town-world .town-post-sign[data-waiting] {
   box-shadow:
@@ -36,8 +50,7 @@
     0 2px 0 #1c1722;
 }
 
-.town-world .town-post-sign:focus-visible,
-.town-world .town-post-fold:focus-visible {
+.town-world .town-post-sign:focus-visible {
   outline: 2px solid #ffd166;
   outline-offset: 2px;
 }
@@ -90,7 +103,7 @@
   color: #ffe9c2;
 }
 
-/* A pillar box: the sign's and the fold's mark. */
+/* A pillar box: the sign's mark. */
 .town-post-mark {
   position: relative;
   flex: none;
@@ -104,39 +117,6 @@
   border: 1px solid #1c1722;
   border-radius: 4px 4px 1px 1px;
   image-rendering: pixelated;
-}
-
-/* A narrow town's fold across the post office's front. */
-.town-world .town-post-fold {
-  position: absolute;
-  display: inline-flex;
-  align-items: center;
-  gap: 4px;
-  min-height: 24px;
-  padding: 2px 6px;
-  color: #fbf1dc;
-  background: #9c1e24;
-  border: 2px solid #1c1722;
-  border-radius: 4px;
-  transform: translate(-50%, -50%) scale(clamp(0.55, var(--iz), 1.6));
-  font:
-    700 10px "Silkscreen",
-    "Pixelify Sans",
-    ui-monospace,
-    monospace;
-  white-space: nowrap;
-  cursor: pointer;
-  pointer-events: auto;
-}
-
-.town-world .town-post-fold[data-waiting] {
-  box-shadow: inset 0 0 0 1px #e8c75a;
-}
-
-.town-world .town-post-fold .town-post-counts {
-  gap: 4px;
-  max-width: none;
-  font-weight: 700;
 }
 
 /* The yard (#1105): a painted letter per question on the forecourt's

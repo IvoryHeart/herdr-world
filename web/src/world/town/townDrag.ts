@@ -1,6 +1,7 @@
 import type { TownLevel } from "./townCamera";
 import type { TownHit } from "./townHitTest";
 import type { TownModel } from "./townModel";
+import { canMoveDeskToRoom, needsAgentHandoff } from "./townMoveEligibility";
 import { TOWN_TILE, type TownLayout } from "./townLayout";
 import {
   townRoomPlacement,
@@ -179,8 +180,9 @@ export function townMagnetDesk(
  * still on it for TOWN_MAGNET_MS (`magnet`), it snaps to that desk and groups
  * with it, so moving, reordering and grouping stay separate gestures. A
  * pinned desk moves as a pinned browser tab does: only onto another pinned
- * seat of its room (or into a team there); unpinned desks cannot take a
- * pinned seat. A carried room is aimed by townRoomDropTarget.
+ * seat of its room (or into a team there), or to another room, where it
+ * stays pinned; unpinned desks cannot take a pinned seat. A carried room is
+ * aimed by townRoomDropTarget.
  */
 export function townDropTarget(
   drag: TownDrag,
@@ -237,15 +239,32 @@ export function townDropTarget(
       if (room?.key === drag.from && hit?.kind === "room")
         if (groupedDesks.has(drag.key))
           return { key: room.key, label: "Leave the team", action: "ungroup" };
+      // To another room a pinned desk goes, pinned there: the move carries
+      // its pin (town-move.ts, agent-move.ts; a core pin is the terminal's).
+      const desk = model.desks.get(drag.key);
+      if (
+        room &&
+        desk &&
+        room.key !== drag.from &&
+        canMoveDeskToRoom(desk, room)
+      )
+        return {
+          key: room.key,
+          label: `${drag.label} to ${room.displayLabel}`,
+          action: "move",
+        };
       return { key: null, label: TOWN_PINNED_HINT };
     }
     if (!room) return { key: null, label: `${drag.label}: drop on a room` };
-    if (room.hostKey !== drag.hostKey)
+    // Another runtime's room takes a desk with one terminal (world.agent.move).
+    const desk = model.desks.get(drag.key);
+    if (!desk || !canMoveDeskToRoom(desk, room))
       return {
         key: null,
-        label: sameBuilding(room, model.desks.get(drag.key))
-          ? "Desks move only within one runtime"
-          : "Desks move only within one host",
+        label:
+          desk && needsAgentHandoff(desk, room)
+            ? "Only a desk with one terminal moves to another runtime"
+            : `${drag.label}: ${room.displayLabel} can't take it now`,
       };
     if (room.key === drag.from) {
       const onto = slotDesk(hit, model);

@@ -28,7 +28,6 @@ if (process.env.BOARD_SEARCH_DOM !== "1") {
   const browser = globalThis.window as unknown as typeof globalThis;
   for (const [key, value] of Object.entries({
     HTMLButtonElement: browser.HTMLButtonElement,
-    HTMLInputElement: browser.HTMLInputElement,
     KeyboardEvent: browser.KeyboardEvent,
     MouseEvent: browser.MouseEvent,
     getComputedStyle: browser.getComputedStyle.bind(browser),
@@ -38,13 +37,14 @@ if (process.env.BOARD_SEARCH_DOM !== "1") {
       configurable: true,
       writable: true,
     });
-  const { act, createElement, Fragment } = await import("react");
+  const { act, createElement } = await import("react");
   const { createRoot } = await import("react-dom/client");
   const { fixtureHost, fixtureWorld } = await import("./boardFixture");
   const { projectBoard } = await import("./boardModel");
+  const { boardSearchMatches } = await import("./boardSearch");
   const { WorldViewToolbar } = await import("../WorldViewToolbar");
-  const { WorldSearchResults } = await import("../WorldSearchResults");
   const { worldSearchResults } = await import("../worldSearch");
+  const { worldFinder } = await import("../worldFinder");
   const { useBoardSearch } = await import("./useBoardSearch");
 
   const host = fixtureHost("example-host", [
@@ -61,146 +61,117 @@ if (process.env.BOARD_SEARCH_DOM !== "1") {
   const model = projectBoard(world);
 
   function mount() {
-    const selected: string[] = [];
+    let matches: Set<string> | null = null;
+    let chosen: ReturnType<typeof useBoardSearch>["chosen"] = null;
     function Probe() {
-      const search = useBoardSearch(world, model, (id) => selected.push(id));
-      return createElement(
-        Fragment,
-        null,
-        createElement(WorldViewToolbar, {
-          viewLabel: "Board",
-          ...search.toolbar,
-        }),
-        search.open
-          ? createElement(WorldSearchResults, {
-              world,
-              onSelect: (id: string) => selected.push(id),
-              ...search.results,
-            })
-          : null,
-      );
+      const search = useBoardSearch(world, model);
+      matches = search.matches;
+      chosen = search.chosen;
+      return createElement(WorldViewToolbar, {
+        viewLabel: "Board",
+        ...search.toolbar,
+      });
     }
     const element = document.createElement("div");
     document.body.append(element);
     const root = createRoot(element);
     act(() => root.render(createElement(Probe)));
-    const input = () =>
-      element.querySelector<HTMLInputElement>("input[type=search]")!;
-    // Typing starts where a user does: the search icon, then the box.
-    const type = (value: string) => {
-      act(() =>
-        element
-          .querySelector<HTMLButtonElement>('button[aria-label="Search Board"]')
-          ?.click(),
-      );
-      act(() => {
-        const field = input();
-        const setter = Object.getOwnPropertyDescriptor(
-          Object.getPrototypeOf(field),
-          "value",
-        )!.set!;
-        setter.call(field, value);
-        field.dispatchEvent(new window.Event("input", { bubbles: true }));
-      });
-    };
-    const key = (target: HTMLElement, name: string) =>
+    const key = (target: HTMLElement, name: string, taken = false) =>
       act(() => {
         // Keys go where the cursor is.
         target.focus();
-        target.dispatchEvent(
-          new KeyboardEvent("keydown", {
-            key: name,
-            bubbles: true,
-            cancelable: true,
-          }),
-        );
+        const event = new KeyboardEvent("keydown", {
+          key: name,
+          bubbles: true,
+          cancelable: true,
+        });
+        if (taken) event.preventDefault();
+        target.dispatchEvent(event);
       });
-    const submit = () =>
-      act(() => {
-        input()
-          .closest("form")!
-          .dispatchEvent(
-            new window.Event("submit", { bubbles: true, cancelable: true }),
-          );
-      });
-    const rows = () => [
-      ...element.querySelectorAll<HTMLButtonElement>(
-        "[data-world-search-result]",
-      ),
-    ];
+    const chip = () => element.querySelector('[role="search"]');
     const unmount = () => {
       act(() => root.unmount());
+      act(() => worldFinder.end());
       element.remove();
     };
-    return { element, selected, input, type, key, submit, rows, unmount };
+    return {
+      element,
+      matches: () => matches,
+      chosen: () => chosen,
+      key,
+      chip,
+      unmount,
+    };
   }
 
-  test("the toolbar counts what the results list shows", () => {
+  test("typing in the box lights Board's matches and counts World's", () => {
     const board = mount();
-    board.type("platform");
+    expect(board.matches()).toBeNull();
+    expect(board.chip()).toBeNull();
+    act(() => worldFinder.type("board", "platform"));
     const count = worldSearchResults(world, "platform").length;
     expect(count).toBeGreaterThan(1);
-    expect(board.rows().length).toBe(count);
+    expect(board.matches()).toEqual(boardSearchMatches(model, "platform"));
     expect(
       board.element.querySelector(".world-view-toolbar-results")?.textContent,
     ).toBe(`${count} matches`);
-    expect(
-      board.element.querySelector(".world-search-results [role=status]")
-        ?.textContent,
-    ).toBe(`${count} matches`);
     board.unmount();
   });
 
-  test("Down and Enter select the result they are on", () => {
+  test("a choice in the box names its card, again on each choice", () => {
     const board = mount();
-    board.type("platform");
-    const results = worldSearchResults(world, "platform");
-    board.key(board.input(), "ArrowDown");
-    expect(board.rows()[1]!.getAttribute("aria-current")).toBe("true");
-    board.submit();
-    expect(board.selected).toEqual([results[1]!.nodeId]);
+    expect(board.chosen()).toBeNull();
+    const result = worldSearchResults(world, "builder").find(
+      (found) => found.kind === "agent" || found.kind === "terminal",
+    )!;
+    const builder = model.tabs.find((tab) => tab.label === "Builder")!;
+    act(() => worldFinder.choose("board", "builder", result));
+    const first = board.chosen()!;
+    expect(first.key).toBe(builder.key);
+    expect(first.nodeId).toBe(result.nodeId);
+    act(() => worldFinder.choose("board", "builder", result));
+    expect(board.chosen()!.seq).toBeGreaterThan(first.seq);
+    // Town's choices are not Board's.
+    act(() => worldFinder.choose("town", "builder", result));
+    expect(board.chosen()).toBeNull();
     board.unmount();
   });
 
-  test("Escape in the box or on a result ends the search", () => {
+  test("another view's search leaves Board alone", () => {
     const board = mount();
-    board.type("login");
-    expect(board.rows().length).toBe(1);
-    board.key(board.rows()[0]!, "Escape");
-    expect(board.input()).toBeNull();
-    expect(board.rows().length).toBe(0);
-    board.type("login");
-    board.key(board.input(), "Escape");
-    expect(board.input()).toBeNull();
+    act(() => worldFinder.type("town", "platform"));
+    expect(board.matches()).toBeNull();
+    expect(board.chip()).toBeNull();
     board.unmount();
   });
 
-  test("after a click on the board, Escape still ends the search", () => {
+  test("the chip's end and Escape on the board end the search", () => {
     const board = mount();
     const surface = document.createElement("div");
     surface.className = "board";
     surface.tabIndex = -1;
     board.element.append(surface);
-    board.type("login");
-    // The query keeps the box open when the cursor leaves it.
-    act(() => surface.focus());
-    expect(board.input()?.value).toBe("login");
-    board.key(surface, "Escape");
-    expect(board.input()).toBeNull();
-    expect(board.rows().length).toBe(0);
+    act(() => worldFinder.type("board", "login"));
+    act(() =>
+      board.element
+        .querySelector<HTMLButtonElement>('button[aria-label="End search"]')!
+        .click(),
+    );
+    expect(worldFinder.get()).toBeNull();
+    expect(board.matches()).toBeNull();
+    act(() => worldFinder.type("board", "login"));
     // A key something else took, such as a carried pane, keeps the search.
-    board.type("login");
-    act(() => surface.focus());
-    act(() => {
-      const event = new KeyboardEvent("keydown", {
-        key: "Escape",
-        bubbles: true,
-        cancelable: true,
-      });
-      event.preventDefault();
-      surface.dispatchEvent(event);
-    });
-    expect(board.input()?.value).toBe("login");
+    board.key(surface, "Escape", true);
+    expect(board.chip()?.textContent).toContain("login");
+    board.key(surface, "Escape");
+    expect(board.chip()).toBeNull();
+    // Escape aimed elsewhere, such as a dialog, is not Board's.
+    act(() => worldFinder.type("board", "login"));
+    const dialog = document.createElement("button");
+    document.body.append(dialog);
+    board.key(dialog, "Escape");
+    expect(board.chip()).not.toBeNull();
+    dialog.remove();
     board.unmount();
   });
 }

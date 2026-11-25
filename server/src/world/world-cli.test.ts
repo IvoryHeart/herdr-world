@@ -18,7 +18,7 @@ import {
   type WorldCliResponse,
 } from "./world-cli";
 import { createWorldCliService } from "./world-cli-service";
-import { WorldLedger } from "./world-ledger";
+import { WorldLedger, type CliActor } from "./world-ledger";
 
 const resultOf = (reply: WorldCliResponse) =>
   (reply as { result?: unknown }).result;
@@ -504,6 +504,137 @@ describe("Herdr changes", () => {
 });
 
 describe("questions and results", () => {
+  test("ask ls preserves dismissed states and withdrawal precedence, with stable ties and bounded ages", async () => {
+    const { run, ledger } = setup();
+    const actor = resultOf(await run("whoami")) as CliActor;
+    await ledger.update((doc) => {
+      const base = {
+        at: 500,
+        actor,
+        question: "First line\r\nPrivate detail",
+        options: [],
+        owner_only: true,
+      };
+      doc.asks = [
+        { ...base, id: "q-dismissed", dismissed: { at: 600, by: "owner" } },
+        {
+          ...base,
+          id: "q-answer",
+          answer: { at: 600, by: "owner", text: "Yes" },
+          withdrawn: { at: 700 },
+        },
+        { ...base, id: "q-future", at: 2000 },
+      ];
+    });
+    expect(resultOf(await run("ask ls"))).toEqual([
+      { id: "q-future", state: "open", age_ms: 0, question: "First line" },
+      {
+        id: "q-answer",
+        state: "withdrawn",
+        age_ms: 500,
+        question: "First line",
+      },
+      {
+        id: "q-dismissed",
+        state: "dismissed",
+        age_ms: 500,
+        question: "First line",
+      },
+    ]);
+  });
+
+  test("ask ls reads only the caller's questions, newest first, across closure", async () => {
+    const { run, ledger, published } = setup();
+    const first = resultOf(
+      await run("ask", { question: "Proceed?\nMore detail" }),
+    ) as { id: string };
+    const second = resultOf(
+      await run("ask", { question: "Which option?" }),
+    ) as { id: string };
+    const peer = resultOf(
+      await run("ask", { question: "Peer's question?" }, "w1:p2", inPane(200)),
+    ) as { id: string };
+    await ledger.update((doc) => {
+      doc.asks.find((ask) => ask.id === first.id)!.at = 100;
+      doc.asks.find((ask) => ask.id === second.id)!.at = 900;
+    });
+    const before = structuredClone(ledger.get());
+    const notices = { ...published };
+    const runtimeCalls = calls.length;
+    expect(await run("ask ls")).toMatchObject({
+      ok: true,
+      result: [
+        {
+          id: second.id,
+          state: "open",
+          age_ms: 100,
+          question: "Which option?",
+        },
+        { id: first.id, state: "open", age_ms: 900, question: "Proceed?" },
+      ],
+    });
+    expect(ledger.get()).toEqual(before);
+    expect(published).toEqual(notices);
+    expect(
+      calls
+        .slice(runtimeCalls)
+        .every((call) =>
+          ["pane.get", "pane.process_info"].includes(call.method),
+        ),
+    ).toBe(true);
+    await run(
+      "ask answer",
+      { id: second.id, answer: "Yes" },
+      "w1:p2",
+      inPane(200),
+    );
+    await run("ask withdraw", { id: first.id });
+    expect(await run("ask ls")).toMatchObject({
+      ok: true,
+      result: [
+        { id: second.id, state: "answered" },
+        { id: first.id, state: "withdrawn" },
+      ],
+    });
+    expect(resultOf(await run("ask ls", {}, "w1:p2", inPane(200)))).toEqual([
+      { id: peer.id, state: "open", age_ms: 0, question: "Peer's question?" },
+    ]);
+    expect(await run("ask ls", {}, null, null)).toMatchObject({
+      ok: false,
+      code: "refused",
+    });
+    expect(await run("ask ls", {}, "w1:p1", inPane(200))).toMatchObject({
+      ok: false,
+      code: "refused",
+    });
+  });
+
+  test("reserved question words create no records, publication or alerts", async () => {
+    const { run, ledger, published } = setup();
+    const before = structuredClone(ledger.get());
+    for (const question of [
+      "ls",
+      "list",
+      "get",
+      "answer",
+      "withdraw",
+      "help",
+      "acknowledge",
+      " LIST ",
+    ]) {
+      expect(await run("ask", { question })).toMatchObject({
+        ok: false,
+        code: "usage",
+        error: expect.stringContaining("herdr-world ask"),
+      });
+    }
+    expect(ledger.get()).toEqual(before);
+    expect(published).toEqual({ board: 0, ledger: 0, asks: 0 });
+    expect(calls.some((call) => call.method === "notification.show")).toBe(
+      false,
+    );
+  });
+
   test("withdrawal releases an already held service read without an answer", async () => {
     const { run, ledger } = setup();
     const asked = await run("ask", { question: "Wait for a decision?" });
