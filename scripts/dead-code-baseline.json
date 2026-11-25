@@ -1593,7 +1593,6 @@
       "scripts/check-dead.ts#Clone",
       "scripts/check-dead.ts#Findings",
       "scripts/check-lock.ts#Holder",
-      "scripts/check-privacy.ts#PrivacyFinding",
       "scripts/ci-health-github.ts#Release",
       "scripts/classify-pr-label.ts#PullRequestLabel",
       "scripts/classify-pr-label.ts#PullRequestLabelInput",

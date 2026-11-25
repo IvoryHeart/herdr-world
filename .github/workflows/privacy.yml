@@ -6,7 +6,7 @@ on:
     push:
         branches: ["**"]
     pull_request:
-        types: [opened, synchronize, reopened]
+        types: [opened, synchronize, reopened, edited]
 
 permissions:
     contents: read
@@ -27,7 +27,7 @@ jobs:
               with:
                   bun-version: "1.4.4"
                   no-cache: true
-            - name: Scan every introduced commit without exposing matches
+            - name: Scan introduced commits and PR metadata without exposing matches
               run: |
                   if [ "$GITHUB_EVENT_NAME" = workflow_dispatch ]; then
                     bun run check:privacy
