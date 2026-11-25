@@ -5,15 +5,9 @@
 World SHALL let the user move an agent's desk to a room of another runtime of
 the same machine (Herdr TUI to herdr-core or back) by dragging the desk into
 that room in Town, from Town's M list, and with Move to… on the desk's Town
-and Board peeks. A move within one runtime SHALL use that runtime's own move;
-two connections that reach the same runtime are one runtime, so Move to…
-SHALL NOT offer the same Herdr's rooms as another runtime and the service SHALL
-move such a desk natively. A herdr-core desk moved to another core room SHALL
-keep running and keep its Board colour, pin and links under its new tab.
-Every move step SHALL be logged by the service, and a refusal SHALL tell the
-user its reason. Once an agent moves, World SHALL refuse to move it again until
-the move settles. A move SHALL outlive the page's socket: a page that lost the
-reply SHALL learn that move's outcome once it reconnects, without moving again.
+and Board peeks. A move within one runtime, including between two connections
+of one Herdr, SHALL use that runtime's own move. The service SHALL log every
+move step, and a refusal SHALL tell the user its reason.
 
 #### Scenario: Agent moves between runtimes refusals
 
@@ -98,6 +92,11 @@ reply SHALL learn that move's outcome once it reconnects, without moving again.
 
 - **WHEN** two connections reach the same Herdr and the user opens Move to… on a desk
 - **THEN** the other connection's rooms are not offered as another runtime, and a move between them runs natively with nothing closed
+
+#### Scenario: A core desk moves to another core room
+
+- **WHEN** the user moves a herdr-core desk to another herdr-core room
+- **THEN** the agent keeps running, and its desk keeps its Board colour, pin and links under its new tab
 
 #### Scenario: A moved agent moves again too soon
 
