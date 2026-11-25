@@ -160,23 +160,56 @@ test("Linux finds the unit's main process; macOS finds launchd's", () => {
       managed: false,
     },
   ]);
-  expect(
-    parseDarwinProcesses(
-      "  1     0 /sbin/launchd\n 512     1 /opt/homebrew/opt/herdr-world/libexec/herdr-world\n 600   555 /opt/homebrew/Cellar/herdr-world/0.3.7/libexec/herdr-world\n",
-    ),
-  ).toEqual([
-    { pid: 1, command: "/sbin/launchd", managed: false },
-    {
-      pid: 512,
-      command: "/opt/homebrew/opt/herdr-world/libexec/herdr-world",
-      managed: true,
-    },
-    {
-      pid: 600,
-      command: "/opt/homebrew/Cellar/herdr-world/0.3.7/libexec/herdr-world",
-      managed: false,
-    },
+  const job = "/opt/homebrew/opt/herdr-world/libexec/herdr-world";
+  const keg = "/opt/homebrew/Cellar/herdr-world/0.3.7/libexec/herdr-world";
+  const darwin = parseDarwinProcesses(
+    [
+      "  1     0 /sbin/launchd",
+      // The generated launchd job: launchd sets XPC_SERVICE_NAME to its label.
+      ` 512     1 ${job} PATH=/usr/bin XPC_SERVICE_NAME=dev.herdr-world`,
+      // A terminal World still attached to its shell.
+      ` 600   555 ${keg} XPC_SERVICE_NAME=0`,
+      // A nohup'd terminal World reparented to launchd after its shell exited.
+      ` 612     1 ${keg} XPC_SERVICE_NAME=application.example.Terminal`,
+      // Another launchd job whose label only starts with World's.
+      ` 613     1 ${keg} XPC_SERVICE_NAME=dev.herdr-world.other`,
+      // A launchd process whose environment ps could not read.
+      ` 614     1 ${keg}`,
+    ].join("\n"),
+  );
+  expect(darwin.map(({ pid, managed }) => [pid, managed])).toEqual([
+    [1, false],
+    [512, true],
+    [600, false],
+    [612, false],
+    [613, false],
+    [614, false],
   ]);
+  expect(darwin[1]!.command.startsWith(job)).toBe(true);
+});
+
+test("the handoff never signals a terminal World reparented to launchd", async () => {
+  // A prefix that does not exist, so bridging older kegs touches nothing.
+  const keg = "/synthetic-brew/Cellar/herdr-world/0.3.7/libexec/herdr-world";
+  const processes = parseDarwinProcesses(
+    ` 612     1 ${keg} XPC_SERVICE_NAME=application.example.Terminal\n`,
+  );
+  const signalled: number[] = [];
+  const result = await handOffHomebrewService(
+    homebrewKeg(
+      "/synthetic-brew/Cellar/herdr-world/0.3.8/libexec/herdr-world",
+    )!,
+    {
+      listProcesses: () => processes,
+      signal: (pid) => signalled.push(pid),
+      sleep: async () => {},
+      now: () => 0,
+      selfPid: 999,
+      log: () => {},
+    },
+  );
+  expect(result).toBe("none");
+  expect(signalled).toEqual([]);
 });
 
 test("a supervised World moves a keg-pinned definition to opt before it listens", async () => {

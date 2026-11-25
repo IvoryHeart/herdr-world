@@ -13,6 +13,7 @@ import { join, resolve } from "node:path";
 import {
   resolveServicePaths,
   resolveServicePlatform,
+  SERVICE_LABEL,
 } from "./service-definitions";
 import { ownsHomebrewService } from "./service-executable";
 
@@ -147,15 +148,25 @@ export function listLinuxProcesses(procRoot = "/proc"): WorldProcess[] {
   }));
 }
 
-/** macOS: launchd (pid 1) starts the dev.herdr-world agent's process. */
+/**
+ * macOS: launchd (pid 1) starts the dev.herdr-world agent's process and sets
+ * its XPC_SERVICE_NAME to the job label. A World left running from a terminal
+ * (nohup, disown) is also reparented to launchd when its shell exits, but it
+ * keeps its terminal's XPC_SERVICE_NAME, so it is never signalled.
+ */
 function listDarwinProcesses(): WorldProcess[] {
   // /bin/ps is the one process Homebrew's macOS sandbox lets us run unsandboxed.
-  const result = spawnSync("/bin/ps", ["-axww", "-o", "pid=,ppid=,command="], {
+  // -E appends each same-user process's environment after its arguments.
+  const result = spawnSync("/bin/ps", ["-axwwE", "-o", "pid=,ppid=,command="], {
     encoding: "utf8",
   });
   if (result.status !== 0) return [];
   return parseDarwinProcesses(result.stdout);
 }
+
+const LAUNCHD_JOB = new RegExp(
+  `(?:^|\\s)XPC_SERVICE_NAME=${SERVICE_LABEL.replaceAll(".", "\\.")}(?:\\s|$)`,
+);
 
 /** @internal */
 export function parseDarwinProcesses(output: string): WorldProcess[] {
@@ -166,7 +177,7 @@ export function parseDarwinProcesses(output: string): WorldProcess[] {
       {
         pid: Number(match[1]),
         command: match[3]!,
-        managed: match[2] === "1",
+        managed: match[2] === "1" && LAUNCHD_JOB.test(match[3]!),
       },
     ];
   });
