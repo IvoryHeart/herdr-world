@@ -458,8 +458,8 @@ the rules they adjust; do not create a separate mobile stylesheet.
 Do not hang `:has()` on the page or World shell (`body`, `html`, `:root`,
 `.app`, `.world-foundation-shell`, `.world-view-layout`): Chrome then restyles
 most of the page on each typed key or streamed line. Set the state as an
-`<html>` attribute from JavaScript instead (`web/src/rootFlag.ts`,
-`web/src/terminalInputFocus.ts`). `bun run lint` refuses new ones
+`<html>` attribute from JavaScript instead (as
+`web/src/terminalInputFocus.ts` does). `bun run lint` refuses new ones
 ([check](scripts/check-has-selectors.ts)), and
 `web/src/world/ComposerTypingStyle.browser.test.ts` traces how many elements
 each composer key restyles.

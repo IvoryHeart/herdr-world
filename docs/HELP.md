@@ -294,11 +294,11 @@ Where: Beside the views at the top; on a phone, the views button. Since 0.3.7.
 
 ![Find or act](../web/public/help/world.command-box.desktop.light.webp)
 
-One box finds agents, rooms and actions on every host and runtime, from every view.
+One search finds agents, rooms and actions on every host and runtime, from every view.
 
-1. Press Ctrl+K (Cmd+K on a Mac) or the ⌘ button beside the views; on a phone, open the views menu and choose Find or act.
-2. Type a few letters of a name, room, machine, harness (Claude Code, Codex), status (needs you) or task, or of an action.
-3. Press Enter to open an agent's terminal or do the action; in Town, Board or Desk, Shift+Enter or the row's Show button shows it in that view instead.
+1. Press /, Ctrl+F or Ctrl+K (Cmd+K on a Mac), or a view's search button; on a phone, open the views menu and choose Find or act.
+2. Type a few letters of a name, room, machine, harness (Claude Code, Codex), status (needs you) or task, or of an action such as new workspace.
+3. Press Enter to go to it in the view you are in, or to do the action; Shift+Enter or the row's Open terminal button opens its terminal instead.
 
 Where: Beside the views at the top; on a phone, in the views menu. Since 0.3.0.
 

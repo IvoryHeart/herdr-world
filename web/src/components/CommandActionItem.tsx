@@ -1,4 +1,4 @@
-import type { ReactNode } from "react";
+import type { KeyboardEvent, ReactNode } from "react";
 import type { ShortcutNumber } from "../shortcutBindings";
 import {
   getShortcutSnapshot,
@@ -94,4 +94,32 @@ export function ActionItem({
       ) : null}
     </CommandItem>
   );
+}
+
+/**
+ * Shift+Enter runs the selected row's second action (World's finds: open its
+ * terminal); true when it did.
+ */
+export function runSecondaryKey(
+  event: KeyboardEvent<HTMLElement>,
+  row:
+    | { secondary?: { run: () => void }; disabledReason?: string | null }
+    | undefined,
+  run: (fn: () => void) => void,
+) {
+  if (
+    event.key !== "Enter" ||
+    !event.shiftKey ||
+    event.altKey ||
+    event.ctrlKey ||
+    event.metaKey ||
+    event.nativeEvent.isComposing ||
+    !row?.secondary ||
+    row.disabledReason
+  )
+    return false;
+  event.preventDefault();
+  event.stopPropagation();
+  run(row.secondary.run);
+  return true;
 }

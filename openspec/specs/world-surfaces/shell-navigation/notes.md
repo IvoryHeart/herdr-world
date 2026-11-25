@@ -24,6 +24,7 @@
 - `web/src/world/WorldFoundationApp.tsx`
 - `web/src/world/visualRouteActions.ts`
 - `web/src/world/worldSearch.ts`
+- One search: `web/src/world/worldFinder.ts`, `web/src/world/WorldViewToolbar.tsx`, `web/src/world/viewSearchShortcut.ts`, `web/src/commandBoxKey.ts`, `web/src/world/town/useTownSearch.ts`, `web/src/world/board/useBoardSearch.ts`
 - Find any agent: `web/src/world/worldCommandBox.tsx`, `web/src/components/CommandCombobox.tsx`, `web/src/components/CommandActionItem.tsx`, `shared/harnessLabels.ts`
 - Found herdr-core terminal in Spaces: `web/src/world/SpacesCoreTerminal.tsx`, `web/src/world/spacesCore.ts`, `web/src/world/spacesCoreTerminal.css`
 - `web/src/layerStack.ts`
@@ -41,6 +42,7 @@
 - `web/src/world/WorldFoundationApp.test.ts`
 - `web/src/world/visualRouteActions.test.ts`
 - `web/src/world/worldSearch.test.ts`
+- One search: `web/src/world/worldFinder.test.ts`, `web/src/world/viewSearchShortcut.dom.test.ts`, `web/src/world/worldSearchMatches.test.ts`, `web/src/world/HostsFilter.browser.tsx`, `web/src/world/WorldTerminalHandoff.browser.tsx`
 - Find: `web/src/world/worldCommandBox.test.tsx`, `web/src/commandBoxKey.dom.test.ts`, `web/src/foundTerminalReveal.dom.test.ts`
 - `web/src/systemBack.browser.tsx`
 - `web/src/world/runtimeGrouping.test.ts`
@@ -114,11 +116,17 @@
   panes before dropping. Overflowing desktop tab strips offer scroll controls.
 - Search workspace, worktree, file, tab and pane actions in the command
   menu (`Cmd+K` on macOS, `Ctrl+K` elsewhere, or `Cmd+Option+K`/`Ctrl+Alt+K`
-  from a terminal or text field). A workspace-relative or
+  from a terminal or text field). It is World's one search: `/` and
+  `Cmd+F`/`Ctrl+F` open the same box, and so do a view's search button and the
+  phone's **Find or act**. A workspace-relative or
   absolute path opens the file. Agents are found in its **In World** group,
   in every view (see Find or act in terminal-windows notes); Spaces has no
-  separate list of its own connection's agents. Enter on a herdr-core agent
-  shows its terminal in Spaces' terminal area in place of the Herdr tab
+  separate list of its own connection's agents. The group shows 12 finds at a
+  time; its **Next** and **Previous** rows page through the rest without closing
+  the box, so agents that read alike stay reachable. Enter or a click goes to a
+  found agent in the current view (in Town the box stays open, and choosing the
+  same row again opens its Inspector: `go.stays` in `worldCommandBox.tsx`); in Spaces, or with Shift+Enter or the row's **Open
+  terminal**, a herdr-core agent shows its terminal in Spaces' terminal area in place of the Herdr tab
   (`web/src/world/SpacesCoreTerminal.tsx`); **Close** returns to the tab.
   Every terminal a find opens closes an expanded Inspector (or any Inspector
   on a phone) first, through App's `revealTerminal` request.
@@ -265,7 +273,7 @@ Common defaults (Linux/Android overrides follow the table):
 | Zen mode | `Cmd+Shift+Z` | `Ctrl+Alt+Z` |
 | Recent pane switcher | `Ctrl+Tab` | `Ctrl+Alt+J` |
 | Pane Search | `Alt+K` | `Alt+K` |
-| Search the current view (Town, Board, Desk) | `/` or `Cmd+F` | `/` or `Ctrl+F` |
+| Find or act (World's one search, same box as the command menu) | `/` or `Cmd+F` | `/` or `Ctrl+F` |
 | Create / close tab or pane | `Cmd+T` / `Cmd+W` | `Ctrl+Alt+T` / `Ctrl+Alt+W` |
 | Previous / next tab | `Cmd+Option+Left/Right` | `Alt+Shift+Left/Right` |
 | Focus neighboring pane | `Cmd+Ctrl+Arrow` | `Ctrl+Shift+Arrow` |
