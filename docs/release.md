@@ -58,7 +58,11 @@ builds each of the six native packages once. Every channel consumes those bytes:
 
 Only then does the standard immutable Actions artifact `verified-release` seal
 the tested GitHub assets, npm tarballs and product Formula/tap inputs in this tag
-run. Standard download-artifact checks its digest when publishers retrieve it.
+run. The seal job runs only when every contract job succeeded: a cancelled or
+skipped job, such as a walk that never got a runner, blocks it. Its `seal.json`
+records each contract job's result, and a rerun reuses retained bytes only when
+that record is from the same run and all green; otherwise it builds and tests
+again. Standard download-artifact checks its digest when publishers retrieve it.
 No source or browser suite runs in Release. No candidate is built on main.
 
 ## When a step fails

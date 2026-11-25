@@ -387,8 +387,10 @@ jobs:
 
   verify:
     name: Seal tested bytes with the immutable Actions artifact
-    needs: [validate, archives, npm-stage, npm-smoke, homebrew-formula, homebrew-smoke, release-walk]
-    if: ${{ !cancelled() && !failure() }}
+    # Every contract job is a direct need and must have succeeded: cancelled
+    # or skipped is not success, so a walk that never got a runner blocks it.
+    needs: [validate, package, release-walk, archives, npm-stage, npm-smoke, homebrew-formula, homebrew-smoke]
+    if: ${{ !cancelled() && needs.validate.result == 'success' && needs.package.result == 'success' && needs.release-walk.result == 'success' && needs.archives.result == 'success' && needs.npm-stage.result == 'success' && needs.npm-smoke.result == 'success' && needs.homebrew-formula.result == 'success' && needs.homebrew-smoke.result == 'success' }}
     runs-on: ubuntu-latest
     outputs:
       bundle_digest: ${{ steps.bundle.outputs.artifact-digest }}
@@ -413,6 +415,11 @@ jobs:
         with:
           name: homebrew-formula
           path: candidate/tap
+      # Release accepts retained bytes only with this record of a fully green run.
+      - name: Record that every contract job succeeded
+        env:
+          NEEDS: ${{ toJSON(needs) }}
+        run: bun scripts/release-seal.ts write candidate
       - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7
         id: bundle
         with:

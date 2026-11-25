@@ -13,8 +13,11 @@ version retain Windows installer's plain-assignment parsing.
 Only tags and nightly build native candidates. Acceptance consumes exact native
 archives and npm tarballs, running upgrades and real-agent starts. The standard
 immutable Actions artifact seals the tested package set within that workflow run;
-reruns reuse it or rebuild and repeat all acceptance when unavailable. No cross-run
-main authorization, receipt, bespoke seal manifest or custom publisher remains.
+reruns reuse it or rebuild and repeat all acceptance when unavailable. The seal job
+runs only when every contract job succeeded (cancelled is not success) and writes
+`seal.json` with each contract job's result; Release reuses retained bytes only
+when that record belongs to the same run and is all green, otherwise it rebuilds.
+No cross-run main authorization, receipt or custom publisher remains.
 
 Use softprops for GitHub assets, npm publish --provenance for tarballs and mislav
 for the tap proposal. Mislav updates only the first URL. Our existing product

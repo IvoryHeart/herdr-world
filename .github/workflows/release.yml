@@ -20,7 +20,7 @@ jobs:
     outputs:
       version: ${{ steps.metadata.outputs.version }}
       commit: ${{ steps.metadata.outputs.commit }}
-      retained: ${{ steps.retained.outcome == 'success' }}
+      retained: ${{ steps.retained.outcome == 'success' && steps.seal.outcome == 'success' }}
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
         with:
@@ -39,6 +39,13 @@ jobs:
         with:
           name: verified-release
           path: candidate
+      # Reuse only a seal recording that every contract job succeeded in this
+      # run; anything else builds and tests the tagged bytes again.
+      - name: Check the retained seal came from a fully green run
+        id: seal
+        if: steps.retained.outcome == 'success'
+        continue-on-error: true
+        run: bun scripts/release-seal.ts check candidate
 
   candidate:
     name: Build and test the tagged bytes once

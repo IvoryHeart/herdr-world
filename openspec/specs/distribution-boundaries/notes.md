@@ -39,6 +39,7 @@
 - `scripts/release-plan.ts`
 - `scripts/release-validation.test.ts`
 - `scripts/release-publication.test.ts`
+- `scripts/release-seal.ts` (seal record of every contract job's result; Release reuses retained bytes only from an all-green record of the same run)
 - `herdr-plugin.toml`
 - `scripts/install-plugin.ps1`
 - `scripts/install-plugin.test.ts`

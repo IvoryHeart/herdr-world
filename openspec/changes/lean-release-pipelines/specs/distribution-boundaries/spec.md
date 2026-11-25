@@ -43,11 +43,16 @@ Feature PRs SHALL express contract changes in their OpenSpec change folder along
 ## ADDED Requirements
 
 ### Requirement: Tested release channels
-A release SHALL publish only bytes that pass fresh installer starts on Linux/macOS x64/arm64, npm, Homebrew and native Windows archive starts; running-service upgrades from the previous published release through installer and Homebrew on Linux/macOS preserving data and service health; real Claude/Codex starts and World listings on TUI/core; and the shipped-dependency audit. Only the tag run and advisory nightly SHALL build native candidates. The standard immutable Actions artifact SHALL seal every tested publication file within that source run. Required PR checks SHALL run on Linux only and retry a failed test step once inside its job.
+A release SHALL publish only bytes that pass fresh installer starts on Linux/macOS x64/arm64, npm, Homebrew and native Windows archive starts; running-service upgrades from the previous published release through installer and Homebrew on Linux/macOS preserving data and service health; real Claude/Codex starts and World listings on TUI/core; and the shipped-dependency audit. Only the tag run and advisory nightly SHALL build native candidates. The standard immutable Actions artifact SHALL seal every tested publication file within that source run, and only after every contract job (packages, walks, fresh installs, npm and Homebrew checks, audit) succeeded; a cancelled or skipped contract job is not success. The seal SHALL record each contract job's result, and publication from retained bytes SHALL accept only a seal from the same run that records every contract job as succeeded. Required PR checks SHALL run on Linux only and retry a failed test step once inside its job.
 
 #### Scenario: A channel or agent fails
 - **WHEN** a Windows archive cannot launch, a running service upgrade loses health or data, an agent fails to start or list, or the shipped security audit fails
 - **THEN** no verified seal is produced and no release channel is published
+
+#### Scenario: A contract job is cancelled
+- **WHEN** a contract job is cancelled or never gets a runner while the others succeed
+- **THEN** no verified seal is produced
+- **AND** a rerun that finds retained bytes without a record of every contract job succeeding builds and tests the tagged bytes again before publication
 
 ### Requirement: Recoverable release publication
 Publication SHALL use standard GitHub Release actions, npm publish with provenance and the Homebrew bump action with create-pullrequest and the tap token. Product-specific multi-platform Formula generation MAY complete the same PR through a standard PR action. Publication SHALL keep identical existing GitHub assets, skip matching npm integrity and reuse one tap PR. Infrastructure failures SHALL retry once automatically. Failed release summaries SHALL name the failed stage and rerun behavior; Pages SHALL deploy independently of tap success.
