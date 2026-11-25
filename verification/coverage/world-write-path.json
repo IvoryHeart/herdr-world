@@ -10,7 +10,7 @@
     "server/src/world/snapshot.test.ts",
     "web/src/world/worldReplica.test.ts"
   ],
-  "acceptedDelivery": "https://github.com/IvoryHeart/herdr-world/pull/1405",
+  "acceptedDelivery": "https://github.com/IvoryHeart/herdr-world/pull/1406",
   "status": "pending",
   "technique": "design-model-with-production-replay",
   "assessment": "Bounded model of one room on one host with two screens in one browser, source changes, late and lost reads, lost commands that may still land, reconnects and one World restart. Nine named scenarios pass; three seeds of 2,000 simulated runs check the safety invariant. Exhaustive TLC did not finish within ten minutes, so the gate samples. Seven scenarios replay through the real WorldSnapshotService, composeWorldCommands and two browser WorldRuntimeStore replicas over a synthetic Herdr runtime. Two model flags (no fence, no compare-and-set) and three production mutants (snapshot admission fence, compare-and-set, publish on settle) are rejected.",
