@@ -4,17 +4,21 @@ import { renderToStaticMarkup } from "react-dom/server";
 import type { WorldRuntimeConnection } from "./runtimeStore";
 import { TERMINAL_COLOR_HEX } from "./terminalColor";
 import { townScaleConnections } from "./town/townScaleScene";
+import { townLandmarkResults } from "./town/townSearch";
 import { spacesCoreChoice, spacesCoreLeaf } from "./spacesCore";
 import { SpacesCoreTerminal } from "./SpacesCoreTerminal";
 import {
   coreSpacesLeaf,
   openWorldFind,
+  openWorldFindHere,
   WORLD_COMMAND_FINDS,
   withWorldViews,
   worldFindGroup,
+  worldFindHereReason,
   worldFindOpenReason,
   worldFoundTarget,
   worldViewGroup,
+  type WorldFindHereDeps,
   type WorldFindOpenDeps,
 } from "./worldCommandBox";
 import { buildWorldObject } from "./worldObject";
@@ -70,13 +74,26 @@ describe("the command box finds what the views' search finds", () => {
     const results = worldSearchResults(world, "harbor");
     expect(results.length).toBeGreaterThan(WORLD_COMMAND_FINDS);
     expect(group.heading).toBe("In World");
-    // A page of finds, then how many more a narrower search would show.
-    expect(group.actions).toHaveLength(WORLD_COMMAND_FINDS + 1);
-    const more = group.actions[WORLD_COMMAND_FINDS]!;
-    expect(more.title).toBe(
-      `${results.length - WORLD_COMMAND_FINDS} more in World`,
+    // A page of finds; the box pages through the rest.
+    expect(group.actions).toHaveLength(WORLD_COMMAND_FINDS);
+    expect(group.page).toEqual({
+      from: 0,
+      size: WORLD_COMMAND_FINDS,
+      total: results.length,
+    });
+    // The next page holds the matches after it, ending with the last one.
+    const lastFrom =
+      Math.floor((results.length - 1) / WORLD_COMMAND_FINDS) *
+      WORLD_COMMAND_FINDS;
+    const last = worldFindGroup(world, "harbor", none, lastFrom)!;
+    expect(last.page!.from).toBe(lastFrom);
+    expect(last.actions[last.actions.length - 1]!.key).toBe(
+      `world-find-${results[results.length - 1]!.id}`,
     );
-    expect(more.disabledReason).toBe("Add a word to narrow the search");
+    // A page past the end, as after a narrower search, is the last page.
+    expect(worldFindGroup(world, "harbor", none, 10_000)!.page!.from).toBe(
+      lastFrom,
+    );
     const [room] = group.actions;
     expect(room!.title).toBe("harbor");
     expect(room!.detail).toBe("Room · atlas");
@@ -85,7 +102,7 @@ describe("the command box finds what the views' search finds", () => {
     expect(group.actions[1]!.score).toBe(0.8);
     room!.run();
     expect(chosen).toEqual([results[0]!.nodeId]);
-    // Without a view to show it in (Spaces), there is no second action.
+    // Without a view to go to it in, choosing opens it: no second action.
     expect(room!.secondary).toBeUndefined();
   });
 
@@ -117,21 +134,88 @@ describe("the command box finds what the views' search finds", () => {
     expect(trailing).toContain("Needs you");
   });
 
-  test("the second action shows the node in the current view", () => {
-    const shown: string[] = [];
+  test("choosing goes to the find in the current view; the second action opens it there", () => {
+    const went: string[] = [];
     const opened: string[] = [];
-    const group = worldFindGroup(world, "harbor", {
-      open: (node) => opened.push(node.id),
-      show: { label: "Show in Town", run: (node) => shown.push(node.id) },
-    })!;
-    const room = group.actions[0]!;
-    expect(room.secondary?.label).toBe("Show in Town");
-    room.secondary!.run();
-    expect(shown).toEqual([worldSearchResults(world, "harbor")[0]!.nodeId]);
+    const handlers = {
+      open: (node: { id: string }) => opened.push(node.id),
+      go: { run: (result: { nodeId: string }) => went.push(result.nodeId) },
+      opensHere: true,
+      opensNote: "Opens its window here",
+    };
+    const room = worldFindGroup(world, "harbor", handlers)!.actions[0]!;
+    room.run();
+    expect(went).toEqual([worldSearchResults(world, "harbor")[0]!.nodeId]);
     expect(opened).toEqual([]);
+    // A room opens its Inspector; an agent or terminal opens its terminal;
+    // nothing outside Spaces says it goes to Spaces (#1356).
+    expect(room.secondary?.label).toBe("Open Inspector");
+    room.secondary!.run();
+    expect(opened).toEqual([went[0]]);
+    expect(room.detail).not.toContain("Opens its window here");
+    const agent = worldFindGroup(world, "harbor migration", handlers)!
+      .actions[0]!;
+    expect(agent.secondary?.label).toBe("Open terminal");
+    // A host has no window beside the view, so it has no second action.
+    const host = worldFindGroup(
+      world,
+      world.hosts[0]!.hostLabel,
+      handlers,
+    )!.actions.find(
+      (action) => action.key === `world-find-${world.hosts[0]!.id}`,
+    );
+    expect(host).toBeDefined();
+    expect(host!.secondary).toBeUndefined();
+    // In Spaces a room still opens there.
+    const spaces = worldFindGroup(world, "harbor", {
+      ...handlers,
+      opensHere: false,
+    })!.actions[0]!;
+    expect(spaces.secondary?.label).toBe("Open in Spaces");
   });
 
-  test("finds every connected host's agents whatever Hosts shows; shows only what the view shows", () => {
+  test("the view says when choosing a find leaves the box open", () => {
+    let shown = "";
+    const handlers = {
+      open: () => {},
+      go: {
+        stays: (result: { id: string }) => shown !== result.id,
+        run: (result: { id: string }) => {
+          shown = result.id;
+        },
+      },
+    };
+    const room = worldFindGroup(world, "harbor", handlers)!.actions[0]!;
+    const stay = room.stay as () => boolean;
+    expect(stay()).toBe(true);
+    room.run();
+    expect(stay()).toBe(false);
+    // A view that says nothing closes the box as each find is chosen.
+    const plain = worldFindGroup(world, "harbor", {
+      open: () => {},
+      go: { run: () => {} },
+    })!.actions[0]!;
+    expect(plain.stay).toBeUndefined();
+  });
+
+  test("a view's own result goes there and has nothing to open", () => {
+    const went: string[] = [];
+    const group = worldFindGroup(world, "warehouse", {
+      open: () => {
+        throw new Error("a landmark is never opened");
+      },
+      go: { run: (result) => went.push(result.id) },
+      extra: townLandmarkResults,
+    })!;
+    const found = group.actions[0]!;
+    expect(found.title).toContain("Warehouse");
+    expect(found.secondary).toBeUndefined();
+    expect(found.trailing).toBeUndefined();
+    found.run();
+    expect(went).toEqual([townLandmarkResults("warehouse")[0]!.id]);
+  });
+
+  test("finds every connected host's agents whatever Hosts shows; goes only to what the view shows", () => {
     const [shownHost, otherHost] = world.hosts;
     const shownWorld = worldObjectForHosts(world, [shownHost!.connectionId]);
     const other = world.leaves.find(
@@ -139,34 +223,40 @@ describe("the command box finds what the views' search finds", () => {
         leaf.kind === "agent" && leaf.connectionId === otherHost!.connectionId,
     )!;
     expect(shownWorld.nodeById.has(other.id)).toBe(false);
-    const group = worldFindGroup(world, `${other.label} ${other.hostLabel}`, {
-      open: () => {},
-      show: {
-        label: "Show in Town",
-        shows: (node) => shownWorld.nodeById.has(node.id),
-        run: () => {},
+    const went: string[] = [];
+    const opened: string[] = [];
+    const handlers = {
+      open: (node: { id: string }) => opened.push(node.id),
+      go: {
+        shows: (node: { id: string }) => shownWorld.nodeById.has(node.id),
+        run: (result: { nodeId: string }) => went.push(result.nodeId),
       },
-    })!;
+      opensHere: true,
+      opensNote: "Opens its window here",
+    };
+    const group = worldFindGroup(
+      world,
+      `${other.label} ${other.hostLabel}`,
+      handlers,
+    )!;
     const found = group.actions.find(
       (action) => action.key === `world-find-${other.id}`,
-    );
-    expect(found).toBeDefined();
-    // Enter opens it; the view hides its host, so it isn't shown there.
-    expect(found!.secondary).toBeUndefined();
+    )!;
+    // The view hides its host: choosing opens it, and the row says so.
+    expect(found.detail).toMatch(/ · Opens its window here$/);
+    expect(found.secondary).toBeUndefined();
+    found.run();
+    expect(opened).toEqual([other.id]);
+    expect(went).toEqual([]);
     const shown = shownWorld.leaves.find((leaf) => leaf.kind === "agent")!;
-    const shownGroup = worldFindGroup(world, shown.label, {
-      open: () => {},
-      show: {
-        label: "Show in Town",
-        shows: (node) => shownWorld.nodeById.has(node.id),
-        run: () => {},
-      },
-    })!;
-    expect(
-      shownGroup.actions.find(
-        (action) => action.key === `world-find-${shown.id}`,
-      )?.secondary?.label,
-    ).toBe("Show in Town");
+    const shownFind = worldFindGroup(
+      world,
+      shown.label,
+      handlers,
+    )!.actions.find((action) => action.key === `world-find-${shown.id}`)!;
+    expect(shownFind.secondary?.label).toBe("Open terminal");
+    shownFind.run();
+    expect(went).toEqual([shown.id]);
   });
 
   test("finds agents by their harness's full name", () => {
@@ -387,6 +477,106 @@ describe("opening a find", () => {
     const second = deps();
     expect(await openWorldFind(empty, second.value)).toBe(false);
     expect(second.calls).toEqual([]);
+  });
+
+  // Cmd+K outside Spaces opens a find's window in the view it was opened in,
+  // never changing the view (#1356): Herdr TUI and herdr-core alike.
+  function here(found = true) {
+    const calls: string[] = [];
+    const notes: string[] = [];
+    const value: WorldFindHereDeps = {
+      openWindow: async (target, opens) => {
+        calls.push(
+          `window ${target.connectionId} ${target.runtimeGeneration} ${target.workspaceId} ${target.paneId} ${opens}`,
+        );
+        return found;
+      },
+      notify: (message, detail) => notes.push(`${message}: ${detail}`),
+    };
+    return { calls, notes, value };
+  }
+
+  test("in the current view a Herdr agent opens its terminal window there, on the host Spaces shows or another", async () => {
+    for (const agent of [
+      agentOn(scene[0]!.connectionId),
+      agentOn(scene[1]!.connectionId),
+    ]) {
+      expect(worldFindHereReason(agent)).toBeNull();
+      const { calls, notes, value } = here();
+      expect(await openWorldFindHere(agent, value)).toBe(true);
+      expect(calls).toEqual([
+        `window ${agent.connectionId} ${agent.generation} ${agent.workspaceId} ${agent.nativeId} terminal`,
+      ]);
+      expect(notes).toEqual([]);
+    }
+  });
+
+  test("in the current view a herdr-core agent opens its terminal window there", async () => {
+    const agent = agentOn("core-local");
+    expect(agent.capabilities.openTerminal).toBe(false);
+    expect(worldFindHereReason(agent)).toBeNull();
+    const { calls, notes, value } = here();
+    expect(await openWorldFindHere(agent, value)).toBe(true);
+    expect(calls).toEqual([
+      `window core-local ${agent.generation} ${agent.workspaceId} ${agent.nativeId} terminal`,
+    ]);
+    expect(notes).toEqual([]);
+    // The window's admission finds it by this target, on its own generation.
+    expect(
+      worldNodeForWorkspaceSurfaceSelection(all, {
+        connectionId: "core-local",
+        runtimeGeneration: agent.generation,
+        workspaceId: agent.workspaceId,
+        paneId: agent.nativeId,
+        view: "terminal",
+      })?.id,
+    ).toBe(agent.id);
+  });
+
+  test("in the current view a room opens its Inspector; a host says it has no window", async () => {
+    const room = all.spaces.find(
+      (space) => space.connectionId === scene[2]!.connectionId,
+    )!;
+    const first = here();
+    expect(await openWorldFindHere(room, first.value)).toBe(true);
+    expect(first.calls).toEqual([
+      `window ${room.connectionId} ${room.generation} ${room.nativeId} null null`,
+    ]);
+    const host = all.hosts.find(
+      (item) => item.connectionId === scene[2]!.connectionId,
+    )!;
+    const second = here();
+    expect(await openWorldFindHere(host, second.value)).toBe(false);
+    expect(second.calls).toEqual([]);
+    expect(second.notes).toEqual([
+      `Can't open ${host.label}: ${host.hostLabel} is a host, so it has no window. Find one of its agents or rooms to open it.`,
+    ]);
+  });
+
+  test("in the current view an offline, reconnecting or moved agent says why and opens nothing", async () => {
+    for (const [agent, why] of [
+      [agentOn("lost"), "lost is offline. World shows what it last saw there."],
+      [
+        agentOn("returning"),
+        "returning is reconnecting. Try again when it is back.",
+      ],
+    ] as const) {
+      const { calls, notes, value } = here();
+      expect(await openWorldFindHere(agent, value)).toBe(false);
+      expect(calls).toEqual([]);
+      expect(notes).toEqual([`Can't open ${agent.label}: ${why}`]);
+    }
+    const agent = agentOn(scene[0]!.connectionId);
+    const moved = here(false);
+    expect(await openWorldFindHere(agent, moved.value)).toBe(false);
+    expect(moved.notes).toEqual([
+      `Can't open ${agent.label}: ${agent.label} is no longer where World last saw it.`,
+    ]);
+    // A herdr-core terminal World only watches from another machine.
+    const remote = { ...agentOn("core-local"), watch: undefined };
+    expect(worldFindHereReason(remote)).toBe(
+      "World only watches this herdr-core terminal from another machine, so it can't open it here.",
+    );
   });
 
   test("Spaces shows a core terminal only on the generation it was opened on", () => {

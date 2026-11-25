@@ -1,4 +1,5 @@
 import { questionAskerKey } from "../../../shared/questionAsker";
+import { askQuestionHint } from "../../../shared/askCommands";
 import { CliError } from "./world-cli-errors";
 import type { CliHost, WorldCliDeps } from "./world-cli";
 import { paneActor } from "./world-cli-actor";
@@ -128,6 +129,28 @@ export async function handleWorldAsk(
   now: () => number,
 ): Promise<unknown> {
   switch (command) {
+    case "ask ls": {
+      if (!actor.verified)
+        refused("listing your questions requires a verified asking terminal");
+      const at = now();
+      return deps.ledger
+        .get()
+        .asks.filter((ask) => canWithdraw(ask.actor, actor))
+        .reverse()
+        .sort((left, right) => right.at - left.at)
+        .map((ask) => ({
+          id: ask.id,
+          state: ask.withdrawn
+            ? "withdrawn"
+            : ask.answer
+              ? "answered"
+              : ask.dismissed
+                ? "dismissed"
+                : "open",
+          age_ms: Math.max(0, at - ask.at),
+          question: ask.question.split(/\r?\n/, 1)[0]!,
+        }));
+    }
     case "ask withdraw": {
       let ask;
       if (params.key !== undefined) {
@@ -168,6 +191,8 @@ export async function handleWorldAsk(
     }
     case "ask": {
       const question = text(params.question, "the question");
+      const hint = askQuestionHint(question);
+      if (hint) usage(hint);
       const key =
         params.key === undefined
           ? undefined

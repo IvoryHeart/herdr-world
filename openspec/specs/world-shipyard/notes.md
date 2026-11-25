@@ -86,10 +86,9 @@
   running World reads as stopped reporting without **Open**. GitHub off, no
   repository or no project with a release leaves an empty sea, without piers,
   and the sign says how to go on. A phone or portrait
-  Town has the same harbour right of its stacked buildings: drag or pinch to
-  reach it, or tap the **Shipyard** signpost on the town center's left wing
-  (a dot per project in its colour and lamp, and an arrow), which flies to
-  the sea with the promenade and a whole pier across the screen. Calm Town
+  Town has the same harbour right of its stacked buildings and the library
+  and observatory: drag or pinch to reach it; at home zoom the promenade and
+  a whole pier fit across the screen. Calm Town
   and reduced motion stop the bobbing and
   sailing. Open pull requests are the warehouse's, not the harbour's.
 - **Work → Releases** (Board's Work lens and Town's harbour): main's checks,

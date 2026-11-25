@@ -269,5 +269,5 @@ it on the asker's own connection.
 Presentation: `web/src/world/shipyard/shipyardModel.test.ts` (view model),
 `shipyardStore.test.ts` (reads, refresh, repository choice),
 `web/src/world/town/townHarbour.test.ts` (lot geometry) and the isolated DOM
-suite `web/src/world/town/TownShipyard.dom.test.ts` (harbour, fold, Releases
+suite `web/src/world/town/TownShipyard.dom.test.ts` (harbour, phone, Releases
 tab, links and refresh).

@@ -47,7 +47,7 @@ function fixture() {
   return { ledger, deps };
 }
 
-test("withdrawal exhausts terminal ownership independently of generation and session", async () => {
+test("question listing and withdrawal exhaust terminal ownership independently of generation and session", async () => {
   const { ledger, deps } = fixture();
   // All 128 identity equivalence classes, both ID and lost-ID/key recovery.
   // A reused pane with a different stable terminal is always a different asker.
@@ -66,6 +66,29 @@ test("withdrawal exhausts terminal ownership independently of generation and ses
       await ledger.update((doc) => {
         doc.asks = [question("q-original")];
       });
+      const permitted = !(mask & 7);
+      const listing = await handleWorldAsk(
+        deps,
+        "ask ls",
+        {},
+        actor,
+        () => 2,
+      ).catch(() => null);
+      expect({ mask, listing }).toEqual({
+        mask,
+        listing: !actor.verified
+          ? null
+          : permitted
+            ? [
+                {
+                  id: "q-original",
+                  state: "open",
+                  age_ms: 1,
+                  question: "Continue?",
+                },
+              ]
+            : [],
+      });
       const result = await handleWorldAsk(
         deps,
         "ask withdraw",
@@ -76,7 +99,6 @@ test("withdrawal exhausts terminal ownership independently of generation and ses
         () => true,
         () => false,
       );
-      const permitted = !(mask & 7);
       expect({ mask, byKey, result }).toEqual({
         mask,
         byKey,
@@ -84,6 +106,51 @@ test("withdrawal exhausts terminal ownership independently of generation and ses
       });
       expect(Boolean(ledger.ask("q-original")?.withdrawn)).toBe(permitted);
     }
+  }
+});
+
+test("legacy question listing retains strict original identity checks", async () => {
+  const { ledger, deps } = fixture();
+  const legacy = {
+    ...original,
+    terminal_id: undefined,
+    agent_session_fingerprint: undefined,
+  };
+  await ledger.update((doc) => {
+    doc.asks = [question("q-legacy", legacy)];
+  });
+  for (let mask = 0; mask < 64; mask++) {
+    const actor = {
+      ...legacy,
+      verified: !(mask & 1),
+      connection_id: mask & 2 ? "other-core" : legacy.connection_id,
+      terminal_id: mask & 4 ? "t1" : undefined,
+      connection_generation: mask & 8 ? 3 : legacy.connection_generation,
+      pane_id: mask & 16 ? "t9" : legacy.pane_id,
+      agent_session_id: mask & 32 ? "replacement" : legacy.agent_session_id,
+    };
+    const listing = await handleWorldAsk(
+      deps,
+      "ask ls",
+      {},
+      actor,
+      () => 2,
+    ).catch(() => null);
+    expect({ mask, listing }).toEqual({
+      mask,
+      listing: !actor.verified
+        ? null
+        : mask === 0
+          ? [
+              {
+                id: "q-legacy",
+                state: "open",
+                age_ms: 1,
+                question: "Continue?",
+              },
+            ]
+          : [],
+    });
   }
 });
 
@@ -128,6 +195,18 @@ test("the current verified core terminal withdraws after restart; a forged addre
   const { id } = ask.result as { id: string };
   generation = 3;
   fingerprint = "after";
+  expect(await run("ask ls", {})).toMatchObject({
+    ok: true,
+    result: [{ id, state: "open" }],
+  });
+  expect(await run("ask ls", {}, "t2", 200)).toMatchObject({
+    ok: true,
+    result: [],
+  });
+  expect(await run("ask ls", {}, "t1", 200)).toMatchObject({
+    ok: false,
+    code: "refused",
+  });
   expect(await run("ask withdraw", { id }, "t2", 200)).toMatchObject({
     ok: false,
   });
@@ -139,6 +218,10 @@ test("the current verified core terminal withdraws after restart; a forged addre
     result: { withdrawn: { at: expect.any(Number) } },
   });
   expect(ledger.openAsks().asks).toEqual([]);
+  expect(await run("ask ls", {})).toMatchObject({
+    ok: true,
+    result: [{ id, state: "withdrawn" }],
+  });
 });
 
 test("owner bulk dismissal closes only open questions from the stable asker", async () => {

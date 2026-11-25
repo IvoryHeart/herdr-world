@@ -243,6 +243,7 @@ test.each(destinationEdits)(
           publishBoardChanged: () => {},
           publishWorldInvalidation: () => {},
           connectionManager: {
+            has: (id: string) => id === connection_id,
             readyRuntimeLease: () => ({
               connectionId: connection_id,
               generation: state.context.generation,

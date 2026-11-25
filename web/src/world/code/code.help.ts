@@ -16,7 +16,7 @@ export const CODE_HELP: readonly HelpEntry[] = [
     place: "code",
     where: "Code, the project picker at the left of its top bar",
     control: "code.project",
-    since: "0.3.6",
+    since: "0.3.7",
     picture: { scene: "code" },
   },
 ];

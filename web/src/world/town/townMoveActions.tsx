@@ -37,6 +37,8 @@ import {
   type TownMoveResult,
 } from "./townMoves";
 import { townTeamActions } from "./townTeamActions";
+import { needsAgentHandoff } from "./townMoveEligibility";
+import { deskAgentAddress, requestAgentHandoff } from "./townRuntimeMove";
 import { sharedTownJoinSeats, type TownJoinSeats } from "./townJoinSeats";
 
 /** The confirmation asked before a move closes its room. */
@@ -149,12 +151,26 @@ export function townMoveActions({
     setMovingKey(desk.key);
     toast("ok", `Moving ${desk.displayLabel} to ${room.displayLabel}…`);
     try {
-      const outcome = await requestDeskMove(
-        desk,
-        room,
-        allowCloseRoom,
-        inheritsColor(desk),
-      );
+      const outcome = needsAgentHandoff(desk, room)
+        ? await requestAgentHandoff(
+            deskAgentAddress(
+              desk,
+              source?.workspaceRef.nativeId ?? "",
+              office.roomRoster
+                .filter(
+                  (r) =>
+                    r.workspaceRef.connectionId === desk.tabRef.connectionId,
+                )
+                .map((r) => r.workspaceRef.nativeId),
+            ),
+            room,
+          )
+        : await requestDeskMove(
+            desk,
+            room,
+            allowCloseRoom,
+            inheritsColor(desk),
+          );
       const result = reportMove(
         desk.displayLabel,
         outcome,

@@ -40,6 +40,7 @@ export function withFeatures(services: RpcServices): RpcServices {
     send: services.safeSend,
     deskMarks: () => ({ persistentMarks: services.persistentMarks }),
     appearanceRpc: {
+      coreControl: services.coreControl,
       board: services.board,
       publishBoardChanged: services.publishBoardChanged,
       publishWorldInvalidation: services.publishWorldInvalidation,

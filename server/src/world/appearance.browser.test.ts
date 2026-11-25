@@ -127,6 +127,7 @@ test.skipIf(!chrome)(
               publishWorldInvalidation: () =>
                 publish({ type: "world_invalidated" }),
               connectionManager: {
+                has: (connectionId: string) => connectionId === "alpha",
                 readyRuntimeLease: (connectionId: string) =>
                   connectionId !== "alpha"
                     ? null

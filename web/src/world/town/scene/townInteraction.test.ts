@@ -116,6 +116,8 @@ function setup(
   const ghost: unknown[][] = [];
   /** Where the bin lies on the canvas, when a test puts one there. */
   let binAt: ((at: Point) => boolean) | null = null;
+  /** The bus stop the bin lies under, when a test puts it on one. */
+  let binStop: string | null = null;
   const binned: unknown[] = [];
   const interaction = new TownInteraction({
     clock: time.clock,
@@ -158,8 +160,8 @@ function setup(
       remove: () => ghost.push(["remove"]),
     },
     held: () => log.push(["held"]),
-    binAt: (at) => Boolean(at && binAt?.(at)),
-    bin: (drag) => binned.push(drag),
+    binAt: (at) => (at && binAt?.(at) ? { stop: binStop } : null),
+    bin: (drag, stop) => binned.push(stop ? { ...drag, stop } : drag),
   });
   /** Draw a frame, as the renderer does, so presses hit what is drawn. */
   const draw = () => view.drew(camera, level, layout);
@@ -193,7 +195,10 @@ function setup(
     moves,
     ghost,
     binned,
-    setBin: (over: (at: Point) => boolean) => (binAt = over),
+    setBin: (over: (at: Point) => boolean, stop: string | null = null) => {
+      binAt = over;
+      binStop = stop;
+    },
     reasons,
     draw,
     press,
@@ -536,6 +541,20 @@ test("a carry near the edge pans the town each frame until it drops", () => {
   expect(t.frames.pending()).toBe(1);
   t.lift(pointer, { x: 720, y: 450 });
   expect(t.frames.pending()).toBe(0);
+});
+
+test("an agent dropped on a bus stop is put in the bin at that stop", () => {
+  const t = setup();
+  t.setBin((at) => at.x < 10 && at.y < 10, "7:12");
+  const cell = t.deskCell(0);
+  const at = t.deskCentre(cell);
+  const pointer = t.press(at);
+  t.moveTo(pointer, offset(at, 20));
+  t.moveTo(pointer, { x: 4, y: 4 });
+  expect(last(t.ghost)).toEqual(["aim", "Put in the bin", true, "bin"]);
+  t.lift(pointer, { x: 4, y: 4 });
+  expect(t.moves).toEqual([]);
+  expect(t.binned).toEqual([{ kind: "desk", key: cell.deskKey, stop: "7:12" }]);
 });
 
 test("a carry resting on the bin in the edge band holds the town still", () => {

@@ -38,3 +38,16 @@ export function boardSearchMatches(model: BoardModel, query: string) {
       hit.add(space.key);
   return hit;
 }
+
+/**
+ * The card a chosen result goes to: a room's workspace card, or the tab card
+ * that holds an agent or terminal. Null when Board draws no card for it, such
+ * as a host.
+ */
+export function boardSearchKey(model: BoardModel, nodeId: string) {
+  for (const space of model.workspaces)
+    if (space.space.id === nodeId) return space.key;
+  for (const tab of model.tabs)
+    if (tab.panes.some((pane) => pane.leaf.id === nodeId)) return tab.key;
+  return null;
+}

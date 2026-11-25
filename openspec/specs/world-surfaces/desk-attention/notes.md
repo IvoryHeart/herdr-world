@@ -4,7 +4,7 @@
 
 **Surfaces:**
 
-- Choose Desk or /desk for Now, Agents and Reviewed, with shared search.
+- Choose Desk or /desk for Now, Agents and Reviewed, with a shared filter.
 - Cards open exact agent Inspectors; Answer leads to Needs you and review offers Undo.
 - Wide screens dock a reading pane and support J/K/Enter/E; phones open the Inspector full-screen.
 - TUI/core use the same qualified receipts and stops; missing native evidence remains explicit.
@@ -71,8 +71,10 @@
     Terminal) beside the Desk as a reading pane and folds the lanes
     into one queue. `J`/`K` preview the next agent there, `Enter` opens it using
     **Agents open** and `Esc` closes the pane. Phones open the Inspector full screen.
-  - One search (`/`, `Ctrl+F` or `Cmd+F`) filters every mode by agent name, thread title, harness,
-    workspace, tab, folder, request and report. Agents are named by the thread
+  - **Filter** (the toolbar's filter button, "Filter Desk") filters every mode by agent name,
+    thread title, harness, workspace, tab, folder, request and report. `/`, `Ctrl+F` and
+    `Cmd+F` open World's one search instead (Find or act, shell-navigation notes);
+    choosing an agent there selects it on the Desk. Agents are named by the thread
     title their harness writes to the terminal when they have no Herdr name.
   - `J`/`K` move between cards; `Enter` opens the agent's Inspector using **Agents open** to
     answer, review, or watch. Expand an outside-filter host's summary chip to see

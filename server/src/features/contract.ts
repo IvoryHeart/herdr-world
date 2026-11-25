@@ -22,7 +22,10 @@ export type FeatureKernel = Readonly<
     deskMarks(): Pick<RpcServices, "persistentMarks">;
     appearanceRpc: Pick<
       RpcServices,
-      "board" | "publishBoardChanged" | "publishWorldInvalidation"
+      | "board"
+      | "publishBoardChanged"
+      | "publishWorldInvalidation"
+      | "coreControl"
     >;
     createAppearance: typeof import("./appearance/service").createProfileServices;
     createIntegrations: typeof import("./integrations/service").createIntegrations;
@@ -94,6 +97,7 @@ export function featureKernel(
     send: rpc.safeSend,
     deskMarks: () => ({ persistentMarks: rpc.persistentMarks }),
     appearanceRpc: {
+      coreControl: rpc.coreControl,
       board: rpc.board,
       publishBoardChanged: rpc.publishBoardChanged,
       publishWorldInvalidation: rpc.publishWorldInvalidation,

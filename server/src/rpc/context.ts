@@ -98,6 +98,8 @@ export type RpcServices = {
   ): boolean;
   snapshotAdmission: WorldSnapshotAdmission;
   townMoveQueues: Map<string, ReturnType<typeof createMoveQueue>>;
+  /** One runtime move per agent until it settles (world/move-settle.ts). */
+  moveSettle?: import("../world/move-settle").MoveSettle;
   /** Server-wide interface preferences (bridge.ui_settings.*). */
   uiSettings: ReturnType<
     typeof import("../bridge/settings-rpc").createUiSettingsRpcHandler

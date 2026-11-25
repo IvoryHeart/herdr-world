@@ -18,6 +18,7 @@ this recent attribution is not a complete audit and has no CLI undo.
 - Ask when you need a decision: herdr-world ask "Which option?" --owner-only
   --options a,b --wait. The owner answers at reception in World. Keep the
   returned ask ID; herdr-world ask get ID retrieves a saved answer later.
+  herdr-world ask ls lists your retained questions, newest first.
 - Report a finished or blocked task: herdr-world result --task TASK-42
   "What changed and what was verified" --status done --pr 12. Use blocked
   or failed honestly. Results are durable reports; result ls lists them.
@@ -52,6 +53,7 @@ write pane metadata through Herdr; they do not require the World service.
     herdr-world ask "Ship the fix now?" --options yes,no --wait
     herdr-world ask "Which host?" --owner-only --wait --timeout 600
     herdr-world ask "Task 7 is stuck. What next?" --key task:7:stuck --owner-only
+    herdr-world ask ls --json
     herdr-world ask withdraw q-example
     herdr-world ask withdraw --key task:7:stuck
     herdr-world result --task FM-42 "Fixed the login race" --pr 12 --status done
@@ -143,6 +145,15 @@ Targets are on your own host; add --connection ID for another one.
          interrupted alerts. Retrieve answers with ask get or --wait.
          Automatic pane delivery without --wait is a planned follow-up;
          uncertain pane sends must never auto-replay.
+  ask ls [--json]
+         lists your verified terminal's retained questions, newest first,
+         including answered and withdrawn ones (owner dismissals say dismissed).
+         Each entry has id, state, age_ms and the question's first line.
+         Like result ls, text output is one JSON object per line, or (none);
+         --json (also the default when piped) keeps the normal reply envelope.
+         Use ask ls to list questions; ask list creates nothing and gives a hint.
+         Single command words (ls, list, get, answer, withdraw, acknowledge,
+         help), ignoring case and surrounding spaces, cannot be whole questions.
   result --task ID "SUMMARY" [--pr N] [--status done|blocked|failed]
   result ls [--task ID]
   task-summary "TEXT" [--pane ID] [--ttl-ms MS] [--session NAME]

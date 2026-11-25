@@ -821,9 +821,15 @@ export default function App({
   onSpacesWindowLayerReady?: (element: HTMLDivElement | null) => void;
   /**
    * What Spaces shows in place of a Herdr TUI tab: a herdr-core terminal
-   * (#1329). A new key brings the phone to it from the list.
+   * (#1329). A new key brings the phone to it from the list. `tabs` replace
+   * the TUI tab strip; the tab keys go to `selectTab` (#1390).
    */
-  spacesSurface?: { key: string; content: ReactNode } | null;
+  spacesSurface?: {
+    key: string;
+    content: ReactNode;
+    tabs?: ReactNode;
+    selectTab?(step: "previous" | "next" | number): void;
+  } | null;
   /**
    * Each new value reveals Spaces' terminal, as choosing a terminal does: an
    * Inspector that would hide it (expanded, or any on a phone) closes and the
@@ -854,6 +860,13 @@ export default function App({
   const hasWorkspaceSurface =
     workspaceSurface !== null && workspaceSurfaceVisible;
   const spacesSurfaceShown = !hasWorkspaceSurface && spacesSurface !== null;
+  // The tab keys' owner while Spaces shows a herdr-core terminal (#1390).
+  const spacesSurfaceTabsRef = useRef<
+    ((step: "previous" | "next" | number) => void) | undefined
+  >(undefined);
+  spacesSurfaceTabsRef.current = spacesSurfaceShown
+    ? spacesSurface?.selectTab
+    : undefined;
   const focusExplicitTab = useCallback(
     async (tabId: string) => {
       if (hasWorkspaceSurface && onWorkspaceSurfaceSelect) {
@@ -3329,6 +3342,13 @@ export default function App({
         if (e.repeat && (tabAction === "create" || tabAction === "close")) {
           return;
         }
+        const surfaceTabs = spacesSurfaceTabsRef.current;
+        if (surfaceTabs) {
+          // A herdr-core strip only switches: it creates and closes nothing.
+          if (tabAction === "previous" || tabAction === "next")
+            surfaceTabs(tabAction);
+          return;
+        }
 
         const current = operations.get();
         const focusedWorkspace = current.workspaces.find(
@@ -3453,6 +3473,13 @@ export default function App({
       const tabIndex = tabShortcutIndex(e);
       if (tabIndex !== null) {
         if (isEditableElement(e.target)) return;
+        const surfaceTabs = spacesSurfaceTabsRef.current;
+        if (surfaceTabs) {
+          e.preventDefault();
+          e.stopPropagation();
+          surfaceTabs(tabIndex);
+          return;
+        }
         const current = operations.get();
         const focusedWorkspace = current.workspaces.find((w) => w.focused);
         // Number shortcuts address tab-strip positions, pinned tabs first.
@@ -4185,8 +4212,10 @@ export default function App({
             extension={
               operationalShortcutsEnabled ? undefined : visualActionExtension
             }
-            // World's finds in every view, Spaces included (#1329).
+            // World's one search in every view, Spaces included (#1329,
+            // #1355): its finds and the search it shares with the view.
             find={visualActionExtension?.find}
+            finderSearch={visualActionExtension?.finderSearch}
             onOpenFileExplorer={openFileExplorer}
             onOpenFile={openFileExplorerFile}
             onOpenDiffViewer={openDiffViewer}
@@ -4730,7 +4759,9 @@ export default function App({
           <OperationalContext.Provider
             value={hasWorkspaceSurface ? workspaceSurfaceContext : null}
           >
-            {spacesSurfaceShown ? null : (
+            {spacesSurfaceShown ? (
+              spacesSurface.tabs
+            ) : (
               <TabBar
                 key={`${hasWorkspaceSurface && workspaceSurfaceContext ? JSON.stringify(workspaceSurfaceContext) : resourceUiKey}:tabs`}
                 mobile={mobile}

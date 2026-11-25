@@ -81,7 +81,8 @@ if [ "$gate" = changed ] && [ -n "$base" ]; then
   set -- "$@" "--base=$base"
 fi
 
-# Policy uses the complete PR diff even when units narrow to a single push.
+# Policy scans the intended/existing PR body for privacy and uses the complete
+# PR diff even when units narrow to a single push.
 if bun scripts/check-privacy.ts --pre-push "$refs_file" >"$log_file" 2>&1 &&
   bun scripts/check-push-policy.ts >>"$log_file" 2>&1 && bun "$@" >>"$log_file" 2>&1; then
   ended_at=$(date +%s)
