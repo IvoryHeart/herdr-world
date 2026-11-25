@@ -62,8 +62,13 @@ Publication SHALL use standard GitHub Release actions, npm publish with provenan
 - **THEN** it rebuilds the tagged packages and verifies every channel contract before publication
 
 ### Requirement: Stable managed release service
-A managed Homebrew World service SHALL execute through the selected formula's stable opt path, never a versioned Cellar path. A Homebrew upgrade SHALL refresh and restart a running generated service belonging to that formula, preserving its configuration and data, without taking over another installation's service.
+A managed Homebrew World service SHALL execute through the selected formula's stable opt path, never a versioned Cellar path. A Homebrew upgrade SHALL refresh and restart a running generated service belonging to that formula automatically, preserving its configuration and data, without taking over another installation's service. Homebrew's post-install sandbox cannot read the home folder, so the post-install step SHALL find the service manager's main process started from that formula's kegs, point older keg executables at opt, signal that process and wait until the service runs from opt. A supervised World started from a keg whose generated definition still names a versioned keg SHALL move that definition to opt before it listens.
 
 #### Scenario: Running Homebrew upgrade
 - **WHEN** Homebrew replaces and removes the previous keg while World is running as its managed service
 - **THEN** World answers on the new version, its saved data remains intact and its service can restart after the old keg is gone
+
+#### Scenario: Upgrade from a release whose service names its keg
+- **WHEN** the running service's definition names the previous release's versioned keg and Homebrew upgrades the formula
+- **THEN** the service restarts on the new version without a manual step and its definition names opt before Homebrew removes the old keg
+- **AND** a World started from that formula in a terminal, and another formula's service, are left running

@@ -49,6 +49,7 @@
 - `scripts/pipeline-retry.ts`
 - `server/src/config/service-executable.ts`
 - `server/src/cli/update-finish.ts`
+- `server/src/config/homebrew-handoff.ts` (Homebrew upgrade restart from the post-install sandbox; startup move of a keg-pinned definition)
 - `scripts/release-walk/`
 - `server/src/config/service-discovery.ts`
 - `server/src/config/service-uninstall.test.ts`

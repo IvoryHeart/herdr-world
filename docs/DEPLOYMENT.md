@@ -1075,7 +1075,9 @@ The in-app checker follows newer release candidates on the same version line and
 then the stable release; stable builds follow GitHub Latest. Automatic installation
 is available only for supervised standalone binaries. Homebrew, npm, and Herdr
 plugin installations must be upgraded through their installation channel.
-Pre-merge previews have no update channel.
+`brew upgrade` restarts a running World service on the new version by itself,
+including a service an older release registered with its versioned keg path; a
+World started in a terminal is left running. Pre-merge previews have no update channel.
 
 ## Private remote access
 
