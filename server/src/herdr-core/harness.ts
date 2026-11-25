@@ -268,6 +268,26 @@ export function mayWrapHarness(
     );
 }
 
+/**
+ * An interactive shell alone in front, waiting for a command: a plain
+ * terminal with nothing unfinished. A shell running a script or `-c`, or any
+ * other program (`sleep 3600` as the terminal's own program), is busy.
+ */
+export function isIdleShell(
+  foreground: { name?: unknown; argv?: unknown; pid?: unknown },
+  root?: unknown,
+): boolean {
+  const argv = Array.isArray(foreground.argv) ? foreground.argv : [];
+  const names = [argv[0], foreground.name].filter(
+    (name): name is string => typeof name === "string",
+  );
+  // A login shell's argv[0] starts with "-" (`-bash`).
+  return (
+    names.some((name) => SHELLS.has(base(name).replace(/^-/, ""))) &&
+    !mayWrapHarness(foreground, root)
+  );
+}
+
 /** Every harness World recognises in core (Herdr's and the desktop app's). */
 export function coreHarnessNames(): string[] {
   return [...new Set(NAMES.values())];

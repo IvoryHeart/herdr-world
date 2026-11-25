@@ -1381,6 +1381,38 @@ describe("independent qualified operational sessions", () => {
     });
   });
 
+  // #1356: Cmd+K's Open terminal on an agent of the host Spaces already
+  // showed focused its tab, then said it could not open it.
+  test("opening a Spaces target succeeds on the host Spaces already shows, as on another", async () => {
+    await withIndependentClients(async (calls, held) => {
+      held.resolve({});
+      const target = (connectionId: string, runtimeGeneration = 1) => ({
+        connectionId,
+        runtimeGeneration,
+        workspaceId: "same-workspace",
+        paneId: "same-pane",
+        terminalId: "same-terminal",
+      });
+      expect(store.get().activeConnectionId).toBe("alpha");
+      expect(await store.activateQualifiedSpacesTarget(target("alpha"))).toBe(
+        true,
+      );
+      expect(store.get().activeConnectionId).toBe("alpha");
+      expect(
+        calls.filter((call) => call.method === "tab.focus").map((c) => c.host),
+      ).toEqual(["alpha"]);
+      expect(await store.activateQualifiedSpacesTarget(target("beta"))).toBe(
+        true,
+      );
+      expect(store.get().activeConnectionId).toBe("beta");
+      // Another runtime generation is never opened, active or not.
+      expect(await store.activateQualifiedSpacesTarget(target("beta", 2))).toBe(
+        false,
+      );
+      expect(store.get().activeConnectionId).toBe("beta");
+    });
+  });
+
   test("opening a cold host waits for its already running topology refresh", async () => {
     await withIndependentClients(async (_calls, held) => {
       held.resolve({});

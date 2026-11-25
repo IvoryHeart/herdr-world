@@ -43,19 +43,16 @@ export type TownZoomLimits = {
 
 /**
  * Tiles from the town's left edge past the side road of the last host's
- * building or the town center (with a wide town's library and observatory), whichever
+ * building or the town center (with its library and observatory), whichever
  * stands further right, on to the harbour's shore and the water's edge, so
  * a wide town's home shows the warehouse and the shipping lanes' flags
  * (townHarbour.ts).
  */
 export function townHostsWidth(layout: TownLayout) {
   if (!layout.buildings.length) return layout.width;
-  // A wide town's library stands right of the center (townLibraryLot.ts),
-  // its observatory right of the library (townObservatoryLot.ts).
-  const civic =
-    layout.formFactor === "narrow"
-      ? 0
-      : TOWN_LIBRARY_ROOM + TOWN_OBSERVATORY_ROOM;
+  // The library stands right of the center (townLibraryLot.ts), its
+  // observatory right of the library (townObservatoryLot.ts).
+  const civic = TOWN_LIBRARY_ROOM + TOWN_OBSERVATORY_ROOM;
   const right = Math.max(
     layout.center.x + layout.center.w + civic,
     ...layout.buildings.map((b) => b.x + b.w),

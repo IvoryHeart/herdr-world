@@ -37,7 +37,7 @@ class ReceiptTests(unittest.TestCase):
             with self.subTest(change=change), self.assertRaises(AssertionError):
                 validate_receipt(report)
 
-    def test_publication_requires_exact_commit_bytes_platforms_and_signed_in_reply(self):
+    def test_publication_verifies_optional_signed_in_commit_bytes_platform_and_reply(self):
         reports = [receipt(platform=name) for name in ('linux-x64', 'linux-arm64', 'darwin-x64', 'darwin-arm64')]
         signed = receipt('signed-in')
         validate_publication(reports, signed, 'a' * 40, '0.3.6')
@@ -54,6 +54,28 @@ class ReceiptTests(unittest.TestCase):
         private['credentials'] = 'synthetic accidental private field'
         with self.assertRaises(AssertionError):
             validate_publication(reports, private, 'a' * 40, '0.3.6')
+
+    def test_publication_without_signed_in_receipt_keeps_every_native_check(self):
+        reports = [receipt(platform=name) for name in ('linux-x64', 'linux-arm64', 'darwin-x64', 'darwin-arm64')]
+        validate_publication(reports, None, 'a' * 40, '0.3.6')
+        invalid = [reports[:-1], [*reports, reports[0]], [reports[0]] * 4]
+        for field, value in [('commit', 'd' * 40), ('version', '0.3.7'),
+                             ('binary_sha256', ''), ('archive_sha256', ''),
+                             ('mode', 'signed-in'), ('journeys', []), ('status', 'fail')]:
+            changed = copy.deepcopy(reports)
+            changed[0][field] = value
+            invalid.append(changed)
+        missing_control = copy.deepcopy(reports)
+        del missing_control[0]['negative_control']
+        invalid.append(missing_control)
+        for field, value in [('tag', 'v0.3.4'), ('reason', 'download failed'),
+                             ('status', 'pass'), ('journey', 'Other journey'), ('binary_sha256', '')]:
+            changed = copy.deepcopy(reports)
+            changed[0]['negative_control'][field] = value
+            invalid.append(changed)
+        for reports in invalid:
+            with self.subTest(reports=reports), self.assertRaises((AssertionError, KeyError)):
+                validate_publication(reports, None, 'a' * 40, '0.3.6')
 
     def test_network_error_is_not_a_historical_launch_regression(self):
         reports = [receipt(platform=name) for name in ('linux-x64', 'linux-arm64', 'darwin-x64', 'darwin-arm64')]
@@ -124,6 +146,8 @@ class ReceiptTests(unittest.TestCase):
             self.assertEqual(env['HC_SESSION'], 'walk-isolated')
             self.assertNotIn(str(root / 'tools/tui'), env['PATH'])
             self.assertEqual(env['CLAUDE_CONFIG_DIR'], str(root / 'home/.claude'))
+            self.assertIn('check_for_update_on_startup = false',
+                          (Path(env['CODEX_HOME']) / 'config.toml').read_text())
 
     def test_service_guard_refuses_existing_configuration_and_implicit_consent(self):
         with tempfile.TemporaryDirectory() as directory:

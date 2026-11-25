@@ -48,13 +48,6 @@ export type ManagedWindowControls = {
   back?: { label: string };
   /** A narrow window: maximize joins ⋯ so the bar still fits. */
   narrow?: boolean;
-  /** On a phone, the window's views live in ⋯ instead of the bar. */
-  views?: readonly {
-    id: string;
-    label: string;
-    checked: boolean;
-    onSelect(): void;
-  }[];
   /** Mobile Inspector attention settings, independent of the selected view. */
   attention?: InterestChoice | null;
   /** Other agents and terminals this window can switch to. */
@@ -141,13 +134,6 @@ export function WindowControls({
     : [];
   const items: MenuItem[] = [
     ...(controls.compact ? pinItems : []),
-    ...(controls.views ?? []).map((view, index) => ({
-      key: `view:${view.id}`,
-      label: view.label,
-      checked: view.checked,
-      section: index === 0 ? "View" : undefined,
-      run: view.onSelect,
-    })),
     ...(controls.attention?.onDefault
       ? [
           {
@@ -194,9 +180,7 @@ export function WindowControls({
           {
             label: controls.maximized ? "Restore" : "Maximize",
             section:
-              controls.views?.length ||
-              controls.switchTo?.length ||
-              controls.attention
+              controls.switchTo?.length || controls.attention
                 ? "Window"
                 : undefined,
             run: controls.onMaximize,
@@ -207,9 +191,7 @@ export function WindowControls({
       label: "Minimize",
       section: controls.narrow
         ? undefined
-        : controls.views?.length ||
-            controls.switchTo?.length ||
-            controls.attention
+        : controls.switchTo?.length || controls.attention
           ? "Window"
           : undefined,
       run: controls.onMinimize,
@@ -241,7 +223,7 @@ export function WindowControls({
   });
   useEffect(() => {
     if (!open) return;
-    // The checked item (the current view) first, else the first item.
+    // The checked item (the current attention) first, else the first item.
     const items = menu.current;
     (
       items?.querySelector<HTMLButtonElement>(

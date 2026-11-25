@@ -8,6 +8,7 @@ import {
 import type { WorldRuntimeConnection } from "../runtimeStore";
 import { buildWorldObject } from "../worldObject";
 import { townDragFor, townDropTarget } from "./townDrag";
+import { canHandoffDesk } from "./townMoveEligibility";
 import { townModelFromProjection } from "./townModel";
 import { townMoveActions } from "./townMoveActions";
 import { sharedBoardStore, type BoardOp } from "../board/boardDocument";
@@ -23,7 +24,8 @@ afterEach(() => {
 });
 
 /** Core rows also exercised through the real provider in server's town-moves test. */
-async function setup() {
+/** `counted: false`: tab rows without pane_count, as an older core sends. */
+async function setup(counted = true) {
   const addresses = ["t1", "t2", "t3"];
   const tabs = addresses.map((address, index) => ({
     tab_id: `desk-${address}`,
@@ -31,7 +33,7 @@ async function setup() {
     number: index + 1,
     label: address,
     focused: index === 0,
-    pane_count: 1,
+    ...(counted ? { pane_count: 1 } : {}),
     agent_status: "working",
   }));
   const snapshot: NonNullable<WorldRuntimeConnection["snapshot"]> = {
@@ -45,7 +47,8 @@ async function setup() {
       active_tab_id: tabs[index === 0 ? 0 : 2]!.tab_id,
       agent_status: "working",
     })),
-    tabs,
+    // The wire row may lack the count the browser's type promises.
+    tabs: tabs as NonNullable<WorldRuntimeConnection["snapshot"]>["tabs"],
     panes: tabs.map((tab, index) => ({
       ...tab,
       pane_id: addresses[index]!,
@@ -274,4 +277,10 @@ test("core pinned desks still reorder their saved seats without native moves", a
   } finally {
     store.patch = patch;
   }
+});
+
+test("a lone core desk whose tab row carries no pane count can go to another runtime", async () => {
+  const s = await setup(false);
+  expect(s.desk(0).observedPaneCount).toBe(1);
+  expect(canHandoffDesk(s.desk(0))).toBe(true);
 });

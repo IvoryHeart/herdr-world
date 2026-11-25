@@ -837,7 +837,9 @@ function* constructHost(
         connectionId: connection.connectionId,
         generation: observedGeneration,
         label: boundedLabel(
-          agentTitle(agentName, agentLabel),
+          isAgent
+            ? agentTitle(agentName, agentLabel)
+            : boundedOptionalText(pane.label, 100),
           isAgent ? "Agent" : `Terminal ${pane.pane_id.slice(0, 8)}`,
         ),
         hostLabel,

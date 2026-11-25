@@ -2,6 +2,10 @@ import { STARTER_PROFILES } from "../../../shared/agentProfile";
 import { afterEach, describe, expect, test } from "bun:test";
 import { coreWorld } from "../herdr-core/testing/core-world";
 import type { CoreHost } from "../herdr-core/host";
+import { createCoreRoom, launchCore } from "../herdr-core/operations";
+import { tabCardKey } from "../../../shared/terminalColor";
+import { BoardStore, emptyBoardDocument } from "../world/board-store";
+import { createMoveSettle } from "../world/move-settle";
 import { handleCoreRpc } from "./core";
 import type { BridgeRpcContext } from "./context";
 
@@ -31,7 +35,11 @@ async function call(
   w: World,
   method: string,
   params: Record<string, unknown>,
-  options: { host?: CoreHost; profiles?: unknown } = {},
+  options: {
+    host?: CoreHost;
+    profiles?: unknown;
+    services?: Record<string, unknown>;
+  } = {},
 ) {
   const replies: Record<string, unknown>[] = [];
   const errors: string[] = [];
@@ -57,6 +65,7 @@ async function call(
       publishWorldInvalidation: (_id: string, generation: number) => {
         invalidations.push(generation);
       },
+      ...options.services,
     },
   } as unknown as BridgeRpcContext);
   return { reply: replies[0], error: errors[0], invalidations };
@@ -302,4 +311,75 @@ describe("world.core.* answers only the core connection it names", () => {
       });
     },
   );
+});
+
+test("world.core.move re-keys the moved desk's Board colour and pin, then lets it settle", async () => {
+  const w = await world();
+  const a = await createCoreRoom(w.lease(), w.topology, "A");
+  const b = await createCoreRoom(w.lease(), w.topology, "B");
+  await launchCore(
+    w.lease(),
+    { workspaceId: a.workspace_id, kind: "claude", label: "Ada", text: "" },
+    {
+      topology: w.topology,
+      resolveExecutable: async (kind) => `/opt/example/bin/${kind}`,
+    },
+  );
+  await w.settle();
+  const lease = w.lease();
+  const [{ workspaces = [] }, { panes = [] }] = await Promise.all([
+    lease.runtime.operations.listWorkspaces(),
+    lease.runtime.operations.listTerminals(),
+  ]);
+  const tab = String(panes.find((row) => row.terminal_id === "t1")!.tab_id);
+  const ids = (rows: typeof workspaces) =>
+    new Set(rows.map((row) => String(row.workspace_id)));
+  const key = tabCardKey("box", tab, ids(workspaces));
+  const initial = emptyBoardDocument();
+  initial.layout.colors[key] = "teal";
+  initial.layout.desk_pins[key] = { cell: null };
+  const board = new BoardStore({ read: () => initial, commit: () => {} });
+  const services = {
+    board: () => board,
+    publishBoardChanged: () => {},
+    moveSettle: createMoveSettle(),
+  };
+  const moved = await call(
+    w,
+    "world.core.move",
+    {
+      connection_id: "box",
+      connection_generation: lease.generation,
+      kind: "desk",
+      tab_id: tab,
+      workspace_id: b.workspace_id,
+    },
+    { services },
+  );
+  const result = moved.reply?.result as { status: string; tab_id: string };
+  expect(result).toMatchObject({
+    status: "moved",
+    workspace_id: b.workspace_id,
+  });
+  const after = await w.lease().runtime.operations.listWorkspaces();
+  const next = tabCardKey("box", result.tab_id, ids(after.workspaces ?? []));
+  expect(next).not.toBe(key);
+  expect(board.get().layout.colors).toEqual({ [next]: "teal" });
+  expect(Object.keys(board.get().layout.desk_pins)).toEqual([next]);
+  const again = await call(
+    w,
+    "world.core.move",
+    {
+      connection_id: "box",
+      connection_generation: lease.generation,
+      kind: "desk",
+      tab_id: result.tab_id,
+      workspace_id: a.workspace_id,
+    },
+    { services },
+  );
+  expect(again.reply?.result).toMatchObject({
+    status: "refused",
+    message: expect.stringContaining("just moved"),
+  });
 });

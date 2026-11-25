@@ -18,7 +18,7 @@
 import type { AgentMarkKind } from "../agentMarks";
 import type { NeedsYouItem } from "../needsYou";
 import { askerName, type WorldAsk } from "../worldAsks";
-import { TOWN_TILE } from "./townLayout";
+import { TOWN_TILE, type TownFormFactor } from "./townLayout";
 import type { TownPostLot } from "./townPostLot";
 /** What the post office counts: Needs you's kinds and the Outbox. */
 export type TownPostCounts = {
@@ -115,31 +115,21 @@ export function townPostSpoken(counts: TownPostCounts) {
 }
 
 /**
- * Where a wide town's sign stands, in world pixels: on the ridge at the
- * roof's right end, growing up and left over the lawn, so at every zoom it
- * leaves the house's front and the town center's west wing in view.
+ * Where the sign stands, in world pixels. A wide town's stands on the ridge
+ * at the roof's right end, growing up and left over the lawn, so at every
+ * zoom it leaves the house's front and the town center's west wing in view.
+ * A narrow (phone) town's stands at the ridge's middle, growing straight up
+ * with its counts stacked (townPost.css), so it stays over its own house and
+ * inside a phone's view (#1351).
  */
-export function townPostSignAt(lot: TownPostLot) {
-  return { x: (lot.x + lot.w) * TOWN_TILE - 10, y: lot.y * TOWN_TILE + 6 };
+export function townPostSignAt(
+  lot: TownPostLot,
+  formFactor: TownFormFactor = "wide",
+) {
+  return formFactor === "narrow"
+    ? { x: (lot.x + lot.w / 2) * TOWN_TILE, y: lot.y * TOWN_TILE + 6 }
+    : { x: (lot.x + lot.w) * TOWN_TILE - 10, y: lot.y * TOWN_TILE + 6 };
 }
-
-/**
- * Where a narrow town's folded post office hangs, in world pixels: across
- * its own house's cornice, under the roof and over the "POST" fascia. A
- * phone stands the post office beside the town center (#1033), and its
- * home view keeps the house from just above the eaves down, so the sign
- * stays in view; the center's wings hold the harbour's, the library's and
- * the warehouse's signs.
- */
-export function townPostFoldAt(lot: TownPostLot) {
-  return {
-    x: (lot.x + lot.w / 2) * TOWN_TILE,
-    y: lot.y * TOWN_TILE + TOWN_POST_FOLD_Y,
-  };
-}
-
-/** World pixels from the house's top to the folded sign: the cornice. */
-export const TOWN_POST_FOLD_Y = 40;
 
 export type TownLetter = {
   /** The ask's id. */

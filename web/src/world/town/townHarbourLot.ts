@@ -8,7 +8,7 @@
  * can size the town for it and everything else reads it from the layout.
  */
 
-import { TOWN_CENTER_FRIEZE_Y, type TownCenterLot } from "./townCenter";
+import type { TownCenterLot } from "./townCenter";
 
 /** The warehouse's lot width in tiles: its house and its yard share it. */
 export const TOWN_WAREHOUSE_WIDTH = 12;
@@ -120,16 +120,5 @@ export function townHarbourReserve(lot: TownHarbourLot) {
     y0: -Infinity,
     x1: Infinity,
     y1: Infinity,
-  };
-}
-
-/**
- * Where a narrow town's folded Shipyard sign hangs, in world pixels: on the
- * town center's left wing, inside a phone's home view.
- */
-export function townHarbourFoldAt(center: TownCenterLot, tile: number) {
-  return {
-    x: center.x * tile + 60,
-    y: center.y * tile + TOWN_CENTER_FRIEZE_Y + 40,
   };
 }

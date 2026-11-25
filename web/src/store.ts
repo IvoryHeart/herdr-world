@@ -1586,13 +1586,21 @@ export const store = {
     });
   },
 
+  /**
+   * Focus a target on its own connection and make that connection Spaces'
+   * host. A target on the host Spaces already shows is opened too (#1356):
+   * selectConnectionNow reports only a switch, so it is not the answer.
+   */
   async activateQualifiedSpacesTarget(target: QualifiedFocusTarget) {
     if (
       !(await store.focusQualifiedTarget(target)) ||
       !qualifiedRuntimeTargetIsCurrent(target)
     )
       return false;
-    return selectConnectionNow(target.connectionId, false);
+    return (
+      state.activeConnectionId === target.connectionId ||
+      selectConnectionNow(target.connectionId, false)
+    );
   },
 
   createWorkspace(label?: string, cwd?: string) {

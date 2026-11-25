@@ -29,6 +29,8 @@ export type LaunchRequest = {
   args?: string[] | ((agentName: string) => string[]);
   /** The first prompt; empty sends nothing. */
   text: string;
+  /** The folder to start in, instead of the workspace's (an agent move's). */
+  cwd?: string;
   isCurrent: () => boolean;
   /** Test hooks: the clock and a pause between checks. */
   now?: () => number;
@@ -88,6 +90,7 @@ export async function launchAgent(
   const tabResult = await call("tab.create", {
     workspace_id: request.workspace_id,
     label: request.label,
+    ...(request.cwd ? { cwd: request.cwd } : {}),
   });
   const pane =
     isRecord(tabResult) && isRecord(tabResult.root_pane)

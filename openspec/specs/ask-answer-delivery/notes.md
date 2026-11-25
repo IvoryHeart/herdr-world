@@ -5,9 +5,23 @@
 **Surfaces:**
 
 - Needs you, agent ask/get and Chat answer delivery.
+- Agent `ask ls [--json]` lists retained questions for the verified calling
+  terminal, newest first, including closed questions. It follows `result ls`'s
+  JSON line/envelope style; `age_ms` is time since creation. An owner dismissal
+  remains `dismissed`, and a later withdrawal supersedes an answer or dismissal.
+- Use `ask ls`, not `ask list`. Command-word-only questions fail quietly with a
+  usage hint, including when supplied after flags or sent directly to World.
 
 **Code:**
 
+- `shared/askCommands.ts`
+- `shared/questionAsker.ts`
+- `server/src/cli/world.ts`, `server/src/cli/world.test.ts`
+- `server/src/cli/world-skill.ts`, `server/src/cli/integration.ts`, `server/src/cli/integration.test.ts`
+- `server/src/world/world-cli.ts`, `server/src/world/world-cli-protocol.ts`
+- `server/src/world/world-cli.test.ts`, `server/src/world/world-question-ownership.test.ts`
+- `server/src/verbs/cli.ts`, `server/src/verbs/policy-baseline.json`
+- `server/src/verbs/policy.test.ts`
 - `server/src/config/data-paths.ts`
 - `server/src/config/data-paths.test.ts`
 - `server/src/world/ask-peers.ts`

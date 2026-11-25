@@ -619,6 +619,8 @@ export function createWorldCli(deps: WorldCliDeps) {
   ): Promise<unknown> {
     if (command.startsWith("memory "))
       return runMemoryCli(deps.memory, command, params, recheck);
+    if (command === "ask" || command.startsWith("ask "))
+      return handleWorldAsk(deps, command, params, actor, now);
     const record = recordWithDeps.bind(null, completion);
     const patchBoard = patchBoardWithDeps.bind(null, deps);
     const changeBoard = changeBoardWithDeps.bind(null, deps);
@@ -826,12 +828,6 @@ export function createWorldCli(deps: WorldCliDeps) {
           null,
         );
       }
-      case "ask":
-      case "ask get":
-      case "ask acknowledge":
-      case "ask answer":
-      case "ask withdraw":
-        return handleWorldAsk(deps, command, params, actor, now);
       case "result": {
         const status = (params.status ?? "done") as ResultStatus;
         if (!RESULT_STATUSES.includes(status))

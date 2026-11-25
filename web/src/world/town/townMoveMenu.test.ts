@@ -9,6 +9,7 @@ const DESK = {
   displayLabel: "d0",
   tabRef: ref("d0"),
   paneDevices: [{}],
+  canOpenInSpaces: true,
 };
 const room = (
   key: string,
@@ -22,6 +23,7 @@ const room = (
   desks: key === "home" ? [DESK] : [],
   omittedDeskCount: 0,
   workspaceRef: ref(key),
+  canOpenInSpaces: true,
   ...(runtime && { runtimeKind: runtime[0], runtimeTag: runtime[1] }),
 });
 // One building, two runtimes: two rooms named api, one web.

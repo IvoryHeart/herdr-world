@@ -29,8 +29,8 @@ import {
  * identity. Evidence is current only while both terminals are in a
  * current (not cached, not stale) snapshot of their connection; otherwise it
  * is kept and shown as stale until a complete current snapshot shows the
- * terminals closed (`closedRelations`). A relation never crosses
- * connections. The service and the browser share these rules.
+ * terminals closed (`closedRelations`). Explicit agent moves can preserve a
+ * spawned relation across connections. The service and the browser share these rules.
  */
 
 /** The child pane's token naming its parent pane. */
@@ -46,6 +46,8 @@ export type TerminalRef = { connection_id: string; terminal_id: string };
 export type SpawnClaim = {
   child: TerminalRef;
   parent: TerminalRef;
+  /** Native parent stamps superseded by an explicit World agent move. */
+  moved_from?: TerminalRef[];
   /** Where the claim came from: the token convention, or a harness. */
   source: string;
   /** The connection's runtime generation when World saw it. */
@@ -175,6 +177,12 @@ export function spawnClaimsToRecord(
   );
   return observed.filter((claim) => {
     const known = byChild.get(terminalKey(claim.child));
+    if (
+      known?.moved_from?.some(
+        (ref) => terminalKey(ref) === terminalKey(claim.parent),
+      )
+    )
+      return false;
     return (
       !known ||
       terminalKey(known.parent) !== terminalKey(claim.parent) ||
@@ -220,7 +228,15 @@ export function relationsOf(
   for (const claim of document.spawns) {
     const childKey = terminalKey(claim.child);
     claimed.add(childKey);
-    const token = tokenParents.get(childKey);
+    const observedToken = tokenParents.get(childKey);
+    const token =
+      observedToken &&
+      !claim.moved_from?.some(
+        (ref) => terminalKey(ref) === terminalKey(observedToken),
+      )
+        ? observedToken
+        : undefined;
+    if (observedToken && !token) tokenParents.delete(childKey);
     // A live token naming another parent supersedes the saved claim.
     if (token && terminalKey(token) !== terminalKey(claim.parent)) continue;
     add(claim.parent, claim.child, {
@@ -446,8 +462,11 @@ export function withInheritedColors<C extends string>(
   for (const [child, parent] of spawnParents(relations)) {
     const from = places.get(terminalKey(parent));
     const to = places.get(child);
-    if (!from || !to || from.connectionId !== to.connectionId) continue;
-    if (from.tabId === to.tabId) continue;
+    // Only an explicit agent move keeps a link across connections; the
+    // moved desk keeps the colour it showed.
+    if (!from || !to) continue;
+    if (from.connectionId === to.connectionId && from.tabId === to.tabId)
+      continue;
     const key = tabCardKey(to.connectionId, to.tabId, to.workspaceIds);
     if (colors[key] || parentTabs.has(key)) continue;
     parentTabs.set(key, from);

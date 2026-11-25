@@ -1,5 +1,6 @@
 import { validateCoreTrace } from "./herdr-core-runtime";
 import { validateSeenTrace } from "./herdr-core-seen";
+import { validateMoveTrace } from "./agent-move";
 import { effectActions, validateEffectTrace } from "./effect-recovery";
 import { validateObservationTrace } from "./observation-traces";
 import { validateBindingTrace } from "./binding-resolution";
@@ -21,6 +22,7 @@ const actions = {
   "claude-tap-lock": [],
   "herdr-core-runtime": [],
   "herdr-core-seen": [],
+  "agent-move": [],
   "ide-lifecycle": [],
   "effect-recovery": effectActions,
   "binding-resolution": [],
@@ -191,6 +193,10 @@ export function validateTrace(
     throw new Error("Tap schedules use their dedicated replay validator");
   if (model === "herdr-core-runtime") return validateCoreTrace(value);
   if (model === "herdr-core-seen") return validateSeenTrace(value);
+  if (model === "agent-move") {
+    validateMoveTrace(value);
+    return;
+  }
   if (model === "ide-lifecycle")
     throw new Error(
       "IDE lifecycle schedules use their dedicated replay validator",

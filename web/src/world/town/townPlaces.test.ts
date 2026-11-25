@@ -34,7 +34,13 @@ const towns: [string, TownInput, TownShape][] = [
     town({ a: [2], b: [1], c: [1], d: [1], e: [1] }),
     TOWN_SHAPES.wide,
   ],
-  ["one building, phone", town({ a: [1] }), TOWN_SHAPES.portrait],
+  ["one building, portrait", town({ a: [1] }), TOWN_SHAPES.portrait],
+  ["one building, phone", town({ a: [1] }), TOWN_SHAPES.phone],
+  [
+    "three buildings, phone",
+    town({ a: [2], b: [1], c: [4] }),
+    TOWN_SHAPES.phone,
+  ],
 ];
 
 const middle = (box: { x0: number; y0: number; x1: number; y1: number }) =>
@@ -90,7 +96,7 @@ test.each(towns)(
   },
 );
 
-test("a wide town has all five buildings; a phone's folds the library and observatory to signs", () => {
+test("a wide town and a phone's both have all five buildings (#1351)", () => {
   const wide = townPlaceBoxes(
     layoutTown(town({ a: [1] }), TOWN_SHAPES.wide).layout,
   );
@@ -101,13 +107,12 @@ test("a wide town has all five buildings; a phone's folds the library and observ
     "post",
     "warehouse",
   ]);
-  const phone = townPlaceBoxes(
-    layoutTown(town({ a: [1] }), TOWN_SHAPES.portrait).layout,
-  ).map(([key]) => key);
-  expect(phone).not.toContain("library");
-  expect(phone).not.toContain("observatory");
-  expect(phone).toContain("post");
-  expect(phone).toContain("warehouse");
+  for (const shape of [TOWN_SHAPES.phone, TOWN_SHAPES.portrait])
+    expect(
+      townPlaceBoxes(layoutTown(town({ a: [1] }), shape).layout)
+        .map(([key]) => key)
+        .sort(),
+    ).toEqual(["apartments", "library", "observatory", "post", "warehouse"]);
 });
 
 test("a building is a place target only while its place opens something", () => {

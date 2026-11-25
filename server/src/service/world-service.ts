@@ -66,6 +66,7 @@ import { createArtefactShelf } from "../world/artefact-shelf";
 import { createBinService } from "./bin-service";
 import { inFlightWork } from "./in-flight";
 import type { createMoveQueue } from "../world/desk-move";
+import { createMoveSettle } from "../world/move-settle";
 import { reconcileReadyInterest } from "../world/interest-prune";
 import { serializeWorldInvalidation } from "../world/invalidation";
 import { usageKey } from "../features/usage/register";
@@ -137,6 +138,7 @@ async function compose(
   const snapshotAdmission = new WorldSnapshotAdmission();
   /** Town moves run one at a time per connection (see world/desk-move). */
   const townMoveQueues = new Map<string, ReturnType<typeof createMoveQueue>>();
+  const moveSettle = createMoveSettle();
   let publishFocusChanged: (revision: number) => void = () => {};
   const focus = await startSettingsFocus({
     clock,
@@ -765,6 +767,7 @@ async function compose(
     safeSend,
     snapshotAdmission,
     townMoveQueues,
+    moveSettle,
     uiSettings: createUiSettingsRpcHandler({
       readSettings: () => settings.read(),
       updateSettings: (update, shouldCommit) =>
