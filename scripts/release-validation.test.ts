@@ -37,7 +37,9 @@ test("only tags and nightly build native bytes; every channel contract precedes 
   ]);
   const steps = candidate.jobs.package.steps;
   expect(
-    steps.filter((step: any) => step.run?.includes("bun run package:")),
+    steps.filter((step: any) =>
+      step.run?.includes("bash scripts/package-release.sh"),
+    ),
   ).toHaveLength(1);
   expect(
     steps.some(

@@ -1,5 +1,14 @@
 import { expect, test } from "bun:test";
 import {
+  mkdirSync,
+  mkdtempSync,
+  readFileSync,
+  rmSync,
+  writeFileSync,
+} from "node:fs";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
+import {
   DESCRIPTION_STEP,
   HOLD_STEP,
   SCOPE_JOB,
@@ -725,11 +734,72 @@ test("release candidate packages and verifies natively on Windows", async () => 
   // Bun's shell cannot execute a .sh script on Windows.
   expect(build.run).toContain("bash scripts/package-release.sh");
   expect(build.run).not.toContain("bun run package:");
-  const verify = await Bun.file(
-    new URL("./verify-release-package.sh", import.meta.url),
-  ).text();
-  // GNU tar reads "D:" in a Windows temp path as a remote host.
-  expect(verify).toMatch(
-    /MINGW\* \| MSYS\* \| CYGWIN\*\) tar --force-local -xJf/,
-  );
+});
+
+test("release package verification extracts into a temp folder tar would unescape", () => {
+  // Windows RUNNER_TEMP is D:\a\_temp: GNU tar unescapes a -C argument, so
+  // "\a" became a bell character and extraction failed with "Cannot open".
+  const root = mkdtempSync(join(tmpdir(), "verify-release-package-"));
+  try {
+    const version = "0.0.1-test";
+    const platform = "windows-x64";
+    const pkg = join(root, "stage", `herdr-world-${platform}`);
+    mkdirSync(join(pkg, "LICENSES"), { recursive: true });
+    writeFileSync(join(pkg, "VERSION"), `herdr-world ${version} ${platform}\n`);
+    for (const legal of [
+      "LICENSE",
+      "THIRD_PARTY_NOTICES.md",
+      "DEPENDENCY_NOTICES.md",
+      "DEPENDENCY_LICENSES.md",
+      "UPSTREAM.md",
+      "LICENSES/CLAW-EMPIRE-APACHE-2.0.txt",
+    ])
+      writeFileSync(join(pkg, legal), "synthetic\n");
+    // Minimal PE32+ header for x64: DOS stub pointing at a PE signature.
+    const exe = new Uint8Array(0x100);
+    const view = new DataView(exe.buffer);
+    exe.set([0x4d, 0x5a]);
+    view.setUint32(0x3c, 0x80, true);
+    view.setUint32(0x80, 0x50450000);
+    view.setUint16(0x84, 0x8664, true);
+    view.setUint16(0x98, 0x20b, true);
+    writeFileSync(join(pkg, "herdr-world.exe"), exe);
+    const dist = join(root, "dist");
+    mkdirSync(dist);
+    const versioned = `herdr-world-v${version}-${platform}.tar.xz`;
+    const latest = `herdr-world-${platform}.tar.xz`;
+    const run = (cmd: string[], cwd: string) => {
+      const result = Bun.spawnSync(cmd, { cwd, stderr: "pipe" });
+      expect(result.stderr.toString()).not.toContain("Cannot open");
+      expect(result.exitCode).toBe(0);
+      return result.stdout.toString();
+    };
+    run(
+      ["tar", "-cJf", join(dist, versioned), `herdr-world-${platform}`],
+      join(root, "stage"),
+    );
+    run(["cp", versioned, latest], dist);
+    const digest = new Bun.CryptoHasher("sha256")
+      .update(readFileSync(join(dist, latest)))
+      .digest("hex");
+    for (const archive of [versioned, latest])
+      writeFileSync(join(dist, `${archive}.sha256`), `${digest}  ${archive}\n`);
+    writeFileSync(
+      join(dist, `herdr-world-${platform}.update.json`),
+      `${JSON.stringify({ schema: 1, name: "herdr-world", version, platform, archive: latest, sha256: digest })}\n`,
+    );
+    const runnerTemp = join(root, "D:\\a\\_temp");
+    mkdirSync(runnerTemp);
+    const script = new URL("./verify-release-package.sh", import.meta.url)
+      .pathname;
+    const result = Bun.spawnSync(["bash", script, version, platform], {
+      cwd: root,
+      env: { ...process.env, RUNNER_TEMP: runnerTemp },
+      stderr: "pipe",
+    });
+    expect(result.stderr.toString()).not.toContain("Cannot open");
+    expect(result.exitCode).toBe(0);
+  } finally {
+    rmSync(root, { recursive: true, force: true });
+  }
 });
