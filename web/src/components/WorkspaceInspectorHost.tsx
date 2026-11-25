@@ -1,7 +1,6 @@
 import {
   WorkspaceInspectorViewSelect,
   WorkspaceInspectorSecondaryControls,
-  INSPECTOR_TAB_LABELS,
   INSPECTOR_TAB_ORDER,
 } from "./WorkspaceInspectorViewSelect";
 import { WorkspaceInspectorLocation } from "./WorkspaceInspectorLocation";
@@ -25,7 +24,6 @@ import {
   MessagesSquare,
   Maximize2,
   Minimize2,
-  MoreHorizontal,
   PanelBottom,
   PanelRight,
   PanelRightClose,
@@ -89,7 +87,6 @@ import type { ActiveFilePreviewSelection } from "./FilePreviewContent";
 import { InspectorFilePreview } from "./LazyFilePreviewContent";
 import { FilePreviewTabs } from "./FilePreviewTabs";
 import { workspaceInspectorLayout } from "./workspaceInspectorLayout";
-import { Popover, PopoverContent, PopoverTrigger } from "./ui/popover";
 import { changedCount, checkoutLabel } from "./inspectorCheckout";
 import { useAgentInterestChoice } from "./AgentInterestButton";
 import { InterestButton } from "./InterestButton";
@@ -414,7 +411,6 @@ export function WorkspaceInspectorHost({
       setDrillInByView((current) => ({ ...current, files: true }));
   }, [fileSelection.entry, state.view, state.initialDirectory]);
 
-  const [viewsMenuOpen, setViewsMenuOpen] = useState(false);
   const handleTabKeyDown = (event: ReactKeyboardEvent<HTMLButtonElement>) => {
     if (event.key === "ArrowDown" && state.view === "files") {
       const treeItem = hostRef.current?.querySelector<HTMLElement>(
@@ -477,9 +473,20 @@ export function WorkspaceInspectorHost({
     return () => observer.disconnect();
   }, []);
 
-  const viewsInMenu = Boolean(
-    windowControls &&
-      (windowControls.compact || (hostWidth > 0 && hostWidth < barNeeds)),
+  // When the tabs do not fit, the views move into the one view menu (#1361):
+  // a window whose bar is crowded or compact, or a docked Inspector below
+  // 360px, where the tabs' labels and icons would no longer fit.
+  const viewsInMenu = windowControls
+    ? windowControls.compact || (hostWidth > 0 && hostWidth < barNeeds)
+    : hostWidth > 0 && hostWidth < 360;
+  // A phone window shows its views from the header menu at every width.
+  const viewMenu = viewsInMenu || (mobile && !!windowControls);
+  // A phone window keeps the four primary views; elsewhere the menu offers
+  // every view the tab bar would.
+  const menuViews = INSPECTOR_TAB_ORDER.filter(
+    (view) =>
+      availableViews.includes(view) &&
+      !(mobile && windowControls && view === "commits"),
   );
   // While the views are inline, measure what the bar needs: everything but
   // the name, plus 120px so the name stays readable. The Town skin's larger
@@ -634,17 +641,23 @@ export function WorkspaceInspectorHost({
               : null}
           </div>
         )}
-        {mobile && windowControls ? (
+        {viewMenu ? (
           <WorkspaceInspectorViewSelect
             value={state.view}
-            availableViews={availableViews}
+            views={menuViews}
             historyAvailable={historyAvailable}
+            bar={!mobile}
             onChange={onViewChange}
           />
         ) : null}
         {/* One selector in the window's top bar, Chat first: Chat,
-            Terminal, Files, Changes (then Commits). */}
-        <div className="workspace-inspector-tabs" role="tablist">
+            Terminal, Files, Changes (then Commits). When the bar is too
+            narrow for the tabs, the view menu above replaces them. */}
+        <div
+          className="workspace-inspector-tabs"
+          role="tablist"
+          hidden={viewMenu}
+        >
           {availableViews.includes("history") ? (
             <button
               ref={historyTabRef}
@@ -725,8 +738,7 @@ export function WorkspaceInspectorHost({
           ) : null}
         </div>
         <WorkspaceInspectorSecondaryControls
-          commitsAvailable={availableViews.includes("commits")}
-          hideInactiveCommits={viewsInMenu}
+          commitsAvailable={!viewMenu && availableViews.includes("commits")}
           view={state.view}
           commitsRef={commitsTabRef}
           onViewChange={onViewChange}
@@ -737,69 +749,16 @@ export function WorkspaceInspectorHost({
         !(windowControls && (mobile || viewsInMenu)) ? (
           <InterestButton {...interestChoice} />
         ) : null}
-        {/* In the narrowest window only the active view's tab shows; the
-            others are one tap away here. */}
-        <Popover open={viewsMenuOpen} onOpenChange={setViewsMenuOpen}>
-          <PopoverTrigger asChild>
-            <button
-              type="button"
-              className="workspace-inspector-tabs-more"
-              aria-label="More views"
-              title="More views"
-            >
-              <MoreHorizontal size={15} aria-hidden="true" />
-            </button>
-          </PopoverTrigger>
-          <PopoverContent
-            className="workspace-inspector-tabs-menu"
-            align="end"
-            role="menu"
-            aria-label="Views"
-          >
-            {INSPECTOR_TAB_ORDER.filter(
-              (view) =>
-                availableViews.includes(view) &&
-                view !== state.view &&
-                (view !== "history" || historyAvailable),
-            ).map((view) => (
-              <button
-                key={view}
-                type="button"
-                role="menuitem"
-                onClick={() => {
-                  setViewsMenuOpen(false);
-                  onViewChange(view);
-                }}
-              >
-                {INSPECTOR_TAB_LABELS[view]}
-              </button>
-            ))}
-          </PopoverContent>
-        </Popover>
         {windowControls ? (
           <WindowControls
-            // Mobile views live in the header dropdown; attention joins ⋯.
+            // The views live in the view menu; a crowded or phone window's
+            // attention joins ⋯.
             controls={
-              // A crowded or narrow window's views join ⋯ too, so it keeps
-              // one menu rather than two.
               viewsInMenu || mobile
                 ? {
                     ...windowControls,
                     narrow: !windowControls.compact,
-                    attention:
-                      mobile || viewsInMenu ? interestChoice : undefined,
-                    views: mobile
-                      ? undefined
-                      : INSPECTOR_TAB_ORDER.filter(
-                          (view) =>
-                            availableViews.includes(view) &&
-                            (view !== "history" || historyAvailable),
-                        ).map((view) => ({
-                          id: view,
-                          label: INSPECTOR_TAB_LABELS[view] ?? view,
-                          checked: state.view === view,
-                          onSelect: () => onViewChange(view),
-                        })),
+                    attention: interestChoice,
                   }
                 : windowControls
             }

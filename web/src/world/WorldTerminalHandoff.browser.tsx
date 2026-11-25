@@ -809,6 +809,188 @@ async function openAgent(label: string) {
   );
 }
 
+/** A mouse press as a desktop pointer makes it, ending in a click. */
+function press(target: Element) {
+  const rect = target.getBoundingClientRect();
+  const at = {
+    bubbles: true,
+    cancelable: true,
+    composed: true,
+    button: 0,
+    pointerId: 11,
+    pointerType: "mouse",
+    isPrimary: true,
+    clientX: rect.left + rect.width / 2,
+    clientY: rect.top + rect.height / 2,
+  };
+  flushSync(() => {
+    target.dispatchEvent(
+      new PointerEvent("pointerdown", { ...at, buttons: 1 }),
+    );
+    target.dispatchEvent(new MouseEvent("mousedown", { ...at, buttons: 1 }));
+    target.dispatchEvent(new PointerEvent("pointerup", at));
+    target.dispatchEvent(new MouseEvent("mouseup", at));
+    target.dispatchEvent(new MouseEvent("click", at));
+  });
+}
+
+/** Drag a window's bottom-right corner sideways by `dx` pixels. */
+async function dragWidth(frame: HTMLElement, grip: HTMLElement, dx: number) {
+  const before = frame.getBoundingClientRect();
+  const at = (x: number) => ({
+    bubbles: true,
+    button: 0,
+    pointerId: 12,
+    pointerType: "mouse",
+    clientX: x,
+    clientY: before.bottom - 2,
+  });
+  grip.dispatchEvent(
+    new PointerEvent("pointerdown", { ...at(before.right - 2), buttons: 1 }),
+  );
+  frame.dispatchEvent(
+    new PointerEvent("pointermove", {
+      ...at(before.right - 2 + dx),
+      buttons: 1,
+    }),
+  );
+  frame.dispatchEvent(new PointerEvent("pointerup", at(before.right - 2 + dx)));
+  await until(
+    () => Math.abs(frame.getBoundingClientRect().width - before.width) >= 1,
+    `window resized by ${dx}px`,
+  );
+  await settleWindowLayout();
+}
+
+// #1361: a desktop window too narrow for its tab bar keeps one chip, the
+// active view's, and that chip is the one view menu: choosing a view there
+// shows it at once, as the tab bar does when the window is wide.
+async function checkNarrowWindowViews(frame: HTMLElement, grip: HTMLElement) {
+  const inspector = frame.querySelector<HTMLElement>(".workspace-inspector")!;
+  const head = () =>
+    frame.querySelector<HTMLElement>(".workspace-inspector-head")!;
+  const shownIn = (root: ParentNode, selector: string) =>
+    [...root.querySelectorAll<HTMLElement>(selector)].filter(
+      (element) => element.getClientRects().length > 0,
+    );
+  const labels: Record<string, string> = {
+    history: "Chat",
+    terminal: "Terminal",
+    files: "Files",
+    changes: "Changes",
+    commits: "Commits",
+  };
+  const wideViews = shownIn(head(), '[role="tab"]').map(
+    (tab) => tab.getAttribute("aria-label") ?? "",
+  );
+  const wide = frame.getBoundingClientRect().width;
+  await dragWidth(frame, grip, 300 - wide);
+  await until(
+    () =>
+      head().hasAttribute("data-views-in-menu") &&
+      shownIn(head(), ".workspace-inspector-view-select").length === 1,
+    () =>
+      `narrow window folds its views into the view menu (width ${frame.getBoundingClientRect().width})`,
+  );
+  check(
+    shownIn(head(), '[role="tab"]').length === 0,
+    "the narrow window still shows view tabs beside its view menu",
+  );
+  // The window's ⋯ holds the window's actions, not a second list of views.
+  press(
+    head().querySelector<HTMLElement>(
+      '[aria-label="More actions for Inspector window"]',
+    )!,
+  );
+  await until(
+    () => document.querySelector('[aria-label="Window actions"]'),
+    "narrow window's actions menu opens",
+  );
+  const actions = [
+    ...document.querySelectorAll<HTMLElement>(
+      '[aria-label="Window actions"] [role^="menuitem"]',
+    ),
+  ].map((item) => item.textContent?.trim() ?? "");
+  check(
+    !actions.some((label) => Object.values(labels).includes(label)),
+    `the window's ⋯ lists views as a second menu: ${actions.join(",")}`,
+  );
+  document.dispatchEvent(
+    new KeyboardEvent("keydown", { key: "Escape", bubbles: true }),
+  );
+  await until(
+    () => !document.querySelector('[aria-label="Window actions"]'),
+    "narrow window's actions menu closes",
+  );
+  const choose = async (view: string) => {
+    const chip = shownIn(head(), ".workspace-inspector-view-select")[0]!;
+    check(
+      chip.getAttribute("aria-label") ===
+        `Inspector view: ${labels[inspector.getAttribute("data-view") ?? ""]}`,
+      `the view menu's chip does not name the shown view: ${chip.getAttribute("aria-label")}`,
+    );
+    press(chip);
+    await until(
+      () => document.querySelector('[aria-label="Inspector views"]'),
+      "narrow window's view menu opens",
+    );
+    const offered = [
+      ...document.querySelectorAll<HTMLButtonElement>(
+        '[aria-label="Inspector views"] button',
+      ),
+    ];
+    check(
+      offered.map((item) => item.textContent?.trim()).join(",") ===
+        wideViews.join(","),
+      `the view menu offers ${offered.map((item) => item.textContent?.trim()).join(",")}, the wide tab bar ${wideViews.join(",")}`,
+    );
+    press(offered.find((item) => item.dataset.view === view)!);
+    await until(
+      () =>
+        inspector.getAttribute("data-view") === view &&
+        !document.querySelector('[aria-label="Inspector views"]'),
+      () =>
+        `choosing ${labels[view]} in the narrow window's view menu shows it (view ${inspector.getAttribute("data-view")})`,
+    );
+    check(
+      head().hasAttribute("data-views-in-menu"),
+      `choosing ${labels[view]} widened the window's bar`,
+    );
+  };
+  const views = Object.keys(labels).filter((view) =>
+    wideViews.includes(labels[view]!),
+  );
+  check(
+    ["terminal", "files", "history"].every((view) => views.includes(view)),
+    `the window offers Terminal, Files and Chat: ${wideViews.join(",")}`,
+  );
+  for (const view of ["files", "history", "terminal", ...views].filter(
+    (view, index, all) => views.includes(view) && all.indexOf(view) === index,
+  ))
+    await choose(view);
+  await choose("files");
+  await dragWidth(frame, grip, wide - frame.getBoundingClientRect().width);
+  await until(
+    () =>
+      !head().hasAttribute("data-views-in-menu") &&
+      shownIn(head(), ".workspace-inspector-view-select").length === 0 &&
+      head()
+        .querySelector('[role="tab"][aria-label="Files"]')
+        ?.getAttribute("aria-selected") === "true" &&
+      inspector.getAttribute("data-view") === "files",
+    "widened window's tab bar shows the view chosen in the menu",
+  );
+  flushSync(() =>
+    head()
+      .querySelector<HTMLButtonElement>('[role="tab"][aria-label="Terminal"]')!
+      .click(),
+  );
+  await until(
+    () => inspector.getAttribute("data-view") === "terminal",
+    "widened window back on Terminal",
+  );
+}
+
 /** Board's card for a single-pane tab, or a split tab's pane row, by name. */
 function boardTarget(label: string) {
   return (
@@ -3380,6 +3562,7 @@ async function run() {
       paneGetsBeforeResize,
     "resizing the floating Inspector focused its terminal",
   );
+  await checkNarrowWindowViews(initialBuilderWindow, builderResizeGrip);
 
   await openAgent("Reviewer");
   await until(() => reviewerInspectorActive(), "Reviewer Inspector");
@@ -5381,7 +5564,7 @@ async function run() {
   );
   await settle();
   // Every view stays one tap away: as a tab, or, in the narrowest window,
-  // under the window's one ⋯ menu beside its actions.
+  // in the view menu that replaces the tabs.
   check(
     [
       ...document.querySelectorAll<HTMLElement>(
@@ -5395,12 +5578,10 @@ async function run() {
           ),
         ].every((tab) => tab.getClientRects().length > 0) ||
         (window
-          .querySelector<HTMLElement>(
-            'button[aria-label="More actions for Inspector window"]',
-          )
+          .querySelector<HTMLElement>(".workspace-inspector-view-select")
           ?.getClientRects().length ?? 0) > 0,
     ),
-    "a narrow Inspector hid views without offering More views",
+    "a narrow Inspector hid views without offering its view menu",
   );
   check(
     clippedVisualControls().length === 0,

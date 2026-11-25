@@ -4,7 +4,11 @@ import { WorkspaceTree } from "../components/WorkspaceTree";
 import { useLayoutPreferences } from "../layoutPreferences";
 import { OperationalContext } from "../store";
 import type { InspectorView } from "../workspaceResource";
-import type { WorldObject, WorldObjectNode } from "./worldObject";
+import {
+  isLiveNode,
+  type WorldObject,
+  type WorldObjectNode,
+} from "./worldObject";
 import { projectWorldTree } from "./treeProjection";
 import { ColorSwatchButton } from "../components/ColorSwatch";
 import {
@@ -122,12 +126,16 @@ export function WorldNavigator({
             >
               <div
                 className="world-navigator-tree"
+                // A stale host's cached tree stays inert. A live herdr-core
+                // host is never `actionable` (it is view-only for the TUI
+                // paths), yet its rows choose what Spaces shows (#1390).
                 ref={(element) => {
-                  if (element) element.inert = !host.source.actionable;
+                  if (element) element.inert = !isLiveNode(host.source);
                 }}
               >
                 <WorkspaceTree
                   includeTerminals
+                  selectOnly={host.source.coreControl === true}
                   agentsFirst={agentsFirst}
                   focusOnSelect={false}
                   observedTopology={{
