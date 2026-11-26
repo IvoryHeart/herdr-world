@@ -1,4 +1,5 @@
 import { afterEach, expect, test } from "bun:test";
+import { withTestTimings } from "../../shared/testing/timings";
 import { bridge, UncertainRequestError, type ConnectionClient } from "./api";
 import {
   creationSources,
@@ -565,11 +566,13 @@ test("acknowledged creation survives runtime retirement without publishing into 
 
 test("unacknowledged preparation has a finite deadline and releases its owner demand", async () => {
   fixture();
-  await expect(store.createQualifiedTab(owner, "b")).rejects.toThrow(
-    "preparation timed out; nothing was created",
+  await withTestTimings(() =>
+    expect(store.createQualifiedTab(owner, "b")).rejects.toThrow(
+      "preparation timed out; nothing was created",
+    ),
   );
   expect(creationSources()).toEqual([]);
-}, 30_000);
+});
 
 test("source revocation between preparation acknowledgement and dispatch does not send a mutation", async () => {
   const { calls, attach } = fixture();
