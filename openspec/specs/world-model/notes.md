@@ -23,7 +23,10 @@ until it is archived. Navigation and usage guidance; contracts live in OpenSpec.
   anchors and the view Town shows; derived in every `world.snapshot` reply, never
   stored)
 - `server/src/world/setting-commands.ts` ("Group runtimes" as a `world.command`:
-  settles as stored or failed, one `setting change` entry in the ledger history)
+  one `setting change` entry in the ledger history, written as accepted before the
+  setting and replaced by stored or failed; an entry a failed write or restart leaves
+  accepted is settled by the next command or start, as uncertain when the value held
+  is not the one asked for)
 - `server/src/service/world-commands.ts` (one publication for settings and commands,
   with `host_grouping` derived from the catalogue, setting and staleness;
   room rename on Herdr and core; each accepted

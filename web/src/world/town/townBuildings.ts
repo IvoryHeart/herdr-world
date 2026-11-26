@@ -23,6 +23,8 @@
  * the rooms of the one World publishes as shown: the endpoint's fixed anchor,
  * or another live view while the anchor is down, standing where the anchor's
  * rooms stood and keeping their spots and colours (`placeConnectionId`).
+ * A building reads with its published group's name (World chooses it with
+ * the same endpoint decisions), never a name Town picks.
  */
 
 import type {
@@ -69,6 +71,8 @@ type Plan = {
   orderOffset: Map<string, number>;
   /** A merged building's first host, stale only when all its runtimes are. */
   primaryStale: Map<string, boolean>;
+  /** A building's name, by its first host's key: the published group's. */
+  labelOf: Map<string, string>;
   signature: string;
 };
 
@@ -126,8 +130,10 @@ function plan(
 ): Plan {
   const groupOf = new Map<string, string>();
   const kindOf = new Map<string, GroupingRuntime>();
+  const groupLabel = new Map<string, string>();
   for (const group of grouping?.groups ?? [])
     for (const member of group.members) {
+      groupLabel.set(group.key, group.label);
       groupOf.set(member.connection_id, group.key);
       kindOf.set(member.connection_id, member.runtime);
     }
@@ -136,14 +142,24 @@ function plan(
   const tagOf: Plan["tagOf"] = new Map();
   const orderOffset = new Map<string, number>();
   const primaryStale = new Map<string, boolean>();
+  const labelOf = new Map<string, string>();
   const byGroup = new Map<string, OfficeHost[]>();
   for (const host of shownHosts(office.hosts, hidden, placeOf)) {
-    // A runtime World has not grouped (yet) stands alone.
-    const group =
-      groupOf.get(host.connectionId) ?? `runtime:${host.connectionId}`;
+    // A taken-over view stands in its anchor's group; a runtime World has
+    // not grouped (yet) stands alone.
+    const stands = (placeOf.get(host.key) ?? host).connectionId;
+    const group = groupOf.get(stands) ?? `runtime:${stands}`;
     byGroup.set(group, [...(byGroup.get(group) ?? []), host]);
   }
-  for (const members of byGroup.values()) {
+  for (const [group, members] of byGroup) {
+    // The building reads as World names the group in every view.
+    const building = members[0]!;
+    const label = groupLabel.get(group);
+    if (
+      label !== undefined &&
+      label !== (placeOf.get(building.key) ?? building).displayLabel
+    )
+      labelOf.set(building.key, label);
     if (members.length < 2) continue;
     // The first runtime in Town's order keys the building, whatever its
     // state, so rooms never change building when a runtime drops.
@@ -175,6 +191,7 @@ function plan(
     [...buildingOf],
     [...tagOf],
     [...primaryStale],
+    [...labelOf],
   ]);
   return {
     hidden,
@@ -183,6 +200,7 @@ function plan(
     tagOf,
     orderOffset,
     primaryStale,
+    labelOf,
     signature,
   };
 }
@@ -233,10 +251,19 @@ export function createTownBuildings() {
 
 function apply(
   office: HerdrOfficeProjection,
-  { hidden, placeOf, buildingOf, tagOf, orderOffset, primaryStale }: Plan,
+  {
+    hidden,
+    placeOf,
+    buildingOf,
+    tagOf,
+    orderOffset,
+    primaryStale,
+    labelOf,
+  }: Plan,
   cache: Caches,
 ): HerdrOfficeProjection {
-  if (!hidden.size && !buildingOf.size && !tagOf.size) return office;
+  if (!hidden.size && !buildingOf.size && !tagOf.size && !labelOf.size)
+    return office;
   const shown = (item: { hostKey: string }) => !hidden.has(item.hostKey);
   const memo = <T extends object>(
     map: WeakMap<T, T>,
@@ -290,7 +317,13 @@ function apply(
       : item;
   const host = (item: OfficeHost): OfficeHost => {
     const anchor = placeOf.get(item.key);
-    if (!anchor && !buildingOf.has(item.key) && !primaryStale.has(item.key))
+    const label = labelOf.get(item.key);
+    if (
+      !anchor &&
+      label === undefined &&
+      !buildingOf.has(item.key) &&
+      !primaryStale.has(item.key)
+    )
       return item;
     return {
       ...item,
@@ -301,6 +334,10 @@ function apply(
         displayOrder: anchor.displayOrder,
         deterministicSkin: anchor.deterministicSkin,
         placeConnectionId: anchor.connectionId,
+      }),
+      ...(label !== undefined && {
+        displayLabel: label,
+        accessibleLabel: label,
       }),
       ...(buildingOf.has(item.key) && {
         buildingKey: buildingOf.get(item.key)!,

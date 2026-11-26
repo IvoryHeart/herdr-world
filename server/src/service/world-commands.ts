@@ -83,6 +83,12 @@ export function composeWorldPublication(
   });
   const settingCommands = createSettingCommands({
     now: deps.now,
+    async read(key) {
+      const current = (await uiSettings("bridge.ui_settings.get", {})) as {
+        ui?: Record<string, unknown>;
+      };
+      return current?.ui?.[key];
+    },
     async write(key, value) {
       const result = (await uiSettings("bridge.ui_settings.update", {
         key,
@@ -92,27 +98,48 @@ export function composeWorldPublication(
     },
     publish: publishWorld,
     record: (record) => recordSettingCommand(deps.ledger(), record),
+    unsettled: () =>
+      deps
+        .ledger()
+        .get()
+        .changes.flatMap((change) =>
+          change.world_command?.entity.kind === "setting" &&
+          change.world_command.state === "accepted"
+            ? [change.world_command as SettingCommandRecord]
+            : [],
+        ),
     log: deps.log,
   });
+  // Setting commands a restart left between their write and their record.
+  void settingCommands
+    .recover()
+    .catch((error) => deps.log(`World setting history not settled: ${error}`));
   return { uiSettings, publishWorld, worldCommands, settingCommands };
 }
 
-/** One settled record in the ledger's change history per setting command. */
+/**
+ * A setting command's one record in the ledger's change history, created
+ * when it is accepted and replaced in place by its outcome.
+ */
 async function recordSettingCommand(
   ledger: LedgerStore,
   record: SettingCommandRecord,
 ) {
-  const id = await ledger.nextId("c");
+  const existing = recordOf(ledger.get().changes, record.id);
+  const id = existing?.id ?? (await ledger.nextId("c"));
   await ledger.update((document) => {
-    document.changes.push({
+    const change: LedgerChange = {
       id,
-      at: record.at,
+      at: existing?.at ?? record.at,
       actor: { label: "World", verified: false },
       command: "setting change",
       summary: settingCommandSummary(record),
       undo: null,
       world_command: record,
-    });
+    };
+    const index = document.changes.findIndex((each) => each.id === id);
+    if (index >= 0) document.changes[index] = change;
+    else document.changes.push(change);
   });
 }
 

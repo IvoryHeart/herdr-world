@@ -151,8 +151,15 @@ async function runSchedule(
       })) as { before: unknown; value: unknown };
       return { before: result.before, value: result.value };
     },
+    read: async () => stored(),
     publish,
-    record: async (record) => void history.push(record),
+    // One record per command, replaced in place by its outcome.
+    record: async (record) => {
+      const index = history.findIndex(({ id }) => id === record.id);
+      if (index >= 0) history[index] = record;
+      else history.push(record);
+    },
+    unsettled: () => history.filter(({ state }) => state === "accepted"),
     log: () => {},
   });
 
@@ -175,7 +182,8 @@ async function runSchedule(
     else
       await browser
         .call("world.command", {
-          id: `choice-${browser.next}`,
+          // Each browser names its commands uniquely (worldCommands.ts).
+          id: `choice-${browsers.indexOf(browser)}-${browser.next}`,
           entity: { kind: "setting", key: RUNTIME_GROUPING_SETTING_KEY },
           field: "value",
           expected: browser.replica.value ?? null,

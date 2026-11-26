@@ -363,6 +363,45 @@ test("a takeover of a socket keeps its building, saved spots and colours", () =>
   expect(perRuntime("tui-profile")).toEqual(perRuntime(null));
 });
 
+test("a building reads as World names its group, whichever view Town shows", () => {
+  // A read-only startup default and a writable saved profile of one socket.
+  const named = [
+    { ...runtimes[0]!, label: "Studio", isDefault: true },
+    { ...runtimes[1]!, label: "Saved profile" },
+    { ...runtimes[2]!, label: "Workshop" },
+    runtimes[3]!,
+  ];
+  const groupLabel = (
+    grouping: ReturnType<typeof published>,
+    connectionId: string,
+  ) =>
+    grouping.groups.find((group) =>
+      group.members.some((member) => member.connection_id === connectionId),
+    )?.label;
+  const label = (town: typeof office, connectionId: string) =>
+    town.hosts.find((host) => host.key === keyOf(connectionId))?.displayLabel;
+  for (const grouping of ["machine", "runtime"] as const) {
+    const live = deriveHostGrouping(named, grouping, (id) => id === "remote");
+    expect(groupLabel(live, "tui-profile")).toBe("Saved profile");
+    const town = createTownBuildings()(office, live);
+    expect(label(town, "tui-profile")).toBe("Saved profile");
+    expect(label(town, "tui-default")).toBeUndefined();
+    // The profile drops: the default's view takes over under the same name.
+    const down = deriveHostGrouping(named, grouping, (id) =>
+      ["remote", "tui-profile"].includes(id),
+    );
+    expect(groupLabel(down, "tui-profile")).toBe("Saved profile");
+    const takenOver = createTownBuildings()(office, down);
+    expect(label(takenOver, "tui-default")).toBe("Saved profile");
+    // Actions still name the view's own connection.
+    expect(
+      roomsOf(takenOver, "tui-default").every(
+        (room) => room.workspaceRef.connectionId === "tui-default",
+      ),
+    ).toBe(true);
+  }
+});
+
 test("a takeover of a socket keeps its pinned desks at their seats", () => {
   // Ten desks in a room folded to eight: only a pin admits the first. The
   // pin was saved on the writable profile, which then drops.

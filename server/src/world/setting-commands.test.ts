@@ -16,20 +16,44 @@ const change = {
   value: "runtime",
 } as const;
 
-function commands(write: () => Promise<{ before: unknown; value: unknown }>) {
+function commands(
+  write: (
+    value: unknown,
+    held: unknown,
+  ) => Promise<{ before: unknown; value: unknown }>,
+  options: {
+    held?: unknown;
+    /** Fail the record writes at these (0-based) calls. */
+    failRecords?: number[];
+    history?: SettingCommandRecord[];
+  } = {},
+) {
   const events: string[] = [];
-  const records: SettingCommandRecord[] = [];
+  const records: SettingCommandRecord[] = options.history ?? [];
+  let held: unknown = options.held ?? "machine";
+  let recordCalls = 0;
   const settings = createSettingCommands({
     now: () => 5,
-    write,
+    read: async () => held,
+    async write(_key, value) {
+      events.push("write");
+      const written = await write(value, held);
+      held = written.value;
+      return written;
+    },
     publish: () => events.push("publish"),
     async record(record) {
-      events.push("record");
-      records.push(record);
+      if (options.failRecords?.includes(recordCalls++))
+        throw new Error("ledger unavailable");
+      events.push(`record ${record.state}`);
+      const index = records.findIndex(({ id }) => id === record.id);
+      if (index >= 0) records[index] = record;
+      else records.push(record);
     },
+    unsettled: () => records.filter(({ state }) => state === "accepted"),
     log: (line) => events.push(line),
   });
-  return { settings, events, records };
+  return { settings, events, records, held: () => held };
 }
 
 test("a setting command names the setting; a room command is not one", () => {
@@ -65,7 +89,12 @@ test("a stored change publishes once, then leaves one record with before and aft
     observed: "runtime",
     at: 5,
   });
-  expect(events).toEqual(["publish", "record"]);
+  expect(events).toEqual([
+    "record accepted",
+    "write",
+    "publish",
+    "record stored",
+  ]);
   expect(records).toEqual([record]);
   expect(settingCommandSummary(record)).toBe(
     "Group runtimes by machine → by runtime",
@@ -83,9 +112,80 @@ test("a failed write publishes nothing and records the failure", async () => {
     detail: "disk full",
   });
   expect(record).not.toHaveProperty("observed");
-  expect(events).toEqual(["record"]);
+  expect(events).toEqual(["record accepted", "write", "record failed"]);
   expect(settingCommandSummary(records[0]!)).toBe(
     "Group runtimes by machine → by runtime failed: disk full",
+  );
+});
+
+test("a command whose acceptance cannot be recorded changes nothing", async () => {
+  const { settings, events, records, held } = commands(
+    async () => ({ before: "machine", value: "runtime" }),
+    { failRecords: [0] },
+  );
+  const record = await settings.submit(parseSettingCommand(change)!);
+  expect(record).toMatchObject({ state: "failed", before: "machine" });
+  expect(events).toEqual([
+    "World setting history not recorded: Error: ledger unavailable",
+  ]);
+  expect(records).toEqual([]);
+  expect(held()).toBe("machine");
+});
+
+test("an outcome that cannot be recorded settles before the next command", async () => {
+  const { settings, events, records } = commands(
+    async (value, held) => ({ before: held, value }),
+    { failRecords: [1] },
+  );
+  const record = await settings.submit(parseSettingCommand(change)!);
+  expect(record.state).toBe("stored");
+  // The setting is written and published; its record still says accepted.
+  expect(records).toEqual([
+    { ...change, state: "accepted", before: "machine", at: 5 },
+  ]);
+  expect(events).toContain("publish");
+  await settings.submit(
+    parseSettingCommand({ ...change, id: "cmd-2", value: "machine" })!,
+  );
+  expect(
+    records.map(({ id, state, before, observed }) => [
+      id,
+      state,
+      before,
+      observed,
+    ]),
+  ).toEqual([
+    ["cmd-1", "stored", "machine", "runtime"],
+    ["cmd-2", "stored", "runtime", "machine"],
+  ]);
+});
+
+test("after a restart, a record left accepted settles from the value held", async () => {
+  const accepted = (id: string, value: "machine" | "runtime") => ({
+    ...parseSettingCommand({ ...change, id, value })!,
+    state: "accepted" as const,
+    before: "machine",
+    at: 1,
+  });
+  const history = [accepted("cmd-1", "runtime")];
+  const written = commands(async () => ({ before: null, value: null }), {
+    held: "runtime",
+    history,
+  });
+  await written.settings.recover();
+  expect(history[0]).toMatchObject({ state: "stored", observed: "runtime" });
+  expect(settingCommandSummary(history[0]!)).toBe(
+    "Group runtimes by machine → by runtime",
+  );
+  const lost = [accepted("cmd-2", "runtime")];
+  const unwritten = commands(async () => ({ before: null, value: null }), {
+    held: "machine",
+    history: lost,
+  });
+  await unwritten.settings.recover();
+  expect(lost[0]).toMatchObject({ state: "uncertain", observed: "machine" });
+  expect(settingCommandSummary(lost[0]!)).toBe(
+    "Group runtimes by machine → by runtime uncertain: World stopped before the change settled",
   );
 });
 

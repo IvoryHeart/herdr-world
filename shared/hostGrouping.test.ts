@@ -201,3 +201,34 @@ test("a published grouping parses back; malformed entries are dropped and lists 
   });
   expect(parsed?.groups.length).toBe(512);
 });
+
+test("a group is named and ordered after the runtime standing for its endpoint", () => {
+  const grouping = deriveHostGrouping(
+    groupingHosts([
+      local("startup", { label: "Studio", read_only: true, is_default: true }),
+      local("saved", { label: "Saved profile" }),
+      local("box", { ...remote, label: "Box" }),
+    ]),
+    "machine",
+    live,
+  );
+  expect(grouping.groups.map(({ key, label }) => [key, label])).toEqual([
+    ["ssh:box.example.test", "Box"],
+    ["local", "Saved profile"],
+  ]);
+  // Members stay in World's order: the startup default first.
+  expect(grouping.groups[1]!.members.map((each) => each.label)).toEqual([
+    "Studio",
+    "Saved profile",
+  ]);
+});
+
+test("the replica keeps a machine group of every profile plus the startup default", () => {
+  const profiles = Array.from({ length: 65 }, (_, index) =>
+    local(`p${index}`, { client_socket_path: `/tmp/example-${index}.sock` }),
+  );
+  const grouping = deriveHostGrouping(groupingHosts(profiles), "machine", live);
+  const parsed = parseHostGrouping(JSON.parse(JSON.stringify(grouping)));
+  expect(parsed?.groups).toHaveLength(1);
+  expect(parsed?.groups[0]!.members).toHaveLength(65);
+});

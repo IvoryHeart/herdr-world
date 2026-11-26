@@ -167,7 +167,11 @@ type HostGroupMember = {
 /** Runtimes every view shows together. */
 type HostGroup = {
   key: string;
-  /** Its first runtime's name, as Town names the machine's building. */
+  /**
+   * Its name in every view: its first runtime's that stands for an endpoint
+   * (a second view of an endpoint stands behind its anchor, whose name it
+   * shows even while taking over), else its first runtime's.
+   */
   label: string;
   /** Its runtimes, in World's order (`compareWorldOrder`). */
   members: HostGroupMember[];
@@ -185,7 +189,7 @@ type HostEndpoint = {
 
 export type HostGrouping = {
   grouping: RuntimeGrouping;
-  /** In the order of their first runtimes (`compareWorldOrder`). */
+  /** In the order of the runtimes they are named after (`compareWorldOrder`). */
   groups: HostGroup[];
   endpoints: HostEndpoint[];
 };
@@ -208,23 +212,39 @@ export function compareWorldOrder(
 const worldOrder = (hosts: readonly GroupingHost[]) =>
   [...hosts].sort(compareWorldOrder);
 
-/** The catalogue's groups in World's order: their first runtimes'. */
+/**
+ * The catalogue's groups, each named after its first runtime that stands for
+ * an endpoint (not `behind` an anchor), in World's order of those runtimes.
+ * Town shows a building only for such runtimes, so every view names and
+ * orders a group as Town's building.
+ */
 function hostGroups(
   hosts: readonly GroupingHost[],
   grouping: RuntimeGrouping,
+  behind: ReadonlySet<string>,
 ): HostGroup[] {
-  const byKey = new Map<string, HostGroup>();
-  for (const host of worldOrder(hosts)) {
+  const byKey = new Map<string, HostGroup & { at: number; named: boolean }>();
+  worldOrder(hosts).forEach((host, index) => {
     const key = runtimeGroupKey(host, grouping);
-    const group = byKey.get(key) ?? { key, label: host.label, members: [] };
+    const group = byKey.get(key) ?? {
+      key,
+      label: host.label,
+      members: [],
+      at: index,
+      named: false,
+    };
+    if (!group.named && !behind.has(host.id))
+      Object.assign(group, { label: host.label, at: index, named: true });
     group.members.push({
       connection_id: host.id,
       runtime: host.runtime,
       label: host.label,
     });
     byKey.set(key, group);
-  }
-  return [...byKey.values()];
+  });
+  return [...byKey.values()]
+    .sort((left, right) => left.at - right.at)
+    .map(({ key, label, members }) => ({ key, label, members }));
 }
 
 /** @internal Each endpoint of two or more views: its anchor and the view shown. */
@@ -262,10 +282,16 @@ export function deriveHostGrouping(
   stale: (connectionId: string) => boolean,
 ): HostGrouping {
   const grouping = parseRuntimeGrouping(setting) ?? RUNTIME_GROUPING_DEFAULT;
+  const endpoints = hostEndpoints(hosts, stale);
+  const behind = new Set(
+    endpoints.flatMap(({ views, anchor }) =>
+      views.filter((view) => view !== anchor),
+    ),
+  );
   return {
     grouping,
-    groups: hostGroups(hosts, grouping),
-    endpoints: hostEndpoints(hosts, stale),
+    groups: hostGroups(hosts, grouping, behind),
+    endpoints,
   };
 }
 
@@ -317,7 +343,13 @@ export function endpointAnchors(
   return anchors;
 }
 
-const LIMITS = { groups: 512, members: 64, text: 1024 };
+/**
+ * One bound for groups, a group's members and an endpoint's views: any one
+ * of them may hold every connection the service registers (64 saved
+ * profiles, the startup default and herdr-core connections), so the replica
+ * keeps the service's complete membership and never cuts a group short.
+ */
+const LIMITS = { connections: 512, text: 1024 };
 
 const text = (value: unknown) =>
   typeof value === "string" && value.length > 0 && value.length <= LIMITS.text
@@ -339,14 +371,14 @@ export function parseHostGrouping(value: unknown): HostGrouping | null {
     !Array.isArray(item.endpoints)
   )
     return null;
-  const groups = item.groups.slice(0, LIMITS.groups).flatMap((entry) => {
+  const groups = item.groups.slice(0, LIMITS.connections).flatMap((entry) => {
     const group = record(entry);
     const key = text(group?.key);
     const label = typeof group?.label === "string" ? group.label : null;
     if (!group || !key || label === null || !Array.isArray(group.members))
       return [];
     const members = group.members
-      .slice(0, LIMITS.members)
+      .slice(0, LIMITS.connections)
       .flatMap((each): HostGroupMember[] => {
         const member = record(each);
         const id = text(member?.connection_id);
@@ -366,13 +398,13 @@ export function parseHostGrouping(value: unknown): HostGrouping | null {
     return members.length ? [{ key, label, members }] : [];
   });
   const endpoints = item.endpoints
-    .slice(0, LIMITS.groups)
+    .slice(0, LIMITS.connections)
     .flatMap((entry): HostEndpoint[] => {
       const endpoint = record(entry);
       const anchor = text(endpoint?.anchor);
       const shown = text(endpoint?.shown);
       const views = Array.isArray(endpoint?.views)
-        ? endpoint.views.slice(0, LIMITS.members).flatMap((view) => {
+        ? endpoint.views.slice(0, LIMITS.connections).flatMap((view) => {
             const id = text(view);
             return id ? [id] : [];
           })

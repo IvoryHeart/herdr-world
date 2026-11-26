@@ -33,8 +33,9 @@ pins) SHALL run once, on the service.
 - **THEN** one revision carries the setting with the groups, their members, order and
   labels, and the view of each shared endpoint that Town shows
 - **AND** Town, Desk, Board, Spaces, the hosts control and `herdr-world ls` show those
-  groups
-- **AND** only the explicit setting change leaves a history entry
+  groups under the published labels, a Town building included
+- **AND** only the explicit setting change leaves a history entry, recorded before the
+  setting is written
 
 ### Requirement: Views display World
 
