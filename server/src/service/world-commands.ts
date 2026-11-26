@@ -1,3 +1,5 @@
+import { createUiSettingsRpcHandler } from "../bridge/settings-rpc";
+import type { GuiSettingsStore } from "../config/gui-settings";
 import type { ConnectionManager } from "../connections/manager";
 import type { LegacyConnectionRuntime } from "../connections/runtime";
 import { CoreOperationRefused, renameCoreRoom } from "../herdr-core/operations";
@@ -13,6 +15,42 @@ import {
 import type { LedgerChange, LedgerStore } from "../world/world-ledger";
 
 const RECONNECTED = "The host reconnected; look again and retry.";
+
+/**
+ * One publication for World's own values: settings and commands are read
+ * after each topology revision is taken and published under it, and a change
+ * to either advances that revision with one notice to every browser.
+ */
+export function composeWorldPublication(
+  deps: Omit<Parameters<typeof composeWorldCommands>[0], "publish"> & {
+    settings: Pick<GuiSettingsStore, "read" | "update">;
+    broadcast(line: string, context: string): void;
+  },
+) {
+  const uiSettings = createUiSettingsRpcHandler({
+    readSettings: () => deps.settings.read(),
+    updateSettings: (update, shouldCommit) =>
+      deps.settings.update(update, shouldCommit),
+  });
+  /** World's own values changed: one revision, one notice to every browser. */
+  const publishWorld = () => {
+    const revision = deps.snapshots.publish();
+    deps.broadcast(
+      JSON.stringify({ control: { type: "world_invalidated", revision } }),
+      "world-invalidation",
+    );
+  };
+  const worldCommands = composeWorldCommands({
+    ...deps,
+    publish: publishWorld,
+  });
+  // Settings and commands are published with topology, under its revision.
+  deps.snapshots.publishWith(async () => ({
+    ui_settings: await uiSettings("bridge.ui_settings.get", {}),
+    commands: worldCommands.published(),
+  }));
+  return { uiSettings, publishWorld, worldCommands };
+}
 
 /**
  * World commands composed over the service: the entity's own connection and

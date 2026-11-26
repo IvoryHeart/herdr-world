@@ -15,9 +15,11 @@ until it is archived. Navigation and usage guidance; contracts live in OpenSpec.
 
 - `server/src/world/snapshot.ts` (aggregate observation, per-host epoch fence, one
   publication revision for topology, hosts, settings and commands)
+- `server/src/world/snapshot-records.ts` (bounded record selection and coverage counts)
 - `server/src/world/commands.ts` (World commands: compare-and-set, own connection and
   generation, settle only on a read that started after the acknowledgement)
-- `server/src/service/world-commands.ts` (room rename on Herdr and core; each accepted
+- `server/src/service/world-commands.ts` (one publication for settings and commands;
+  room rename on Herdr and core; each accepted
   command and its outcome recorded in
   the ledger history, unsettled ones settled as uncertain after a restart)
 - `server/src/rpc/world.ts` (`world.snapshot`, `world.command`, World verbs)
@@ -29,6 +31,7 @@ until it is archived. Navigation and usage guidance; contracts live in OpenSpec.
 - `server/src/storage/catalog.ts`
 - `web/src/world/runtimeStore.ts` (browser replica: adopts only newer revisions, holds
   pending values; today also the browser builder)
+- `web/src/world/runtimeDecode.ts` (decodes one published connection)
 - `web/src/world/worldReplica.ts` (published World and pending values in the replica)
 - `web/src/world/worldCommands.ts` (browser side of World commands; room rename)
 - `web/src/store/uiSettings.ts` (settings read from the World publication)
