@@ -14,6 +14,8 @@ import { openStorage } from "../../service/storage";
 import { testServerConfig } from "../../service/testing/services";
 import { createWorldService } from "../../service/world-service";
 import { ConnectionProfileStore } from "../profiles";
+import { TEST_TIMINGS } from "../../../../shared/testing/timings";
+import { setTimingsForTests } from "../../../../shared/timings";
 
 const options = JSON.parse(process.argv[2]) as {
   root: string;
@@ -22,7 +24,10 @@ const options = JSON.parse(process.argv[2]) as {
   args?: string[];
   hold?: string;
   ownerRoot?: string;
+  /** Run this process's timers on the test set (a contender's wait expires at once). */
+  testTimings?: boolean;
 };
+if (options.testTimings) setTimingsForTests(TEST_TIMINGS);
 function event(name: string, data?: unknown) {
   console.log(`@@${JSON.stringify({ name, data })}`);
   if (options.hold === name) {

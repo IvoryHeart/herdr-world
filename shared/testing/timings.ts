@@ -8,6 +8,7 @@ import { setTimingsForTests, type Timings } from "../timings";
 export const TEST_TIMINGS: Timings = {
   askPeerPollMs: 3,
   askPeerGraceMs: 9,
+  registryBusyWaitMs: 5,
   creationPreparationMs: 5,
 };
 

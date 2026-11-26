@@ -17,6 +17,11 @@ export const PRODUCTION_TIMINGS = {
   askPeerPollMs: 5_000,
   /** After a failed sibling read, the last good list stays this long. */
   askPeerGraceMs: 15_000,
+  /**
+   * An offline connection-registry edit or World startup waits this long for
+   * another process's ownership before it reports busy.
+   */
+  registryBusyWaitMs: 5_000,
   /** Browser-local creation waits this long for its source terminal. */
   creationPreparationMs: 20_000,
 } as const;
