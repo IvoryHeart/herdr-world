@@ -35,6 +35,9 @@
 - `server/src/herdr-core/core.live.test.ts` (native status in the unified read model)
 - `server/src/herdr-core/harnesses.live.test.ts` (ready, blocked and completed reports)
 - `scripts/herdr-core-smoke.ts` (checksum-verified newest-release live suites)
+- `scripts/release-walk/contract.py`, `scripts/release-walk/assets.py` (pinned
+  release-walk core download and receipt version)
+- `scripts/check-homebrew-runtime.rb` (Homebrew install acceptance fixture)
 - `server/src/herdr-core/`
 
 **Pitfalls:**
@@ -135,6 +138,8 @@ no control for it. Platform and harness limits apply across the table.
   core's headless size; World reports the move. The daily and manual
   [release smoke](../../../docs/development.md#herdr-core-release-smoke) checks newer
   releases for drift without changing your installed runtime.
+  Release-walk acceptance pins **0.1.22** for repeatable runtime downloads and
+  receipts; install previews and fake release fixtures use the same baseline.
 
 ### Runtime limits
 
