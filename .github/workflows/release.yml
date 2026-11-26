@@ -137,6 +137,7 @@ jobs:
 
   homebrew-pr:
     name: Propose the tested multi-platform Formula
+    environment: release
     needs: [validate, npm-publish]
     if: ${{ !cancelled() && needs.validate.result == 'success' && needs.npm-publish.result == 'success' }}
     runs-on: ubuntu-latest

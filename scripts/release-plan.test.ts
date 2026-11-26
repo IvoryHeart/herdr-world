@@ -34,13 +34,6 @@ test("only the main version commit's matching tag can publish, with changelog as
       writeFileSync(join(root, name), '{"version":"0.0.0"}');
     writeFileSync(join(root, "herdr-plugin.toml"), 'version = "0.3.7"\n');
     commit();
-    writeFileSync(join(root, "herdr-plugin.toml"), 'version = "0.3.8-rc.1"\n');
-    writeFileSync(
-      join(root, "CHANGELOG.md"),
-      "# Changelog\n\n## [Unreleased]\n\n## [0.3.8-rc.1] - 2026-11-24\n\n- Synthetic change.\n",
-    );
-    commit();
-    git("update-ref", "refs/remotes/origin/main", "HEAD");
     const run = (ref: string) =>
       Bun.spawnSync([process.execPath, script], {
         cwd: root,
@@ -48,22 +41,35 @@ test("only the main version commit's matching tag can publish, with changelog as
         stdout: "pipe",
         stderr: "pipe",
       });
-    expect(run("refs/tags/v0.3.8-rc.1").exitCode).toBe(0);
+    for (const version of ["0.3.8-rc.1", "0.3.8-rc.2", "0.3.8"]) {
+      writeFileSync(
+        join(root, "herdr-plugin.toml"),
+        `version = "${version}"\n`,
+      );
+      writeFileSync(
+        join(root, "CHANGELOG.md"),
+        `# Changelog\n\n## ${version}\n\n- Synthetic change.\n`,
+      );
+      commit();
+      git("update-ref", "refs/remotes/origin/main", "HEAD");
+      expect(run(`refs/tags/v${version}`).exitCode).toBe(0);
+      expect(run("refs/tags/v0.3.7").exitCode).toBe(1);
+    }
     for (const ref of [
       "refs/heads/main",
-      "refs/tags/v0.3.8",
+      "refs/tags/v0.3.8-rc.2",
       "refs/tags/v0.3.7",
     ])
       expect(run(ref).exitCode).toBe(1);
     writeFileSync(join(root, "later.txt"), "later");
     commit();
     git("update-ref", "refs/remotes/origin/main", "HEAD");
-    expect(run("refs/tags/v0.3.8-rc.1").stderr.toString()).toContain(
+    expect(run("refs/tags/v0.3.8").stderr.toString()).toContain(
       "version commit",
     );
     git("checkout", "-q", "HEAD^");
     git("update-ref", "refs/remotes/origin/main", "HEAD^");
-    expect(run("refs/tags/v0.3.8-rc.1").exitCode).toBe(1);
+    expect(run("refs/tags/v0.3.8").exitCode).toBe(1);
   } finally {
     rmSync(root, { recursive: true, force: true });
   }

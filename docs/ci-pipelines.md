@@ -9,6 +9,7 @@ required. The native launchd shim reports have been removed.
 | Pre-push | Read-only formatting and privacy scan of every pushed ref, including tags |
 | Privacy | One scan for each PR open/synchronize/reopen, plus explicit bot dispatches |
 | PR CI | Linux static, affected units, browser shards and behavioral verification; description policy remains in CI |
+| Merge queue | Fresh Linux validation of the queue's combined commit; the same required Delivery checks aggregate |
 | Native checks | Tags and nightly only, including packaging changes |
 | Main CI | Report the merged PR's successful identical tree; missing evidence raises the main issue, without running suites |
 | Release tag | Build each native package once, test installed channels and agents, audit shipped dependencies, then seal |
@@ -49,6 +50,17 @@ another suite. Nightly catches integration/platform failures as one advisory iss
 PR reuse still requires the same scope and checkout/base/head identities.
 The stability opt-in explicitly requests fresh repeated browser passes.
 
+After the owner approves a PR, it joins the merge queue for `main`. GitHub
+combines it with current main and any preceding queued PRs, then sends
+[`merge_group: checks_requested`](https://docs.github.com/en/actions/reference/workflows-and-actions/events-that-trigger-workflows#merge_group).
+CI checks out that queue commit and runs the same Linux static, dependency,
+unit, browser and behavioral lanes as PR validation, with a full selection.
+It reports **Delivery checks** on the queue commit and never reuses a green PR
+result. The static ratchet uses the queue's immutable base SHA as its integration target.
+Once the queue's checks pass and review requirements hold, GitHub merges the PR.
+FirstMate enables the queue in the ruleset after this workflow change merges;
+the workflow does not change repository settings.
+
 A failing unit, browser or behavioral test step retries once inside its existing
 job. A second failure fails the job. Before a behavioral retry, the failed
 run and resource receipts move into retained `retries/` diagnostics. The aggregate
@@ -69,6 +81,15 @@ manual Help capture remains available when a help entry changes. The broken Open
 pinned archive helper still supports reviewed synchronization PRs with ordered
 archives and rollback at a conflicting delta. Neither retired workflow consumes
 runners or writes a bot branch on main pushes.
+
+Only CI subscribes directly to merge groups. Its reusable World browser and
+behavioral workflows run through the same aggregate. Privacy scans each PR's
+additions and metadata before queueing, with no separate required queue check.
+Pages deployment, latency, Town golden images and asset headroom remain side
+workflows on their existing inputs. Dependency maintenance/security reporting,
+labels, upstream automation, main health, retry handlers, release preparation,
+publication and native/manual acceptance keep their existing events. None is
+an additional required merge-group report.
 
 ## Audited flaky cases
 
@@ -117,9 +138,13 @@ artifacts, selects each newest attempt, requires complete model coverage and
 current source/tool identity, and verifies every group's retained accounting.
 It publishes one canonical manifest including the three resource records. The
 single-machine canonical gate is unchanged and still rejects filters.
-The long core runtime model owns a dedicated shard. Its independent fault controls
-run two at a time within that shard's existing resource envelope. Each worker
-reuses its owned checker sequentially, avoiding a JVM startup for each fault.
+The long core runtime and IDE lifecycle models each own a dedicated shard; the
+third shard runs every other model, two at a time. Their independent exhaustive
+checks (core fault controls; the IDE default, deep and eight flag checks) run
+two at a time within that shard's existing resource envelope. Run one at a time,
+the IDE checks alone took about 565 seconds on a fast hosted runner and passed
+the 930-second shard deadline on one about 1.55 times slower (#1346). Each worker
+reuses its owned checker sequentially, avoiding a JVM startup for each check.
 Each command retains its 240-second deadline; the session shares the existing
 outer worker deadline, memory cap and cancellation/drain. A checker failure
 ends the worker instead of relaunching a failed check. Every model fault, trace

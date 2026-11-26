@@ -389,6 +389,10 @@ const implementationMutation = (
   fault: ImplementationFault = "primary",
 ) => mutateImplementation(name, fault, { root, output });
 
+/** Two only on a dedicated CI shard (scripts/ci-verification.ts); local runs keep one. */
+const controlWorkers = () =>
+  Number(process.env.HERDR_VERIFICATION_CONTROL_WORKERS || 1);
+
 async function command(
   label: string,
   args: string[],
@@ -699,6 +703,9 @@ export async function runReviewedQuintModels(
           command,
           mutate: (fault?: ImplementationFault) =>
             implementationMutation(name, fault),
+          signal: cancellation.signal,
+          controlWorkers: controlWorkers(),
+          withControlWorker: checkerSessions.withWorker,
         });
         results.push(result);
         console.log(JSON.stringify(result));
@@ -711,7 +718,7 @@ export async function runReviewedQuintModels(
           artifacts,
           command,
           signal: cancellation.signal,
-          controlWorkers: Number(process.env.HERDR_CORE_CONTROL_WORKERS || 1),
+          controlWorkers: controlWorkers(),
           withControlWorker: checkerSessions.withWorker,
           mutate: (fault) =>
             implementationMutation("herdr-core-runtime", fault),

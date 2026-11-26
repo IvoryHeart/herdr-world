@@ -3,6 +3,9 @@ name: CI
 on:
     pull_request:
         types: [opened, synchronize, reopened, labeled]
+    # The queue must validate its combined commit afresh, independently of PR proof.
+    merge_group:
+        types: [checks_requested]
     # Main only checks existing PR evidence. Native builds belong to tags/nightly.
     push:
         branches: [main]
@@ -183,7 +186,7 @@ jobs:
         runs-on: ubuntu-latest
         timeout-minutes: 30
         env:
-            HERDR_WORLD_RATCHET_TARGET: ${{ github.event.pull_request.base.sha }}
+            HERDR_WORLD_RATCHET_TARGET: ${{ github.event.pull_request.base.sha || github.event.merge_group.base_sha }}
             HERDR_CI_SELECTION: ${{ needs.validation-scope.outputs.selection }}
         steps:
             - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7

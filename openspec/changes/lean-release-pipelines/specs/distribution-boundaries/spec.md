@@ -1,13 +1,24 @@
 ## MODIFIED Requirements
 
 ### Requirement: Reviewed release identity
-Release-please SHALL keep one reviewed release PR current using the simple strategy in PR-only mode (`skip-github-release: true`). It SHALL update CHANGELOG from squash-merged fix/feat titles and the plugin version through its generic marker updater. Only the owner SHALL create a release tag on the merged version commit; no automation SHALL create tags. The owner SHALL only merge the release PR, create its tag and merge the automatic tap PR.
+Release-please SHALL keep one reviewed release PR current using the simple strategy in PR-only mode (`release-pr`). It SHALL update CHANGELOG from squash-merged fix/feat titles and the plugin version through its generic marker updater. Only the owner SHALL create a release tag on the merged version commit; no automation SHALL create tags. The owner SHALL only merge the release PR, create its tag and merge the automatic tap PR.
 
 #### Scenario: Release preparation
 - **WHEN** scheduled or dispatched release-please runs
 - **THEN** it refreshes one release PR and automatically dispatches its checks without change fragments, a separate notes file or a manual run identifier
 - **AND** the owner tags the merged release before the next release-please run
 - **AND** successful publication automatically replaces that exact merged release PR's pending label with the tagged label so the next release PR needs no manual bookkeeping
+
+#### Scenario: Exact dispatched release version
+- **WHEN** the owner dispatches Release PR with a valid `release_as` such as `0.3.8-rc.1`, `0.3.8-rc.2` or `0.3.8`
+- **THEN** release-please opens or updates the release PR at exactly that version using its supported manifest override
+- **AND** the override applies only to that run, without a direct main commit or another owner step
+- **AND** an invalid version fails before release preparation
+
+#### Scenario: Patch by default
+- **WHEN** scheduled or dispatched release-please runs without `release_as` after `0.3.7`, including with merged `feat:` commits
+- **THEN** it opens or updates the release PR at `0.3.8`
+- **AND** minor and major bumps require an explicit `release_as`, such as `0.4.0`
 
 #### Scenario: Cross-platform release candidate
 - **WHEN** an owner-created `vX.Y.Z-rc.N` tag selects the reviewed version commit on main
@@ -45,6 +56,12 @@ Feature PRs SHALL express contract changes in their OpenSpec change folder along
 ### Requirement: Tested release channels
 A release SHALL publish only bytes that pass fresh installer starts on Linux/macOS x64/arm64, npm, Homebrew and native Windows archive starts; running-service upgrades from the previous published release through installer and Homebrew on Linux/macOS preserving data and service health; real Claude/Codex starts and World listings on TUI/core; and the shipped-dependency audit. Only the tag run and advisory nightly SHALL build native candidates. The standard immutable Actions artifact SHALL seal every tested publication file within that source run, and only after every contract job (packages, walks, fresh installs, npm and Homebrew checks, audit) succeeded; a cancelled or skipped contract job is not success. The seal SHALL record each contract job's result, and publication from retained bytes SHALL accept only a seal from the same run that records every contract job as succeeded. Required PR checks SHALL run on Linux only and retry a failed test step once inside its job.
 
+#### Scenario: Queued PR validates its combined commit
+- **WHEN** an owner-approved PR joins main's merge queue and GitHub requests merge-group checks
+- **THEN** CI runs fresh Linux static, dependency, unit, browser and behavioral checks on the queue's combined commit with current main
+- **AND** the required aggregate reports exactly `Delivery checks` on that commit without reusing a passing PR result
+- **AND** GitHub merges only after the queue checks and review requirements pass; side workflows add no required queue report
+
 #### Scenario: A channel or agent fails
 - **WHEN** a Windows archive cannot launch, a running service upgrade loses health or data, an agent fails to start or list, or the shipped security audit fails
 - **THEN** no verified seal is produced and no release channel is published
@@ -61,6 +78,11 @@ Publication SHALL use standard GitHub Release actions, npm publish with provenan
 - **WHEN** a tag run stops after GitHub publication
 - **THEN** rerunning failed jobs or all jobs consumes its retained tested artifact, retains matching existing publications and completes npm, the same tap PR and the exact merged release PR's tagged label without duplication
 - **AND** skipping a publisher or label completion is reported as incomplete rather than successful
+
+#### Scenario: Tap credentials are scoped to release tags
+- **WHEN** an owner-created release tag reaches Homebrew publication
+- **THEN** only the Homebrew PR job uses the tag-only `release` environment to access its tap token
+- **AND** npm retains OIDC trusted publishing without that environment
 
 #### Scenario: Seal expired
 - **WHEN** a full rerun cannot retrieve its tested artifact
