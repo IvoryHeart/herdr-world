@@ -14,9 +14,19 @@ organisation; this change builds direct downloads only.
 ## What Changes
 
 - Add **Herdr World apps**: one Tauri 2 codebase in `apps/native/` that builds an
-  Android APK and desktop installers (`.dmg` for macOS arm64 and x64, `.msi` and
-  `.exe` for Windows, `.AppImage` and `.deb` for Linux). iOS would be a later
+  Android APK and desktop installers (`.dmg` for macOS arm64 and x64, an `.exe`
+  installer for Windows, `.AppImage` and `.deb` for Linux). iOS would be a later
   platform integration in the same project.
+- **All-in-one desktop:** every direct-download desktop package also carries World's
+  service, the release's own tested `herdr-world` executable, unchanged. Download,
+  open, choose "Start World on this computer", and World runs as the user's
+  background service through World's existing `service install`, on loopback only
+  until the user lets other devices in. The app finds an existing World (installer,
+  Homebrew, npm or a running service) and connects to it instead of starting a
+  second one. Quitting the app never stops World or an agent. The app ships no Herdr
+  runtime; World's existing confirmed herdr-core installation covers a fresh
+  computer. App and World update together through Tauri's signed updater once the
+  owner's updater key exists. Android and future store builds stay client-only.
 - **Platform minimums:** Android with a current Android System WebView (per-World
   profiles that can be deleted), macOS 14, Windows 10 with WebView2, Linux with
   WebKitGTK 4.1.
@@ -25,7 +35,9 @@ organisation; this change builds direct downloads only.
   bridge, adds no script of its own and needs no Host, Origin or CSP
   configuration. Its only bundled page is its own small World list, which never
   talks to a World and is the only page with native commands. Other origins open
-  in the system browser; other schemes and page-opened windows are refused.
+  in the system browser; form posts to other origins, other schemes and page-opened
+  windows are refused, on Android through a request-level check because its
+  URL-loading hook does not see `POST`s.
 - **Pairing:** scan World's QR code (Android) or paste a login link from
   `herdr-world url` (every platform). The app keeps a list of Worlds by origin and
   name. It never stores the login token or a password: the session is World's
@@ -53,12 +65,16 @@ organisation; this change builds direct downloads only.
   Find or act box with that text. Files are not part of v1.
 - **Builds:** a `Native apps` workflow builds every package on GitHub runners and
   smoke-tests each shipped file on its OS against a synthetic test World: pairing,
-  Town visible, a notification and a hostile page. The release candidate contract
-  (#1374) makes it a sealed contract job and publishes only the sealed packages.
+  Town visible, a notification and a hostile page; each desktop package also starts
+  World on a clean account, passes the agent walk, and detects an existing World.
+  The release candidate contract (#1374) makes it a sealed contract job that takes
+  World's executable from the sealed archives and publishes only the sealed
+  packages and updater files.
 - **Signing:** test builds use throwaway keys made inside the run and discarded.
-  The owner's Android release key and later Apple and Windows certificates are
-  used only from repository secrets the owner adds; nothing creates, commits or
-  uploads a release key. Install docs say how to open unsigned builds.
+  The owner's Android release key, updater key and later Apple and Windows
+  certificates are used only from repository secrets the owner adds; nothing
+  creates, commits or uploads a release key. Install docs say how to open unsigned
+  builds.
 
 ## Capabilities
 
@@ -66,8 +82,9 @@ organisation; this change builds direct downloads only.
 
 - `native-apps`: installable World apps: one-origin wrapping, pairing and
   session storage, sign out and forget, native notifications, Android background
-  connection and share, desktop tray and launch at login, builds, smoke tests and
-  signing boundaries.
+  connection and share, desktop tray and launch at login, World on this computer
+  (all-in-one desktop: carrying, detecting, starting and updating World), builds,
+  smoke tests and signing boundaries.
 
 ### Modified Capabilities
 
@@ -83,16 +100,21 @@ organisation; this change builds direct downloads only.
 - Server: one new GET route beside `/api/notifications/push` and a notification
   fan-out in front of Web Push, using the same login cookie and admission. No
   change to World's login, origin, cookie or CSP model.
-- Storage catalog: the app's own stores (World list, per-World web view stores,
-  Android notification channels, launch-at-login entry) and the stream's
-  in-memory replay ring.
+- CLI: `herdr-world service install --host <address>`, `service start` and
+  `service stop`; `herdr-world update` names the app for an app-managed
+  executable.
+- Storage catalog: the app's own stores (World list with last event IDs and the
+  local installation, per-World web view stores, Android notification channels,
+  launch-at-login entry, AppImage's extracted World executable, the `herdr-world`
+  command link) and the stream's in-memory replay ring. World's own data folder and
+  service files are unchanged and shared with any other installation.
 - Web: `taskNotifications.ts` also reacts to a `#herdr-world-task=` hash set after
   load; a `#herdr-world-find=` hash opens Find or act with shared text; Settings
   explains that the app delivers notifications when the page is inside it
   (detected from the app's user agent suffix).
 - CI: `.github/workflows/native-apps.yml`, path-filtered to the app, plus a
-  `workflow_call` entry for the release candidate, which also forwards the
-  signing secrets by name.
+  `workflow_call` entry for the release candidate, which needs `archives`, joins
+  the seal's contract jobs and forwards the signing secrets by name.
 - Docs: an install guide for the apps (unsigned-build warnings, pairing, sign out,
   forget) and `native-apps` notes.
 - Out of scope: store accounts, listings, privacy labels and upload; iOS builds;

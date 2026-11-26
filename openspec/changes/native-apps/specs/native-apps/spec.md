@@ -10,9 +10,12 @@ allow-lists or cross-origin CSP entries. The app's only bundled page SHALL be it
 World list, which SHALL NOT request any World origin and is the only page granted
 native commands; every custom command SHALL be covered by the permission model.
 Top-level navigation, redirects and new windows from a World page SHALL stay in the
-app only for that World's exact origin; another `http` or `https` origin, including
-another paired World's, SHALL open in the system browser without changing the
-selected World, and every other scheme SHALL be refused. The app SHALL NOT create a
+app only for that World's exact origin; a `GET` to another `http` or `https` origin,
+including another paired World's, SHALL open in the system browser without changing
+the selected World, a navigation with another method (such as a form `POST`) to
+another origin SHALL be refused without sending it, and every other scheme SHALL be
+refused. Enforcement SHALL cover navigations the platform's URL-loading hook does not
+report, and SHALL fail closed. The app SHALL NOT create a
 web view for a page-opened window. Native requests to a World SHALL carry only that
 origin's cookie and SHALL NOT follow redirects.
 
@@ -33,6 +36,13 @@ origin's cookie and SHALL NOT follow redirects.
   `file:`, `intent:` or custom-scheme URL, or redirects a native request elsewhere
 - **THEN** the command is refused, the URL is not opened, the request fails and no
   cookie leaves the World's origin
+
+#### Scenario: A form posts to another origin
+
+- **WHEN** a World page submits a form with method `POST` to another origin, on any
+  platform including Android
+- **THEN** the request is not sent, nothing from that origin loads in the World view,
+  and the app keeps showing the same World
 
 ### Requirement: Pairing keeps no credential
 
@@ -136,7 +146,8 @@ own which agent states notify. When the stream is refused for lack of a session,
 app SHALL stop retrying that World and show one notification asking the user to sign
 in again; when World ends the stream for a logout, it SHALL stop without that
 notification. A lost connection SHALL be retried with bounded backoff, resuming from
-the last event it received.
+the last event it received, also after the app's process restarts; the app SHALL keep
+only that event's identifier, never its content.
 
 #### Scenario: An agent asks the user
 
@@ -180,7 +191,8 @@ baseline and published in the install guide.
 
 The desktop app SHALL show a tray or menu-bar item listing paired Worlds with Open,
 Sign out and Quit. Closing the window SHALL hide it to the tray while notifications
-continue; Quit SHALL end the app and its connections. Launch at login SHALL be off
+continue; Quit SHALL end the app and its connections and SHALL NOT stop a World
+service or any agent. Launch at login SHALL be off
 until the user turns it on, and SHALL start the app hidden in the tray. A second
 launch SHALL focus the running app.
 
@@ -204,13 +216,19 @@ Find or act box with that text. It SHALL NOT accept shared files in this version
 A workflow SHALL build the Android APK and the desktop packages on GitHub-hosted
 runners, and SHALL install every shipped package file fresh and check, on those exact
 bytes, that it pairs with a synthetic test World, shows Town, shows a World
-notification and refuses a hostile page. The release candidate SHALL make that
+notification and refuses a hostile page. For every package that carries World, the
+fresh install SHALL also start World on a clean account, pass the agent walk (or, where
+the release walk does not run, an agent's question notifying and opening that agent)
+and connect to an existing World instead of starting a second one. Desktop packages
+SHALL carry World's executable taken unchanged from the release's own tested
+archives. The release candidate SHALL make that
 workflow a contract job recorded in its seal, SHALL publish only the packages it
 sealed, and SHALL reuse them unchanged on a rerun. Test builds SHALL use keys made in
 the run and discarded. Release signing SHALL use only owner-provided repository
 secrets passed by name to each workflow that needs them; nothing SHALL create, commit
-or upload a release key. When the Android release key is absent, the release SHALL
-attach no APK rather than a test-signed one.
+or upload a release key, including the app updater's key. When the Android release
+key is absent, the release SHALL attach no APK rather than a test-signed one; when
+the updater key is absent, release builds SHALL have no updater.
 
 #### Scenario: A smoke test fails
 
@@ -222,3 +240,75 @@ attach no APK rather than a test-signed one.
 - **WHEN** the release candidate runs without the owner's Android key secret
 - **THEN** it attaches the desktop packages and no APK, and says so in the release
   notes
+
+### Requirement: Desktop packages carry World
+
+Every direct-download desktop package (macOS `.dmg`, Windows installer, Linux `.deb`
+and `.AppImage`) SHALL carry World's service as the release's own `herdr-world`
+executable for that platform, byte for byte, and SHALL be able to start World on that
+computer through World's existing `service install`, so World runs as the user's
+background service. Android and store builds SHALL NOT carry or start World. The app
+SHALL start, stop and remove World only through World's own `service` commands, and
+quitting, updating or stopping World from the app SHALL NOT stop Herdr, herdr-core or
+any agent; stopping World SHALL ask first. The app SHALL NOT ship, install over or
+update a Herdr runtime; a computer without one SHALL be offered World's existing
+confirmed herdr-core installation.
+
+#### Scenario: Download, open, World runs
+
+- **WHEN** the user installs the desktop app on a computer with no World and chooses
+  "Start World on this computer"
+- **THEN** World starts as the user's background service, the app shows Town signed
+  in, and World keeps running after the app quits and after the user signs in again
+
+#### Scenario: Quit while agents run
+
+- **WHEN** agents are running and the user quits the app
+- **THEN** the app closes without asking, and World and every agent keep running
+
+### Requirement: One World per computer
+
+At every start, the desktop app SHALL detect a World already on the computer (a
+listening World for the default data folder, a World service definition, or another
+installation from the installer, Homebrew or npm) and SHALL connect to it as a client
+instead of starting its own. The app SHALL NOT run a second World service, SHALL NOT
+run World over a data folder another World holds, and SHALL NOT edit or remove another
+installation. Switching which installation runs World SHALL be an explicit choice
+that keeps the one data folder, and the app SHALL refuse to run its World over data
+from a newer World version.
+
+#### Scenario: Homebrew World already running
+
+- **WHEN** the user installs the desktop app on a computer where a Homebrew World
+  service runs
+- **THEN** the app opens that World signed in, starts no service and leaves the
+  Homebrew installation and its data folder unchanged
+
+### Requirement: World on this computer starts loopback-only
+
+When the app starts World on its computer for the first time, World SHALL listen on
+loopback only, and the app SHALL sign in with World's own login link read from World's
+CLI without showing, storing or logging the token. Letting other devices reach that
+World SHALL be an explicit choice in the app that says what it allows, and SHALL be
+reversible. World's login, origin and listener policy SHALL be unchanged.
+
+#### Scenario: First run is not on the network
+
+- **WHEN** World was started by the app's first run
+- **THEN** a connection to the computer's network address is refused until the user
+  chooses to let other devices reach World
+
+### Requirement: App and World update together
+
+A desktop app that runs World SHALL update the app and its World as one package, and
+SHALL install an update only after verifying its signature against a public key built
+into the app; the update SHALL be one the release sealed. After the update, World's
+service SHALL run the new executable, and the update SHALL NOT change a Herdr runtime.
+`herdr-world update` and World's web update SHALL refuse to replace an app-managed
+executable and point to the app. Packages whose format the updater cannot install
+SHALL say a new version exists and link the release.
+
+#### Scenario: Update with agents running
+
+- **WHEN** the user installs an app update while an agent runs
+- **THEN** World restarts on the new version and the agent's terminal is still there

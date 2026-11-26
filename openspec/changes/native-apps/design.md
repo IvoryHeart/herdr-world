@@ -41,12 +41,28 @@ model breaks World's one-origin rule; only its icons and manifest settings
 Goals: an Android APK and desktop installers that open the user's own World, pair by
 QR code or login link, notify when an agent needs the user and open at that agent,
 sit in the tray and launch at login, accept shared text on Android, and build and
-smoke-test the shipped bytes on GitHub runners.
+smoke-test the shipped bytes on GitHub runners. The direct-download desktop packages
+are also **all-in-one**: they carry the World service, so download, open, and World
+runs on that computer (section 12). The client parts (shell, pairing, notifications,
+World list) are shared; the all-in-one adds the local service.
 
 Non-goals: store accounts, listings and upload; iOS builds; a push relay (Firebase,
 APNs, UnifiedPush distributors); analytics or diagnostics; any change to World's
-login, cookie, origin, CSP or listener policy; an app updater (v1 users download a
-new version; the release page lists it).
+login, cookie, origin, CSP or listener policy; bundling or updating a Herdr runtime.
+Store builds, when they come, are client-only: the Mac App Store sandbox forbids
+starting shells, Herdr and agents. The build keeps a `client-only` switch that leaves
+out the bundled service and section 12 so a store build is a configuration, not a
+second app.
+
+**Which package is which:**
+
+| Package | Carries World | Client |
+|---|---|---|
+| `.dmg` macOS arm64 and x64 | yes | yes |
+| Windows `-setup.exe` (NSIS) | yes | yes |
+| Linux `.deb` and `.AppImage` | yes | yes |
+| Android `.apk` | no | yes |
+| Future store builds | no (`client-only`) | yes |
 
 ## Platform minimums
 
@@ -80,19 +96,22 @@ and `.localhost` handling that let remote sites pass as local on Windows and And
 | | Tauri 2 | Electron (desktop) + Capacitor (Android) |
 |---|---|---|
 | Codebases | One project: Rust core, one bundled list page, a Kotlin Android plugin that owns the World web view and background service. iOS would need its own Swift equivalent of that plugin | Two stacks: Electron (Node) and Capacitor/Android, iOS a third shell |
-| Size | Published desktop figures about 3–15 MB (`.deb`, `.dmg`, `.msi`); AppImage 70+ MB because it bundles WebKitGTK; this app's sizes are measured in spikes 1.1–1.2 | Electron installers about 85–270 MB; Capacitor APK a few MB |
+| Size | Published desktop figures about 3–15 MB (`.deb`, `.dmg`, `.msi`); AppImage 70+ MB because it bundles WebKitGTK; the all-in-one adds World's own executable (a compiled Bun binary of tens of MB, the same for any framework); this app's sizes are measured in spikes 1.1–1.3 | Electron installers about 85–270 MB; Capacitor APK a few MB |
 | Engine updates | System web view, patched by the OS (WebView2 evergreen, WKWebView with macOS, WebKitGTK with the distro for `.deb`, Android WebView through the store). AppImage is the exception: its bundled WebKitGTK updates only when we ship a new AppImage | Electron ships its own Chromium; only the latest three majors (8-week cadence) are supported, so without an updater a v1 build is unsupported within about six months |
 | Remote page access to native code | IPC is refused for a remote URL unless a capability names it (2.11.1+); we name none. Tauri still installs its framework IPC scripts in every web view it creates | Electron: none with `contextIsolation`, sandbox and no preload. Capacitor injects its bridge into the `server.url` origin, giving the World page every plugin, and documents `server.url` as live reload, "not intended for production" |
 | Notifications | `tauri-plugin-notification` ≥ 2.6 reports desktop clicks to Rust (`on_action`); Android through the Kotlin plugin | Electron `Notification` click; Capacitor local-notifications |
 | Tray, autostart | Built-in tray; official autostart plugin (Windows, macOS, Linux) | Tray built in; `setLoginItemSettings` lacks Linux |
 | QR scan | Official barcode-scanner plugin (Android, iOS) | Capacitor community plugins |
-| CI | `tauri-action` builds `.dmg`, `.msi`/`.exe`, `.AppImage`/`.deb`; `tauri android build --apk` on Ubuntu | electron-builder for desktop; Gradle for Android |
+| CI | `tauri-action` builds `.dmg`, `.exe`, `.AppImage`/`.deb`; `tauri android build --apk` on Ubuntu | electron-builder for desktop; Gradle for Android |
+| Carrying World (section 12) | Sidecar (`bundle.externalBin`) ships an existing executable unchanged inside each desktop package; the official updater verifies a signature before installing (`.app` archive, NSIS, AppImage) | Electron `extraResources` plus electron-updater; Capacitor not applicable |
 | Engine risk | WKWebView and WebKitGTK are WebKit: World already supports Safari for the PWA; WebKitGTK can fall back to slow canvas/WebGL and has NVIDIA DMABUF issues | Same Chromium World's browser tests use |
 
 **Choice: Tauri 2, provisionally, as the better fit of the two compared.** It keeps
 desktop and Android in one project and toolchain, its desktop packages are small,
-most of its engines are patched by the OS (which matters because v1 has no updater
-and the page it wraps can run shells), and remote pages get no native access by
+most of its engines are patched by the OS (which matters because the page it wraps
+can run shells, and Android and `.deb` builds have no in-app updater), its sidecar
+carries the release's own `herdr-world` executable unchanged, and remote pages get no
+native access by
 default. Capacitor's main value, a JS bridge into bundled web content, is what this
 design must not use. Other wrappers exist (for example a plain Kotlin app plus a
 separate desktop shell); nothing here shows they would make the session and
@@ -135,14 +154,37 @@ copy of World's web app, proxies nothing and needs no World setting.
   World list) and names its commands explicitly. Every custom command is declared in
   `build.rs` through `AppManifest`, so the ACL covers custom commands as well as plugin
   commands. A hostile-page test (section 9) proves World pages are refused.
-- **Navigation** (desktop `on_navigation`, Android `shouldOverrideUrlLoading`), for
-  top-level loads and redirects alike: allow only the exact paired origin (scheme,
-  host and port) over `http`/`https`, and `blob:` URLs whose origin is that origin.
-  Another `http`/`https` origin, including another paired World's, opens in the system
-  browser and the app keeps showing the selected World; the selection never changes
-  from inside a page. Everything else (`file:`, `data:`, `javascript:`, `intent:`,
-  `tauri:`, `ipc:`, `asset:`, any custom scheme) is cancelled and never handed to the
-  OS.
+- **Navigation**, for top-level loads and redirects alike: allow only the exact
+  paired origin (scheme, host and port) over `http`/`https`, and `blob:` URLs whose
+  origin is that origin. Another `http`/`https` origin, including another paired
+  World's, opens in the system browser when the navigation is a `GET`, and the app
+  keeps showing the selected World; the selection never changes from inside a page.
+  A navigation with another method (a form `POST`) to another origin is refused, not
+  handed to the browser, because its body cannot be passed on safely. Everything
+  else (`file:`, `data:`, `javascript:`, `intent:`, `tauri:`, `ipc:`, `asset:`, any
+  custom scheme) is cancelled and never handed to the OS.
+  - Desktop: `on_navigation` sees every top-level navigation the engine starts,
+    including form `POST`s and server redirects (WebView2 `NavigationStarting`,
+    WKWebView `decidePolicyFor navigationAction`, WebKitGTK `decide-policy`); spike
+    1.2 proves each engine calls it for a cross-origin `POST` and for a `307`.
+  - Android is enforced in three layers, because `shouldOverrideUrlLoading` is not
+    called for `POST` requests:
+    1. `shouldOverrideUrlLoading` applies the policy to the navigations it sees
+       (links, script navigation, `GET` redirects).
+    2. `shouldInterceptRequest` sees every request, `POST` included. For a request
+       with `isForMainFrame()` whose origin is not the World's exact origin it
+       returns a local empty `403` response with `Content-Security-Policy: sandbox`,
+       so no request leaves the device and nothing from that origin loads. It makes
+       no network request of its own and never touches World-origin requests, so
+       World's responses are not proxied. This layer fails closed: any main-frame
+       request it cannot classify is refused.
+    3. `onPageStarted` and `doUpdateVisitedHistory` check the main frame's URL; if it
+       is not the World's origin (the case of a World-origin response redirecting a
+       `POST` with `307`/`308` elsewhere, a hop layer 2 is not told about), the view
+       stops loading, loads the World's origin and clears its history. World itself
+       sends no cross-origin redirect, so this needs a server flaw; spike 1.1 checks
+       whether any script of the redirected page runs first (a beacon in the fixture)
+       and, if it does, the design returns for review.
 - **New windows** (desktop `on_new_window`, Android `setSupportMultipleWindows(false)`
   plus the same check): the app never creates a web view for a page. A same-origin
   `window.open` or `target=_blank` loads in the current World view; another
@@ -172,7 +214,9 @@ scheme for pairing, so a website cannot pair the app with a hostile World.
 
 **The list.** `worlds.json` in the app's data folder holds, per World: a random app
 ID (it names the World's store), origin, display name (the host, editable),
-notification switch, added time and state (`signed-in`, `signed-out`, `forgetting`).
+notification switch, added time, state (`signed-in`, `signed-out`, `forgetting`), the
+last stream event ID (section 4) and, for the World on this computer, which
+installation runs it (section 12).
 A separate `pendingStoreDeletes` list holds only random store IDs awaiting removal
 (below). Never a token, password, PIN or cookie value.
 
@@ -298,7 +342,10 @@ the World ID and target. Notification IDs join the World ID and payload tag, bec
 tags hold World-local runtime identities. Backoff: 2 s doubling to 5 min, reset on a
 network change. A 401 marks the World `signed-out`, stops retries and posts one "Sign
 in again" notification; a `logout` frame does the same without the notification.
-Both parsers run one shared fixture of stream frames.
+Both clients save each World's last event ID (`<boot id>:<sequence>`, never the event)
+in `worlds.json` at most once a minute and on shutdown, so a restart after process
+death or a reboot resumes from it; a different boot ID means World restarted and the
+replay has nothing for it. Both parsers run one shared fixture of stream frames.
 
 **Web.** `taskNotifications.ts` also handles a `hashchange` to
 `#herdr-world-task=`, so a tap reaches an already-open page; stale targets keep
@@ -321,7 +368,7 @@ state ("Connected", "Waiting for network", "Signed out") and offers "Turn off".
 | Screen off, not yet in Doze | Streams stay open; heartbeats keep NAT and VPN paths alive |
 | Doze, no battery exemption | Android suspends the app's network; the stream drops and reconnects in maintenance windows with `Last-Event-ID`, so events inside the replay window arrive late and older ones are lost |
 | Battery exemption granted | The per-World background switch offers it with an explanation and opens `ACTION_IGNORE_BATTERY_OPTIMIZATION_SETTINGS`; with it, network stays available in Doze and delivery is near real time. Never required |
-| Process killed by the system | `START_STICKY`; the service restarts, reads `worlds.json` and reconnects with `Last-Event-ID` |
+| Process killed by the system | `START_STICKY`; the service restarts, reads `worlds.json` and reconnects with the saved `Last-Event-ID` (events since the last save that are still in the ring arrive; spike 1.1 kills the process to prove it) |
 | Reboot | A `BOOT_COMPLETED` receiver starts the service when any World has background notifications on and the notification permission is granted |
 | Force stop | Android allows nothing to run until the user opens the app; the guide says so; opening the app resumes |
 | VPN or Wi-Fi lost | A `NetworkCallback` pauses attempts while no network can reach the World and resumes on `onAvailable` or a link change; the ongoing notification says "Waiting for network" |
@@ -343,7 +390,12 @@ heartbeat interval is the first thing to tune.
 ### 6. Desktop tray and launch at login
 
 The tray (menu bar on macOS) lists paired Worlds with Open and Sign out, plus Launch
-at login and Quit. Closing the window hides it; Quit ends connections. Launch at login
+at login and Quit. Closing the window hides it; Quit ends the app's connections and
+never stops World or an agent: a World on this computer is the user's background
+service (section 12) and keeps running, and agents run inside Herdr or herdr-core,
+which are not children of World or the app. Stopping World is a separate tray item
+for the World on this computer, with a confirmation that says agents keep running in
+their runtime and notifications stop until World starts again. Launch at login
 uses the official autostart plugin (Launch Agent on macOS, registry on Windows,
 `~/.config/autostart` on Linux), off by default, starting with `--hidden`. The
 single-instance plugin focuses the running app. On Linux the tray needs
@@ -375,16 +427,20 @@ device reaching a World by LAN address and over a VPN (task 4.4 and Try it).
 ### 9. Builds and smoke tests
 
 `.github/workflows/native-apps.yml`, path-filtered to `apps/native/**`, the stream
-route and the fan-out, plus `workflow_dispatch` and `workflow_call(version)`. Each job
-builds, signs (section 10), records the SHA-256 of each package, smoke-tests those
-exact files and uploads them unchanged as the `native-packages` artifact.
+route and the fan-out, plus `workflow_dispatch` and `workflow_call(version)`. Each
+desktop job first takes World's executable for its platform from the release
+archive (section 12: `verified-archives` in a release, the same `package-release.sh`
+archive built once per platform on PRs), checks it against the archive's checksum
+list, and places it as the sidecar. Each job then builds, signs (section 10), records
+the SHA-256 of each package, smoke-tests those exact files and uploads them unchanged
+as the `native-packages` artifact.
 
 | Job | Runner | Shipped package | Smoke |
 |---|---|---|---|
 | android | ubuntu-latest (KVM) | `herdr-world-app-<v>-android-arm64.apk` | install that APK on an x86_64 API 35 emulator image with ARM translation; if spike 1.1 finds translation unusable, the shipped APK becomes one universal APK (arm64 and x86_64) so the tested file is still the shipped file |
 | macos-arm64 | macos-latest | `…-macos-arm64.dmg` | mount, copy to /Applications, launch |
 | macos-x64 | macos-15-intel (until its 2027 retirement) | `…-macos-x64.dmg` | same |
-| windows | windows-latest | `…-windows-x64.msi`, `…-windows-x64-setup.exe` | each in turn: silent install, smoke, uninstall |
+| windows | windows-latest | `…-windows-x64-setup.exe` (NSIS; the format whose install hooks can stop and start World's task, section 12) | silent install, smoke, uninstall |
 | linux | ubuntu-22.04 | `…-linux-x86_64.AppImage`, `…-linux-amd64.deb` | each in turn under Xvfb with a session bus |
 
 **Smoke World.** A real World from the same commit on loopback, with a temporary data
@@ -417,15 +473,46 @@ through the emulator's alias for the host machine.
    stayed on its origin, only `http`/`https` reached the system-browser opener (an
    OS-level stub: `BROWSER` on Linux, a registered handler on Windows and macOS), and
    no cookie left its origin.
+   The fixture page also auto-submits a `<form method="post">` to another origin and
+   posts to its own origin, which answers `307` to another origin. Pass: the
+   cross-origin `POST` never reaches the other origin's recorder and the view stays
+   on its World; after the `307` the view is back on its World with no history entry
+   for the other origin, and the fixture's beacon shows whether that page's script
+   ran (it must not, or the design returns for review).
 5. Forget: forgetting the World leaves no file naming its origin or holding its cookie
    once clean-up completes (after a restart where the platform needs one).
 
-**Release (#1374).** Mapped onto the release candidate contract in #1374:
+**All-in-one, per desktop package**, on a fresh runner account with no World, no
+Herdr and every `HERDR_*` variable cleared (desktop runners are disposable):
+6. The app is started with `--start-local-world` (the same action as the first-run
+   button): it installs World's service from the bundled executable through
+   `service install --host 127.0.0.1`, World listens on loopback only (a connection
+   to the runner's LAN address is refused), the app pairs through `url --json`, and
+   Town is visible. No token is left on disk, as in step 1.
+7. Agent walk: on Linux and macOS, `scripts/release-walk.ts` runs its journeys
+   against that installed service (a new `--service-installed-by-app` mode that skips
+   its own archive install), with herdr-core installed the way World's UI does it;
+   on Windows, where the release walk does not run today, an isolated herdr-core
+   runtime, a scratch agent and `herdr-world ask` must notify and open that agent.
+8. One World per machine: a second app start finds the running World and starts
+   nothing; with a standalone World installed first from the same archive, the app
+   connects to it and leaves its service definition and data folder untouched.
+9. Update: where an updater key exists (section 10), the previous release's app is
+   installed first and updated to this one through the updater; World's service
+   restarts on the new executable and the scratch agent's terminal is still there.
+10. Quit leaves the service running; `herdr-world service uninstall` through the
+    tray removes it; the uninstaller removes the app and keeps World's data folder.
+
+**Release (#1374).** Mapped onto the release candidate contract #1374 merged:
 - `release-candidate.yml` gains a job `native-apps` that calls `native-apps.yml` with
   the version, and `verify` lists it in `needs` and in its `if` like every other
   contract job. `scripts/release-seal.ts` adds `native-apps` to `CONTRACT_JOBS`, so
   the seal records its result and refuses anything but success (cancelled or skipped
   is not success).
+- `native-apps` needs `archives` too: its desktop jobs take World's executable from
+  the `verified-archives` artifact, so the app carries the exact bytes the `package`
+  job built and tested and the release walk walked. World is never built a second
+  time for the app.
 - `verify` downloads `native-packages` into `candidate/github/`, so the app packages
   are inside the sealed `verified-release` artifact, are what `publish` uploads from
   `candidate/github/*`, and are compared byte for byte against an existing release
@@ -438,19 +525,35 @@ through the emulator's alias for the host machine.
   `release-candidate.yml` declares them under `workflow_call.secrets` (optional) and
   passes them to `native-apps.yml`, which declares them too and exposes them only to
   the Android signing step. No `secrets: inherit`.
-- Package set without the Android key: the two `.dmg`, the `.msi`, the `-setup.exe`,
-  the `.AppImage` and the `.deb`; the release notes say "No Android APK in this
+- Package set without the Android key: the two `.dmg`, the `-setup.exe`, the
+  `.AppImage` and the `.deb`; the release notes say "No Android APK in this
   release: the release signing key is not set up yet". With the key, the `.apk` is
-  added. `verify` adds each package's SHA-256 to the release checksum list before it
-  seals.
-- The app version is the World version, so channels never disagree. Until #1374
-  merges, `native-apps.yml` runs on PRs and by hand only.
+  added. With the owner's updater key (section 10) the updater files are added: the
+  signed `.app.tar.gz` per macOS architecture, the `.sig` beside the `-setup.exe` and
+  the `.AppImage`, and `app-update.json` naming them. `verify` adds each package's
+  SHA-256 to the release checksum list before it seals, so updater files are sealed
+  and published like every other asset and a rerun reuses them.
+- Release secrets forwarded the same way: `TAURI_SIGNING_PRIVATE_KEY` and
+  `TAURI_SIGNING_PRIVATE_KEY_PASSWORD`, exposed only to the step that signs updater
+  files.
+- The app version is the World version, so channels never disagree. #1374 is merged
+  (`release-candidate.yml`, `scripts/release-seal.ts`); the hook lands with task 4.3,
+  and until then `native-apps.yml` runs on PRs and by hand only.
 
 ### 10. Signing
 
 - Test builds: the Android job makes a throwaway keystore in the runner's temp folder
   and deletes it in an `always()` step; the APK is named `-test`. macOS builds are
-  ad-hoc signed (`-`), Windows builds unsigned.
+  ad-hoc signed (`-`), Windows builds unsigned. An update smoke on a PR uses a
+  throwaway updater key pair made in the run (its public key built into that run's
+  test app only) and deleted in an `always()` step.
+- Updater key: Tauri's updater checks a signature made with a key pair whose public
+  half is built into the app. That key is a release key and belongs to the owner, like
+  the Android key: the crew never creates, commits or uploads it. Until its secret
+  exists, release builds are made without the updater, the app's "Check for updates"
+  opens the release page, and the build asks in Needs you when the first updatable
+  release is due. A key made later cannot update apps built before it existed, so
+  those users download one new version by hand; the install guide says so.
 - Release: the Android job signs only when the owner's key secrets exist (section 9);
   otherwise the release attaches no APK, because a test-signed APK cannot later be
   updated by a release-signed one. The keystore is written to the runner's temp folder
@@ -461,6 +564,11 @@ through the emulator's alias for the host machine.
 - Install guide (`docs/native-apps.md`): macOS needs System Settings → Privacy &
   Security → Open Anyway for an unsigned app; Windows SmartScreen needs More info →
   Run anyway; Android needs "Install unknown apps" for the browser or file manager.
+  The all-in-one `.dmg` is meant to be notarized; until the owner's Developer ID
+  exists it ships ad-hoc signed, and spike 1.3 checks whether launchd may run the
+  bundled World from a quarantined, unnotarized app after Open Anyway. If it may not,
+  the guide gives the one `xattr` step, or the `.dmg` waits for notarization and the
+  release notes say so.
 
 ### 11. Storage owned by the app
 
@@ -474,10 +582,146 @@ lists, with owner `native-apps`:
 | World store: desktop `data_directory`, macOS data store identifier, Android profile `world-<id>` | World's session cookie, web storage and cache, written by World's page | app ID | cache | engine quota; deleted by Forget |
 | Android notification channel `world-<id>` | Per-World notification settings | app ID | source | deleted by Forget |
 | Launch at login entry (Launch Agent, registry value, autostart file) | Start hidden at login | one per install | source | removed when turned off |
+| `worlds.json#lastEventId` per World | Where the stream resumes (boot ID and sequence, no content) | app ID | derived | overwritten; removed with the World |
+| `worlds.json#local` | Which installation runs the World on this computer (`app`, or the path and kind of another installation) | one per install | derived | rewritten at each start by detection (section 12) |
+| AppImage only: extracted World executable `world/<version>/herdr-world` in the app data folder | The executable World's service runs, at a stable path | version | cache | the previous version is deleted after an update succeeds |
+| `herdr-world` command link (`~/.local/bin` on macOS and Linux, user `PATH` entry on Windows) | Lets agents and the user run `herdr-world ask` | one per install | source | created only when no `herdr-world` exists; removed when the app's World is removed |
+
+World's own data folder, service definition and service environment file are not new:
+they are World's existing stores, written only by World's own `service install`, and
+the app never writes them directly.
 
 and one `memory` row for the stream replay ring (`notifications`, boot ID and
 sequence, 32 events / 10 minutes). The install guide describes the same stores for
 users.
+
+### 12. All-in-one desktop: World on this computer
+
+Every direct-download desktop package carries World's service. The client parts above
+are unchanged; this section adds how the app finds, starts, keeps and updates a World
+on the same computer. Android and future store builds leave it out.
+
+**12.1 What ships, per platform.** The release already builds and tests one
+`herdr-world` executable per platform (`package` job, `herdr-world-v<v>-<platform>.tar.xz`)
+and walks it (`release-walk`). The app ships that file unchanged as a Tauri sidecar
+(`bundle.externalBin`), beside the archive's `VERSION` file:
+
+| Package | Where World's executable lives | Service definition points at |
+|---|---|---|
+| `.dmg` (arm64 from `darwin-arm64`, x64 from `darwin-x64`) | `Herdr World.app/Contents/MacOS/herdr-world`, covered by the app's signature | that path; the app re-runs `service install` at start if the app was moved |
+| Windows `-setup.exe` (from `windows-x64`) | the per-user install folder `…\Programs\Herdr World\herdr-world.exe` | that path |
+| `.deb` (from `linux-x64`) | `/usr/lib/herdr-world-app/herdr-world`, not on `PATH` (spike 1.3 checks Tauri's default sidecar placement and moves it if it lands in `/usr/bin`) | that path |
+| `.AppImage` (from `linux-x64`) | inside the image, whose mount path changes at every start | a copy the app extracts to `world/<version>/herdr-world` in its data folder after checking its SHA-256 against the one built into the app |
+
+No package builds World from source; the sidecar's SHA-256 must equal the archive's
+checksum entry or the build fails. Linux and Windows arm64 apps are not in this
+version (the archives exist; the app runners and smoke tests come later).
+
+The app does not supervise World itself: it starts and stops World only through World's
+existing service commands (12.3).
+
+**12.2 One World per machine.** At every start, before offering anything, the app
+detects, in this order, using only read-only checks:
+1. A World listening for the default data folder: `instance.lock` in World's data folder
+   names a live process and its loopback address.
+2. A World service definition for this user (systemd user unit, launchd LaunchAgent or
+   Windows task carrying World's generated marker, as `service status` finds it) and the
+   executable it runs.
+3. Another `herdr-world` installation without a service: on `PATH`, in the standalone
+   installer's folder, Homebrew's prefix or npm's global folder. A `herdr-world`
+   link the app made to its own executable (12.7) counts as the app's.
+
+| Found | What the app does |
+|---|---|
+| 1 or 2, run by another installation (installer, Homebrew, npm) | Connects to it as a client: gets the login link with that installation's `herdr-world url --json`, pairs it (section 3; when World gives no token link, for example with a fixed password, the app opens World's login page) and lists it as "This computer (Homebrew)" and so on. Its bundled World stays unused. Updates stay with that installation's channel |
+| 1 or 2, run by this app's executable | Connects to it |
+| 2 stopped | Offers "Start World", which runs that executable's `service restart` (an older installation may lack `service start`) |
+| 3 only | Offers "Start the installed World" (that executable's `service install --host 127.0.0.1`) or "Use this app's World" |
+| nothing | First run screen: "Start World on this computer" (12.3) or "Connect to another World" (section 3) |
+
+Two services never share a data folder: every installation uses the same service label
+(`dev.herdr-world`), so installing one service replaces the other's definition, and
+World's instance lock already refuses a second listener on a folder. Both installed:
+whichever installation last ran `service install` runs World; the data folder is the
+same, so Town, boards and settings carry over and nothing is copied. Moving from the
+app to Homebrew: `brew install` and `herdr-world service install`; the app notices at
+its next start and becomes a client. Moving back: the tray's "Run World from this app"
+asks, refuses when the other installation is a newer version than the app's World
+(an older World is not run over newer data; update the app first), and runs the
+bundled `service install`. Removing the app's World ("Remove World from this
+computer") runs `service uninstall`, which keeps the data folder. The app never
+uninstalls or edits another installation.
+
+**12.3 Service lifetime: World's existing service manager.** "Start World on this
+computer" runs the bundled executable's `service install --host 127.0.0.1` (12.6): a
+systemd user service, launchd LaunchAgent or Windows logon task, exactly what the
+standalone installer sets up. World therefore runs in the background from then on,
+starts at login whether or not the app does, and keeps running when the app quits.
+There is no "only while the app is open" mode: it would make the app a second
+supervisor, and quitting would stop World. The tray offers Stop World (asks first, as
+section 6 says), Start World and Remove World from this computer. World's `service`
+command gains `start` and `stop` (today it has install, status, restart, reload,
+uninstall, logs); they call the same systemd, launchd and Task Scheduler operations
+`restart` and `uninstall` already use. Quitting the app,
+updating it or stopping World never stops Herdr, herdr-core or an agent.
+Uninstalling: the Windows uninstaller and the `.deb`'s `prerm` run `service uninstall`
+for the current user when the service runs this app's executable; on macOS, dragging
+the app to the Bin leaves a LaunchAgent pointing at a missing file, so the guide says
+to choose Remove World from this computer first, and any later `service install` from
+another installation replaces the stale definition.
+
+**12.4 Runtimes.** The app does not ship or update herdr-core or Herdr. A fresh
+computer has neither; World's existing first-run flow covers that: World's UI probes
+the computer and, after the user confirms, installs herdr-core with World's reviewed
+copy of core's installer (`server/src/herdr-core/install.ts`,
+`scripts/herdr-core-install.sh` and `.ps1`), which verifies the release checksum, sets
+core to start at login, and never replaces, updates or removes an installed core or
+Herdr. Core updates itself through its own channel. The app's update path (12.5) skips
+`herdr upgrade`, so updating the app never touches a runtime; World's UI already says
+when a runtime is older than it supports, and the user upgrades it.
+
+**12.5 Updates.** App and World update together, as one signed package:
+- The app checks `app-update.json` on the release (at most daily and from the tray),
+  shows the version, and installs only after Tauri's updater verifies the signature
+  against the public key built into the app (`.dmg` builds: the `.app.tar.gz`;
+  Windows: the NSIS `-setup.exe`; AppImage: the image). Nothing downloaded is run
+  before that check.
+- Before installing, when this app's executable runs World, the app ends World's
+  service with `service stop` (12.3; on Windows the NSIS pre-install hook also ends
+  the task, because a running `.exe` cannot be replaced).
+  After the update it runs the new bundled executable's `update --finish-install`
+  with `HERDR_WORLD_SKIP_HERDR=1`, which restarts the service on the new executable
+  and leaves runtimes alone. The AppImage extracts the new version first, re-runs
+  `service install`, then deletes the old folder.
+- The `.deb` has no in-app updater (Tauri's updater does not install `.deb`): the app
+  says a new version exists and links the release page. An apt repository can come
+  with the store work.
+- `herdr-world update` and World's web update refuse an app-managed executable already:
+  the `VERSION` file beside it marks it as package-managed
+  (`updateInstallationBlockReason`). The build changes that message to "Update through
+  the Herdr World app" when an app marker file sits beside it. The retained seal and
+  rerun rules (section 9) cover the updater files, so an update installs only bytes
+  the release sealed. Without the owner's updater key there is no updater (section 10).
+
+**12.6 Security defaults.** First run listens on loopback only: the app passes
+`--host 127.0.0.1` to `service install`, a new flag that writes `HOST` into World's
+service environment file (today a new file gets `HOST=0.0.0.0`; an existing file is
+otherwise kept as today). World's login policy is unchanged: the app takes the login
+link from `herdr-world url --json` over a pipe, opens it only in the pairing view
+(section 3), and never shows, stores or logs it. Letting other devices reach World is
+an explicit choice in the World list ("Let my phone and other devices on this network
+reach World"): it says what that allows, then re-runs `service install --host
+0.0.0.0`, and shows World's QR code from `url --json` so the phone app can pair. The
+switch back runs `--host 127.0.0.1`. World stays on the home network or the user's VPN
+(section 8); nothing exposes it to the internet.
+
+**12.7 The `herdr-world` command.** Agents call `herdr-world ask`, so the command must
+exist. When no `herdr-world` is on `PATH`, starting the app's World links
+`~/.local/bin/herdr-world` to the bundled executable (macOS, Linux; on Linux the
+AppImage's extracted copy), or the NSIS installer adds the install folder to the
+user's `PATH` (Windows). When one exists, it is another installation (12.2) and the app
+does not start its own World. Removing the app's World removes only a link the app
+made.
 
 ## Names
 
@@ -497,15 +741,27 @@ later, under the organisation). The bundled list page reuses World's icons.
   than the replay window. Needs you keeps every ask.
 - Battery: a persistent connection costs some battery; it is visible, switchable per
   World and measured against a baseline.
-- Without an updater, users stay on old versions; the AppImage's engine ages with it.
-  Mitigation: OS-patched engines elsewhere, an AppImage per World release, and an
-  updater later with signing.
+- Until the owner's updater key exists, and always for Android and `.deb`, users
+  update by downloading; the AppImage's engine ages with it. Mitigation: OS-patched
+  engines elsewhere, an AppImage per World release, and the signed updater once the
+  key exists.
+- All-in-one: an unnotarized macOS app may not be allowed to run its bundled World
+  under launchd (spike 1.3); then the `.dmg` waits for notarization or the guide gives
+  the manual step. Windows locks a running executable, so updates end World's task
+  first; spike 1.3 proves the NSIS hooks. A user who deletes the macOS app without
+  removing its World leaves a stale LaunchAgent until another `service install`
+  replaces it.
+- Two installations on one computer share one data folder by design. The app refuses
+  to run its World over data from a newer World, but an older standalone installation
+  started by hand over newer data is outside the app's control, as it is today.
 - The stream is a new authenticated route. It is read-only, bounded, keeps only an
   in-memory replay ring and reuses the existing notification decision and session
   binding.
 
 ## Migration
 
-None: new packages, one new read-only route and a refactor that moves Focus and
-currency checks in front of Web Push without changing what Web Push sends. The PWA
-and Web Push keep working.
+None: new packages, one new read-only route, a refactor that moves Focus and
+currency checks in front of Web Push without changing what Web Push sends, and three
+additions to World's `service` command (`--host`, `start`, `stop`) that leave existing
+service definitions and environment files as they are. The PWA, Web Push and every
+existing installation keep working; an app installed beside them uses them (12.2).
