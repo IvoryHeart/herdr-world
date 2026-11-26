@@ -3,6 +3,7 @@ import { TEST_TIMINGS } from "./testing/timings";
 import {
   PRODUCTION_TIMINGS,
   setTimingsForTests,
+  TIMING_FLOORS,
   TIMING_ORDER,
   timing,
   type TimingName,
@@ -16,12 +17,14 @@ test("the test set names every product timer and nothing else", () => {
   expect(Object.keys(TEST_TIMINGS).sort()).toEqual([...names].sort());
 });
 
-test("every test timing is a single-digit millisecond count", () => {
+test("every test timing is a single-digit millisecond count or its library floor", () => {
   for (const name of names) {
     const value = TEST_TIMINGS[name];
     expect(Number.isInteger(value)).toBe(true);
     expect(value).toBeGreaterThan(0);
-    expect(value).toBeLessThan(10);
+    const floor = TIMING_FLOORS[name];
+    if (floor === undefined) expect(value).toBeLessThan(10);
+    else expect(value).toBe(floor);
   }
 });
 

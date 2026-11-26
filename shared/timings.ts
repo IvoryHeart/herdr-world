@@ -22,6 +22,14 @@ export const PRODUCTION_TIMINGS = {
    * another process's ownership before it reports busy.
    */
   registryBusyWaitMs: 5_000,
+  /** Ranger's durable storage retries a held lock this often... */
+  durableLockRetryMs: 100,
+  /** ...for this long, then reports that the storage already has an owner. */
+  durableLockWaitMs: 12_000,
+  /** A live owner renews its durable storage lock this often. */
+  durableLockRenewMs: 2_000,
+  /** A lock not renewed for this long belongs to a crashed owner. */
+  durableLockStaleMs: 10_000,
   /** Browser-local creation waits this long for its source terminal. */
   creationPreparationMs: 20_000,
 } as const;
@@ -33,7 +41,24 @@ export type Timings = { readonly [name in TimingName]: number };
 export const TIMING_ORDER: readonly (readonly [TimingName, TimingName])[] = [
   // A failed read keeps the last list for a few reads, so items do not flicker.
   ["askPeerPollMs", "askPeerGraceMs"],
+  // A live owner's lock never looks stale; a crashed one's is taken over
+  // before the wait gives up.
+  ["durableLockRenewMs", "durableLockStaleMs"],
+  ["durableLockStaleMs", "durableLockWaitMs"],
+  ["durableLockRetryMs", "durableLockWaitMs"],
 ];
+
+/**
+ * Test values that cannot be a few milliseconds: a library refuses less
+ * (proper-lockfile clamps `stale` to at least 2 s and `update` to at least
+ * 1 s), or an order above such a minimum needs more.
+ */
+export const TIMING_FLOORS: { readonly [name in TimingName]?: number } = {
+  durableLockRenewMs: 1_000,
+  durableLockStaleMs: 2_000,
+  // Outlasts the stale floor, so a crashed owner's lock is taken over.
+  durableLockWaitMs: 2_500,
+};
 
 let active: Timings = PRODUCTION_TIMINGS;
 

@@ -14,7 +14,7 @@ import { openStorage } from "../../service/storage";
 import { testServerConfig } from "../../service/testing/services";
 import { createWorldService } from "../../service/world-service";
 import { ConnectionProfileStore } from "../profiles";
-import { TEST_TIMINGS } from "../../../../shared/testing/timings";
+import { TEST_TIMINGS } from "../../../../shared/testing/test-timings";
 import { setTimingsForTests } from "../../../../shared/timings";
 
 const options = JSON.parse(process.argv[2]) as {

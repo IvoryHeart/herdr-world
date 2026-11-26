@@ -1,16 +1,8 @@
 import { afterAll, beforeAll } from "bun:test";
-import { setTimingsForTests, type Timings } from "../timings";
+import { setTimingsForTests } from "../timings";
+import { TEST_TIMINGS } from "./test-timings";
 
-/**
- * The test timing set (#1419): the real product timers, each a few
- * milliseconds, keeping every order in `TIMING_ORDER`.
- */
-export const TEST_TIMINGS: Timings = {
-  askPeerPollMs: 3,
-  askPeerGraceMs: 9,
-  registryBusyWaitMs: 5,
-  creationPreparationMs: 5,
-};
+export { TEST_TIMINGS };
 
 /** Runs this test file's product timers on the test set. */
 export function useTestTimings() {
