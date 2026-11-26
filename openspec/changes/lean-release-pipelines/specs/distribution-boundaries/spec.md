@@ -56,6 +56,12 @@ Feature PRs SHALL express contract changes in their OpenSpec change folder along
 ### Requirement: Tested release channels
 A release SHALL publish only bytes that pass fresh installer starts on Linux/macOS x64/arm64, npm, Homebrew and native Windows archive starts; running-service upgrades from the previous published release through installer and Homebrew on Linux/macOS preserving data and service health; real Claude/Codex starts and World listings on TUI/core; and the shipped-dependency audit. Only the tag run and advisory nightly SHALL build native candidates. The standard immutable Actions artifact SHALL seal every tested publication file within that source run, and only after every contract job (packages, walks, fresh installs, npm and Homebrew checks, audit) succeeded; a cancelled or skipped contract job is not success. The seal SHALL record each contract job's result, and publication from retained bytes SHALL accept only a seal from the same run that records every contract job as succeeded. Required PR checks SHALL run on Linux only and retry a failed test step once inside its job.
 
+#### Scenario: Queued PR validates its combined commit
+- **WHEN** an owner-approved PR joins main's merge queue and GitHub requests merge-group checks
+- **THEN** CI runs fresh Linux static, dependency, unit, browser and behavioral checks on the queue's combined commit with current main
+- **AND** the required aggregate reports exactly `Delivery checks` on that commit without reusing a passing PR result
+- **AND** GitHub merges only after the queue checks and review requirements pass; side workflows add no required queue report
+
 #### Scenario: A channel or agent fails
 - **WHEN** a Windows archive cannot launch, a running service upgrade loses health or data, an agent fails to start or list, or the shipped security audit fails
 - **THEN** no verified seal is produced and no release channel is published

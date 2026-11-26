@@ -45,6 +45,13 @@ succeed.
 
 Linux PR jobs retry failed test steps once within the job. Main reports immutable
 PR proof without running heavy jobs; absence stays visible in the main-red issue.
+Merge-group checks run the existing Linux graph with a full selection on the
+queue commit. The non-PR selector never queries PR reuse for a merge group;
+the required aggregate keeps the exact `Delivery checks` name. Checkout uses
+the event SHA and static ratchets use the queue base SHA. Only CI subscribes
+directly; reusable browser/behavioral workflows stay in its graph and side
+workflows retain their existing triggers. GitHub owns approval, queue ordering,
+rebuilding groups and merging; repository settings stay with the owner.
 Nightly provides native/storage/plugin and running upgrade signal without a gate.
 Keep stable Homebrew opt registration and owned-service migration before cleanup.
 

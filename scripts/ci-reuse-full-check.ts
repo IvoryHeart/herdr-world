@@ -608,7 +608,7 @@ if (import.meta.main) {
     const sha = process.env.GITHUB_SHA ?? "";
     const runId = Number(process.env.GITHUB_RUN_ID);
     let mode = process.env.GITHUB_EVENT_NAME === "push" ? "hold" : "full";
-    // Only main pushes reuse; dispatches and Release always validate fully.
+    // Only main pushes reuse; merge groups and dispatches always validate fully.
     if (
       process.env.GITHUB_EVENT_NAME === "push" &&
       process.env.GITHUB_REF === "refs/heads/main" &&
