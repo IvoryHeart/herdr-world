@@ -8,8 +8,11 @@
  * resolves a promise, `setTimeout(ms)` from `node:timers/promises`, or a call
  * of a helper that pauses (`settle()`, `sleep(80)`), in the same file or
  * imported from another test file. Not pauses: a 0 ms yield, a deadline
- * timer that rejects, and a poll tick of at most `POLL_TICK_MS` inside a loop
- * (the last resort when nothing signals).
+ * timer that rejects, and a poll tick of at most `POLL_TICK_MS` directly in a
+ * loop that polls, one whose condition or conditional exit reads observable
+ * state (the last resort when nothing signals). A tick in a fixed-count loop,
+ * a loop over a collection or the clock, or a callback that runs later (a
+ * test body declared in a loop) is a pause.
  *
  * `bun scripts/check-test-waits.ts --update` lowers the allowlist to the
  * current counts; it never raises one.
@@ -44,13 +47,14 @@ type Node = {
   loc?: { start: { line: number } };
   [key: string]: unknown;
 };
-type Delay = number | "unknown" | "none";
+/** A pause's length; `{ param }` is a helper's own parameter, set per call. */
+type Delay = number | "unknown" | "none" | { param: number };
 type Site = { line: number; delay: Delay; loop: boolean; helper?: string };
 type FileScan = {
   /** Pause lines counted against the allowlist. */
   pauses: number[];
   /** Helpers that pause once per call, by name, for importing files. */
-  exported: Set<string>;
+  exported: Map<string, Delay>;
 };
 
 function children(node: Node): Node[] {
@@ -74,10 +78,130 @@ function children(node: Node): Node[] {
   return out;
 }
 
-function delayOf(argument: Node | undefined): Delay {
+const CLOCK = /^(?:Date|performance)$/;
+const isClock = (node: Node) =>
+  node.type === "CallExpression" &&
+  (node.callee as Node).type === "MemberExpression" &&
+  isIdentifier((node.callee as Node).object, CLOCK) &&
+  isIdentifier((node.callee as Node).property, "now");
+const COMPARISON = new Set(["<", "<=", ">", ">=", "==", "===", "!=", "!=="]);
+
+/** Walks a subtree without entering nested functions. */
+function within(node: Node, visit: (node: Node, path: Node[]) => void) {
+  const step = (current: Node, path: Node[]) => {
+    visit(current, path);
+    for (const child of children(current))
+      if (!FUNCTIONS.has(child.type)) step(child, [...path, current]);
+  };
+  step(node, []);
+}
+
+/** Identifiers a loop counts with: `i++`, `n -= 1`. */
+function counters(loop: Node) {
+  const out = new Set<string>();
+  within(loop, (node) => {
+    const target =
+      node.type === "UpdateExpression"
+        ? (node.argument as Node)
+        : node.type === "AssignmentExpression" &&
+            (node.operator === "+=" || node.operator === "-=") &&
+            (node.right as Node).type === "NumericLiteral"
+          ? (node.left as Node)
+          : null;
+    if (target && isIdentifier(target)) out.add(target.name as string);
+  });
+  return out;
+}
+
+/**
+ * Whether a condition reads state the loop waits on, rather than only its
+ * own counter, the clock or constants: `!done`, `seen.length < 2`, `check()`.
+ */
+function observes(test: Node, counted: ReadonlySet<string>): boolean {
+  switch (test.type) {
+    case "BinaryExpression":
+      if (COMPARISON.has(test.operator as string)) {
+        const sides = [test.left as Node, test.right as Node];
+        // `i < cases.length` counts; `Date.now() < deadline` is a deadline.
+        if (
+          sides.some(
+            (side) =>
+              isClock(side) ||
+              (isIdentifier(side) && counted.has(side.name as string)),
+          )
+        )
+          return false;
+      }
+      return (
+        observes(test.left as Node, counted) ||
+        observes(test.right as Node, counted)
+      );
+    case "LogicalExpression":
+      return (
+        observes(test.left as Node, counted) ||
+        observes(test.right as Node, counted)
+      );
+    case "UnaryExpression":
+    case "AwaitExpression":
+    case "TSNonNullExpression":
+      return observes((test.argument ?? test.expression) as Node, counted);
+    case "Identifier":
+      return !counted.has(test.name as string) && test.name !== "undefined";
+    case "CallExpression":
+      return !isClock(test);
+    case "MemberExpression":
+    case "OptionalMemberExpression":
+    case "OptionalCallExpression":
+      return true;
+    default:
+      return children(test).some((child) => observes(child, counted));
+  }
+}
+
+/**
+ * A poll: a loop whose condition, or a conditional exit (`if (check())
+ * return`, a `break` after work that succeeded in `try`), reads observable
+ * state. A loop over a fixed count, a collection or the clock only pauses.
+ */
+function polls(loop: Node): boolean {
+  const counted = counters(loop);
+  if (loop.test && observes(loop.test as Node, counted)) return true;
+  let exits = false;
+  within(loop.body as Node, (node, path) => {
+    if (exits) return;
+    if (node.type !== "BreakStatement" && node.type !== "ReturnStatement")
+      return;
+    // An unlabelled break inside a nested loop or switch leaves only that.
+    if (
+      node.type === "BreakStatement" &&
+      !node.label &&
+      path.some(
+        (outer) => LOOPS.has(outer.type) || outer.type === "SwitchStatement",
+      )
+    )
+      return;
+    exits = path.some((outer, index) => {
+      if (outer.type === "TryStatement") return path[index + 1] === outer.block;
+      return (
+        (outer.type === "IfStatement" ||
+          outer.type === "ConditionalExpression") &&
+        observes(outer.test as Node, counted)
+      );
+    });
+  });
+  return exits;
+}
+
+function delayOf(
+  argument: Node | undefined,
+  params: readonly string[] = [],
+): Delay {
   if (!argument) return "none";
   if (argument.type === "NumericLiteral") return argument.value as number;
-  return "unknown";
+  const param = isIdentifier(argument)
+    ? params.indexOf(argument.name as string)
+    : -1;
+  return param >= 0 ? { param } : "unknown";
 }
 
 const isIdentifier = (node: unknown, name?: string | RegExp): boolean =>
@@ -130,7 +254,8 @@ function helperName(node: Node, parent: Node | undefined): string | null {
 type Call = {
   name: string;
   line: number;
-  delay: Delay;
+  /** Each argument's delay, for helpers whose pause is a parameter. */
+  delays: Delay[];
   loop: boolean;
   helper?: string;
 };
@@ -208,29 +333,44 @@ function parseSource(path: string, text: string): Parsed {
     helper: string | undefined,
     loop: boolean,
     executorParam: string | undefined,
+    params: readonly string[],
   ) => {
     let nextHelper = helper;
+    let nextParams = params;
     let nextLoop = loop;
     let nextExecutor = executorParam;
     if (FUNCTIONS.has(node.type)) {
-      // A named helper starts a fresh loop context; an inline callback
-      // inside a loop still runs once per iteration.
       const name = helperName(node, parent);
       if (name) {
         nextHelper = name;
-        nextLoop = false;
+        nextParams = (node.params as Node[]).map((param) => {
+          const target =
+            param.type === "AssignmentPattern" ? param.left : param;
+          return isIdentifier(target) ? ((target as Node).name as string) : "";
+        });
       }
-      if (
+      // Only a promise executor or a React `act` body runs in place, once
+      // per poll; any other callback (a test body, a handler) runs later,
+      // outside the loop.
+      const executor =
         parent?.type === "NewExpression" &&
-        isIdentifier(parent.callee, "Promise")
-      ) {
+        isIdentifier(parent.callee, "Promise");
+      const inPlace =
+        executor ||
+        (parent?.type === "CallExpression" &&
+          (isIdentifier(parent.callee, "act") ||
+            ((parent.callee as Node).type === "MemberExpression" &&
+              isIdentifier((parent.callee as Node).property, "act"))));
+      if (!inPlace || name) nextLoop = false;
+      if (executor) {
         const first = (node.params as Node[])[0];
         nextExecutor = isIdentifier(first)
           ? ((first as Node).name as string)
           : undefined;
       }
     }
-    if (LOOPS.has(node.type)) nextLoop = true;
+    // The nearest loop decides: a short tick is exempt only when it polls.
+    if (LOOPS.has(node.type)) nextLoop = polls(node);
     if (node.type === "CallExpression") {
       // A timer raced against real work bounds a failure; it is no pause.
       if (isCall(node, "Promise", /^(?:race|any)$/)) return;
@@ -238,105 +378,134 @@ function parseSource(path: string, text: string): Parsed {
       const args = node.arguments as Node[];
       const line = node.loc?.start.line ?? 0;
       let delay: Delay | null = null;
-      if (isCall(node, "Bun", /^sleep(?:Sync)?$/)) delay = delayOf(args[0]);
+      if (isCall(node, "Bun", /^sleep(?:Sync)?$/))
+        delay = delayOf(args[0], params);
       else if (
         (isIdentifier(callee, "setTimeout") ||
           (callee.type === "MemberExpression" &&
             isIdentifier(callee.property, "setTimeout"))) &&
         onlyResolves(args[0], executorParam)
       )
-        delay = delayOf(args[1]);
+        delay = delayOf(args[1], params);
       else if (
         isIdentifier(callee) &&
         timersPromises.has(callee.name as string)
       )
-        delay = delayOf(args[0]);
+        delay = delayOf(args[0], params);
       if (delay !== null) sites.push({ line, delay, loop, helper });
       else if (isIdentifier(callee))
         calls.push({
           name: callee.name as string,
           line,
-          delay: delayOf(args[0]),
+          delays: args.map((arg) => delayOf(arg, params)),
           loop,
           helper,
         });
     }
     for (const child of children(node))
-      walk(child, node, nextHelper, nextLoop, nextExecutor);
+      walk(child, node, nextHelper, nextLoop, nextExecutor, nextParams);
   };
-  walk(ast.program as Node, undefined, undefined, false, undefined);
+  walk(ast.program as Node, undefined, undefined, false, undefined, []);
   return { sites, calls, imports, exportedNames, timingSwitches };
 }
 
+const isParam = (delay: Delay): delay is { param: number } =>
+  typeof delay === "object";
+
+/**
+ * Whether a pause counts where it is written: not a yield, not a short tick
+ * in a poll, and not a helper's parameter outside a loop (its calls count).
+ */
 const counts = (site: { delay: Delay; loop: boolean }) =>
   !(site.delay === "none" || site.delay === 0) &&
+  !(isParam(site.delay) && !site.loop) &&
   !(site.loop && typeof site.delay === "number" && site.delay <= POLL_TICK_MS);
+
+/** One delay for a helper with several pauses. */
+function merge(a: Delay | undefined, b: Delay): Delay {
+  if (a === undefined || JSON.stringify(a) === JSON.stringify(b)) return b;
+  if (typeof a === "number" && typeof b === "number") return Math.max(a, b);
+  return "unknown";
+}
 
 /**
  * Pause lines of one parsed file. `importedPausing` holds the local names of
- * imported helpers that pause once per call.
+ * imported helpers that pause once per call, with their delay.
+ *
+ * Every line that pauses counts: a primitive pause where it is written and
+ * each call of a pausing helper, also inside another helper (so a new sleep
+ * inside `run()` or `settle()` raises the count like any other).
  */
 function resolvePauses(
   parsed: Parsed,
-  importedPausing: ReadonlySet<string> = new Set(),
+  importedPausing: ReadonlyMap<string, Delay> = new Map(),
 ): FileScan {
   const { sites, calls } = parsed;
+  // A call's delay: the helper's own, or the argument its pause reads.
+  const callDelay = (call: Call, helperDelay: Delay): Delay => {
+    if (!isParam(helperDelay)) return helperDelay;
+    const argument = call.delays[helperDelay.param] ?? "none";
+    // An omitted argument takes the helper's default: a real pause.
+    return argument === "none" ? "unknown" : argument;
+  };
   // A helper pauses once per call when it pauses outside a loop; so does a
   // helper calling one outside a loop.
-  const pausing = new Set(importedPausing);
-  const helpers = new Set(
-    [...sites, ...calls].flatMap((entry) =>
-      entry.helper ? [entry.helper] : [],
-    ),
-  );
+  const pausing = new Map(importedPausing);
+  const add = (name: string, delay: Delay) => {
+    const next = merge(pausing.get(name), delay);
+    if (JSON.stringify(next) === JSON.stringify(pausing.get(name)))
+      return false;
+    pausing.set(name, next);
+    return true;
+  };
   for (const site of sites)
-    if (site.helper && !site.loop && counts(site)) pausing.add(site.helper);
-  for (let changed = true; changed; ) {
+    if (site.helper && !site.loop && (counts(site) || isParam(site.delay)))
+      add(site.helper, site.delay);
+  for (let changed = true, rounds = 0; changed && rounds < 50; rounds++) {
     changed = false;
-    for (const call of calls)
+    for (const call of calls) {
+      const delay = pausing.get(call.name);
+      if (delay === undefined || !call.helper || call.loop) continue;
+      const effective = callDelay(call, delay);
       if (
-        pausing.has(call.name) &&
-        call.helper &&
-        !call.loop &&
-        !pausing.has(call.helper) &&
-        helpers.has(call.helper)
-      ) {
-        pausing.add(call.helper);
+        (counts({ delay: effective, loop: false }) || isParam(effective)) &&
+        add(call.helper, effective)
+      )
         changed = true;
-      }
+    }
   }
-  // Count each pause once: at the call sites of a pausing helper, not inside.
-  // A helper only handed on as a value (`{ settle }`) keeps its own count.
+  // A helper only handed on as a value (`{ advance: sleep }`) has no call
+  // here to count, so its parameter pause counts where it is written.
   const called = new Set([
     ...calls.map((call) => call.name),
     ...parsed.exportedNames,
   ]);
-  const inPausingHelper = (entry: { helper?: string; loop: boolean }) =>
-    !!entry.helper &&
-    !entry.loop &&
-    pausing.has(entry.helper) &&
-    called.has(entry.helper);
   const pauses = [
     ...sites
-      .filter((site) => counts(site) && !inPausingHelper(site))
+      .filter(
+        (site) =>
+          counts(site) ||
+          (isParam(site.delay) && !!site.helper && !called.has(site.helper)),
+      )
       .map((site) => site.line),
     ...calls
-      .filter(
-        (call) =>
-          pausing.has(call.name) &&
-          !inPausingHelper(call) &&
-          // `settle()` pauses; `sleep(0)` yields; `sleep(5)` in a loop polls.
-          counts({
-            delay: call.delay === "none" ? "unknown" : call.delay,
-            loop: call.loop,
-          }),
-      )
+      .filter((call) => {
+        const delay = pausing.get(call.name);
+        // `settle()` pauses; `sleep(0)` yields; `sleep(5)` in a poll ticks.
+        return (
+          delay !== undefined &&
+          counts({ delay: callDelay(call, delay), loop: call.loop })
+        );
+      })
       .map((call) => call.line),
   ].sort((a, b) => a - b);
   return {
     pauses,
-    exported: new Set(
-      [...parsed.exportedNames].filter((name) => pausing.has(name)),
+    exported: new Map(
+      [...parsed.exportedNames].flatMap((name) => {
+        const delay = pausing.get(name);
+        return delay === undefined ? [] : [[name, delay] as const];
+      }),
     ),
   };
 }
@@ -402,23 +571,24 @@ export function scanFiles(files: Map<string, string>): Map<string, number[]> {
     targets.set(path, list);
   }
   // Exported pausing helpers settle once no new one appears.
-  let exported = new Set<string>();
+  let exported = new Map<string, Delay>();
   let result = new Map<string, number[]>();
-  for (;;) {
-    const next = new Set<string>();
+  for (let rounds = 0; rounds < 50; rounds++) {
+    const next = new Map<string, Delay>();
     result = new Map([...files.keys()].map((path) => [path, []]));
     for (const [path, file] of parsed) {
-      const importedPausing = new Set(
-        targets
-          .get(path)!
-          .filter((target) => exported.has(target.ref))
-          .map((target) => target.local),
+      const importedPausing = new Map(
+        targets.get(path)!.flatMap((target) => {
+          const delay = exported.get(target.ref);
+          return delay === undefined ? [] : [[target.local, delay] as const];
+        }),
       );
       const scan = resolvePauses(file, importedPausing);
       result.set(path, scan.pauses);
-      for (const name of scan.exported) next.add(`${path}#${name}`);
+      for (const [name, delay] of scan.exported)
+        next.set(`${path}#${name}`, delay);
     }
-    if (next.size === exported.size) break;
+    if (JSON.stringify([...next]) === JSON.stringify([...exported])) break;
     exported = next;
   }
   return result;

@@ -46,7 +46,39 @@ while (!ready()) await new Promise((resolve) => setTimeout(resolve, 11));`),
   ).toEqual([1, 2]);
 });
 
-test("a pausing helper counts at each call, not at its definition", () => {
+test("a short tick in a loop that only counts, iterates or watches the clock is a pause", () => {
+  expect(
+    lines(`for (let i = 0; i < 100; i++) await Bun.sleep(5);
+for (let i = 0; i < cases.length; i += 1) await Bun.sleep(5);
+for (const x of cases) await Bun.sleep(5);
+while (Date.now() < deadline) await Bun.sleep(5);
+for (;;) await Bun.sleep(5);
+for (let n = 0; n < 9; n++) { if (n === 3) continue; await Bun.sleep(5); }
+for (const x of xs) { for (;;) { if (x.ready) break; } await Bun.sleep(5); }`),
+  ).toEqual([1, 2, 3, 4, 5, 6, 7]);
+});
+
+test("a short tick polls when the loop's condition or a conditional exit reads state", () => {
+  expect(
+    lines(`while (count < 2) await Bun.sleep(5);
+do { await Bun.sleep(5); } while (!state.ready);
+for (const _ of attempts) { if (await check()) break; await Bun.sleep(5); }
+while (Date.now() < deadline) { if (seen.length) return; await Bun.sleep(5); }
+for (;;) { try { await fetch(url); return; } catch { await Bun.sleep(5); } }
+for (;;) { await new Promise((resolve) => setTimeout(resolve, 5)); if (done) break; }
+for (let i = 0; i < 50; i++) { if (host.firstChild) return; await act(async () => Bun.sleep(5)); }`),
+  ).toEqual([]);
+});
+
+test("a callback declared in a loop runs later, outside the loop", () => {
+  expect(
+    lines(`for (const x of cases) test("case", async () => { await Bun.sleep(5); });
+while (!ready()) { emitter.on("tick", () => Bun.sleep(5)); await Bun.sleep(5); }
+for (const x of cases) { function later() { return Bun.sleep(5); } later(); }`),
+  ).toEqual([1, 2, 3, 3]);
+});
+
+test("every pausing line counts: a helper's pause and each call of it", () => {
   const text = `const settle = () => new Promise((resolve) => setTimeout(resolve, 50));
 async function calm() { await settle(); }
 function sleep(ms) { return Bun.sleep(ms); }
@@ -58,17 +90,47 @@ await calm();
 await sleep(80);
 await sleep(0);
 await waitFor(() => true);
-for (;;) await sleep(3);`;
-  expect(lines(text)).toEqual([7, 8, 9]);
+while (!done()) await sleep(3);`;
+  expect(lines(text)).toEqual([1, 2, 7, 8, 9]);
+});
+
+test("a new sleep inside a helper that already pauses still counts", () => {
+  const before = `async function run() {
+  await Bun.sleep(50);
+  for (const width of [390, 1300]) await settle();
+}
+const settle = () => Bun.sleep(80);
+run();`;
+  expect(lines(before)).toEqual([2, 3, 5, 6]);
+  expect(
+    lines(
+      before.replace(
+        "await Bun.sleep(50);",
+        "await Bun.sleep(50);\n  await settle();",
+      ),
+    ),
+  ).toEqual([2, 3, 4, 6, 7]);
+});
+
+test("a helper's pause set by a parameter counts at each call by its argument", () => {
+  expect(
+    lines(`function nap(label, ms = 40) { return Bun.sleep(ms); }
+await nap("yield", 0);
+await nap("pause", 30);
+await nap("default");
+while (!ready()) await nap("tick", 5);
+for (const x of cases) await nap("fixed", 5);`),
+  ).toEqual([3, 4, 6]);
 });
 
 test("a pausing helper handed on as a value counts where it is defined", () => {
   expect(
     lines(`function harness() {
   const settle = () => Bun.sleep(40);
-  return { settle };
+  const sleep = (ms) => Bun.sleep(ms);
+  return { settle, advance: sleep };
 }`),
-  ).toEqual([2]);
+  ).toEqual([2, 3]);
 });
 
 test("helpers imported from another test file count in the importer", () => {
@@ -97,9 +159,9 @@ export const gently = () => relax();`,
     ],
   ]);
   const result = scanFiles(files);
-  expect(result.get("web/src/testing/pause.ts")).toEqual([]);
+  expect(result.get("web/src/testing/pause.ts")).toEqual([1, 2]);
   expect(result.get("web/src/a.test.ts")).toEqual([2, 3]);
-  expect(result.get("web/src/b.test.ts")).toEqual([]);
+  expect(result.get("web/src/b.test.ts")).toEqual([2]);
   expect(result.get("web/src/c.test.ts")).toEqual([2]);
 });
 

@@ -115,8 +115,13 @@ timers on the few-millisecond set with `useTestTimings()` or `withTestTimings()`
 from `shared/testing/timings.ts`, and a spawned process with
 `--preload ./shared/testing/timings-preload.ts`. Production code never switches
 the set. `bun run check:test-waits` (static lane) fails on a new fixed sleep in a
-test file; `scripts/test-waits-allowlist.json` only shrinks. After removing
-sleeps, `bun scripts/check-test-waits.ts --update` lowers its entry.
+test file; `scripts/test-waits-allowlist.json` only shrinks. Every pausing line
+counts, including each call of a pausing helper and pauses inside one. A tick of
+at most 10 ms is exempt only directly in a loop that polls: its condition or a
+conditional exit reads observable state. A tick in a fixed-count loop, a loop
+over a collection or the clock, or a callback declared in a loop (a test body)
+counts. After removing sleeps, `bun scripts/check-test-waits.ts --update`
+lowers its entry.
 
 ## Development tools
 
