@@ -13,15 +13,15 @@ export function createCheckerSessions(root: string, output: string) {
     signal: AbortSignal;
   }>();
 
-  async function withWorker(
-    work: (signal?: AbortSignal) => Promise<void>,
+  async function withWorker<T>(
+    work: (signal: AbortSignal) => Promise<T>,
     signal: AbortSignal,
   ) {
     const temporary = resolve(output, `checker-session-${randomUUID()}`);
     await mkdir(temporary, { recursive: true });
     let log = "";
     try {
-      await withPrivateChecker(
+      return await withPrivateChecker(
         temporary,
         signal,
         (port, ownedSignal) =>

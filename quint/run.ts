@@ -690,14 +690,22 @@ export async function runReviewedQuintModels(
       } as const;
       if (item.name in composed) {
         const { name } = item;
-        const result = await composed[name as keyof typeof composed]({
-          root,
-          output,
-          artifacts,
-          command,
-          mutate: (fault?: ImplementationFault) =>
-            implementationMutation(name, fault),
-        });
+        const run = async (signal = cancellation.signal) =>
+          composed[name as keyof typeof composed]({
+            root,
+            output,
+            artifacts,
+            command: (label, args, broken) =>
+              command(label, args, broken, signal),
+            mutate: (fault?: ImplementationFault) =>
+              implementationMutation(name, fault),
+          });
+        // Keep the IDE compiler warm across its exhaustive checks and eight
+        // controls, within the same owned worker and unchanged deadlines.
+        const result =
+          name === "ide-lifecycle"
+            ? await checkerSessions.withWorker(run, cancellation.signal)
+            : await run();
         results.push(result);
         console.log(JSON.stringify(result));
         continue;

@@ -258,6 +258,12 @@ race in which Quint tried to launch a second server on the occupied port. Its
 downloaded logs identified that failure; delayed-readiness and failed-readiness
 regressions preserve the corrected startup and cleanup boundary.
 
+The IDE lifecycle case reuses one worker-owned compiler daemon for its positive
+TLC explorations and eight fault controls, avoiding repeated cold compiler startup
+under CI's two-CPU quota. Each command retains its private temporary directory and
+240-second deadline; the worker retains its 15-minute deadline, cancellation and
+owned-process cleanup. Model bounds, sampled replay and required controls are unchanged.
+
 ## Bounded parallel execution
 
 The canonical gate schedules the 11 independent cases in a bounded process pool,
