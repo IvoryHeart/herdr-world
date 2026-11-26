@@ -3,7 +3,8 @@ import type { ServerWebSocket } from "bun";
 import { MEMORY_ACTIONS, MemoryError } from "../../../../shared/memory";
 import { serverFeatures } from "../catalog";
 import { composeFeatures } from "../compose";
-import type { FeatureKernel, FeatureRpcHandler } from "../contract";
+import { testFeatureKernel } from "../../testing/features";
+import type { FeatureRpcHandler } from "../contract";
 import { memoryKey } from "./register";
 
 test("discovered memory handlers share the typed CLI service and preserve replies and caller fences", async () => {
@@ -12,10 +13,10 @@ test("discovered memory handlers share the typed CLI service and preserve replie
   );
   const ws = {} as ServerWebSocket<unknown>;
   const clients = new Set([ws]);
-  const composed = composeFeatures({ clients } as unknown as FeatureKernel);
+  const composed = composeFeatures(testFeatureKernel({ clients }));
   const memory = composed.get(memoryKey);
   expect(
-    composeFeatures({ clients } as unknown as FeatureKernel).get(memoryKey),
+    composeFeatures(testFeatureKernel({ clients })).get(memoryKey),
   ).not.toBe(memory);
   const replies: unknown[] = [];
   memory.call = async (action, params, recheck) => {

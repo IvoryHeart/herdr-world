@@ -33,6 +33,7 @@ import {
   worktreeRemovalCompletionNotice,
 } from "./store";
 import { notifyWorldAsk } from "./store/notifications";
+import { resetFocusForTests } from "./world/focus";
 import { parseHerdrTaskNotification } from "./herdrTaskNotification";
 import type { Pane } from "./types";
 import { removeTemporaryWorkspaceSafely } from "./worktreeLifecycle";
@@ -1377,6 +1378,38 @@ describe("independent qualified operational sessions", () => {
       expect(await store.focusWorkspaceSource(target)).toBe(true);
       expect(paneReads()).toHaveLength(1);
       expect(store.get().activeConnectionId).toBe("alpha");
+    });
+  });
+
+  // #1356: Cmd+K's Open terminal on an agent of the host Spaces already
+  // showed focused its tab, then said it could not open it.
+  test("opening a Spaces target succeeds on the host Spaces already shows, as on another", async () => {
+    await withIndependentClients(async (calls, held) => {
+      held.resolve({});
+      const target = (connectionId: string, runtimeGeneration = 1) => ({
+        connectionId,
+        runtimeGeneration,
+        workspaceId: "same-workspace",
+        paneId: "same-pane",
+        terminalId: "same-terminal",
+      });
+      expect(store.get().activeConnectionId).toBe("alpha");
+      expect(await store.activateQualifiedSpacesTarget(target("alpha"))).toBe(
+        true,
+      );
+      expect(store.get().activeConnectionId).toBe("alpha");
+      expect(
+        calls.filter((call) => call.method === "tab.focus").map((c) => c.host),
+      ).toEqual(["alpha"]);
+      expect(await store.activateQualifiedSpacesTarget(target("beta"))).toBe(
+        true,
+      );
+      expect(store.get().activeConnectionId).toBe("beta");
+      // Another runtime generation is never opened, active or not.
+      expect(await store.activateQualifiedSpacesTarget(target("beta", 2))).toBe(
+        false,
+      );
+      expect(store.get().activeConnectionId).toBe("beta");
     });
   });
 
@@ -4133,6 +4166,48 @@ describe("Herdr task notifications", () => {
       });
       expect(store.get().notice).toBeNull();
     } finally {
+      __storeTesting.replaceState(partitionState());
+    }
+  });
+
+  test("a focus session holds the toast and notification for a new ask (#1131)", () => {
+    const ask = {
+      id: "q-focus",
+      at: 1,
+      question: "Ship it?",
+      options: [],
+      owner_only: true,
+      actor: {
+        label: "Example watcher",
+        verified: true,
+        connection_id: "beta",
+        connection_generation: 1,
+        terminal_id: "beta-terminal",
+        workspace_id: "w1",
+        pane_id: "w1:p9",
+        agent: "codex",
+        agent_session_id: "original-session",
+      },
+    };
+    const now = Date.now();
+    try {
+      resetFocusForTests({
+        revision: 1,
+        now,
+        session: { id: "focus-a", started_at: now, ends_at: now + 60_000 },
+        last: null,
+      });
+      __storeTesting.replaceState(enabledState({ notice: null }));
+      notifyWorldAsk(ask);
+      expect(store.get().notice).toBeNull();
+      // Once it ends, the next one raises its toast again.
+      resetFocusForTests();
+      notifyWorldAsk(ask);
+      expect(store.get().notice).toMatchObject({
+        message: "Example watcher · for you: Ship it?",
+      });
+    } finally {
+      resetFocusForTests();
       __storeTesting.replaceState(partitionState());
     }
   });

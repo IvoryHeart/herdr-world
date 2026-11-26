@@ -27,7 +27,13 @@ test.skipIf(process.platform !== "win32")(
         join(import.meta.dir, "install-plugin.ps1"),
         join(root, "scripts/install-plugin.ps1"),
       );
-      writeFileSync(join(root, "herdr-plugin.toml"), 'version = "9.8.7"\n');
+      writeFileSync(
+        join(root, "herdr-plugin.toml"),
+        readFileSync("herdr-plugin.toml", "utf8").replace(
+          /^version = "[^"]+"/m,
+          'version = "9.8.7"',
+        ),
+      );
       const powershell = join(
         process.env.SystemRoot!,
         "System32/WindowsPowerShell/v1.0/powershell.exe",

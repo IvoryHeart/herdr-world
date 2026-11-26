@@ -230,14 +230,45 @@ export function placeNew(
   } = {},
 ): BoardLayout {
   const sizeOf = options.sizeOf ?? defaultSizeOf;
+  const phone = options.phone ?? false;
   const layout = cloneLayout(previous);
   // The hosts already on the board end here; new hosts go after them, one
   // after another (measured once: per new host it was quadratic in hosts).
   let cursor = model.hosts.some((host) => !layout.anchors.has(host.key))
     ? hostExtent(model, layout, sizeOf, options.phone ?? false)
     : 0;
+  // Where the next runtime joining each placed zone goes, past the zone's
+  // cards and every newcomer already put there (keyed by zone).
+  const besideNext = new Map<string, Point>();
   for (const host of model.hosts) {
     if (layout.anchors.has(host.key)) continue;
+    // A runtime joining a zone already on the board ("Group runtimes": one
+    // per machine) goes beside its zone mates, across the hosts' flow, so
+    // the zone's one frame never spans another zone.
+    const zone = model.zones.find((each) =>
+      each.hosts.some((member) => member.key === host.key),
+    );
+    const beside =
+      (zone && besideNext.get(zone.key)) ??
+      besideZoneMates(model, previous, host.key, sizeOf, phone);
+    if (beside) {
+      layout.anchors.set(host.key, beside);
+      // Reserve its grid as the flow does, so the zone's next newcomer
+      // goes past it rather than onto it.
+      const cell = cellFor(model, host.key);
+      const rows = Math.max(
+        1,
+        Math.ceil(host.workspaceKeys.length / GRID_COLS),
+      );
+      if (zone)
+        besideNext.set(
+          zone.key,
+          phone
+            ? { x: beside.x + GRID_COLS * cell.x + HOST_GAP, y: beside.y }
+            : { x: beside.x, y: beside.y + rows * cell.y + HOST_GAP },
+        );
+      continue;
+    }
     layout.anchors.set(
       host.key,
       options.phone ? { x: 0, y: cursor } : { x: cursor, y: 0 },
@@ -302,6 +333,46 @@ export function placeNew(
     }
   }
   return layout;
+}
+
+/**
+ * Where a new runtime goes beside its zone's runtimes already on the board:
+ * past their cards across the hosts' flow (below on desktop, to the right on
+ * a phone). Null when none of its zone is placed yet.
+ */
+function besideZoneMates(
+  model: BoardModel,
+  previous: BoardLayout,
+  hostKey: string,
+  sizeOf: SizeOf,
+  phone: boolean,
+): Point | null {
+  const zone = model.zones.find((each) =>
+    each.hosts.some((host) => host.key === hostKey),
+  );
+  const mates = (zone?.hosts ?? []).filter(
+    (host) => host.key !== hostKey && previous.anchors.has(host.key),
+  );
+  if (!mates.length) return null;
+  const at = positions(model, previous, sizeOf);
+  const first = previous.anchors.get(mates[0]!.key)!;
+  let extent = phone ? first.x : first.y;
+  for (const host of mates)
+    for (const key of host.workspaceKeys) {
+      const space = model.workspaceByKey.get(key);
+      for (const cardKey of [key, ...(space?.tabKeys ?? [])]) {
+        const point = at.get(cardKey);
+        if (!point) continue;
+        const size = sizeOf(cardKey, cardKey === key ? "workspace" : "tab");
+        extent = Math.max(
+          extent,
+          phone ? point.x + size.w / 2 : point.y + size.h / 2,
+        );
+      }
+    }
+  return phone
+    ? { x: extent + HOST_GAP, y: first.y }
+    : { x: first.x, y: extent + HOST_GAP };
 }
 
 function hostExtent(

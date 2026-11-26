@@ -1,5 +1,6 @@
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { worldLocalStorage } from "../browserStorage";
+import { hostsFilterByMachine, type WorldHost } from "../worldHosts";
 
 const KEY = "worldHostsFilter.v1";
 const EVENT = "world-hosts-filter-changed";
@@ -8,8 +9,8 @@ export type HostsFilter = readonly string[] | null;
 function read(): HostsFilter {
   try {
     const value: unknown = JSON.parse(worldLocalStorage.getItem(KEY) ?? "null");
+    // An empty list is an explicit choice (every host unchecked), not All hosts.
     return Array.isArray(value) &&
-      value.length > 0 &&
       value.every((id) => typeof id === "string" && id.length > 0)
       ? [...new Set(value)]
       : null;
@@ -19,7 +20,6 @@ function read(): HostsFilter {
 }
 
 export function writeHostsFilter(ids: HostsFilter) {
-  if (ids?.length === 0) ids = null;
   try {
     worldLocalStorage.setItem(KEY, JSON.stringify(ids));
   } catch {
@@ -28,14 +28,23 @@ export function writeHostsFilter(ids: HostsFilter) {
   window.dispatchEvent(new CustomEvent(EVENT, { detail: ids }));
 }
 
-/** The overview scope is independent of operational ownership and legacy focus. */
+/**
+ * The overview scope is independent of operational ownership and legacy focus.
+ * It is kept as connection IDs but read by machine: `ids` covers every runtime
+ * of each selected machine (`hostsFilterByMachine`), so a selection saved per
+ * connection shows its whole machine. View-only: operations stay qualified by
+ * connection ID and generation.
+ */
 export function useHostsFilter(
-  catalogueIds: readonly string[],
+  catalogue: readonly Pick<WorldHost, "id" | "machine">[],
   catalogueReady = true,
 ) {
   const [ids, setIds] = useState<HostsFilter>(read);
   const [explanation, setExplanation] = useState("");
-  const catalogueKey = JSON.stringify(catalogueIds);
+  const catalogueKey = JSON.stringify(catalogue.map(({ id }) => id));
+  const machinesKey = JSON.stringify(
+    catalogue.map(({ id, machine }) => [id, machine]),
+  );
   useEffect(() => {
     const changed = (event: Event) =>
       setIds((event as CustomEvent<HostsFilter>).detail);
@@ -55,5 +64,15 @@ export function useHostsFilter(
     );
     writeHostsFilter(retained.length ? retained : null);
   }, [catalogueKey, catalogueReady, ids]);
-  return { ids, explanation, setIds: writeHostsFilter };
+  const machineIds = useMemo(
+    () =>
+      hostsFilterByMachine(
+        ids,
+        (JSON.parse(machinesKey) as [string, string][]).map(
+          ([id, machine]) => ({ id, machine }),
+        ),
+      ),
+    [ids, machinesKey],
+  );
+  return { ids: machineIds, explanation, setIds: writeHostsFilter };
 }

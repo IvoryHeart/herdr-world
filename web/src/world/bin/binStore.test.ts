@@ -19,12 +19,16 @@ const state = (over: Partial<BinState> = {}): BinState => ({
   closing: [],
   outcomes: [],
   bus: {
-    interval_ms: 180_000,
-    trip_ms: 20_000,
-    next_ms: 60_000,
+    speed_kmh: 36,
+    route_m: 0,
+    trip_ms: 0,
     elapsed_ms: null,
     stopped: false,
     trip: null,
+    next_ms: 60_000,
+    next_route_m: 200,
+    next_trip_ms: 20_000,
+    next_measured: false,
   },
   ...over,
 });
@@ -133,6 +137,10 @@ test("actions take the service's reply, and report its refusal", async () => {
     "world.bin.close_now",
     { ids: ["a"] },
   ]);
+  f.replies.push(state({ revision: 5 }));
+  const report = { ids: ["a"], route_m: 420, stops: 1 };
+  expect(await f.store.route(report)).toBeNull();
+  expect(f.calls[f.calls.length - 1]).toEqual(["world.bin.route", report]);
 });
 
 test("malformed replies and entries are dropped", async () => {
@@ -153,91 +161,130 @@ test("malformed replies and entries are dropped", async () => {
 
 test("the bus clock runs from when the state was read", async () => {
   const f = fixture();
-  f.replies.push(
-    state({
-      bus: {
-        interval_ms: 180_000,
-        trip_ms: 20_000,
-        next_ms: 5_000,
-        elapsed_ms: null,
-        stopped: false,
-        trip: null,
-      },
-    }),
-  );
+  f.replies.push(state({ bus: { ...state().bus, next_ms: 5_000 } }));
   await f.store.refresh();
   const read = f.store.get();
   expect(binBusClock(read, read.readAt + 2_000)).toEqual({
     elapsed: null,
     next: 3_000,
+    // Nobody rides: they close when the next bus is back (next + its trip).
+    closes: 23_000,
   });
-  // The schedule repeats even before the next state arrives.
-  expect(binBusClock(read, read.readAt + 6_000).next).toBe(179_000);
+  // It holds at its departure until the service says the bus set off.
+  expect(binBusClock(read, read.readAt + 6_000).next).toBe(0);
   const driving = {
     ...read,
-    bus: { ...read.bus, next_ms: 170_000, elapsed_ms: 10_000 },
+    entries: [entry("a", true)],
+    bus: {
+      ...read.bus,
+      route_m: 200,
+      trip_ms: 20_000,
+      elapsed_ms: 10_000,
+      next_ms: null,
+      next_route_m: 0,
+      next_trip_ms: 0,
+    },
   };
-  expect(binBusClock(driving, read.readAt + 5_000).elapsed).toBe(15_000);
-  // Past its trip the bus has left the map.
-  expect(binBusClock(driving, read.readAt + 10_000).elapsed).toBeNull();
+  expect(binBusClock(driving, read.readAt + 5_000)).toEqual({
+    elapsed: 15_000,
+    next: null,
+    closes: 5_000,
+  });
+  // Past its trip the bus has left the map; its riders are due now.
+  expect(binBusClock(driving, read.readAt + 10_000)).toMatchObject({
+    elapsed: null,
+    closes: 0,
+  });
   // A stopped bus stands where it was stopped, however long it waits.
   const stopped = { ...driving, bus: { ...driving.bus, stopped: true } };
-  expect(binBusClock(stopped, read.readAt + 60_000).elapsed).toBe(10_000);
+  expect(binBusClock(stopped, read.readAt + 60_000)).toMatchObject({
+    elapsed: 10_000,
+    closes: 10_000,
+  });
   expect(binClockLabel(125_000)).toBe("2:05");
   expect(binClockLabel(0)).toBe("0:00");
 });
 
 test("only Town's bin speaks of a bus; elsewhere it says when it closes", () => {
-  // What it holds closes once the bus that takes it has left the map:
-  // departure plus the trip.
-  const bin = { ...state(), readAt: 0, verified: true };
-  expect(binBusLabel(bin, 0)).toBe("bus in 1:00");
+  // What it holds closes once the bus that takes it is back at Apartments:
+  // its departure plus its trip.
+  const bin = { ...state(), readAt: 0, verified: true, entries: [entry("a")] };
+  expect(binBusLabel(bin, 0)).toBe("bus back in 1:20");
   expect(binCloseLabel(bin, 0)).toBe("closes in 1:20");
-  const trip = { ...bin.bus, next_ms: 170_000, elapsed_ms: 5_000 };
+  const trip = {
+    ...bin.bus,
+    route_m: 200,
+    trip_ms: 20_000,
+    elapsed_ms: 5_000,
+    next_ms: null,
+    next_trip_ms: 0,
+  };
   const riding = { ...bin, entries: [entry("a", true)], bus: trip };
-  expect(binBusLabel(riding, 0)).toBe("bus on its way");
+  expect(binBusLabel(riding, 0)).toBe("bus back in 0:15");
   expect(binCloseLabel(riding, 0)).toBe("closes in 0:15");
   expect(binCloseLabel(riding, 4_000)).toBe("closes in 0:11");
-  // Put in after the bus set off, it waits for the next one.
-  const waiting = { ...riding, entries: [entry("b")] };
-  expect(binCloseLabel(waiting, 0)).toBe("closes in 3:10");
+  // Put in after the bus set off, it waits for the next one, which leaves
+  // when this one is back.
+  const waiting = {
+    ...riding,
+    entries: [entry("b")],
+    bus: { ...trip, next_ms: 15_000, next_trip_ms: 30_000 },
+  };
+  expect(binCloseLabel(waiting, 0)).toBe("closes in 0:45");
   const stopped = { ...riding, bus: { ...trip, stopped: true } };
   expect(binBusLabel(stopped, 0)).toBe("bus stopped");
   expect(binCloseLabel(stopped, 0)).toBe("paused");
+  const empty = { ...bin, entries: [], bus: { ...bin.bus, next_ms: null } };
+  expect(binBusLabel(empty, 0)).toBe("no bus due");
+  expect(binCloseLabel(empty, 0)).toBe("nothing due");
   for (const label of [
     binCloseLabel(bin, 0),
     binCloseLabel(riding, 0),
     binCloseLabel(stopped, 0),
+    binCloseLabel(empty, 0),
   ])
     expect(label).not.toContain("bus");
   expect(binCloseLabel({ ...bin, verified: false }, 0)).toBe("bin unavailable");
 });
 
-test("Town's one countdown: time to the next bus, the same for every stop and rider", () => {
-  const bin = { ...state(), readAt: 0, verified: true };
-  expect(binBusCountdown(bin, 0)).toBe("1:00");
-  expect(binBusCountdown(bin, 4_500)).toBe("0:56");
-  // Who waits, and where, changes nothing: it is the timetable's clock.
-  const two = { ...bin, entries: [entry("a"), entry("b")] };
-  expect(binBusCountdown(two, 4_500)).toBe(binBusCountdown(bin, 4_500));
-  const trip = { ...bin.bus, next_ms: 170_000, elapsed_ms: 5_000 };
+test("Town's one countdown: until the bus is back, from its route at its speed", () => {
+  const bin = { ...state(), readAt: 0, verified: true, entries: [entry("a")] };
+  expect(binBusCountdown(bin, 0)).toBe("1:20");
+  expect(binBusCountdown(bin, 4_500)).toBe("1:16");
+  // A farther stop makes a longer trip, so a later time.
+  const far = {
+    ...bin,
+    bus: { ...bin.bus, next_route_m: 800, next_trip_ms: 80_000 },
+  };
+  expect(binBusCountdown(far, 0)).toBe("2:20");
+  const trip = {
+    ...bin.bus,
+    route_m: 200,
+    trip_ms: 20_000,
+    elapsed_ms: 5_000,
+    next_ms: 15_000,
+    next_trip_ms: 20_000,
+  };
   const out = { ...bin, entries: [entry("a", true), entry("b")], bus: trip };
-  expect(binBusCountdown(out, 0)).toBe("on its way");
+  // Its riders' countdown: the bus out (those waiting are behind them).
+  expect(binBusCountdown(out, 0)).toBe("0:15");
   expect(binBusCountdown({ ...out, bus: { ...trip, stopped: true } }, 0)).toBe(
     "stopped",
   );
-  // Past the trip's end, before the service says so: the next departure.
-  expect(binBusCountdown(out, 15_000)).toBe("2:35");
   expect(binBusCountdown({ ...bin, verified: false }, 0)).toBeNull();
-  // The bin's label is the same countdown in words.
+  // The bin's labels are the same countdown in words, in Town and elsewhere.
   for (const [value, now] of [
     [bin, 4_500],
     [out, 0],
-    [out, 15_000],
-  ] as const)
-    expect(binBusLabel(value, now)).toMatch(
-      new RegExp(`^bus (in )?${binBusCountdown(value, now)}$`),
+    [far, 0],
+  ] as const) {
+    expect(binBusLabel(value, now)).toBe(
+      `bus back in ${binBusCountdown(value, now)}`,
     );
+    expect(binCloseLabel(value, now)).toBe(
+      `closes in ${binBusCountdown(value, now)}`,
+    );
+  }
 });
 
 test("a pinned desk or a tab pinned in Spaces keeps its tab's last pane", () => {

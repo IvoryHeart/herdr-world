@@ -8,6 +8,13 @@ type FrameClient = {
   disposed: boolean;
 };
 
+/**
+ * Typing targets that quiet continuing motion: a terminal, and the Chat or
+ * Terminal composer, whose keys would otherwise share the main thread with a
+ * Town frame each (#1248).
+ */
+const TERMINAL_INPUT = ".xterm, .terminal-composer-input";
+
 /** One ordinary-task/rAF queue and one terminal-quiet signal for canvas views. */
 class WorldFrameScheduler {
   readonly clients = new Set<FrameClient>();
@@ -86,11 +93,13 @@ class WorldFrameScheduler {
       ![...this.clients].some((client) => this.eligible(client))
     )
       return;
-    // Ordinary tasks must run between canvas frames so socket replies progress.
+    // One ordinary task turn before each frame, so socket replies and input
+    // still run between canvas frames. Not a 16 ms delay: that added to the
+    // frame's own time and held canvases near 30 fps (#1248).
     this.timer = setTimeout(() => {
       this.timer = null;
       this.frame = requestAnimationFrame(this.flush);
-    }, 16);
+    }, 0);
   };
 
   flush = (now: number) => {
@@ -138,7 +147,10 @@ class WorldFrameScheduler {
   }
 
   input = (event: Event) => {
-    if (!(event.target instanceof Element) || !event.target.closest(".xterm"))
+    if (
+      !(event.target instanceof Element) ||
+      !event.target.closest(TERMINAL_INPUT)
+    )
       return;
     if (this.quietTimer !== null) clearTimeout(this.quietTimer);
     this.setQuiet(false);

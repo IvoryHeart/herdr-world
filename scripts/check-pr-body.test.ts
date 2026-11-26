@@ -6,7 +6,6 @@ import { join } from "node:path";
 import { fileURLToPath } from "node:url";
 import {
   assessContractImpacts,
-  assessHelpImpact,
   checkPrBodyEvent,
   checkPrBodyText,
 } from "./check-pr-body";
@@ -316,6 +315,88 @@ test("push policy uses the PR's immutable stacked base and fails closed on inval
   ).toThrow("immutable base");
 });
 
+test("push policy judges a branch that merged a newer main against main's current tip", () => {
+  const root = mkdtempSync(join(tmpdir(), "push-policy-base-"));
+  const git = (...args: string[]) =>
+    execFileSync("git", args, { cwd: root, encoding: "utf8" }).trim();
+  const commit = (path: string, text: string, message: string) => {
+    mkdirSync(join(root, path, ".."), { recursive: true });
+    writeFileSync(join(root, path), text);
+    git("add", path);
+    git("commit", "-qm", message);
+    return git("rev-parse", "HEAD");
+  };
+  const body =
+    noImpacts + "Changelog: none — Only synthetic policy fixtures change.\n";
+  const currentSpec = "openspec/specs/world-surfaces/town/spec.md";
+  try {
+    git("init", "-q", "-b", "main");
+    git("config", "user.name", "Example");
+    git("config", "user.email", "example@example.invalid");
+    commit(
+      "openspec/specs/world-surfaces/town/notes.md",
+      "**Code:**\n\n- `scripts/`\n",
+      "notes",
+    );
+    const recorded = commit(currentSpec, "# Town\n", "base");
+    git("switch", "-qc", "feature");
+    commit("scripts/example.ts", "export {};\n", "feature");
+    git("switch", "-q", "main");
+    // Main's own archive-style edit of a current spec, outside this PR.
+    const tip = commit(currentSpec, "# Town\n\nSynced.\n", "main sync");
+    git("update-ref", "refs/remotes/origin/main", tip);
+    git("switch", "-q", "feature");
+    git("merge", "-q", "--no-edit", "main");
+
+    // The PR's recorded base is stale: main's spec edit counts as the PR's.
+    expect(checkPrBodyText(body, root, recorded)).toEqual(
+      expect.arrayContaining([
+        expect.stringContaining("Put contract edits in openspec/changes/"),
+      ]),
+    );
+    const policy = pushPolicyContext(
+      undefined,
+      () => ({ body, baseRefOid: recorded, baseRefName: "main" }),
+      root,
+    );
+    expect(policy.base).toBe(tip);
+    expect(checkPrBodyText(policy.body, root, policy.base)).toEqual([]);
+
+    // A rewritten stacked parent keeps the recorded immutable base.
+    git("update-ref", "refs/remotes/origin/parent", recorded);
+    git("switch", "-qc", "parent", recorded);
+    const rewritten = commit("docs/parent.md", "rewritten\n", "rewrite");
+    git("update-ref", "refs/remotes/origin/parent", rewritten);
+    const stackedBase = git("rev-parse", "main");
+    expect(
+      pushPolicyContext(
+        undefined,
+        () => ({ body, baseRefOid: stackedBase, baseRefName: "parent" }),
+        root,
+      ).base,
+    ).toBe(stackedBase);
+    // An unknown base branch or a stale local ref also keeps it.
+    for (const baseRefName of ["missing", "main"])
+      expect(
+        pushPolicyContext(
+          undefined,
+          () => ({ body, baseRefOid: tip, baseRefName }),
+          root,
+        ).base,
+      ).toBe(tip);
+    git("update-ref", "refs/remotes/origin/main", recorded);
+    expect(
+      pushPolicyContext(
+        undefined,
+        () => ({ body, baseRefOid: tip, baseRefName: "main" }),
+        root,
+      ).base,
+    ).toBe(tip);
+  } finally {
+    rmSync(root, { recursive: true, force: true });
+  }
+});
+
 test("push policy reads the intended description or existing PR, and never invents an exemption", () => {
   expect(pushPolicyBody(undefined, () => "Existing PR")).toBe("Existing PR");
   expect(
@@ -329,7 +410,7 @@ test("push policy reads the intended description or existing PR, and never inven
 });
 
 const cli = fileURLToPath(new URL("./check-pr-body.ts", import.meta.url));
-test("draft descriptions enforce the same source-coverage and changelog rules before PR creation", () => {
+test("draft descriptions enforce source coverage and contract impact without fragments", () => {
   const root = mkdtempSync(join(tmpdir(), "pr-body-"));
   const git = (...args: string[]) =>
     execFileSync("git", args, { cwd: root, encoding: "utf8" }).trim();
@@ -359,7 +440,7 @@ test("draft descriptions enforce the same source-coverage and changelog rules be
     const invalid = run("Knowledge map impact: unchanged\nChangelog: none\n");
     expect(invalid.status).toBe(1);
     expect(invalid.stderr).toContain("web/src/world/example.ts");
-    expect(invalid.stderr).toContain("Changelog:");
+    expect(invalid.stderr).not.toContain("Add a valid changes/");
     expect(invalid.stderr).toContain("Spec impact:");
     expect(invalid.stderr).toContain("Verification impact:");
     mkdirSync(join(root, "openspec/specs/example"), { recursive: true });
@@ -375,47 +456,9 @@ test("draft descriptions enforce the same source-coverage and changelog rules be
           "Changelog: none — Only synthetic regression coverage changes.\n",
       ).status,
     ).toBe(0);
-    mkdirSync(join(root, "changes"));
-    writeFileSync(
-      join(root, "changes/example.md"),
-      "### Fixed\n\n- Keep synthetic behavior consistent.\n",
-    );
-    git("add", "changes");
-    git("commit", "-qm", "fragment");
-    expect(run(reason).status).toBe(0);
-    writeFileSync(join(root, "changes/example.md"), "invalid fragment");
-    expect(run(reason).status).toBe(1);
   } finally {
     rmSync(root, { recursive: true, force: true });
   }
-});
-
-test("an added feature ships a help declaration or says why it needs none", () => {
-  const added = "### Added\n\n- A synthetic feature.\n";
-  const fixed = "### Fixed\n\n- A synthetic fix.\n";
-  const paths = ["changes/synthetic.md", "web/src/example.tsx"];
-  const read = (text: string) => (path: string) =>
-    path === "changes/synthetic.md" ? text : undefined;
-  expect(assessHelpImpact(paths, read(added), "")).toEqual([
-    expect.stringContaining("changes/synthetic.md adds something"),
-  ]);
-  expect(assessHelpImpact(paths, read(fixed), "")).toEqual([]);
-  expect(
-    assessHelpImpact(
-      [...paths, "web/src/world/example.help.ts"],
-      read(added),
-      "",
-    ),
-  ).toEqual([]);
-  expect(
-    assessHelpImpact(
-      paths,
-      read(added),
-      "Help: none — The setting has no control on screen.",
-    ),
-  ).toEqual([]);
-  for (const answer of ["Help: none", "Help: none — <reason>", "Help: yes"])
-    expect(assessHelpImpact(paths, read(added), answer)).toHaveLength(1);
 });
 
 test("deleted source owners are optional while deleted current specs still require deltas", () => {

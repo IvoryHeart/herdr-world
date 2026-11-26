@@ -7,15 +7,18 @@
 - Create worktrees under `.agents/worktrees/` with `bun run agent:worktree -- create <slug> <parent-ref>` after resolving the parent.
 - Preserve others' edits and worktrees; never move or clean another agent's worktree.
 - Use synthetic data and reserved domains; never publish private hosts, usernames, paths, sockets, keys, tokens, sessions or repository contents. Inspect diff/history before pushing.
-- Scan committed additions with `bun run check:privacy` before any push. Never copy material from `.agents/` into tracked paths without that scan; keep owner-only research in gitignored `research-local/`. CI checks every branch push and PR even when local hooks are skipped.
+- Scan committed additions with `bun run check:privacy` before any push. Never copy material from `.agents/` into tracked paths without that scan; keep owner-only research in gitignored `research-local/`. Privacy CI checks each PR change once; the hook scans every pushed ref.
 - Local-first, trusted-single-user: LAN binding, authentication, uploads, shell/terminal operations and update installation are security-sensitive.
+- Storage catalog rule: changes that add or alter persisted data (a table, data-folder file, browser storage key or Board document field) must list it in `server/src/storage/catalog.ts` with its owner, identity and limit; prefer an existing store; a new table or data file needs the owner's approval in the mandate; never automatically trim user data.
+- World is one unified object. It is derived from the sources of record (the runtimes, git, harness files, deployments, integrations, World's own stores and any other files it reads) and given to the views (Town, Desk, Board, Spaces, CLI) to display. A change made in any view goes through World to its source of record, and a change at a source reaches every view through World. Views never keep their own copy of World state, never derive the same fact (a name, colour, room, grouping) in their own code, and never write to a runtime or store around World. New state joins the World object and its source of record, not a view. A fix that works in one view only is not a fix.
 - Qualify downstream operations by immutable connection ID and runtime generation; never fall back to another connection.
 - Aggregate observation is bounded and read-only; failed-host cached topology is stale and non-actionable.
-- Keep the browser on one World origin; never restore bridge Host, Origin or cross-origin CSP configuration.
+- Keep the browser on one World origin; never restore bridge Host, Origin or cross-origin CSP configuration. Sole exception: IDE pages may frame VS Code's webview origin (`https://*.vscode-cdn.net`).
 - SSH profiles accept OpenSSH aliases or `user@host`; policy belongs in OpenSSH config. Never persist passwords, keys, passphrases or arbitrary SSH options.
-- Feature PRs do not regenerate Help pictures unless adding or changing a help entry; capture only those entries with `HELP_PICTURES_IDS="<id>" bun run help:pictures`. Stale fingerprints warn; main refreshes the full set through one bot PR.
+- Feature PRs do not regenerate Help pictures unless adding or changing a help entry; capture only those entries with `HELP_PICTURES_IDS="<id>" bun run help:pictures`. Stale fingerprints warn; the broken automatic refresh bot is removed; capture changed entries explicitly.
 - Never commit generated `web/dist/`, `server/public/`, binaries, `.pages-dist/` or `dist/`.
-- Add a changelog fragment before pushing, or state `Changelog: none — <reason>` in the PR; [format](changes/README.md). Never edit `CHANGELOG.md` directly.
+- Use `fix:` or `feat:` PR titles for release notes (squash merge preserves the title). Release-please owns `CHANGELOG.md` and release version updates; no change fragments.
+- Feature PRs never edit `scripts/web-asset-budget.json` or `scripts/check-web-assets.mjs` to accommodate bundle growth. Request a separate owner-approved budget-data PR with the exact raise printed by Web asset headroom and a short reason history; main's status and workflow summary show remaining headroom. Lowering the budget is free; other asset limits stay unchanged.
 - Non-documentation PRs require plain `Spec impact:` and `Verification impact:` lines naming changed specs/OpenSpec changes and evidence/owners/checks, or `none — <reason>`; `check:pr-body` enforces presence and diff consistency, and reviewers assess the decision.
 - Update current docs with significant product, API, configuration, installation or workflow changes:
   - Capability `notes.md`: controls, menu paths, shortcuts, edge cases and source ownership.
@@ -52,19 +55,20 @@ Contracts live only in OpenSpec; notes own navigation and usage. Do not use `-m`
 Feature PRs edit `openspec/changes/<slug>/` deltas, code and capability notes, never
 current `openspec/specs/**/spec.md` directly. Update the capability's `notes.md`
 Code list in the same feature PR, including new storage and rendering paths, even
-while its spec delta remains active; notes must not wait for the archive bot.
-After main changes, one bot PR applies and archives completed deltas in merge date
-order, stopping at the first conflict.
-Review that PR normally; never push to main. Keep one coherent change as direction changes.
+while its spec delta remains active; notes must not wait for archival.
+Completed merged deltas are synchronized through reviewed archive PRs with the pinned
+archive helper, in merge date order and stopping at the first conflict. The broken
+automatic archive bot is removed. Never push to main. Keep one coherent change as direction changes.
 
 ## Work loop
 
 Install: `bun install --frozen-lockfile`; hooks: `bun run install-hooks` once per clone.
 Tests sit beside source: `bun run test <path>`; direct `bun test` refuses.
 `bun scripts/affected.ts origin/main` lists branch impact.
+`bun run check:dead` reports production-only unused code (new findings fail) and largest copied blocks (report only) in `.agents/dead-code/`; place test support in `testing/` or `*.{fixture,cases,browserMock}.*` (development-only entries), move renamed nonstandard test helpers there, and mark intentional test-seam exports in production code `/** @internal */`; never pad the baseline, and use `bun run check:dead --prune` explicitly and commit resolved baseline entries with their fixes.
 Browser suites need Chrome/Chromium (`CHROME_BIN`) and queue machine-wide.
 Use one preview per worktree, with its own port/data folder and synthetic Herdr session: [recipe](docs/development.md#isolated-worktree-preview).
-Pre-push runs static checks and affected non-browser units; browser/behavioural acceptance runs in CI. `check:delivery` or `HERDR_WORLD_PREPUSH=full` runs all local lanes.
+Pre-push runs read-only formatting and privacy only. Static/unit/browser/behavioral checks run in CI; `check:delivery` explicitly runs all local lanes.
 After committing, run `bun run check:pr-body <file>` on the exact PR body; append stacked base ref.
 For stacked PRs: `bun run check:size origin/main <ref>`.
 Dependency graph changes: `bun run notices:generate`.

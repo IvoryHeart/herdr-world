@@ -1,4 +1,17 @@
-import { readFileSync } from "node:fs";
+import { ownsHomebrewService } from "../config/service-executable";
+import { runServiceCommand } from "../config/service-manager";
+import { serviceRuntime } from "./service-context";
+import { existsSync, readFileSync } from "node:fs";
+import {
+  handOffHomebrewService,
+  type HandoffDeps,
+  homebrewKeg,
+  systemHandoffDeps,
+} from "../config/homebrew-handoff";
+import {
+  resolveServicePaths,
+  resolveServicePlatform,
+} from "../config/service-definitions";
 import {
   escapeSystemdExecPath,
   xmlEscape,
@@ -45,6 +58,17 @@ export function restartServiceUsing(
     );
     return EXIT_FAILURE;
   }
+  if (ownsHomebrewService(executable, definition)) {
+    // Homebrew calls finalization before pruning the old keg. Re-register with
+    // opt while the old process is still alive, then start the new executable.
+    const installed = runServiceCommand(["service", "install"], {
+      runtime: serviceRuntime(context.runtime),
+      runCommand: context.runCommand,
+      log: context.log,
+      error: context.error,
+    });
+    return typeof installed === "number" ? installed : EXIT_FAILURE;
+  }
   const forms = [
     executable,
     escapeSystemdExecPath(executable),
@@ -74,6 +98,7 @@ export async function finishUpdate(
   context: CliContext,
   runProcess: RunProcessWithCodeTimeout,
   skipHerdr = false,
+  handoff?: HandoffDeps,
 ): Promise<number> {
   if (skipHerdr) {
     context.log(
@@ -117,5 +142,37 @@ export async function finishUpdate(
     context.log(
       "World integrations were not fully installed; run `herdr-world integration sync` to retry.",
     );
+  const keg = homebrewKeg(context.runtime.execPath);
+  if (keg && !serviceDefinitionVisible(context)) {
+    // Homebrew's post-install sandbox hides the home folder (and so the
+    // service definition); hand off through the process table instead.
+    const result = await handOffHomebrewService(
+      keg,
+      handoff ?? systemHandoffDeps(context.runtime.platform, context.log),
+    );
+    if (result === "restarted") context.log("Restarted the service.");
+    if (result === "none") {
+      context.log("No running World service was found; nothing to restart.");
+      context.log(
+        "Restart any running herdr-world process to use the new version.",
+      );
+    }
+    return EXIT_OK;
+  }
   return restartServiceUsing(context, context.runtime.execPath);
+}
+
+function serviceDefinitionVisible(context: CliContext): boolean {
+  try {
+    const platform = resolveServicePlatform(context.runtime.platform);
+    return existsSync(
+      resolveServicePaths(
+        platform,
+        context.runtime.homeDir,
+        context.runtime.appDataDir,
+      ).definition,
+    );
+  } catch {
+    return false;
+  }
 }

@@ -1,6 +1,7 @@
 import { expect, test } from "bun:test";
 import { execFileSync, spawnSync } from "node:child_process";
 import {
+  existsSync,
   mkdirSync,
   mkdtempSync,
   readFileSync,
@@ -9,7 +10,12 @@ import {
 } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { privacyRules, scanPrivacyRange } from "./check-privacy";
+import {
+  privacyRules,
+  scanPrivacyRange,
+  scanPrivacyText,
+} from "./check-privacy";
+import { checkPrBody, checkPrBodyEvent } from "./check-pr-body";
 
 // Assemble disallowed fixtures so these regressions obey the publication rule.
 const ip = (...parts: number[]) => parts.join(".");
@@ -20,6 +26,59 @@ const home = ["", "home", "operator", "report.md"].join("/");
 const email = ["operator", "mail-provider.com"].join("@");
 const tailnet = ["desktop", "private-tailnet", "ts", "net"].join(".");
 const login = `https://world.example/login?token=${secret}`;
+const metadataCases = [
+  [
+    "claude-session-link",
+    ["https://claude.ai", "code", "session_fixture-123"].join("/"),
+  ],
+  ["claude-session-trailer", ["Claude", "Session: fixture-123"].join("-")],
+  ["claude-code-footer", ["Generated with", "Claude Code"].join(" ")],
+  [
+    "claude-coauthor",
+    ["Co-Authored-By:", "Claude <claude@example.invalid>"].join(" "),
+  ],
+  ["private-ip", ip(10, 1, 2, 3)],
+  ["tailnet-ipv6", ["fd7a", "115c", "a1e0", "", "1234"].join(":")],
+  ["tailnet-host", tailnet],
+  ["home-path", home],
+  ["email", email],
+  ["login-token", login],
+  ["world-password", `HERDR_WORLD_PASSWORD=${secret}`],
+  ["session-secret", `SESSION_SECRET="${secret}"`],
+] as const;
+
+test("ordinary Claude prose, human coauthors and unrelated links remain allowed", () => {
+  for (const text of [
+    "Document Claude Code usage and session recovery.",
+    "https://claude.ai/code and https://claude.ai/docs/session_fixture",
+    "https://other.example/code/session_fixture",
+    "Co-Authored-By: Example <example@example.invalid>",
+    "Discuss the Claude-Session field and generated code.",
+  ])
+    expect(privacyRules(text)).toEqual([]);
+});
+
+test("Claude markers accept common casing and footer formatting", () => {
+  for (const [rule, text] of [
+    [
+      "claude-session-link",
+      ["https://CLAUDE.AI", "code", "session_fixture-123?x=1"].join("/"),
+    ],
+    [
+      "claude-session-trailer",
+      ["  cLaUdE", "sEsSiOn: fixture-123\r"].join("-"),
+    ],
+    [
+      "claude-code-footer",
+      ["🤖 Generated with", "[Claude Code](https://claude.ai/code)"].join(" "),
+    ],
+    [
+      "claude-coauthor",
+      ["  co-authored-by:", "cLaUdE <claude@example.invalid>"].join(" "),
+    ],
+  ] as const)
+    expect(privacyRules(text)).toContain(rule);
+});
 
 for (const address of [
   ip(10, 0, 0, 0),
@@ -181,6 +240,238 @@ function cli(root: string, args: string[]) {
   });
 }
 
+const publicGitHubEmails = [
+  ["support", "github.com"].join("@"),
+  ["12345+example-user", "users.noreply.github.com"].join("@"),
+  ["example-user", "users.noreply.github.com"].join("@"),
+  ["49699333+dependabot[bot]", "users.noreply.github.com"].join("@"),
+];
+
+for (const [index, address] of publicGitHubEmails.entries()) {
+  test(`public GitHub identity ${index} passes commit and PR metadata scans`, () =>
+    repository(({ root, git, base }) => {
+      const message = [
+        "Bump example-package from 1.0.0 to 1.0.1",
+        "",
+        `Signed-off-by: dependabot[bot] <${publicGitHubEmails[0]}>`,
+        `Co-authored-by: Example <${address}>`,
+      ].join("\n");
+      git(
+        "-c",
+        "core.hooksPath=/dev/null",
+        "commit",
+        "--allow-empty",
+        "-qm",
+        message,
+      );
+      const head = git("rev-parse", "HEAD");
+      const refs = join(root, "refs");
+      writeFileSync(
+        refs,
+        `refs/heads/topic ${head} refs/heads/topic ${base}\n`,
+      );
+      const event = join(root, "event.json");
+      writeFileSync(event, JSON.stringify({ before: base, after: head }));
+      for (const args of [
+        ["--range", base, head],
+        ["--pre-push", refs],
+        ["--event", event],
+      ]) {
+        const result = cli(root, args);
+        expect(result.status).toBe(0);
+        expect(result.stderr).toBe("");
+      }
+      writeFileSync(
+        event,
+        JSON.stringify({
+          action: "edited",
+          pull_request: {
+            base: { sha: base },
+            head: { sha: head },
+            title: address,
+            body: message,
+          },
+        }),
+      );
+      expect(cli(root, ["--event", event]).status).toBe(0);
+      expect(checkPrBodyEvent(event, root).join("\n")).not.toContain(
+        "privacy/",
+      );
+      const bodyFile = join(root, "body.md");
+      writeFileSync(bodyFile, message);
+      expect(checkPrBody(bodyFile, root).join("\n")).not.toContain("privacy/");
+    }));
+}
+
+test("public GitHub identities never exempt other metadata or file-content leaks", () => {
+  for (const address of publicGitHubEmails) {
+    for (const [rule, value] of metadataCases)
+      for (const text of [`${address}\n${value}`, `${value} (${address})`])
+        expect(scanPrivacyText(text, "PR body").map((f) => f.rule)).toContain(
+          rule,
+        );
+    expect(
+      scanPrivacyText(
+        ["Co-authored-by:", `Claude <${address}>`].join(" "),
+        "commit message",
+      ).map((f) => f.rule),
+    ).toContain("claude-coauthor");
+  }
+  repository(({ root, base, commit }) => {
+    const head = commit(publicGitHubEmails.slice(0, 3).join("\n"));
+    expect(scanPrivacyRange(root, base, head).map((f) => f.rule)).toEqual([
+      "email",
+      "email",
+      "email",
+    ]);
+  });
+});
+
+test("metadata email exceptions require exact public GitHub identities", () => {
+  for (const address of [
+    email,
+    ["operator", "github.com"].join("@"),
+    ["support", "sub.github.com"].join("@"),
+    ["support", "github.com.evil.org"].join("@"),
+    ["operator", "sub.users.noreply.github.com"].join("@"),
+    ["operator", "users.noreply.github.com.evil.org"].join("@"),
+  ])
+    expect(
+      scanPrivacyText(address, "commit message").map((f) => f.rule),
+    ).toContain("email");
+});
+
+for (const [rule, value] of metadataCases) {
+  test(`commit messages reject ${rule} and identify the commit without its text`, () =>
+    repository(({ root, git, base }) => {
+      git(
+        "-c",
+        "core.hooksPath=/dev/null",
+        "commit",
+        "--allow-empty",
+        "-qm",
+        `Safe summary\n\n${value}`,
+      );
+      const bad = git("rev-parse", "HEAD");
+      git(
+        "-c",
+        "core.hooksPath=/dev/null",
+        "commit",
+        "--allow-empty",
+        "-qm",
+        "Later clean message",
+      );
+      const head = git("rev-parse", "HEAD");
+      const refs = join(root, "refs");
+      writeFileSync(
+        refs,
+        `refs/heads/topic ${head} refs/heads/topic ${base}\n`,
+      );
+      const event = join(root, "event.json");
+      writeFileSync(event, JSON.stringify({ before: base, after: head }));
+      for (const args of [
+        ["--range", base, head],
+        ["--pre-push", refs],
+        ["--event", event],
+      ]) {
+        const result = cli(root, args);
+        expect(result.status).toBe(1);
+        expect(result.stderr).toContain(
+          `commit ${bad} "commit message":3: privacy/${rule}`,
+        );
+        expect(result.stderr).not.toContain(value);
+        expect(result.stdout).not.toContain(value);
+      }
+    }));
+
+  test(`PR titles and bodies reject ${rule}, including description-only edits`, () =>
+    repository(({ root, base }) => {
+      const event = join(root, "event.json");
+      for (const field of ["title", "body"]) {
+        writeFileSync(
+          event,
+          JSON.stringify({
+            action: "edited",
+            pull_request: {
+              base: { sha: base },
+              head: { sha: base },
+              title: "Safe title",
+              body: null,
+              [field]: `Safe first line\n${value}`,
+            },
+          }),
+        );
+        const result = cli(root, ["--event", event]);
+        expect(result.status).toBe(1);
+        expect(result.stderr).toContain(`"PR ${field}":2: privacy/${rule}`);
+        expect(result.stderr).not.toContain(value);
+        expect(result.stdout).not.toContain(value);
+        expect(checkPrBodyEvent(event, root)).toContain(
+          `"PR ${field}":2: privacy/${rule}`,
+        );
+      }
+      const bodyFile = join(root, "body.md");
+      writeFileSync(bodyFile, `Safe first line\n<!--\n${value}\n-->\n`);
+      const problems = checkPrBody(bodyFile, root);
+      expect(problems).toContain(`"PR body":3: privacy/${rule}`);
+      expect(problems.join("\n")).not.toContain(value);
+    }));
+}
+
+test("the real pre-push hook privacy step blocks intended and existing PR bodies", () =>
+  repository(({ root, base }) => {
+    const bin = join(root, "bin");
+    mkdirSync(bin);
+    writeFileSync(
+      join(bin, "bun"),
+      `#!/bin/sh
+case "$1" in
+  scripts/check-privacy.ts) shift; exec "$REAL_BUN" "$PRIVACY_SCRIPT" "$@" ;;
+  run) [ "$2" = format:check ] && exit 0 ;;
+esac
+printf '%s\\n' "$*" >> "$DELIVERY_COMMANDS"
+`,
+      { mode: 0o755 },
+    );
+    writeFileSync(join(bin, "gh"), '#!/bin/sh\nprintf "%s" "$EXISTING_PR"\n', {
+      mode: 0o755,
+    });
+    const bodyFile = join(root, "body.md");
+    const value = metadataCases[0][1];
+    writeFileSync(bodyFile, `Safe summary\n${value}\n`);
+    for (const leak of ["intended body", "existing body", "existing title"]) {
+      const intended = leak === "intended body";
+      const result = spawnSync(
+        "sh",
+        [join(import.meta.dir, "../.githooks/pre-push")],
+        {
+          cwd: root,
+          encoding: "utf8",
+          input: `refs/heads/topic ${base} refs/heads/topic ${base}\n`,
+          env: {
+            ...process.env,
+            PATH: `${bin}:${process.env.PATH}`,
+            REAL_BUN: process.execPath,
+            PRIVACY_SCRIPT: script,
+            DELIVERY_COMMANDS: join(root, "delivery-commands"),
+            HERDR_WORLD_PR_BODY: intended ? bodyFile : "",
+            EXISTING_PR: JSON.stringify({
+              title: leak === "existing title" ? value : "Safe title",
+              body: leak === "existing body" ? value : "Safe remote body",
+            }),
+          },
+        },
+      );
+      expect(result.status).toBe(1);
+      expect(result.stderr).toContain(
+        leak === "existing title" ? '"PR title":1:' : '"PR body":',
+      );
+      expect(result.stderr).toContain("privacy/claude-session-link");
+      expect(result.stderr).not.toContain(value);
+      expect(existsSync(join(root, "delivery-commands"))).toBe(false);
+    }
+  }));
+
 test("release walk allows only its reviewed unquoted synthetic password binding", () =>
   repository(({ root, base, commit }) => {
     const path = "scripts/release-walk/world.py";
@@ -190,7 +481,7 @@ test("release walk allows only its reviewed unquoted synthetic password binding"
     const binding = `{'${key}': PASSWORD}\n`;
     const clean = commit(fixture + binding, path);
     expect(scanPrivacyRange(root, base, clean)).toEqual([]);
-    commit(
+    const bad = commit(
       fixture +
         binding +
         ["'PASSWORD'", "'hunter2'", "OTHER_PASSWORD"]
@@ -200,10 +491,10 @@ test("release walk allows only its reviewed unquoted synthetic password binding"
     );
     const head = commit(binding);
     expect(scanPrivacyRange(root, base, head)).toEqual([
-      { file: path, line: 3, rule: "world-password" },
-      { file: path, line: 4, rule: "world-password" },
-      { file: path, line: 5, rule: "world-password" },
-      { file: "report.md", line: 1, rule: "world-password" },
+      { file: path, line: 3, rule: "world-password", commit: bad },
+      { file: path, line: 4, rule: "world-password", commit: bad },
+      { file: path, line: 5, rule: "world-password", commit: bad },
+      { file: "report.md", line: 1, rule: "world-password", commit: head },
     ]);
   }));
 
@@ -415,6 +706,47 @@ test("published dependency attribution is reusable only in the root generated li
       "DEPENDENCY_LICENSES.md",
     );
     expect(scanPrivacyRange(root, trusted, refreshed)).toEqual([]);
+  }));
+
+test("reviewed Knip copyright address is allowed only in the root generated licence artifact", () =>
+  repository(({ base, commit, root }) => {
+    const address = ["hiroki.osame", "gmail.com"].join("@");
+    const copyright = `Copyright (c) Hiroki Osame <${address}>\n`;
+    const licensed = commit(copyright, "DEPENDENCY_LICENSES.md");
+    expect(scanPrivacyRange(root, base, licensed)).toEqual([]);
+    expect(privacyRules(copyright)).toContain("email");
+    mkdirSync(join(root, "nested"));
+    mkdirSync(join(root, "scripts"));
+    let previous = licensed;
+    for (const file of [
+      "report.md",
+      "DEPENDENCY_NOTICES.md",
+      "nested/DEPENDENCY_LICENSES.md",
+      "scripts/privacy-allowlist.ts",
+    ]) {
+      const outside = commit(copyright, file);
+      expect(scanPrivacyRange(root, previous, outside)).toContainEqual(
+        expect.objectContaining({ file, rule: "email" }),
+      );
+      previous = outside;
+    }
+    const otherAddresses = [
+      ["hiroki.osame", "mail-provider.com"].join("@"),
+      ["another-person", "gmail.com"].join("@"),
+      ["hiroki.osame", "gmail.com.evil.org"].join("@"),
+    ];
+    const bad = commit(
+      copyright + otherAddresses.join("\n") + `\n${login}\n${home}\n`,
+      "DEPENDENCY_LICENSES.md",
+    );
+    const findings = scanPrivacyRange(root, previous, bad);
+    expect(findings.filter((finding) => finding.rule === "email")).toHaveLength(
+      3,
+    );
+    for (const rule of ["login-token", "home-path"])
+      expect(findings).toContainEqual(
+        expect.objectContaining({ file: "DEPENDENCY_LICENSES.md", rule }),
+      );
   }));
 
 test("main pushes cannot approve newly added attribution addresses", () =>

@@ -11,6 +11,8 @@ export type Complete = (
   connectionId: string,
   generation: number,
   panes: readonly Row[],
+  /** When the read began (wall clock, ms): it witnesses nothing earlier. */
+  readAt: number,
 ) => void;
 
 /** A presentation bound or malformed reply cannot witness terminal absence. */
@@ -18,6 +20,7 @@ export function complete(
   observer: Complete | undefined,
   lease: { connectionId: string; generation: number },
   value: unknown,
+  readAt: number,
 ) {
   const panes = (value as { panes?: unknown } | null)?.panes;
   if (Array.isArray(panes))
@@ -28,5 +31,6 @@ export function complete(
         (row): row is Row =>
           !!row && typeof row === "object" && !Array.isArray(row),
       ),
+      readAt,
     );
 }

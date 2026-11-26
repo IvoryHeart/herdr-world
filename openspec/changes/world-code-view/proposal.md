@@ -44,9 +44,10 @@ The owner's real-IDE direction supersedes the earlier native-editor proposal.
 ## Impact
 
 Research: [comparison, hurdles and owner decisions](../../../docs/design/code-view/research.md).
-Design: [mock walkthrough](../../../docs/design/code-view/design.md), served at
-`/code-view-prototype.html` with synthetic data only. No dependency or production
-contract owner changes in this PR; no current capability spec is synchronized.
+Design: [interaction study](../../../docs/design/code-view/design.md); its mock
+was retired when the first version shipped (#1009, see
+[tasks](tasks.md)). No current capability spec is synchronized yet: the
+requirements stay in this change until the open tasks land.
 
 Future implementation would touch common shell navigation, integration
 catalogue/adapters, service process/auth/HTTP/WS and SSH transport ownership, plus

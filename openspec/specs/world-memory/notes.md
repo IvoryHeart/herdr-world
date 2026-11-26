@@ -4,7 +4,8 @@
 
 **Surfaces:**
 
-- Town Library building, town center ring, Board hub (**Memory**) and supported agent Settings open one Library.
+- Town Library building, town center ring (**Buildings**), Board hub (**Memory**) and supported agent Settings open one Library; its sign also counts what agents made.
+- The Library's **Made by agents** tab lists artefacts (world-artefacts); search covers them alongside memory.
 - Readers select host/project/agent; shelves support search, fresh reads and explicit revision-checked edits.
 - CLI memory list/search/read/create/update/delete shares the API; memory demo --json is synthetic.
 - TUI/core share adapters and host routing; Unix hosts need Python 3, Windows refuses.
@@ -24,6 +25,7 @@
 - `server/src/memory/worker.py`
 - `server/src/cli/memory.ts`
 - `web/src/world/memory/MemoryLibrary.tsx`
+- `web/src/world/memory/LibraryArtefacts.tsx`, `artefactShelfClient.ts`, `artefactShelfModel.ts`, `artefactFixture.ts` (the "Made by agents" wing; see world-artefacts notes)
 - `web/src/features/memory/mount.tsx`
 
 **Tests:**
@@ -86,11 +88,17 @@ isolated synthetic fixture for sharing, old memory, CRUD, refusals and limits.
   Library entry. Supported harnesses still offer their missing files to create.
   The [testing fixture](../../../docs/memory-api.md#discovery-and-load-evidence) includes
   OpenCode and an unsupported-only project, plus a no-capable-host switch.
+- A host with no such agent (every agent stopped) still offers the Library while
+  agents made something there: it opens on **Made by agents** alone, says memory
+  shows again when an agent with memory starts, and never reads the host's
+  memory. `memoryHostsOf` publishes every live host, marking these
+  `memory: false`; `libraryHosts()` (memoryClient.ts) is the one list every
+  entry point uses. Try it with `?memoryFixture=gone`.
 - Open it from Town's **library**, right of the town center on the first street,
-  from the town center's ring (**Library**), from Board's hub (**Memory**, on the
+  from the town center's ring (**Buildings** → **Library**), from Board's hub (**Memory**, on the
   selected agent or workspace), from an agent window's settings (**Memory**)
   or from Settings (**Agents** → **Library (memory)**, or search "memory").
-  On a phone the library folds to a book sign on the town center's left wing.
+  A phone stands the library there too: pan right from Town's first view.
   The library's sign counts files, stale files and shared files across up to four
   hosts, read at most every five minutes; it never shows contents.
 - The left column (a picker on a phone) chooses a reader: everything on a host,

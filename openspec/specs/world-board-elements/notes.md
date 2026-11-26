@@ -1,6 +1,6 @@
 # Board elements notes
 
-[Contract](../../changes/board-element-data/specs/world-board-elements/spec.md). Navigation and usage guidance; contracts live in OpenSpec.
+[Contract](spec.md). Navigation and usage guidance; contracts live in OpenSpec.
 
 **Surfaces:**
 

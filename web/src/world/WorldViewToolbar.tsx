@@ -1,159 +1,71 @@
 import { Search, X } from "lucide-react";
-import { useState, type FormEvent, type ReactNode } from "react";
-import { createPortal } from "react-dom";
-import { useRootFlag } from "../rootFlag";
-import {
-  useFoldingSearch,
-  usePhoneViewport,
-  useViewSearchTitle,
-} from "./useFoldingSearch";
-import { useViewSearchShortcut } from "./viewSearchShortcut";
+import { openCommandBox } from "../commandBoxKey";
+import { useViewSearchTitle } from "./useFoldingSearch";
 
-export {
-  worldNodeSearchText,
-  worldSearchMatches,
-} from "./worldSearch";
-
+/**
+ * A view's way into World's one search (#1355, worldFinder.ts): a button that
+ * opens the search box, as `/`, Ctrl+F and Cmd+K do. While a search chosen
+ * from runs in the view, it shows the search and its count; clicking it
+ * reopens the box with it, and its × (or Escape) ends it. Other ways in open
+ * the box empty.
+ */
 export function WorldViewToolbar({
   viewLabel,
   query,
-  onQueryChange,
   resultLabel,
-  onSubmit,
-  onNavigate,
   onClear,
-  children,
 }: {
   viewLabel: string;
+  /** The search the view shows, or "" when none runs. */
   query: string;
-  onQueryChange(query: string): void;
   resultLabel?: string;
-  /** Enter. Returning false keeps the phone's search open. */
-  onSubmit?(): void | boolean;
-  /** Up and Down step through the results. */
-  onNavigate?(step: 1 | -1): void;
-  /**
-   * Escape and the phone's close button empty the search, rather than
-   * leaving the phone's search with its query.
-   */
-  onClear?(): void;
-  children?: ReactNode;
+  /** End the search. */
+  onClear(): void;
 }) {
-  const compact = usePhoneViewport();
-  const [compactSearchOpen, setCompactSearchOpen] = useState(false);
-  // On desktop the search rests as an icon until it is wanted.
-  const folding = useFoldingSearch(query, !compact);
-  const title = useViewSearchTitle(`Search ${viewLabel}`);
-  // The same as clicking the search icon: a newly opened phone search takes
-  // the cursor through autoFocus.
-  useViewSearchShortcut(() => {
-    if (compact && !compactSearchOpen) setCompactSearchOpen(true);
-    else folding.expand();
-  });
-
-  // Leaving the phone layout closes its search overlay. Adjusted while
-  // rendering, not in an effect, so mounting commits no extra render.
-  if (!compact && compactSearchOpen) setCompactSearchOpen(false);
-  // The phone overlay restyles the view's results (world-shell.css).
-  useRootFlag("data-world-search-overlay", compact && compactSearchOpen);
-
-  const submit = (event: FormEvent) => {
-    event.preventDefault();
-    const done = onSubmit?.();
-    if (onSubmit && done !== false && compact) setCompactSearchOpen(false);
-  };
-  const close = () => {
-    onClear?.();
-    setCompactSearchOpen(false);
-  };
-  const search = (
-    <form
-      className={
-        compact ? "world-view-search-overlay" : "world-view-toolbar-search"
-      }
-      role="search"
-      onSubmit={submit}
-      {...(compact ? {} : folding.boxProps)}
-    >
-      <Search size={15} aria-hidden="true" />
-      <label>
-        <span className="world-sr-only">Search {viewLabel}</span>
-        <input
-          ref={folding.inputRef}
-          autoFocus={compact}
-          type="search"
-          value={query}
-          placeholder={`Search ${viewLabel}`}
-          onChange={(event) => onQueryChange(event.currentTarget.value)}
-          onKeyDown={(event) => {
-            if (
-              onNavigate &&
-              (event.key === "ArrowDown" || event.key === "ArrowUp")
-            ) {
-              event.preventDefault();
-              onNavigate(event.key === "ArrowDown" ? 1 : -1);
-            } else if (event.key === "Escape") {
-              event.preventDefault();
-              if (compact) close();
-              else {
-                if (onClear) onClear();
-                else onQueryChange("");
-                folding.fold();
-              }
-            }
-          }}
-        />
-      </label>
-      {resultLabel ? (
-        <span className="world-view-toolbar-results" aria-live="polite">
-          {resultLabel}
-        </span>
-      ) : null}
-      {compact ? (
-        <button
-          type="button"
-          aria-label={`Close ${viewLabel} search`}
-          title="Close search"
-          onClick={close}
-        >
-          <X size={16} aria-hidden="true" />
-        </button>
-      ) : null}
-    </form>
-  );
-
+  const title = useViewSearchTitle("Find in World");
   return (
     <div className="world-view-toolbar" aria-label={`${viewLabel} controls`}>
-      {compact ? (
-        <button
-          type="button"
-          className="world-view-search-toggle"
-          aria-label={`Search ${viewLabel}`}
-          aria-expanded={compactSearchOpen}
-          onClick={() => setCompactSearchOpen((open) => !open)}
+      {query ? (
+        <div
+          className="world-view-toolbar-search"
+          role="search"
+          aria-label={`${viewLabel} search`}
         >
-          <Search size={16} aria-hidden="true" />
-        </button>
-      ) : folding.folded ? (
+          <button
+            type="button"
+            className="world-view-search-query"
+            title={title}
+            onClick={() => openCommandBox({ resume: true })}
+          >
+            <Search size={15} aria-hidden="true" />
+            <span>{query}</span>
+          </button>
+          {resultLabel ? (
+            <span className="world-view-toolbar-results" aria-live="polite">
+              {resultLabel}
+            </span>
+          ) : null}
+          <button
+            type="button"
+            className="world-view-search-end"
+            aria-label="End search"
+            title="End search (Esc)"
+            onClick={onClear}
+          >
+            <X size={14} aria-hidden="true" />
+          </button>
+        </div>
+      ) : (
         <button
-          ref={folding.toggleRef}
           type="button"
           className="world-view-search-toggle"
-          aria-label={`Search ${viewLabel}`}
+          aria-label="Find in World"
           title={title}
-          onClick={folding.expand}
+          onClick={() => openCommandBox()}
         >
           <Search size={15} aria-hidden="true" />
         </button>
-      ) : (
-        search
       )}
-      {children ? (
-        <div className="world-view-toolbar-actions">{children}</div>
-      ) : null}
-      {compact && compactSearchOpen
-        ? createPortal(search, document.body)
-        : null}
     </div>
   );
 }

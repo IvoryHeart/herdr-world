@@ -39,7 +39,6 @@ import {
   townLetterLabel,
   townLetterLine,
   townPostCounts,
-  townPostFoldAt,
   townPostOffice,
   townPostParts,
   townPostSignAt,
@@ -63,6 +62,7 @@ import {
 } from "./townPostFixture";
 import { townLetterUrl } from "./townPostPaint";
 import type { TownRendererHandle } from "./townRenderer";
+import { useTownPlace } from "./useTownPlace";
 import "./townPost.css";
 
 /**
@@ -129,6 +129,9 @@ function useFixtureOffice(): Office | null {
   return office;
 }
 
+/** The post office's window (#1170): Needs you, from its sign or building. */
+const openPost = () => openNeedsYou(undefined, { window: true });
+
 /** Keyboard focus on an off-screen sign or letter pans `at` into view. */
 function revealer(
   renderer: { readonly current: TownRendererHandle | null },
@@ -158,8 +161,8 @@ function revealer(
  * never cargo. Its sign counts Needs you's items by kind without hovering
  * (questions, blocked agents, finished work to review) and the Outbox's
  * answers to check; clicking it, or Enter on it, opens Needs you, the same
- * list as the top bar's counter. A narrow town folds the sign to a smaller
- * one across its house's front. In its yard each open question lies as a
+ * list as the top bar's counter, on a narrow (phone) town too (#1351). In
+ * its yard each open question lies as a
  * letter, oldest first, opening a letter card whose **Answer** opens Needs
  * you at that question; your answers still on their way ride the mail
  * trolley, which opens Town's Outbox.
@@ -178,12 +181,15 @@ export const TownPostOffice = memo(function TownPostOffice({
 }) {
   const source = useContext(TownPostContext);
   const fixture = useFixtureOffice();
-  const folded = layout.formFactor === "narrow";
-  const lot = townPostLotBeside(layout.center);
-  const at = folded ? townPostFoldAt(lot) : townPostSignAt(lot);
+  useTownPlace("post", openPost);
+  const narrow = layout.formFactor === "narrow";
+  const at = townPostSignAt(
+    townPostLotBeside(layout.center),
+    layout.formFactor,
+  );
   const reveal = revealer(renderer, at);
   const sign = (counts: TownPostCounts | null) => (
-    <Sign counts={counts} folded={folded} at={at} onFocus={reveal} />
+    <Sign counts={counts} narrow={narrow} at={at} onFocus={reveal} />
   );
   const counted = fixture ? (
     sign(fixtureCounts(fixture))
@@ -220,12 +226,13 @@ const fixtureCounts = (office: Office): TownPostCounts => ({
 
 function Sign({
   counts,
-  folded,
+  narrow,
   at,
   onFocus,
 }: {
   counts: TownPostCounts | null;
-  folded: boolean;
+  /** A phone's sign stands at the ridge's middle, its counts stacked. */
+  narrow: boolean;
   at: { x: number; y: number };
   onFocus(event: FocusEvent<HTMLElement>): void;
 }) {
@@ -234,26 +241,24 @@ function Sign({
   return (
     <button
       type="button"
-      className={folded ? "town-post-fold" : "town-post-sign"}
+      className="town-post-sign"
+      data-narrow={narrow || undefined}
       data-waiting={waiting > 0 || undefined}
       style={{ left: at.x, top: at.y }}
       aria-label={`Post office: ${counts ? townPostSpoken(counts) : "Needs you"}. Open Needs you`}
       title="Post office: open Needs you"
       onPointerDown={(event) => event.stopPropagation()}
       onFocus={onFocus}
+      data-town-place="post"
       onClick={(event) => {
         event.stopPropagation();
-        openNeedsYou();
+        openPost();
       }}
     >
-      {folded ? (
-        <span className="town-post-mark" aria-hidden="true" />
-      ) : (
-        <span className="town-post-sign-title" aria-hidden="true">
-          <span className="town-post-mark" />
-          POST OFFICE
-        </span>
-      )}
+      <span className="town-post-sign-title" aria-hidden="true">
+        <span className="town-post-mark" />
+        POST OFFICE
+      </span>
       {counts ? (
         <span className="town-post-counts" aria-hidden="true">
           {parts.length ? (
@@ -264,11 +269,11 @@ function Sign({
                 ) : (
                   <span className="town-post-letter">✉</span>
                 )}
-                {folded ? part.count : part.text}
+                {part.text}
               </span>
             ))
           ) : (
-            <span data-kind="none">{folded ? "0" : "Nothing for you"}</span>
+            <span data-kind="none">Nothing for you</span>
           )}
         </span>
       ) : null}
@@ -293,8 +298,9 @@ const letterArt = (verified: boolean) => {
 const isFixture = (letter: TownLetter) =>
   letter.id.startsWith(TOWN_POST_FIXTURE_PREFIX);
 
-/** Needs you at a letter's question. */
-const answer = (letter: TownLetter) => openNeedsYou(needsYouAskKey(letter.id));
+/** Needs you at a letter's question, in Town's one window. */
+const answer = (letter: TownLetter) =>
+  openNeedsYou(needsYouAskKey(letter.id), { window: true });
 
 /** The yard from the World ledger: open asks and answers on their way. */
 function LedgerYard({

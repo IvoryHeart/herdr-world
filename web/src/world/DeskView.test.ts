@@ -8,6 +8,7 @@ import {
   otherHostSummaries,
   partitionDesk,
 } from "./DeskView";
+import { deskHostLabel } from "./DeskOtherHosts";
 import { agentThreadTitle } from "./worldObject";
 import {
   deskClient,
@@ -386,7 +387,8 @@ describe("other-host summaries", () => {
     } as unknown as WorldObject);
     expect(summaries).toEqual([
       {
-        connectionId: "build-vm",
+        key: "runtime:build-vm",
+        connectionIds: ["build-vm"],
         label: "build-vm",
         stale: false,
         needs: 1,
@@ -394,6 +396,65 @@ describe("other-host summaries", () => {
         working: 1,
       },
     ]);
+  });
+});
+
+describe("other-host summaries follow Group runtimes", () => {
+  const away = (
+    id: string,
+    connectionId: string,
+    status: WorldLeafObject["status"],
+  ) =>
+    ({
+      ...leaf(id, status),
+      selectedHost: false,
+      connectionId,
+      hostLabel: connectionId,
+      stale: false,
+    }) as WorldLeafObject;
+  const world = {
+    leaves: [
+      away("t1", "build-tui", "blocked"),
+      away("c1", "build-core", "working"),
+    ],
+  } as unknown as WorldObject;
+  test("one per machine: a machine's runtimes are one summary", () => {
+    const machine = { key: "ssh:build.example.test", label: "build-tui" };
+    expect(otherHostSummaries(world, undefined, () => machine)).toEqual([
+      {
+        key: "ssh:build.example.test",
+        connectionIds: ["build-tui", "build-core"],
+        label: "build-tui",
+        stale: false,
+        needs: 1,
+        done: 0,
+        working: 1,
+      },
+    ]);
+  });
+  test("one per runtime: each runtime is its own summary", () => {
+    expect(
+      otherHostSummaries(world, undefined, (id) => ({
+        key: `runtime:${id}`,
+        label: id,
+      })).map((host) => [host.key, host.connectionIds]),
+    ).toEqual([
+      ["runtime:build-tui", ["build-tui"]],
+      ["runtime:build-core", ["build-core"]],
+    ]);
+  });
+  test("Desk's host label counts groups, not runtimes", () => {
+    const shown = {
+      hosts: [
+        { connectionId: "build-tui", label: "build-tui" },
+        { connectionId: "build-core", label: "build-core" },
+      ],
+    } as unknown as WorldObject;
+    const machine = { key: "ssh:build.example.test", label: "build machine" };
+    expect(deskHostLabel(shown, () => machine)).toBe("build machine");
+    expect(
+      deskHostLabel(shown, (id) => ({ key: `runtime:${id}`, label: id })),
+    ).toBe("2 hosts");
   });
 });
 

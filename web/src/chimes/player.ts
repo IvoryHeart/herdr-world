@@ -205,15 +205,32 @@ function audioContext() {
   return context;
 }
 
+const resume = (audio: AudioContext | null) =>
+  void audio?.resume().catch(() => {});
+
 let unlockInstalled = false;
-/** Resume audio on the page's first taps and keys (browsers require it). */
+let creating = false;
+/**
+ * Resume audio on the page's taps and keys (browsers require it). The first
+ * one creates the AudioContext just after the event, not inside it: creating
+ * one takes 35–100 ms, which delayed that first tap or key (#1248). The
+ * page's activation outlasts the wait; where it does not, the next tap or key
+ * resumes the context directly.
+ */
 export function installChimeUnlock() {
   if (unlockInstalled || typeof window === "undefined") return;
   unlockInstalled = true;
   const unlock = () => {
-    void audioContext()
-      ?.resume()
-      .catch(() => {});
+    if (context) return resume(context);
+    if (creating) return;
+    creating = true;
+    const create = () => {
+      creating = false;
+      resume(audioContext());
+    };
+    if (typeof window.requestIdleCallback === "function")
+      window.requestIdleCallback(create, { timeout: 200 });
+    else globalThis.setTimeout(create, 0);
   };
   for (const type of ["pointerdown", "keydown", "touchend"])
     window.addEventListener(type, unlock, { capture: true, passive: true });

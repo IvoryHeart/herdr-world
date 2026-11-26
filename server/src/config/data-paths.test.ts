@@ -18,6 +18,7 @@ import {
   defaultDataFile,
   publishDataFile,
   replaceDataFile,
+  resolveDataPaths,
 } from "./data-paths";
 
 const roots: string[] = [];
@@ -73,6 +74,44 @@ test("HERDR_WORLD_DATA_DIR gives an instance its own folder", () => {
   expect(dataRoot(root, "linux", undefined, { HERDR_WORLD_DATA_DIR: "" })).toBe(
     join(root, ".config", "herdr-world"),
   );
+});
+
+test("the default instance registry is per user, independent of the data folder", () => {
+  const root = home();
+  const cases = [
+    ["linux", {}, join(root, ".local", "state")],
+    ["linux", { XDG_STATE_HOME: join(root, "state") }, join(root, "state")],
+    ["linux", { XDG_STATE_HOME: "relative" }, join(root, ".local", "state")],
+    ["darwin", {}, join(root, "Library", "Application Support")],
+    ["win32", {}, join(root, "AppData", "Local")],
+    ["win32", { LOCALAPPDATA: join(root, "local") }, join(root, "local")],
+  ] as const;
+  for (const [platform, environment, state] of cases) {
+    const paths = (name: string) =>
+      resolveDataPaths(
+        { ...environment, HERDR_WORLD_DATA_DIR: join(root, name) },
+        root,
+        platform,
+      );
+    const first = paths("first"),
+      second = paths("second");
+    expect(first.instanceRegistry).toBe(
+      join(state, "herdr-world", "instances"),
+    );
+    expect(second.instanceRegistry).toBe(first.instanceRegistry);
+    expect(second.root).not.toBe(first.root);
+    expect(second.sessionSecret).not.toBe(first.sessionSecret);
+    expect(
+      resolveDataPaths(
+        {
+          ...environment,
+          HERDR_WORLD_INSTANCE_REGISTRY_DIR: join(root, "override"),
+        },
+        root,
+        platform,
+      ).instanceRegistry,
+    ).toBe(join(root, "override"));
+  }
 });
 
 test("tests never default to the user's data folder, nor do their children", async () => {

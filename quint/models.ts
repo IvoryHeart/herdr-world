@@ -2,6 +2,7 @@
 export const verificationModels = [
   "effect-recovery",
   "herdr-core-runtime",
+  "ide-lifecycle",
   "space-admission",
   "browser-preparation",
   "observation-base",
@@ -18,4 +19,5 @@ export const verificationModels = [
   "herdr-core-seen",
   "connection-registry",
   "claude-tap-lock",
+  "agent-move",
 ] as const;

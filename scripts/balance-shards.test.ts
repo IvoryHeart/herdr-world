@@ -59,6 +59,9 @@ test("Town partitions retain the original cases plus reception, core desk and bu
     [390, 844, "protected", 0],
     [390, 844, "navigation", 0],
     [1440, 900, "navigation", 0],
+    // Pressing each place's building opens one window frame (#1170).
+    [1440, 900, "places", 0],
+    [390, 844, "places", 0],
     // The reception filter's visibility check (#501), at phone and desktop width.
     [390, 844, "reception", 0],
     [1440, 900, "reception", 0],

@@ -1,4 +1,11 @@
-import { memo, useEffect, useRef, useState, type FocusEvent } from "react";
+import {
+  memo,
+  useCallback,
+  useEffect,
+  useRef,
+  useState,
+  type FocusEvent,
+} from "react";
 import { createPortal } from "react-dom";
 import type { WorldSourcesSnapshot } from "../../../../shared/worldSources";
 import {
@@ -6,16 +13,13 @@ import {
   PopoverContent,
   PopoverTrigger,
 } from "../../components/ui/popover";
-import { openIntegrations } from "../../integrations";
 import { PullRequestCard } from "../PullRequestCard";
 import { BadgePopover } from "./DeskWorkBadge";
-import type { TownCenterLot } from "./townCenter";
 import { TOWN_TILE as T, type TownLayout } from "./townLayout";
 import {
   TOWN_WAREHOUSE_SLOTS,
   TOWN_WAREHOUSE_YARD_ROWS,
   townWarehouseCountParts,
-  townWarehouseFoldAt,
   townWarehouseLabel,
   townWarehouseLot,
   townWarehouseName,
@@ -28,6 +32,8 @@ import {
 import { useTownWarehouseSources } from "./townWarehouseFixture";
 import type { TownRendererHandle } from "./townRenderer";
 import { useOpenTownWork } from "./TownWorkLens";
+import { TownIntegrationsWindow } from "./TownIntegrationsWindow";
+import { useTownPlace } from "./useTownPlace";
 import { townCrateUrl, type TownCrateState } from "./townHarbourArt";
 import "./townWarehouse.css";
 
@@ -39,8 +45,6 @@ const crateArt = (state: TownCrateState) => {
 
 /** How long a parcel takes to leave the yard (townWarehouse.css). */
 export const TOWN_WAREHOUSE_LEAVE_MS = 1_400;
-
-const openSourcesSettings = () => openIntegrations("source:github");
 
 /** A parcel leaving the yard: carried off when merged, else just gone. */
 type Leaving = {
@@ -128,7 +132,7 @@ function useExpiry(snapshot: WorldSourcesSnapshot) {
   }, [snapshot, tick]);
 }
 
-/** The counts in words, for names and the folded sign. */
+/** The counts in words, for the sign's name. */
 function spoken(office: Office) {
   if (office.status !== "open" || office.stale)
     return townWarehouseSignText(office);
@@ -139,27 +143,12 @@ function spoken(office: Office) {
     .join(", ");
 }
 
-/** The folded sign in words: what it holds, not how many. */
-function foldedSpoken(office: Office) {
-  if (office.status !== "open") return townWarehouseSignText(office);
-  return office.stale
-    ? "your pull requests, GitHub out of date"
-    : "your pull requests";
-}
-
-const FOLDED_WAITING = {
-  loading: "…",
-  off: "closed",
-  closed: "closed",
-} as const;
-
 /**
  * Town's warehouse (#760, moved to the harbour by #1028): your open pull requests as parcels in its
  * sorting yard beside the town center, ready to merge first, each opening the pull
  * request card the desk badge opens. Its sign counts them without hovering.
- * On a narrow (stacked) town it stands on the shore too, right of the
- * buildings, and a folded sign on the town center opens the same parcels
- * as a list within a phone's first view. Its sign,
+ * On a narrow (phone) town it stands on the shore too, right of the
+ * buildings and the civic row, with the same sign (#1351). Its sign,
  * and "All pull requests" in its lists, open Board's Work lens over Town
  * (#887): every pull request as the same kanban.
  */
@@ -178,6 +167,9 @@ export const TownWarehouse = memo(function TownWarehouse({
   const openWork = useOpenTownWork();
   const leaving = useLeaving(office, snapshot);
   const [cardKey, setCardKey] = useState<string | null>(null);
+  // Integrations at the GitHub row, in Town's one window (#1170).
+  const [connecting, setConnecting] = useState(false);
+  const openConnect = useCallback(() => setConnecting(true), []);
   const cardAnchor = useRef<HTMLElement | null>(null);
   const yardRef = useRef<HTMLDivElement | null>(null);
   const item = cardKey
@@ -207,9 +199,7 @@ export const TownWarehouse = memo(function TownWarehouse({
     )
       return;
     const lot = townWarehouseLot(layout);
-    const at = target.classList.contains("town-warehouse-fold")
-      ? townWarehouseFoldAt(layout.center)
-      : { x: (lot.x + lot.w / 2) * T, y: lot.yardY * T };
+    const at = { x: (lot.x + lot.w / 2) * T, y: lot.yardY * T };
     handle.camera.flyTo(at.x, at.y, handle.camera.z, 0.4);
     handle.invalidate("focus");
   };
@@ -234,11 +224,16 @@ export const TownWarehouse = memo(function TownWarehouse({
   const connect = office.status === "off" || office.status === "closed";
   // Work opens only once GitHub has answered; loading keeps the old sign.
   const work = office.status === "open" ? openWork : undefined;
+  // The building opens what its sign does (#1170): Integrations while GitHub
+  // is off, Work once it has answered, both in Town's one window; nothing
+  // while it is loading.
+  useTownPlace("warehouse", connect ? openConnect : (work ?? null));
   return (
     <>
       <button
         type="button"
         className="town-warehouse-sign"
+        data-town-place="warehouse"
         data-quiet={quiet || undefined}
         style={{ left: (lot.x + lot.w) * T - 12, top: lot.y * T + 34 }}
         aria-label={`Warehouse: ${spoken(office)}${work ? ". Open all pull requests" : ""}`}
@@ -247,7 +242,7 @@ export const TownWarehouse = memo(function TownWarehouse({
         onFocus={reveal}
         onClick={(event) => {
           event.stopPropagation();
-          if (connect) openSourcesSettings();
+          if (connect) openConnect();
           else if (work) work();
           else
             yardRef.current
@@ -339,16 +334,10 @@ export const TownWarehouse = memo(function TownWarehouse({
             .join(" ")}
         </span>
       </div>
-      {layout.formFactor === "narrow" ? (
-        <FoldedSign
-          center={layout.center}
-          office={office}
-          onOpen={openCard}
-          onOpenWork={openWork}
-          onFocus={reveal}
-        />
-      ) : null}
       {card}
+      {connecting ? (
+        <TownIntegrationsWindow onClose={() => setConnecting(false)} />
+      ) : null}
     </>
   );
 });
@@ -456,7 +445,7 @@ function AllPullRequests({
   );
 }
 
-/** Parcels as rows: the folded sign's and the pile's list. */
+/** Parcels as rows: the pile's list. */
 function ParcelList({
   parcels,
   onOpen,
@@ -490,116 +479,5 @@ function ParcelList({
         </li>
       ))}
     </ul>
-  );
-}
-
-/** A crate, as the folded sign's mark. */
-function CrateMark() {
-  return (
-    <span
-      className="town-warehouse-mark"
-      style={{ backgroundImage: crateArt("ready") }}
-      aria-hidden="true"
-    />
-  );
-}
-
-/**
- * On a narrow town: a sign on the town center's right wing, inside a
- * phone's home view (townWarehouseFoldAt), opening the warehouse as a list
- * with its counts, or how to connect GitHub.
- */
-function FoldedSign({
-  center,
-  office,
-  onOpen,
-  onOpenWork,
-  onFocus,
-}: {
-  center: TownCenterLot;
-  office: Office;
-  onOpen(key: string, anchor: HTMLElement | null): void;
-  onOpenWork: (() => void) | null;
-  onFocus(event: FocusEvent<HTMLElement>): void;
-}) {
-  const [open, setOpen] = useState(false);
-  const trigger = useRef<HTMLButtonElement | null>(null);
-  const at = townWarehouseFoldAt(center);
-  return (
-    <Popover open={open} onOpenChange={setOpen}>
-      <PopoverTrigger asChild>
-        <button
-          ref={trigger}
-          type="button"
-          className="town-warehouse-fold"
-          style={{ left: at.x, top: at.y }}
-          aria-label={`Warehouse: ${foldedSpoken(office)}. Open`}
-          title="Warehouse"
-          onPointerDown={(event) => event.stopPropagation()}
-          onFocus={onFocus}
-        >
-          <CrateMark />
-          {/* No counts here: the list inside has them, and the post office
-              beside the center counts what Needs you (#1098). */}
-          <span>
-            {office.status === "open"
-              ? office.stale
-                ? "PRs · old"
-                : "PRs"
-              : FOLDED_WAITING[office.status]}
-          </span>
-        </button>
-      </PopoverTrigger>
-      <PopoverContent
-        className="town-warehouse-popover"
-        collisionPadding={8}
-        aria-label="Warehouse"
-      >
-        <header className="town-warehouse-popover-title">
-          <CrateMark />
-          <span>WAREHOUSE</span>
-        </header>
-        <p className="town-warehouse-popover-counts">
-          {townWarehouseSignText(office)}
-        </p>
-        {office.status === "open" ? (
-          <AllPullRequests
-            onOpenWork={onOpenWork}
-            onClose={() => setOpen(false)}
-          />
-        ) : null}
-        {office.status === "open" ? (
-          office.parcels.length ? (
-            <ParcelList
-              parcels={office.parcels}
-              onOpen={(key) => {
-                setOpen(false);
-                onOpen(key, trigger.current);
-              }}
-            />
-          ) : (
-            <p className="town-warehouse-popover-note">
-              No open pull requests.
-            </p>
-          )
-        ) : office.status === "loading" ? null : (
-          <>
-            {office.status === "closed" ? (
-              <p className="town-warehouse-popover-note">{office.detail}</p>
-            ) : null}
-            <button
-              type="button"
-              className="town-warehouse-setup"
-              onClick={() => {
-                setOpen(false);
-                openSourcesSettings();
-              }}
-            >
-              Connect GitHub
-            </button>
-          </>
-        )}
-      </PopoverContent>
-    </Popover>
   );
 }

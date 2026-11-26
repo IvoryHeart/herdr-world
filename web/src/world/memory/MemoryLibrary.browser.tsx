@@ -415,10 +415,7 @@ async function run() {
       </>,
     ),
   );
-  check(
-    !$(".town-library-sign, .town-library-fold"),
-    "unsupported-only host has a Library sign",
-  );
+  check(!$(".town-library-sign"), "unsupported-only host has a Library sign");
   check(
     !host.textContent?.includes("Memory"),
     "unsupported agent has a Memory entry",

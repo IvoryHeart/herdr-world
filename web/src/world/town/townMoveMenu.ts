@@ -5,15 +5,33 @@ import type {
   OfficeRoom,
 } from "../herdrOfficeProjection";
 import { TOWN_PINNED_HINT } from "./townDrag";
+import { canMoveDeskToRoom } from "./townMoveEligibility";
 import type { TownMoveResult } from "./townMoves";
 import type { townTeamActions, TownMenuEntry } from "./townTeamActions";
 
-/** A room's name in a menu, with its runtime when its building has two. */
-function townRoomName(room: OfficeRoom | null) {
-  if (!room) return "";
-  return room.runtimeTag
-    ? `${room.displayLabel} · ${room.runtimeTag}`
-    : room.displayLabel;
+/** A room's runtime icon, when its building holds more than one runtime. */
+function townRoomRuntime(room: OfficeRoom | null) {
+  return room?.runtimeTag && room.runtimeKind
+    ? { runtime: { kind: room.runtimeKind, tag: room.runtimeTag } }
+    : {};
+}
+
+/**
+ * A room's runtime shows as an icon beside its name; its words join an
+ * entry's detail only where two entries would otherwise read the same.
+ */
+function withRuntimeWords<
+  T extends { label: string; detail: string; runtime?: { tag: string } },
+>(entries: T[]): T[] {
+  const reads = (entry: T) => `${entry.label}\n${entry.detail}`;
+  const count = new Map<string, number>();
+  for (const entry of entries)
+    count.set(reads(entry), (count.get(reads(entry)) ?? 0) + 1);
+  return entries.map((entry) =>
+    entry.runtime && count.get(reads(entry))! > 1
+      ? { ...entry, detail: `${entry.detail} · ${entry.runtime.tag}` }
+      : entry,
+  );
 }
 
 /** A move being chosen in Town: a desk's place or room, its team, or an agent's desk. */
@@ -49,11 +67,9 @@ export function townMoveMenu(
   if (flow.step === "room") {
     const desk = deps.deskForKey(flow.deskKey);
     const rooms = desk
-      ? deps.office.rooms.filter(
-          (room) =>
-            room.hostKey === desk.hostKey &&
-            room.key !== desk.roomKey &&
-            room.workspaceRef.connectionId === desk.tabRef.connectionId,
+      ? // Another runtime's room too: the agent resumes there.
+        deps.office.rooms.filter(
+          (room) => room.key !== desk.roomKey && canMoveDeskToRoom(desk, room),
         )
       : [];
     // Within its room a desk takes another desk's slot, as in a drag.
@@ -62,16 +78,32 @@ export function townMoveMenu(
       deps.close();
       void deps.runDeskReorder(flow.deskKey, ontoKey);
     };
-    // A pinned desk moves only among the pinned seats, and an unpinned one
-    // takes none of them, as in a drag.
+    const roomEntry = (room: OfficeRoom) => ({
+      key: room.key,
+      label: room.displayLabel,
+      detail:
+        room.hostKey === desk?.hostKey
+          ? `${room.observedDeskCount} desks`
+          : `${deps.office.hosts.find((host) => host.key === room.hostKey)?.displayLabel ?? "Another host"} · another runtime`,
+      ...townRoomRuntime(room),
+      onChoose: () => {
+        deps.close();
+        void deps.runDeskMove(flow.deskKey, room.key);
+      },
+    });
+    // In its room a pinned desk moves only among the pinned seats, and an
+    // unpinned one takes none of them, as in a drag. To another room it goes
+    // pinned.
     const pinned = home ? deps.pinnedSeats(home) : [];
     if (desk && pinned.includes(desk.key)) {
       const seats = pinned.filter((key) => key !== desk.key);
       return {
         title: `Move ${desk.displayLabel}`,
-        detail: seats.length
-          ? `Choose a pinned desk’s place. ${TOWN_PINNED_HINT}`
-          : `No other pinned desk in this room. ${TOWN_PINNED_HINT}`,
+        detail: rooms.length
+          ? `Choose ${seats.length ? "a pinned desk’s place or " : ""}a room: it stays pinned there.`
+          : seats.length
+            ? `Choose a pinned desk’s place. ${TOWN_PINNED_HINT}`
+            : `No other pinned desk in this room. ${TOWN_PINNED_HINT}`,
         entries: [
           ...seats.map((key) => ({
             key,
@@ -79,6 +111,7 @@ export function townMoveMenu(
             detail: `Pinned desk ${pinned.indexOf(key) + 1} in ${home?.displayLabel}`,
             onChoose: reorder(key),
           })),
+          ...withRuntimeWords(rooms.map(roomEntry)),
           ...deps.teams.teamEntries(desk),
         ],
       };
@@ -115,19 +148,11 @@ export function townMoveMenu(
       title: `Move ${desk?.displayLabel ?? "desk"}`,
       detail:
         places.length || rooms.length
-          ? "Choose a place in this room or a room on this host"
-          : "No other desk or room on this host",
+          ? "Choose a place in this room or another room"
+          : "No other desk or room it can move to",
       entries: [
         ...places,
-        ...rooms.map((room) => ({
-          key: room.key,
-          label: room.displayLabel,
-          detail: `${room.observedDeskCount} desks${room.runtimeTag ? ` · ${room.runtimeTag}` : ""}`,
-          onChoose: () => {
-            deps.close();
-            void deps.runDeskMove(flow.deskKey, room.key);
-          },
-        })),
+        ...withRuntimeWords(rooms.map(roomEntry)),
         // Teams without a drag: join another desk's, or leave a manual one.
         ...deps.teams.teamEntries(desk),
       ],
@@ -150,14 +175,20 @@ export function townMoveMenu(
     detail: desks.length
       ? "Choose a desk on this host"
       : "No other desk on this host",
-    entries: desks.map((desk) => ({
-      key: desk.key,
-      label: desk.displayLabel,
-      detail: townRoomName(deps.roomForKey(desk.roomKey)),
-      onChoose: () => {
-        deps.close();
-        void deps.runAgentMove(flow.agentKey, desk.key);
-      },
-    })),
+    entries: withRuntimeWords(
+      desks.map((desk) => {
+        const room = deps.roomForKey(desk.roomKey);
+        return {
+          key: desk.key,
+          label: desk.displayLabel,
+          detail: room?.displayLabel ?? "",
+          ...townRoomRuntime(room),
+          onChoose: () => {
+            deps.close();
+            void deps.runAgentMove(flow.agentKey, desk.key);
+          },
+        };
+      }),
+    ),
   };
 }

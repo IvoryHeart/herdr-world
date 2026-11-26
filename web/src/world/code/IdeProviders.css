@@ -1,0 +1,239 @@
+.ide-providers {
+  display: grid;
+  gap: 10px;
+}
+.ide-provider-list {
+  display: grid;
+  gap: 8px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+.ide-provider {
+  display: grid;
+  gap: 6px;
+  padding: 10px 12px;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  background: var(--panel);
+  text-align: left;
+}
+.ide-provider[data-state="enabled"] {
+  border-color: color-mix(in srgb, var(--accent) 45%, var(--border));
+}
+.ide-provider-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 6px 10px;
+}
+.ide-provider-badge {
+  padding: 1px 7px;
+  border-radius: 999px;
+  background: var(--panel-2);
+  color: var(--muted);
+  font-size: 11px;
+  font-weight: 650;
+}
+.ide-provider-badge[data-state="Enabled"] {
+  background: var(--success-soft);
+  color: var(--success-text);
+}
+.ide-provider-badge[data-state="Installed"] {
+  background: var(--accent-soft);
+  color: var(--text);
+}
+.ide-provider-badge[data-state="Not found"],
+.ide-provider-badge[data-state="Can't run"] {
+  background: var(--warning-soft);
+  color: var(--warning-text);
+}
+.ide-provider-market {
+  margin-left: auto;
+  color: var(--muted);
+  font-size: 12px;
+}
+.ide-provider-path {
+  overflow: hidden;
+  color: var(--muted);
+  font-size: 12px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.ide-provider-reason {
+  margin: 0;
+  color: var(--muted);
+  font-size: 12.5px;
+}
+.ide-provider-actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
+}
+.ide-providers .primary,
+.ide-gate .primary,
+.code-view .primary {
+  border-color: color-mix(in srgb, var(--accent) 58%, var(--border));
+  background: var(--accent-soft);
+  color: var(--text-strong, var(--text));
+  font-weight: 650;
+}
+.ide-providers .primary:hover:not(:disabled),
+.code-view .primary:hover:not(:disabled) {
+  background: var(--accent-hover, var(--accent-soft));
+}
+.ide-provider-connect {
+  padding: 5px 10px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  color: var(--text);
+  font-size: 13px;
+  text-decoration: none;
+}
+.ide-provider-connect:hover {
+  border-color: var(--accent);
+}
+.ide-provider-path-form {
+  display: grid;
+  gap: 6px;
+}
+.ide-provider-path-form label {
+  color: var(--muted);
+  font-size: 12px;
+}
+.ide-provider-path-form input {
+  min-width: 0;
+  font-family: var(--mono, ui-monospace, monospace);
+  font-size: 12.5px;
+}
+.ide-providers-error {
+  margin: 0;
+  color: var(--danger-text);
+  font-size: 13px;
+  overflow-wrap: anywhere;
+}
+.ide-gate {
+  max-width: 540px;
+}
+.ide-gate-body {
+  display: grid;
+  gap: 10px;
+  margin-top: 10px;
+  font-size: 13.5px;
+  line-height: 1.45;
+}
+.ide-gate-body p,
+.ide-gate-body ul {
+  margin: 0;
+}
+.ide-gate-body ul {
+  display: grid;
+  gap: 6px;
+  padding-left: 18px;
+}
+.ide-gate-check {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  padding: 8px 10px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--panel-2);
+  cursor: pointer;
+}
+.ide-gate-check input {
+  flex: none;
+  margin-top: 3px;
+}
+.ide-gate-check a {
+  color: var(--accent);
+}
+.ide-integrations-settings {
+  margin-top: 14px;
+  padding-top: 4px;
+  border-top: 1px solid var(--border);
+}
+.ide-integrations-settings .agent-integrations-icon-button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 30px;
+  min-height: 30px;
+  padding: 4px;
+  border-color: transparent;
+  background: transparent;
+  color: var(--muted);
+}
+.ide-servers {
+  display: grid;
+  gap: 8px;
+}
+.ide-server-list {
+  display: grid;
+  gap: 6px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+.ide-server {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 6px 12px;
+  padding: 8px 10px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--panel);
+}
+.ide-server-what {
+  display: grid;
+  min-width: 0;
+  gap: 2px;
+  font-size: 12.5px;
+}
+.ide-server-what strong {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.ide-server-what span {
+  color: var(--muted);
+}
+.ide-server-state {
+  font-weight: 650;
+}
+.ide-server[data-state="detached"] .ide-server-state {
+  color: var(--warning-text);
+}
+.ide-server .ide-provider-actions button {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+}
+.ide-server-by-hand {
+  display: grid;
+  gap: 4px;
+}
+.ide-server-by-hand code {
+  display: block;
+  padding: 6px 8px;
+  border-radius: 6px;
+  background: var(--bg);
+  color: var(--text);
+  font-size: 11.5px;
+  overflow-wrap: anywhere;
+  user-select: all;
+}
+.ide-server-ask {
+  display: grid;
+  gap: 6px;
+  margin-top: 4px;
+}
+.ide-server-ask > span:first-child {
+  color: var(--text);
+}
+.ide-server-what .ide-provider-actions {
+  justify-content: flex-start;
+}

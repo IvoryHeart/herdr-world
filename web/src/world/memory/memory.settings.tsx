@@ -6,7 +6,7 @@
 
 import { Library } from "lucide-react";
 import { defineSettings } from "../../settings/registry";
-import { memoryHosts, subscribeMemory } from "./memoryClient";
+import { libraryHosts, subscribeMemory } from "./memoryClient";
 import { openMemoryLibrary } from "./memoryEvents";
 
 defineSettings("memory", [
@@ -16,7 +16,7 @@ defineSettings("memory", [
     category: "agents",
     title: "Library (memory)",
     description:
-      "See, search and edit what agents and projects remember on each host",
+      "See, search and edit what agents and projects remember on each host, and what agents made",
     words: [
       "memory",
       "memories",
@@ -25,10 +25,16 @@ defineSettings("memory", [
       "instructions",
       "notes",
       "remember",
+      "made",
+      "made by agents",
+      "artefacts",
+      "artifacts",
+      "reports",
     ],
     icon: <Library size={15} />,
     scope: "connection",
-    available: () => memoryHosts().length > 0,
+    // Also a host whose agents have all gone, with what they made (#1342).
+    available: () => libraryHosts().length > 0,
     subscribe: subscribeMemory,
     alsoOn: "Town: the Library; Board: the hub; an agent's settings: Memory",
     open: () => openMemoryLibrary(),

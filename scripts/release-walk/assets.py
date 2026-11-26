@@ -81,7 +81,7 @@ def tools(root, config):
     return directory
 
 
-def environment(root, tools_dir, session, tui, telemetry, signed_home=None, core=True):
+def environment(root, tools_dir, session, tui, telemetry, core=True):
     root.mkdir(parents=True, exist_ok=True)
     state = root / 'state'
     state.mkdir(mode=0o700, exist_ok=True)
@@ -121,8 +121,4 @@ def environment(root, tools_dir, session, tui, telemetry, signed_home=None, core
                OPEN_BROWSER='0')
     if tui:
         env['HERDR_SESSION'] = session
-    if signed_home:
-        assert (signed_home / '.claude').is_dir() and (signed_home / '.codex').is_dir(), 'dedicated signed-in harness home is not initialized'
-        env['CLAUDE_CONFIG_DIR'] = str(signed_home / '.claude')
-        env['CODEX_HOME'] = str(signed_home / '.codex')
     return env

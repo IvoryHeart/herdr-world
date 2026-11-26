@@ -4,7 +4,7 @@
 
 **Surfaces:**
 
-- [Real-runtime release walk and pre-tag gate](../../../docs/release.md#real-runtime-release-walk) covers packaged runtime/agent launch journeys and receipts.
+- [Three owner release steps](../../../docs/release.md#three-owner-steps) and the native walk cover tested packages and automatic recovery.
 - Installers, updates, releases, contributor delivery and the public documentation site.
 - Server feature wiring and presence composition: [contributor guide](../../../docs/development.md#verification).
 
@@ -33,11 +33,25 @@
 - `server/src/testing/`
 - `web/src/features/`
 - `web/src/testing/`
+- `release-please-config.json`
+- `.release-please-manifest.json`
+- `version.txt`
+- `scripts/release-plan.ts`
+- `scripts/release-validation.test.ts`
+- `scripts/release-publication.test.ts`
+- `scripts/release-seal.ts` (seal record of every contract job's result; Release reuses retained bytes only from an all-green record of the same run)
+- `herdr-plugin.toml`
+- `scripts/install-plugin.ps1`
+- `scripts/install-plugin.test.ts`
+- `scripts/install-plugin.windows.test.ts`
 - `scripts/release-walk.ts`
-- `scripts/release-walk-gate.ts`
+- `scripts/release-channel-upgrade.py`
+- `scripts/release-npm-smoke.ts`
+- `scripts/pipeline-retry.ts`
+- `server/src/config/service-executable.ts`
+- `server/src/cli/update-finish.ts`
+- `server/src/config/homebrew-handoff.ts` (Homebrew upgrade restart from the post-install sandbox, signalling only the launchd job for World's label or the systemd unit's main process; startup move of a keg-pinned definition)
 - `scripts/release-walk/`
-- `scripts/prepare-release.ts`
-- `scripts/prepare-release.test.ts`
 - `server/src/config/service-discovery.ts`
 - `server/src/config/service-uninstall.test.ts`
 - `scripts/`
@@ -56,6 +70,12 @@
 **Pitfalls:**
 
 - Herdr stays an external runtime. Changes synchronize through reviewed archive PRs.
+- Whole-bundle ceilings and reason history live in `scripts/web-asset-budget.json`.
+  Feature builders request a separate owner-approved data PR for the exact raise
+  printed by Web asset headroom; they leave the budget and checker unchanged.
+  Main's commit status and workflow summary show remaining bytes/files, and its
+  recorded policy re-judges open PRs after budget-only merges. See
+  [contributor guidance](../../../CONTRIBUTING.md) for the unchanged other limits.
 - Agent discovery starts with native OpenSpec capability and active-change lists,
   then capability specs, notes and their Code paths. Public feature rendering
   belongs to `build:site`; internal notes parsing also serves source-ownership checks.

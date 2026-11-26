@@ -3,6 +3,7 @@
  * its room plaques, and a place's colour choice for the shared picker.
  */
 
+import type { BinStop } from "../../../../shared/bin";
 import type { TownMoveResult } from "./townMoves";
 import type { TownRoomPlacement } from "./townRoomPlace";
 
@@ -93,7 +94,9 @@ export type TownRoomActions = {
     hostLabel: string,
     undo: (() => Promise<TownMoveResult>) | null,
   ): void;
-  /** Whether the room's host can change its rooms now. */
+  /** Rooms skipped by Tidy or Undo, with their current reasons in a note. */
+  onRoomsStayed?(roomKeys: readonly string[]): void;
+  /** Whether this room can change its World spot and any TUI order now. */
   canMoveRoom?(roomKey: string): boolean;
   /**
    * Filled in by TownCanvas from the town it shows: the room a Move before
@@ -117,6 +120,9 @@ export type TownRoomActions = {
   onGroupDesk(deskKey: string, targetDeskKey: string): Promise<TownMoveResult>;
   /** A grouped desk dropped on its own room's floor: leave its team. */
   onUngroupDesk(deskKey: string): Promise<TownMoveResult>;
-  /** An agent, or a desk's agents, dropped on the bin or a bus stop. */
-  onBinDrop?(kind: "agent" | "desk", key: string): void;
+  /**
+   * An agent, or a desk's agents, dropped on the bin, or on a bus stop
+   * (`stop`, as World remembers it) where they wait.
+   */
+  onBinDrop?(kind: "agent" | "desk", key: string, stop: BinStop | null): void;
 };

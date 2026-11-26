@@ -1,3 +1,4 @@
+import { rehomeAgent } from "./agent-rehome";
 import {
   parseBoardElement,
   BOARD_ANCHOR_KINDS,
@@ -108,6 +109,7 @@ export function clientBoardOps(
     )
       fail("tab colours require qualified appearance admission");
     if (
+      op.op === "agent.rehome" ||
       op.op === "appearance.prune" ||
       op.op === "appearance.restore" ||
       op.op === "appearance.relocate" ||
@@ -375,6 +377,14 @@ function spawnClaim(value: unknown): SpawnClaim {
   return {
     child: terminalRef(value.child),
     parent: terminalRef(value.parent),
+    ...(value.moved_from === undefined
+      ? {}
+      : {
+          moved_from:
+            Array.isArray(value.moved_from) && value.moved_from.length <= 64
+              ? value.moved_from.map(terminalRef)
+              : fail("moved spawn parents"),
+        }),
     source: text(value.source, "spawn source", BOARD_LIMITS.key),
     generation: count(value.generation, "spawn generation"),
     observed_at: count(value.observed_at, "spawn time"),
@@ -632,6 +642,9 @@ function applyOp(
   )
     return;
   switch (op.op) {
+    case "agent.rehome":
+      rehomeAgent(next, op.from, op.to);
+      return;
     case "note.put": {
       const existing = next.notes.findIndex(
         (entry) => entry.id === op.note?.id,

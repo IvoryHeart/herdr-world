@@ -11,6 +11,7 @@
 - `server/src/storage/world-ids.ts`
 - `server/src/world/binding-resolution.test.ts`
 - `shared/worldIdentity.ts`
+- `openspec/changes/world-agent-identity/agent-identity.qnt` (design-stage agent identity model; moves to `quint/` with its adapter)
 
 **Pitfalls:**
 

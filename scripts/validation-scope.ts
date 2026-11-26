@@ -18,9 +18,7 @@ export function isToolingPath(path: string): boolean {
   )
     return false;
   return (
-    path.startsWith("scripts/agent/") ||
-    path === "docs/agent-development.md" ||
-    /^changes\/[a-z0-9][a-z0-9-]*\.md$/.test(path)
+    path.startsWith("scripts/agent/") || path === "docs/agent-development.md"
   );
 }
 
@@ -59,29 +57,31 @@ export type ValidationSelection = {
 };
 
 const NATIVE =
-  /^(?:scripts\/(?:install|installer|package|release|prepare-release|build-version|publish|world-plugin|plugin|homebrew|verify-release|check-(?:binary|homebrew))|herdr-plugin\.toml$)/;
-/** Native acceptance also owns browser request builders for launch/connection setup. */
-export function isReleaseWalkInput(path: string): boolean {
-  return /^(?:scripts\/release-walk(?:\/|\.|-)|web\/src\/(?:.*(?:[Cc]onnection|[Ll]aunch)[^/]*\.[jt]sx?|creationRequests\.ts|api\.ts|world\/(?:agentProfiles\.ts|coreControl\.ts|town\/useTownRoomActions\.tsx))$)/.test(
-    path,
-  );
-}
-/** Real systemd acceptance is part of the Linux x64 native installation job. */
-export function isInstallationInput(path: string): boolean {
-  return /^(?:scripts\/(?:install[^/]*|installer[^/]*|herdr-core-install\.[^/]+|herdr-bootstrap[^/]*|(?:generate-|check-)?homebrew[^/]*|package-release\.sh)$|scripts\/install-linux\/|server\/src\/(?:herdr-core\/install\.[^/]+|connections\/|cli\/connections\.ts))/.test(
-    path,
-  );
-}
+  /^(?:scripts\/(?:install|installer|package|release|build-version|publish|world-plugin|plugin|homebrew|verify-release|check-(?:binary|homebrew))|herdr-plugin\.toml$)/;
 const WORLD_RUNTIME =
   /^(?:web\/src\/world\/|server\/src\/(?:world|connections|bridge)\/|server\/src\/index\.ts$|web\/src\/(?:store(?:\/|\.ts$)|api\.ts$|worldSnapshotDecode\.ts$)|shared\/world)/;
+
+/** Runtime directory scans have no import edges from their guarded inputs. */
+const STRUCTURE_CHECKS = [
+  [
+    /^openspec\//,
+    [
+      "scripts/openspec-feature-map.test.ts",
+      "scripts/check-knowledge-map.test.ts",
+      "scripts/check-knowledge-map-links.test.ts",
+      "scripts/pages-features.test.ts",
+    ],
+  ],
+  [
+    /^(?:(?:web\/src\/|server\/src\/(?:world|features|shipyard)\/).*\.tsx?$|openspec\/specs\/world-storage\/notes\.md$)/,
+    ["server/src/storage/catalog.test.ts"],
+  ],
+] as const;
 
 // Native jobs are the authority for their explicitly named test consumers.
 // Derive these paths so adding a native test cannot leave scoped PR CI skipping it.
 const nativeTestConsumers = new Set<string>();
-for (const [file, jobs] of [
-  ["ci.yml", ["plugin-windows"]],
-  ["installer-upgrade.yml", ["upgrade"]],
-] as const) {
+for (const [file, jobs] of [["installer-upgrade.yml", ["upgrade"]]] as const) {
   const workflow = Bun.YAML.parse(
     readFileSync(
       new URL(`../.github/workflows/${file}`, import.meta.url),
@@ -104,26 +104,6 @@ export function ordinaryDocumentation(
     !paths.some(isToolingPath) &&
     !paths.some(owns)
   );
-}
-
-/** The compiled entry points and explicitly native assertions own this lane.
- * A shared browser-only module is not a native binary input merely because
- * it lives in shared/. Follow imports in the same conservative graph as units.
- */
-function nativeInputs(graph: Graph): Set<string> {
-  const seen = new Set([
-    "server/src/index.ts",
-    "scripts/world-plugin.ts",
-    ...nativeTestConsumers,
-  ]);
-  const queue = [...seen];
-  for (let index = 0; index < queue.length; index++)
-    for (const dependency of graph.deps.get(queue[index]!) ?? [])
-      if (!seen.has(dependency)) {
-        seen.add(dependency);
-        queue.push(dependency);
-      }
-  return seen;
 }
 
 /** Whole-PR policy; optional incremental paths narrow tests only. */
@@ -188,22 +168,18 @@ export function selectValidation(
         : tests.unit;
   if (!full && paths.some((path) => isCoveragePath(path) || owns(path)))
     chosen.push("scripts/verification-coverage.test.ts");
-  const browserPlanPaths = [
-    "scripts/world-browser-suites.ts",
-    "scripts/world-browser-timings.json",
-    "scripts/world-browser-suites.test.ts",
-  ];
+  // Use the complete PR even when a local push narrows affected units.
+  for (const [inputs, checks] of STRUCTURE_CHECKS)
+    if ([...paths, ...testPaths].some((path) => inputs.test(path)))
+      chosen.push(
+        ...checks.filter(
+          (path) => graph.files.has(path) && !graph.gone.has(path),
+        ),
+      );
   const shardTable =
     paths.includes("scripts/world-browser-suites.ts") ||
     paths.includes("scripts/world-browser-timings.json") ||
     paths.includes("scripts/balance-shards.ts");
-  const browserPlanOnly =
-    shardTable &&
-    paths.every(
-      (path) =>
-        browserPlanPaths.includes(path) ||
-        (isDocumentationPath(path) && !owns(path)),
-    );
   const world = new Set(worldBrowserSuites);
   const web = new Set(webBrowserSuites);
   const runtime =
@@ -219,7 +195,11 @@ export function selectValidation(
       affectedWorld.includes(path) ||
       (runtime && worldRuntimeSuites.includes(path)),
   );
-  const binaryInputs = nativeInputs(graph);
+  // Production build calls do not import main.tsx into the Bun test process.
+  // Keep the real-entry journey selected even across that build-tool seam.
+  const boot = "web/src/productionBoot.browser.test.ts";
+  const bootChanged =
+    paths.some((path) => path.startsWith("web/src/")) && graph.files.has(boot);
   return {
     full,
     tooling,
@@ -236,7 +216,14 @@ export function selectValidation(
     unit: [
       ...new Set(chosen.filter((path) => !world.has(path) && !web.has(path))),
     ].sort(),
-    web: shardTable ? webBrowserSuites : chosen.filter((path) => web.has(path)),
+    web: shardTable
+      ? webBrowserSuites
+      : [
+          ...new Set([
+            ...chosen.filter((path) => web.has(path)),
+            ...(bootChanged ? [boot] : []),
+          ]),
+        ],
     world: chosenWorld,
     worldShards: worldBrowserShards.flatMap((shard, index) =>
       chosenWorld.some((path) => shard.includes(path)) ? [index + 1] : [],
@@ -245,23 +232,14 @@ export function selectValidation(
       !tooling && (full || (!complete.full && complete.verification)),
     packaging:
       !tooling &&
-      (full ||
-        paths.some(
-          (path) =>
-            isInstallationInput(path) ||
-            isReleaseWalkInput(path) ||
-            nativeTestConsumers.has(path) ||
-            (!browserPlanOnly && binaryInputs.has(path)) ||
-            // Incomplete graphs cannot establish absence from a binary.
-            (!graph.files.has("server/src/index.ts") &&
-              /^(?:server|shared)\//.test(path) &&
-              !TEST.test(path)) ||
-            (NATIVE.test(path) && !TEST.test(path)),
-        ) ||
-        (!browserPlanOnly &&
-          chosen.some((path) =>
-            /^scripts\/(?:install|plugin|package|homebrew)/.test(path),
-          ))),
+      paths.some(
+        (path) =>
+          (NATIVE.test(path) && !TEST.test(path)) ||
+          nativeTestConsumers.has(path) ||
+          /^(?:\.github\/workflows\/(?:release[^/]*|installer-upgrade)\.yml$|scripts\/(?:herdr-core-install|herdr-bootstrap|generate-homebrew|check-homebrew|homebrew-|install-linux\/)|server\/src\/cli\/(?:service-context|update(?:-finish)?)\.ts$|server\/src\/config\/(?:service-|plugin-|launchd-)|server\/src\/herdr-core\/install\.)/.test(
+            path,
+          ),
+      ),
   };
 }
 

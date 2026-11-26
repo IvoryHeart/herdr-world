@@ -40,7 +40,14 @@ export type ImplementationFault =
   | "seen-hidden-look"
   | "seen-stale-look"
   | "seen-blind-write"
-  | "core-missing-foreground";
+  | "core-missing-foreground"
+  | "move-assume-alive"
+  | "move-start-first-codex"
+  | "move-no-fork-guard"
+  | "move-native-handoff"
+  | "move-no-settle"
+  | "ide-queue"
+  | "ide-start-epoch";
 export async function mutateImplementation(
   name: Model,
   fault: ImplementationFault,
@@ -63,12 +70,21 @@ export async function mutateImplementation(
       "core-seat-gap",
       "core-missing-foreground",
     ],
+    "agent-move": [
+      "primary",
+      "move-assume-alive",
+      "move-start-first-codex",
+      "move-no-fork-guard",
+      "move-native-handoff",
+      "move-no-settle",
+    ],
     "herdr-core-seen": [
       "seen-forget-look",
       "seen-hidden-look",
       "seen-stale-look",
       "seen-blind-write",
     ],
+    "ide-lifecycle": ["ide-queue", "ide-start-epoch"],
     "effect-recovery": [
       "primary",
       "effect-authorization",
@@ -105,6 +121,8 @@ export async function mutateImplementation(
     "claude-tap-lock": "server/src/usage/claude-tap.ts",
     "herdr-core-runtime": "server/src/herdr-core/mirror.ts",
     "herdr-core-seen": "web/src/world/coreShared.ts",
+    "agent-move": "server/src/world/agent-move.ts",
+    "ide-lifecycle": "server/src/ide/instances.ts",
     "binding-resolution": "server/src/world/binding-resolution.ts",
     "observation-base": "server/src/world/observation-v1.ts",
     "runtime-leases": "server/src/connections/manager.ts",
@@ -232,6 +250,41 @@ export async function mutateImplementation(
     const [guard, replacement] = guards[fault]!;
     assert.equal(original.split(guard).length, 2, `${fault} target changed`);
     contents = original.replace(guard, replacement);
+  } else if (name === "agent-move") {
+    const guards: Record<string, [string, string]> = {
+      // The second recheck before the close goes: a source that changed
+      // while the desk moved is closed anyway.
+      primary: [
+        '      rehomed = true;\n      await recheck("after-rehome");',
+        "      rehomed = true;",
+      ],
+      // An unreadable source after a lost close counts as still running,
+      // so the copy is closed and the agent may be left nowhere.
+      "move-assume-alive": [
+        "      () => null,\n    );\n    log(",
+        "      () => true,\n    );\n    log(",
+      ],
+      // Codex starts beside its open original: the copy waits on a lock.
+      "move-start-first-codex": ['new Set(["codex"])', "new Set<string>()"],
+      // A copy that reported another conversation is kept.
+      "move-no-fork-guard": [
+        "if (copySession && copySession !== session) {",
+        "if (false) {",
+      ],
+      // Two views of one runtime are handed off by kill and resume.
+      "move-native-handoff": [
+        "    deps.sameRuntime?.(from.connection_id, to.connection_id)",
+        "    false",
+      ],
+      // A chained move acts before the first one settled.
+      "move-no-settle": [
+        '  if (settling) refuse(settlingMessage("This agent", settling), "settling");\n',
+        "",
+      ],
+    };
+    const [guard, replacement] = guards[fault]!;
+    assert.equal(original.split(guard).length, 2, `${fault} target changed`);
+    contents = original.replace(guard, replacement);
   } else if (name === "herdr-core-seen") {
     const guards: Record<string, [string, string]> = {
       // The browser shares a turn on every update, not once per look.
@@ -248,6 +301,24 @@ export async function mutateImplementation(
       ],
       // The service writes over a label another client changed meanwhile.
       "seen-blind-write": ["  if (shared !== expected) return null;\n", ""],
+    };
+    const [guard, replacement] = guards[fault]!;
+    assert.equal(original.split(guard).length, 2, `${fault} target changed`);
+    contents = original.replace(guard, replacement);
+  } else if (name === "ide-lifecycle") {
+    const guards: Record<string, [string, string]> = {
+      // An open queued behind another operation runs on a connection that
+      // changed or went away meanwhile.
+      "ide-queue": [
+        "if (\n        this.options.admits?.({\n          provider: request.provider,",
+        "if (\n        false &&\n        this.options.admits?.({\n          provider: request.provider,",
+      ],
+      // A start keeps the epoch of the look it overtook, so that look's
+      // answer forgets a server the start may have launched.
+      "ide-start-epoch": [
+        "const epoch = (instance.epoch = ++this.epochs);\n    const result = await this.run(this.target(instance), script, {",
+        "const epoch = instance.epoch;\n    const result = await this.run(this.target(instance), script, {",
+      ],
     };
     const [guard, replacement] = guards[fault]!;
     assert.equal(original.split(guard).length, 2, `${fault} target changed`);
@@ -503,9 +574,11 @@ export async function mutateImplementation(
               ? "quint/herdr-core-subjects.ts"
               : name === "herdr-core-seen"
                 ? "quint/herdr-core-seen-subjects.ts"
-                : name === "observation-base"
-                  ? "quint/observation-subjects.ts"
-                  : owner,
+                : name === "ide-lifecycle"
+                  ? "quint/ide-lifecycle.ts"
+                  : name === "observation-base"
+                    ? "quint/observation-subjects.ts"
+                    : owner,
       ),
     ],
     target: "bun",

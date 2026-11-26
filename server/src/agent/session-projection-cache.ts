@@ -1,4 +1,13 @@
 import { sessionWorktreeMetadata } from "./worktree-session";
+import { reportedSessionClaim } from "./agent-claims";
+import { taskSummarySessionFingerprint } from "../herdr/task-summary";
+import {
+  callWorkingDirectories,
+  localArtefactStat,
+  ownedArtefacts,
+  sessionArtefacts,
+  withArtefactPresence,
+} from "./artefacts";
 import { createHash, randomUUID } from "node:crypto";
 import type { AgentSessionFileAccess } from "./session-file-access";
 import type { AgentSessionResolved, SessionFile } from "./session-types";
@@ -57,6 +66,11 @@ export async function readSessionProjection(
     quest: questFromSession(agent, trajectory, records),
     usage_stop: usageStopFromRecords(agent, records),
     worktree: sessionWorktreeMetadata(agent, records),
+    // Relative paths resolve against the cwd recorded for their own call.
+    artefacts: sessionArtefacts(
+      trajectory,
+      callWorkingDirectories(agent, records),
+    ),
     stats: {
       turns: messages.filter((message) => message.role === "user").length,
       records: records.length,
@@ -147,8 +161,14 @@ export function createSessionProjectionCache(
     entries: 16,
     bytes: 32 * 1024 * 1024,
   },
+  /** The immutable connection these sessions are read through. */
+  connectionId = "",
 ) {
   const cache = new Map<string, Cached>();
+  // The room each artefact's maker session was in when World first saw it,
+  // so a later move does not reassign where it was made, and another agent
+  // recreating the same path keeps its own (bounded, references only).
+  const origins = new Map<string, string | null>();
   const pending = new Map<string, Promise<Cached>>();
   // Quests are small, so many more are kept than projections: an agent's
   // quest can be shown without rereading a transcript that has not changed.
@@ -158,6 +178,7 @@ export function createSessionProjectionCache(
       signature: string;
       quest: Quest | null;
       usage_stop: AgentUsageStop | null;
+      artefacts: Projection["artefacts"];
     }
   >();
   // A session file's paging identity, kept even when its projection is too
@@ -310,6 +331,7 @@ export function createSessionProjectionCache(
         signature: value.signature,
         quest: projection.quest,
         usage_stop: projection.usage_stop,
+        artefacts: projection.artefacts,
       });
       while (quests.size > (limits.quests ?? 256))
         quests.delete(quests.keys().next().value!);
@@ -344,31 +366,97 @@ export function createSessionProjectionCache(
     return entries;
   }
   /**
-   * What Town and Board show at the agent's desk: its quest and its
-   * usage-limit stop, reusing the projection while its source is unchanged.
+   * What Town and Board show at the agent's desk: its quest, its usage-limit
+   * stop and the artefacts it made, reusing the projection while its source
+   * is unchanged.
    */
-  const desk = async (
+  const record = async (
     resolved: AgentSessionResolved,
-  ): Promise<{ quest: Quest | null; usage_stop: AgentUsageStop | null }> => {
+  ): Promise<{
+    quest: Quest | null;
+    usage_stop: AgentUsageStop | null;
+    artefacts: Projection["artefacts"];
+  }> => {
     const file = resolved.file;
     if (!file) throw new Error("Session file unavailable");
     const key = `${sessionKey(resolved)}:${file.path}`;
     const known = quests.get(key);
     const snapshot = known ? await readSnapshot(resolved) : undefined;
     if (known && snapshot && known.signature === snapshot.signature)
-      return { quest: known.quest, usage_stop: known.usage_stop };
+      return {
+        quest: known.quest,
+        usage_stop: known.usage_stop,
+        artefacts: known.artefacts,
+      };
     const { projection } = await load(resolved, snapshot);
-    return { quest: projection.quest, usage_stop: projection.usage_stop };
+    return {
+      quest: projection.quest,
+      usage_stop: projection.usage_stop,
+      artefacts: projection.artefacts,
+    };
   };
   return {
     invalidate,
     async get(resolved: AgentSessionResolved) {
       return (await load(resolved)).projection;
     },
-    desk,
+    /**
+     * The desk record with each file artefact's presence checked on every
+     * read, so a deleted file shows as gone; remote hosts are not probed.
+     * Each artefact is named on this connection and stamped with its maker:
+     * this pane, harness and reported session, in the room that session was
+     * in when World first saw it make the artefact. The room is remembered
+     * per maker session, so another agent recreating the same path keeps its
+     * own room.
+     */
+    async desk(
+      resolved: AgentSessionResolved,
+      maker: {
+        pane_id: string;
+        agent: string | null;
+        /** The pane as the runtime lists it (its room and reported session). */
+        info?: Record<string, unknown>;
+      },
+    ) {
+      const room =
+        typeof maker.info?.workspace_id === "string" && maker.info.workspace_id
+          ? maker.info.workspace_id
+          : null;
+      const reported = reportedSessionClaim(maker.info ?? null, Date.now());
+      const session = reported
+        ? taskSummarySessionFingerprint(reported.value)
+        : null;
+      const found = await record(resolved);
+      const present = await withArtefactPresence(
+        found.artefacts,
+        files.remote ? null : localArtefactStat,
+      );
+      const artefacts = ownedArtefacts(present, connectionId, (id) => {
+        // Keyed by the transcript actually read: a reported session can
+        // outlive its transcript (a stale Codex report), and must not carry
+        // one session's room to the next.
+        const origin = JSON.stringify([
+          id,
+          maker.pane_id,
+          sessionKey(resolved),
+        ]);
+        if (!origins.has(origin) && room !== null) {
+          origins.set(origin, room);
+          if (origins.size > 4096) origins.delete(origins.keys().next().value!);
+        }
+        return {
+          connection_id: connectionId,
+          pane_id: maker.pane_id,
+          agent: maker.agent ?? "",
+          workspace_id: origins.get(origin) ?? room,
+          session,
+        };
+      });
+      return { ...found, artefacts };
+    },
     /** The session's quest, reusing its unchanged projection. */
     async quest(resolved: AgentSessionResolved) {
-      return (await desk(resolved)).quest;
+      return (await record(resolved)).quest;
     },
     /** The page before an entry, for scrolling back past the window. */
     async older(

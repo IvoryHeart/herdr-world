@@ -51,6 +51,11 @@ maintenance](react-19.md).
 
 ## Isolated worktree preview
 
+For acceptance checks against both real runtimes, use the
+[isolated runtime kit](isolated-runtimes.md). It creates and cleans up its own
+TUI session, core, World and scratch harness configurations, including after a
+crash; its self-test is run on demand.
+
 Keep one preview per worktree, on its own unused loopback port and data folder.
 Use a synthetic Herdr TUI session, with demo agents/repositories only, so a
 preview cannot act on real work. The standard `dev:server` script fixes port
@@ -87,11 +92,12 @@ it; leave other worktrees' listeners and data alone. For CLI checks, point
 `HERDR_WORLD_URL` at this listener and use the same `HERDR_WORLD_DATA_DIR` so the
 CLI locates its token. Preview data and built assets stay untracked.
 
-To include several previews in Shipyard's local instance observations, set
-`HERDR_WORLD_INSTANCE_REGISTRY_DIR` to the same private directory in each
-listener's environment at startup. Without it, each isolated data folder keeps
-its own registry. This shares display observations and, for previews attached
-to the same runtime, their open owner questions in Needs you (each World reads
+Previews share Shipyard's private per-user instance registry by default, even
+with different data folders. Set `HERDR_WORLD_INSTANCE_REGISTRY_DIR` in a
+listener's environment at startup to select a separate private registry; use
+the same override for previews that should discover one another. This shares
+display observations and, for previews attached to the same runtime, their open
+owner questions in Needs you (each World reads
 the others over loopback with a per-run token); credentials, storage and
 connections stay in each preview's own folder. Reports expire after 45
 seconds without renewal, and stale reports have no open link. See the
@@ -149,6 +155,14 @@ to Ubuntu, GitHub releases and releases.herdr.dev. No root shell or
 `--require-docker` makes it an error in CI. An unavailable daemon, unsupported
 cgroups or a failed download fails the run. `--version` selects the candidate
 build version (or exact package in `dist/` with `--reuse`).
+
+The cached dependency base allows one additional package-index refresh when a
+mirror fails (including HTTP 520, which APT's native retries do not cover). Every index must
+refresh successfully before package installation; signature checks stay enabled.
+Repeated refresh failures and package installation failures still fail the run.
+Both refresh attempts and installation share the base's 300-second deadline;
+HTTP/HTTPS requests retain 15-second timeouts and one native retry. See the
+[image guide](../scripts/install-linux/README.md) for cache and failure evidence.
 
 Every default run uses five fresh containers:
 
@@ -300,11 +314,10 @@ selects another accessible repository. Run it again after delivery to compare th
 same window definition; do not infer an improvement from a different sample size.
 The [pipeline guide](ci-pipelines.md#health-and-delivery-measures) defines the
 request caps, sampling and missing incident links. Save an intended PR description
-before the first push when it contains policy exemptions:
-`HERDR_WORLD_PR_BODY=/tmp/pr-body.md git push`. The hook checks the complete PR diff
-against that body and the existing PR’s immutable base (including stacks) before
-running the delivery gate; `check:pr-body` remains the
-explicit check before opening the PR.
+before pushing: `HERDR_WORLD_PR_BODY=/tmp/pr-body.md git push`. The pre-push
+privacy step scans that body (or the existing PR's description) and the existing
+PR title; description policy runs in CI, and `check:pr-body` remains the explicit
+check before opening the PR.
 
 The runner creates HOME and every XDG directory before launching Bun (a preload
 cannot change Bun's cached home), removes inherited runtime/account settings and
@@ -492,12 +505,11 @@ discovered from `web/src/world/*.browser.tsx`. Inventory checks reject missing
 or duplicate assignments. The required Delivery checks status succeeds only when
 repository validation, every World shard and the web browser job pass.
 Markdown-only and exact-head reuse keep their existing shorter paths.
-Release packaging requires repository validation, all six shards and the web
-browser job to pass. **Web browser tests** runs the
-Chrome-driven suites outside World (`webBrowserSuites` in the same inventory) one
-file at a time; an inventory check rejects an unlisted one.
-Prepare Release validates its generated working tree in one checkout with one file
-worker; it retains the complete World suite, with one active World case at a time.
+PR CI supplies Linux source/browser evidence; main reports the same immutable
+PR result without heavy checks. Release tags build/test installed channel bytes
+before sealing. Release-please updates version/changelog metadata and dispatches
+ordinary PR CI automatically. **Web browser tests** runs the Chrome-driven suites outside
+World (`webBrowserSuites`) one file at a time.
 
 Each World run writes JUnit results and per-file timings under `.agents/delivery/`.
 CI uploads them as `world-browser-N-attempt-M` artifacts, and the web job's JUnit results as `web-browser-attempt-M`, including on test failure. Compare

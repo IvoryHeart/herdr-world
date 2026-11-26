@@ -58,17 +58,17 @@ Codex, Pi and Kimi share one file whose marker ID is `shared`: status for all
 three agrees even if only one harness is configured. Uninstalling any one
 names the other two that also lose the file.
 
-## Proposed IDE integrations
+## IDE integrations
 
-The [Code view study](design/code-view/research.md) proposes extending this
-integration direction with a distinct IDE kind: installed VS Code web servers and
-project handoffs to VS Code desktop, Cursor, JetBrains Gateway, Zed and others.
-Detection/enablement would be per host and opening per project, with explicit
-shell/write trust, upstream terms and transport compatibility gates. This is a
-proposal, not an additional supported harness name or command. Current
-`world.integration.*` still manages World skills on the service host only; no
-remote IDE detection, installation, launch or proxy is implemented by the study.
-Try its [synthetic picker and handoff](design/code-view/design.md).
+The [Code view](../openspec/specs/world-code-view/notes.md#code-view) adds a distinct IDE kind beside these
+harness integrations: Visual Studio Code (`code serve-web`), code-server and
+OpenVSCode Server, installed on the host each project is on. Each is enabled
+once behind the trust and licence gate, detected read-only (on World's
+computer, or over the connection's OpenSSH destination for an SSH host) and
+started per project folder only when **Open** is clicked. They are not harness
+names or commands, and `world.integration.*` does not manage them; their RPCs
+are `world.ide.*`. The [study](design/code-view/research.md) covers the
+remaining proposal (a World extension for agent terminals).
 
 ## Runtime differences
 

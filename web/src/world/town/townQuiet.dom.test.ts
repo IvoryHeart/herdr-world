@@ -27,11 +27,11 @@ test("the board's Busy count carries the quiet working agents and their find", (
   );
   // Help's Try finds the line, and the chip that opens the board.
   expect(board).toContain('data-help="town.quiet"');
-  expect(board).toContain('data-help-opens="town.quiet"');
-  // Nobody quiet: no line, and nothing for Try to open.
+  expect(board).toContain('data-help-opens="town.focus town.quiet"');
+  // Nobody quiet: no line, and the chip opens only the focus controls.
   const calm = renderToStaticMarkup(createElement(TownBoard, { counts }));
   expect(calm).not.toContain("town-board-quiet");
-  expect(calm).not.toContain("data-help-opens");
+  expect(calm).toContain('data-help-opens="town.focus"');
 });
 
 if (process.env.TOWN_QUIET_DOM !== "1") {

@@ -50,7 +50,10 @@ exploration and 48 actual service schedules; ordinary runtime leases did not
 cover lost updates. By contrast, Q56's immutable settings files have equal
 content for equal names: concurrent publication commutes, so real atomic-file
 and before/after-failure retry checks cover that preparation boundary cheaply.
-Q57 separately assesses the open move candidate's exhaustive serial controller.
+Q57 models runtime moves in both directions against source changes, dropped or
+reconnected hosts and lost replies, and replays them through the real controller;
+the model found two faults, fixed and kept as witnesses
+([audit](contracts/agent-move-audit.md)).
 
 The audit also found a **real counterexample**: Q55's stale tap owner can publish
 after its ownership check was superseded (#1086). The repaired canonical case requires
@@ -199,6 +202,19 @@ with the affected evidence decision and limitation recorded. Never make checker
 errors soft-success, disable a consumer regression or weaken an intended property
 to recover a green build. Tool caches and generated traces are ignored and may
 be recreated through `verification:setup`; production code does not depend on Quint.
+
+## Content-matched CI evidence
+
+Applicable PR model groups may reuse a complete passing result with the exact
+model/adapter/production import closure, tool/lock/workflow and seed hash. Main,
+nightly and release executions remain fresh; model inventories, bounds, witnesses,
+mutations and replay are unchanged. The shared runner's adapter imports widen
+the closure conservatively. Cache misses and invalid evidence execute the entire
+group. Original manifests and enforced resource records are retained, and the
+aggregate records each group's `ran` or `reused` mode, hash and origin revision/run
+while binding the current complete source inventory. Reused evidence never claims
+execution on that current revision. See [the CI guide](../docs/ci-pipelines.md#content-reuse-and-test-placement)
+for provenance validation, cache visibility and negative/round-trip tests.
 
 ## Failure diagnostics and progress review
 

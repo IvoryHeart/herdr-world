@@ -1,3 +1,4 @@
+import { usageRpc } from "../features/usage/rpc";
 import { expect, test } from "bun:test";
 import type { ServerWebSocket } from "bun";
 import { USAGE_ANALYTICS_GROUPS } from "../../../shared/usageAnalytics";
@@ -23,7 +24,9 @@ function serviceClient() {
   const services = {
     clients: new Set([ws]),
     snapshotAdmission: { acknowledge: () => false },
-    worldUsageAnalytics: { get: usageAnalyticsFixture },
+    featureRpc: new Map(
+      Object.entries(usageRpc({ analytics: { get: usageAnalyticsFixture } })),
+    ),
     safeSend: (_ws: unknown, payload: string) => {
       const reply = JSON.parse(payload);
       replies.set(reply.id, reply);

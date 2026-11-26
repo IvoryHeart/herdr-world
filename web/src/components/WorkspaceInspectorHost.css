@@ -285,12 +285,9 @@
 
 /* The top selector follows the window's own width, docked, floating or on a
    phone: labelled from 640px; below that every view is an icon (named by its
-   tooltip and aria-label); below 360px only the active view shows, with the
-   others under ⋯ (#265's breakpoints). */
-.workspace-inspector-tabs-more {
-  display: none;
-}
-
+   tooltip and aria-label). When even the icons do not fit, the tabs give way
+   to the one view menu, whose trigger is drawn as the active tab (#265's
+   breakpoints, #1361). */
 @container workspace-inspector (max-width: 639px) {
   .workspace-inspector-tabs button {
     flex: 0 0 auto;
@@ -302,30 +299,28 @@
   }
 }
 
-@container workspace-inspector (max-width: 359px) {
-  .workspace-inspector-tabs {
-    grid-column: 1;
-    width: auto;
-    min-width: 0;
-  }
+.workspace-inspector-tabs[hidden] {
+  display: none;
+}
 
+/* On the resize frame, before React's observer swaps in the view menu, the
+   narrowest bar keeps only the active view's tab. */
+@container workspace-inspector (max-width: 359px) {
   .workspace-inspector-tabs button:not(.is-active) {
     display: none;
   }
+}
 
-  .workspace-inspector-head > .workspace-inspector-tabs-more {
-    display: inline-flex;
-    grid-column: 2;
-    grid-row: 2;
-    align-items: center;
-    justify-content: center;
-    min-width: 32px;
-    min-height: 28px;
-    padding: 0;
-    border: 1px solid var(--viewer-border);
-    border-radius: 8px;
-    background: var(--viewer-content-bg);
-    color: var(--text-strong);
+.workspace-inspector-tabs .workspace-inspector-view-select.is-bar {
+  gap: 2px;
+  padding: 0 6px;
+  cursor: pointer;
+}
+
+/* Narrow Columns leave no room for the chevron; the chip alone opens it. */
+@container workspace-inspector (max-width: 279px) {
+  .workspace-inspector-view-select.is-bar > svg + svg {
+    display: none;
   }
 }
 
@@ -334,36 +329,6 @@
   .workspace-inspector-head[data-views-in-menu]:has(> .interest-button) {
     gap: 2px;
   }
-}
-
-/* A managed window whose bar is crowded keeps only the active view's chip;
-   every view is in the window's ⋯. */
-.workspace-inspector-head[data-views-in-menu]
-  .workspace-inspector-tabs
-  button:not(.is-active) {
-  display: none;
-}
-
-.workspace-inspector-tabs-menu {
-  display: flex;
-  flex-direction: column;
-  min-width: 140px;
-  padding: 4px;
-}
-
-.workspace-inspector-tabs-menu button {
-  padding: 7px 10px;
-  border: 0;
-  border-radius: 6px;
-  background: transparent;
-  color: var(--text);
-  text-align: left;
-}
-
-.workspace-inspector-tabs-menu button:hover,
-.workspace-inspector-tabs-menu button:focus-visible {
-  background: var(--accent-soft);
-  color: var(--text-strong);
 }
 
 .workspace-inspector.is-compact .workspace-inspector-resource {
@@ -595,7 +560,7 @@
   min-height: 28px;
 }
 
-.workspace-inspector-view-select {
+.workspace-inspector-view-select:not(.is-bar) {
   width: 40px;
   height: 40px;
 }

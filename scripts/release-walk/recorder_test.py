@@ -38,17 +38,25 @@ class RecorderTests(unittest.TestCase):
             pane_for(world, connection, pane, require_classified=True)
 
     def test_recorder_preserves_complete_arguments_settings_and_child_input(self):
+        for kind in ('claude', 'codex'):
+            with self.subTest(kind=kind):
+                self.check_recorder(kind)
+
+    def check_recorder(self, kind):
         with tempfile.TemporaryDirectory(prefix='walk-recorder-') as directory:
             root = Path(directory)
             probe = root / 'probe.py'
-            probe.write_text('import json, os\n'
+            screen = ('os.write(1, b"\\x1b[2GChoose\\x1b[9Gthe\\x1b[13Gtext\\x1b[18Gstyle\\r\\n")\n' if kind == 'claude'
+                      else 'print("OpenAI Codex", flush=True)\n')
+            probe.write_text('import json, os, sys\n'
                              'with open("/dev/tty") as terminal:\n'
                              '    state = dict(pid=os.getpid(), sid=os.getsid(0), pgid=os.getpgrp(), foreground=os.tcgetpgrp(terminal.fileno()))\n'
                              'print("PROCESS " + json.dumps(state), flush=True)\n'
-                             'os.write(1, b"\\x1b[2GChoose\\x1b[9Gthe\\x1b[13Gtext\\x1b[18Gstyle\\r\\n")\n'
+                             'print("ARGV " + json.dumps(sys.argv[1:]), flush=True)\n'
+                             + screen +
                              'line = input()\nos.write(1, ("child received: " + line).encode())\n'
                              'input()\n')
-            executable = root / 'claude'
+            executable = root / kind
             executable.write_text('#!/bin/sh\nexec ' + __import__('shlex').join([sys.executable, str(probe)]) + ' "$@"\n')
             executable.chmod(0o755)
             settings = root / 'settings.json'
@@ -56,6 +64,8 @@ class RecorderTests(unittest.TestCase):
             settings.write_text(json.dumps({'statusLine': {'command': command}}))
             role = 'role with "quotes" and apostrophe\'s value\ncomplete end'
             args = ['--agents', json.dumps({'walk': {'prompt': role}}), '--settings', str(settings)]
+            if kind == 'codex':
+                args = ['-a', 'on-request', '-s', 'read-only', '-c', 'developer_instructions=' + json.dumps(role)]
             telemetry = Telemetry(root / 'events.sock')
             master, slave = pty.openpty()
             output = Events()
@@ -63,8 +73,8 @@ class RecorderTests(unittest.TestCase):
             # wiring a slave to stdio misses the runtime-detection regression.
             attach = 'import fcntl, os, sys, termios; fcntl.ioctl(0, termios.TIOCSCTTY, 0); os.execv(sys.argv[1], sys.argv[1:])'
             child = subprocess.Popen([sys.executable, '-c', attach, sys.executable,
-                                      str(Path(__file__).with_name('observe.py')), 'claude', *args],
-                                     env={**os.environ, 'WALK_REAL_CLAUDE': str(executable), 'WALK_TELEMETRY': str(telemetry.path)},
+                                      str(Path(__file__).with_name('observe.py')), kind, *args],
+                                     env={**os.environ, 'WALK_REAL_' + kind.upper(): str(executable), 'WALK_TELEMETRY': str(telemetry.path)},
                                      stdin=slave, stdout=slave, stderr=slave, start_new_session=True)
             os.close(slave)
 
@@ -84,10 +94,13 @@ class RecorderTests(unittest.TestCase):
             try:
                 _, invoked = telemetry.wait(lambda item: item['event'] == 'invoked', timeout=10)
                 self.assertEqual(invoked['argv'], args)
-                self.assertEqual(invoked['settings'][0]['statusLine']['command'], command)
+                self.assertEqual(invoked['settings'], [{'statusLine': {'command': command}}] if kind == 'claude' else [])
                 _, screen = telemetry.wait(lambda item: item['event'] == 'first-screen', timeout=10)
-                _, text = output.wait(lambda text: 'PROCESS ' in text and 'style' in text, timeout=10)
+                _, text = output.wait(lambda text: 'PROCESS ' in text and ('style' if kind == 'claude' else 'OpenAI Codex') in text, timeout=10)
                 state = json.loads(text.split('PROCESS ', 1)[1].splitlines()[0])
+                received_args = json.loads(text.split('ARGV ', 1)[1].splitlines()[0])
+                expected_args = ['-c', 'check_for_update_on_startup=false', *args] if kind == 'codex' else args
+                self.assertEqual(received_args, expected_args)
                 self.assertEqual(state, dict(pid=child.pid, sid=child.pid, pgid=child.pid, foreground=child.pid))
                 self.assertEqual(screen['pid'], child.pid)
                 self.assertEqual(invoked['identity'], str(child.pid))
@@ -110,36 +123,6 @@ class RecorderTests(unittest.TestCase):
                 os.close(master)
                 telemetry.close()
 
-
-    def test_codex_never_offers_its_own_update_and_recorded_argv_is_unchanged(self):
-        with tempfile.TemporaryDirectory(prefix='walk-recorder-') as directory:
-            root = Path(directory)
-            seen = root / 'argv.json'
-            executable = root / 'codex'
-            executable.write_text('#!/bin/sh\nexec ' + __import__('shlex').join(
-                [sys.executable, '-c', 'import json, sys; open(sys.argv[1], "w").write(json.dumps(sys.argv[2:]))',
-                 str(seen)]) + ' "$@"\n')
-            executable.chmod(0o755)
-            args = ['--no-alt-screen', 'walk prompt']
-            telemetry = Telemetry(root / 'events.sock')
-            master, slave = pty.openpty()
-            attach = 'import fcntl, os, sys, termios; fcntl.ioctl(0, termios.TIOCSCTTY, 0); os.execv(sys.argv[1], sys.argv[1:])'
-            child = subprocess.Popen([sys.executable, '-c', attach, sys.executable,
-                                      str(Path(__file__).with_name('observe.py')), 'codex', *args],
-                                     env={**os.environ, 'WALK_REAL_CODEX': str(executable), 'WALK_TELEMETRY': str(telemetry.path)},
-                                     stdin=slave, stdout=slave, stderr=slave, start_new_session=True)
-            os.close(slave)
-            try:
-                _, invoked = telemetry.wait(lambda item: item['event'] == 'invoked', timeout=10)
-                self.assertEqual(invoked['argv'], args)
-                child.wait(timeout=10)
-                self.assertEqual(json.loads(seen.read_text()), ['-c', 'check_for_update_on_startup=false', *args])
-            finally:
-                if child.poll() is None:
-                    child.terminate()
-                    child.wait(timeout=10)
-                os.close(master)
-                telemetry.close()
 
 if __name__ == '__main__':
     unittest.main()

@@ -1,5 +1,6 @@
 import { expect, test } from "bun:test";
 import type { OfficeAgent } from "../herdrOfficeProjection";
+import { openFocus } from "../focus";
 import { townCenterActions } from "./useTownCenter";
 
 const agent = (key: string, agentName: string, extra = {}) =>
@@ -19,6 +20,7 @@ function center(
     roomReason?: string | null;
     seat?: boolean;
     roster?: OfficeAgent[];
+    focusing?: boolean;
     harness?: string;
   } = {},
 ) {
@@ -56,12 +58,10 @@ function center(
       createRoomReason: () => options.roomReason ?? null,
       onCreateRoom: (key) => calls.push(["room", key]),
     },
-    summary: {
-      summary: { counts: { needsYou: 3 } },
-      open: () => calls.push(["summary"]),
-    },
+    summary: { open: () => calls.push(["summary"]) },
     openChat: (key) => calls.push(["chat", key]),
     toast: (kind, text) => calls.push(["toast", kind, text]),
+    focusing: options.focusing ?? false,
   });
   const action = (id: string) => actions.find((entry) => entry.id === id)!;
   return { actions, action, calls };
@@ -71,19 +71,33 @@ const settle = () => new Promise((resolve) => setTimeout(resolve, 0));
 
 test("the ring offers a new agent first, then the Town master and the town's errands", () => {
   const { actions, action } = center();
+  // Places with a building (Needs you's post office, Apartments, the
+  // Library) open from Buildings' second ring instead (#1261).
   expect(actions.map((entry) => entry.id)).toEqual([
     "launch",
     "master",
-    "needs-you",
+    "focus",
     "summary",
     "profiles",
-    "apartments",
-    "library",
     "room",
   ]);
   expect(action("launch").primary).toBe(true);
-  expect(action("needs-you").count).toBe(3);
   expect(action("master").detail).toBeUndefined();
+});
+
+test("no first-ring entry carries a count or a number", () => {
+  const { actions } = center({ focusing: true, selectedRoomKey: "room-a" });
+  for (const action of actions) {
+    expect(action.count).toBeUndefined();
+    expect(`${action.label} ${action.detail ?? ""}`).not.toMatch(/\d/);
+  }
+});
+
+test("Focus opens its chooser and says when a session runs, without its time", () => {
+  expect(center().action("focus").detail).toBeUndefined();
+  const focused = center({ focusing: true });
+  expect(focused.action("focus").detail).toBe("On");
+  expect(focused.action("focus").run).toBe(openFocus);
 });
 
 test("a new agent starts in the open room when it can take one", () => {
@@ -157,13 +171,4 @@ test("New room is shown disabled with the reason it cannot be created", () => {
   open.action("room").run();
   open.action("summary").run();
   expect(open.calls).toEqual([["room", "room-a"], ["summary"]]);
-});
-
-test("the Town ring omits Library when its only harness has no adapter", () => {
-  expect(
-    center({ harness: "letta" }).actions.some((a) => a.id === "library"),
-  ).toBe(false);
-  expect(
-    center({ harness: "opencode" }).actions.some((a) => a.id === "library"),
-  ).toBe(true);
 });

@@ -108,6 +108,11 @@ export interface Pane {
   /** Runtime-provided labels for known semantic agent states. */
   state_labels?: Record<string, string>;
   agent_status: string;
+  /**
+   * The terminal's own name from its runtime (a herdr-core terminal's name),
+   * labelling a plain terminal in every view. Herdr TUI panes give none.
+   */
+  label?: string;
   /** Present only on herdr-core terminals (watched and typed into through world.core.*). */
   runtime?: "herdr-core";
   /** Opaque binding to the addressed core program and foreground. */

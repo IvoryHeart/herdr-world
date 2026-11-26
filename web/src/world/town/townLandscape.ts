@@ -259,16 +259,11 @@ function reservedLand(layout: TownLayout) {
     townHarbourReserve(harbour),
   ])
     reserve(lot.x0, lot.y0, lot.x1, lot.y1);
-  const library = townLibraryLot(layout);
-  if (library) {
-    const lot = townLibraryReserve(library);
+  for (const lot of [
+    townLibraryReserve(townLibraryLot(layout)),
+    townObservatoryReserve(townObservatoryLot(layout)),
+  ])
     reserve(lot.x0, lot.y0, lot.x1, lot.y1);
-  }
-  const observatory = townObservatoryLot(layout);
-  if (observatory) {
-    const lot = townObservatoryReserve(observatory);
-    reserve(lot.x0, lot.y0, lot.x1, lot.y1);
-  }
   const apartments = townApartmentsLot(layout);
   if (apartments) {
     const lot = townApartmentsReserve(apartments);

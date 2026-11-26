@@ -114,10 +114,18 @@ policy is a refusal, not licence to strip protections until the iframe loads.
 
 Official webviews may use a Microsoft CDN. A compatible distribution-supported,
 licence-permitted self-hosted configuration could pass; asset rewriting and blanket
-CDN/CSP allowances are not proposed. If full functionality cannot coexist with the
-current single-origin policy, block embed and offer desktop handoff. A separate
-origin/changed webview policy requires an owner decision and revised architecture;
-the mock is not evidence that the current policy can deliver all official features.
+CDN/CSP allowances are not proposed. A separate origin/changed webview policy requires
+a reviewed change to the one-origin rule and revised architecture; the mock is not
+evidence that the current policy can deliver all official features.
+Decided for #1038 (`docs/design/code-view/webview-origin.md`): stock VS Code and
+OpenVSCode webviews load from VS Code's own webview origin. The frame rule World adds
+to IDE route responses admits `https://*.vscode-cdn.net` as the one origin besides
+World's own (#1053); World's own pages keep the one-origin policy and no product file
+is rewritten. Webview content is untrusted and stays cross-origin to World, so it
+cannot reach World's window, storage, cookies or API. Same-origin webviews (a
+rewritten host page) were tried and rejected, because no rule separates two
+documents on one origin; a second World-owned origin and blank webviews were also
+rejected.
 Marketplace/Sync/extension sign-in may also require external HTTPS/popups;
 upstream's CSP includes unsafe-eval and blob workers. Enumerate actual origins and
 directives for the selected release; proxying its HTML alone does not satisfy the
@@ -190,12 +198,44 @@ evidence is unavailable; stale PR badges remain labelled and non-actionable.
 Resource ownership distinguishes externally started servers from World-started
 children. Start on demand, reuse only a compatible host/user/provider/profile
 instance, enforce measured server/window limits, and show active/open state.
-Window close detaches clients; it is not stop-server. Idle shutdown applies only
-to World-owned instances after no clients/terminal demand and explicit idle policy;
-external instances are detached, never killed. Explicit stop explains affected IDE
-sessions and never ends Herdr agents. Partial start/reply loss is uncertain:
-reconcile the captured instance before retry, avoid duplicate server processes.
+Window close detaches clients; it is not stop-server. Going away is not stopping
+either: World shutdown, restart or update, a reconnect, a changed destination, a
+dropped SSH link and an unreachable host only detach World from a World-started
+server; it keeps running with whatever runs in it, and there is no idle timeout.
+Each server lives in its own folder on its host (World's data folder locally,
+`$XDG_STATE_HOME/herdr-world/ide` over SSH) holding a record (World ID, connection,
+provider, folder, start time and an ownership nonce), its token and its socket. A
+supervisor detached from World and from the SSH channel waits on it. The folder ID
+is derived from World, connection, host, provider and folder, so a second start
+for the folder finds the first (an atomic `mkdir` claim) and a later World
+rediscovers and verifies it before reattaching. Every process the server starts
+inherits the nonce in its environment, so Stop and the supervisor end the whole
+tree, including terminals re-parented out of it. Only the person pressing Stop on
+a server stops it, after warning that its running tasks end. Disabling the
+provider and removing the connection only detach: their confirmations list the
+servers with Stop for each, and the servers stay listed. The limit refuses a
+new start and never stops one. External instances are detached, never killed.
+World keeps the servers it started in `ide.json` (id, provider, connection,
+SSH destination, host name, folder, start time) and drops one only when Stop
+succeeds, its host shows it gone, or the person forgets one it can no longer
+reach; a restart lists every one before any host answers. A removed SSH
+connection's servers are unreachable from World: listed, counted, never reached
+through another connection, with a by-hand stop command for their host.
+Explicit stop never ends Herdr agents. Partial start/reply loss is uncertain:
+listed and counted as possibly running, not failed; reconcile the captured
+instance before retry, avoid duplicate server processes.
 No automatic restart across a retired connection or silently open ports on LAN.
+
+Ordering on the host and in World, as `quint/ide-lifecycle.qnt` found it must be:
+a start first leaves a begin mark, and a Stop or a look voids every begin mark of
+the folder, so a start they overtook launches nothing (exit 93). A host's list
+reports claims, begin marks and the renamed leftovers of an unfinished Stop as
+pending, so none is forgotten; an attach to a folder with a leftover reports it
+as still stopping, and the next Stop or the by-hand command ends it. Each start,
+attach and release takes a new epoch, so a list sent before it cannot forget the
+entry. An Open or reattach queued behind another operation re-checks that its
+connection, generation and provider are still the ones it was asked under, and
+otherwise refuses as stale.
 
 ## Risks / Trade-offs
 
@@ -212,10 +252,11 @@ No automatic restart across a retired connection or silently open ports on LAN.
 
 ## Verification and migration plan
 
-This PR changes only research, proposed deltas and isolated static fixture behavior.
-No production contract owner/adapter in `verification/coverage/` is modified.
-Direct DOM interaction and rendered layout checks are appropriate evidence for a
-no-network synthetic mock; a Quint UI model would not validate an IDE proxy.
+The server lifecycle is modelled in `quint/ide-lifecycle.qnt` and replayed
+through World's real IDE service (`quint/ide-lifecycle.ts`); its coverage area is
+`verification/coverage/ide-lifecycle.json` and its contract
+`verification/contracts/ide-lifecycle.md`. The proxy and one browser origin are
+covered by route and proxy tests, not by the model.
 
 For future implementation derive invariants from requirements first. Assess Q01,
 Q16, Q19, Q20, Q23, Q31, Q33, Q40, Q43 and core Q52/Q53 against actual ownership;

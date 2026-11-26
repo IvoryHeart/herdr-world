@@ -7,10 +7,9 @@ import {
   CONTEXT,
   judge,
   mainDescription,
+  mainReport,
   parseDelta,
-  parseBudget,
   parseMain,
-  rejudge,
   settleVerdict,
 } from "./web-asset-headroom";
 
@@ -54,47 +53,72 @@ test("the recorded delta round-trips through the status description", () => {
   // Main's own record is not a PR delta, and round-trips separately.
   const main = mainDescription({ files: 144, bytes: 13937949 });
   expect(parseDelta(main)).toBeUndefined();
-  expect(parseMain(main)).toEqual({ files: 144, bytes: 13937949 });
-});
-
-test("main's re-judging keeps a budget the PR raised", () => {
-  const mainBudget = { files: 212, bytes: 15.6 * MiB };
-  const prBudget = { files: 212, bytes: 15.7 * MiB };
-  const main = { files: 203, bytes: 16354314 };
-  // Judged on its own run against the budget its branch raised.
-  const own = judge(
-    { files: 203, bytes: 16338191 },
-    { files: 1, bytes: 8746 },
-    prBudget,
-  );
-  expect(own.state).toBe("success");
-  expect(parseBudget(own.description)).toEqual({
-    files: 212,
-    bytes: Math.round(15.7 * MiB),
+  expect(parseMain(main)).toEqual({
+    files: 144,
+    bytes: 13937949,
+    budget: expect.any(Object),
   });
-  const again = rejudge(main, own.description, mainBudget);
-  expect(again?.state).toBe("success");
-  expect(again?.description).toContain("/15.70 MiB");
-  // The verdict keeps that budget for the next main push.
-  expect(rejudge(main, again!.description, mainBudget)?.state).toBe("success");
-  // A PR that did not raise the budget still meets main's.
-  const plain = judge(main, { files: 1, bytes: 8746 }, mainBudget);
-  expect(plain.state).toBe("failure");
-  expect(rejudge(main, plain.description, mainBudget)?.state).toBe("failure");
-  // Main raising its budget later applies to an older record.
-  expect(rejudge(main, plain.description, prBudget)?.state).toBe("success");
-  // Not measured yet.
-  expect(rejudge(main, "", mainBudget)).toBeUndefined();
-  expect(parseBudget(mainDescription(main))).toBeUndefined();
+  expect(parseMain("main 13937949 B 144 files")).toEqual({
+    files: 144,
+    bytes: 13937949,
+  });
 });
 
-test("the workflow judges PRs and re-judges them on every main push", async () => {
+test("main publishes exact remaining headroom and retains its reviewed budget", () => {
+  const size = { files: 148, bytes: budget.bytes - 17 };
+  const description = mainDescription(size, budget);
+  expect(description).toContain("headroom 17 B 2 files");
+  expect(description.length).toBeLessThanOrEqual(140);
+  expect(parseMain(description)).toEqual({ ...size, budget });
+  expect(mainReport(size, budget)).toContain("17 bytes and 2 files");
+  expect(mainReport(size, budget)).toContain("scripts/web-asset-budget.json");
+  const over = { files: 151, bytes: budget.bytes + 9 };
+  expect(parseMain(mainDescription(over, budget))).toEqual({ ...over, budget });
+  expect(mainReport(over, budget)).toContain(
+    "bytes: 13893632 -> 13893641 (+9)",
+  );
+});
+
+test("projection boundaries and exact raise requests use both reviewed ceilings", () => {
+  expect(judge(budget, { bytes: 0, files: 0 }, budget).state).toBe("success");
+  const bytes = judge(budget, { bytes: 1, files: 0 }, budget);
+  expect(bytes.state).toBe("failure");
+  expect(bytes.request).toContain("(+1)");
+  const files = judge(budget, { bytes: -100, files: 1 }, budget);
+  expect(files.state).toBe("failure");
+  expect(files.request).toContain("files: 150 -> 151 (+1)");
+});
+
+test("a budget-only main merge re-judges a feature against the new policy", async () => {
+  for (const bytes of [90, 120]) {
+    const currentBudget = { files: 10, bytes };
+    const verdict = await settleVerdict({
+      baseSha: "main-1",
+      base: { files: 8, bytes: 95 },
+      delta: { files: 0, bytes: 10 },
+      budget: { files: 10, bytes: 100 },
+      readTip: async () => "main-2",
+      readMainSize: async () =>
+        parseMain(mainDescription({ files: 8, bytes: 95 }, currentBudget)),
+      post: async () => {},
+    });
+    expect(verdict.state).toBe(bytes === 120 ? "success" : "failure");
+    if (bytes === 90)
+      expect(verdict.request).toContain("bytes: 90 -> 105 (+15)");
+  }
+});
+
+test("the workflow judges relevant PRs and main pushes with the same web inputs", async () => {
   const workflow = Bun.YAML.parse(
     await Bun.file(
       new URL("../.github/workflows/web-asset-headroom.yml", import.meta.url),
     ).text(),
   ) as any;
-  expect(workflow.on.push).toEqual({ branches: ["main"] });
+  expect(workflow.on.push.branches).toEqual(["main"]);
+  expect(workflow.on.push.paths).toEqual(workflow.on.pull_request.paths);
+  expect(workflow.on.push.paths).toContain("web/**");
+  expect(workflow.on.push.paths).toContain("shared/**");
+  expect(workflow.on.push.paths).not.toContain("server/**");
   expect(workflow.permissions.statuses).toBe("write");
   const runs = workflow.jobs.headroom.steps.map((step: any) => step.run);
   expect(runs).toContain("bun scripts/web-asset-headroom.ts pr");

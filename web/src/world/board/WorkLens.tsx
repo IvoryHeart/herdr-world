@@ -59,7 +59,13 @@ export function WorkLens({
   className,
   agentAction = (label) => `Show agent ${label} on Board`,
   initialTab = "pull_requests",
+  framed = false,
 }: {
+  /**
+   * Inside a window (Town's PlaceWindow, #1170), which owns the layer and
+   * the close button.
+   */
+  framed?: boolean;
   /** The tab it opens on. */
   initialTab?: WorkLensTab;
   world: WorldObject;
@@ -82,7 +88,7 @@ export function WorkLens({
   const live = useWorldSources();
   const snapshot = sources ?? live;
   const sectionRef = useRef<HTMLElement | null>(null);
-  useLayer(true, onClose, {
+  useLayer(!framed, onClose, {
     element: () => sectionRef.current,
     anchors: () => [anchor?.() ?? null],
   });
@@ -152,14 +158,16 @@ export function WorkLens({
         >
           <Settings2 size={16} aria-hidden="true" />
         </button>
-        <button
-          type="button"
-          className="work-lens-icon"
-          aria-label="Close Work"
-          onClick={onClose}
-        >
-          <X size={16} aria-hidden="true" />
-        </button>
+        {framed ? null : (
+          <button
+            type="button"
+            className="work-lens-icon"
+            aria-label="Close Work"
+            onClick={onClose}
+          >
+            <X size={16} aria-hidden="true" />
+          </button>
+        )}
       </header>
       {releases ? <ShipyardPipeline /> : null}
       {!releases && problems.length ? (

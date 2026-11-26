@@ -456,7 +456,8 @@ button.needs-you-icon:hover:not(:disabled) {
   background: var(--panel);
   box-shadow: var(--shadow-lg);
 }
-.needs-you-tab .needs-you {
+.needs-you-tab .needs-you,
+.needs-you-window .needs-you {
   flex: 1;
   min-height: 0;
 }

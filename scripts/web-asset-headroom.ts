@@ -7,17 +7,20 @@
  * - `pr`: build the PR's base and its merge with the PR, record the delta and
  *   judge base + delta.
  * - `main`: build main, then re-judge every open PR's recorded delta on top of
- *   it, so a PR that fit yesterday's main shows red once main has grown. A PR
- *   (or the branch it is stacked on) may raise the budget in a reviewed change;
- *   main's run keeps the larger of main's budget and the one the PR recorded.
+ *   it, so a PR that fit yesterday's main shows red once main has grown.
  *
  * Above 95 % of a budget the status stays green but says so.
  */
+import { appendFile } from "node:fs/promises";
+
 const assetsModule: string = "./check-web-assets.mjs";
-const { BUNDLE_BUDGET, collectAssetStats } = (await import(assetsModule)) as {
-  BUNDLE_BUDGET: { files: number; bytes: number };
-  collectAssetStats: () => Promise<{ fileCount: number; totalBytes: number }>;
-};
+const { BUNDLE_BUDGET, BUDGET_REQUEST, budgetRaiseRequest, collectAssetStats } =
+  (await import(assetsModule)) as {
+    BUNDLE_BUDGET: { files: number; bytes: number };
+    BUDGET_REQUEST: string;
+    budgetRaiseRequest: (size: Size, budget: Size) => string | undefined;
+    collectAssetStats: () => Promise<{ fileCount: number; totalBytes: number }>;
+  };
 
 export const CONTEXT = "Web asset headroom";
 const WARN_AT = 0.95;
@@ -42,18 +45,38 @@ export function judge(main: Size, delta: Size, budget: Size = BUNDLE_BUDGET) {
     state: over ? ("failure" as const) : ("success" as const),
     description,
     projected,
+    request: budgetRaiseRequest(projected, budget),
   };
 }
 
 /** Main records its own measured size under the same context, for PR runs to read. */
-export const mainDescription = (size: Size) =>
-  `main ${size.bytes} B ${size.files} files`;
+export const mainDescription = (size: Size, budget: Size = BUNDLE_BUDGET) =>
+  `main ${size.bytes} B ${size.files} files; headroom ${budget.bytes - size.bytes} B ${budget.files - size.files} files`;
 
-export function parseMain(description: string): Size | undefined {
-  const match = /^main (\d+) B (\d+) files$/.exec(description);
-  return match
-    ? { bytes: Number(match[1]), files: Number(match[2]) }
-    : undefined;
+export function parseMain(
+  description: string,
+): (Size & { budget?: Size }) | undefined {
+  // Keep pre-migration main measurements readable. New records carry the
+  // policy at that exact main SHA, so budget-only merges re-judge old PRs too.
+  const match =
+    /^main (\d+) B (\d+) files(?:; headroom (-?\d+) B (-?\d+) files)?$/.exec(
+      description,
+    );
+  if (!match) return undefined;
+  const size = { bytes: Number(match[1]), files: Number(match[2]) };
+  return match[3] === undefined
+    ? size
+    : {
+        ...size,
+        budget: {
+          bytes: size.bytes + Number(match[3]),
+          files: size.files + Number(match[4]),
+        },
+      };
+}
+
+export function mainReport(size: Size, budget: Size = BUNDLE_BUDGET) {
+  return `### Web asset headroom\n\nMeasured: ${size.bytes} bytes and ${size.files} files.\n\nRemaining: ${budget.bytes - size.bytes} bytes and ${budget.files - size.files} files.\n\n${budgetRaiseRequest(size, budget) ?? BUDGET_REQUEST}\n`;
 }
 
 export function parseDelta(description: string): Size | undefined {
@@ -61,40 +84,6 @@ export function parseDelta(description: string): Size | undefined {
   return match
     ? { bytes: Number(match[1]), files: Number(match[2]) }
     : undefined;
-}
-
-/**
- * The budget a status was judged against, as its description shows it. The
- * byte figure is rounded to 0.01 MiB; budgets are set in tenths of a MiB.
- */
-export function parseBudget(description: string): Size | undefined {
-  const match = /\/(\d+\.\d+) MiB, \d+\/(\d+) files/.exec(description);
-  return match
-    ? { bytes: Math.round(Number(match[1]) * MiB), files: Number(match[2]) }
-    : undefined;
-}
-
-/**
- * Main's re-judging of a PR's recorded status. A PR that raises the budget
- * (directly or through the branch it is stacked on) was judged against its own
- * budget, which applies once it merges; main's budget applies when it is larger.
- * The verdict's description records the budget used, so it carries forward.
- */
-export function rejudge(
-  main: Size,
-  recordedDescription: string,
-  budget: Size = BUNDLE_BUDGET,
-) {
-  const delta = parseDelta(recordedDescription);
-  if (!delta) return undefined;
-  const recorded = parseBudget(recordedDescription);
-  const effective = recorded
-    ? {
-        bytes: Math.max(budget.bytes, recorded.bytes),
-        files: Math.max(budget.files, recorded.files),
-      }
-    : budget;
-  return judge(main, delta, effective);
 }
 
 /**
@@ -108,7 +97,9 @@ export async function settleVerdict(options: {
   base: Size;
   delta: Size;
   readTip: () => Promise<string>;
-  readMainSize: (sha: string) => Promise<Size | undefined>;
+  readMainSize: (
+    sha: string,
+  ) => Promise<(Size & { budget?: Size }) | undefined>;
   post: (state: "success" | "failure", description: string) => Promise<void>;
   rounds?: number;
   /** The web asset budget; the shipped one unless a test supplies its own. */
@@ -137,7 +128,7 @@ export async function settleVerdict(options: {
     const size = await options.readMainSize(tip);
     if (!size) break;
     against = { sha: tip, size };
-    verdict = judge(size, options.delta, options.budget);
+    verdict = judge(size, options.delta, size.budget ?? options.budget);
   }
   return verdict;
 }
@@ -281,6 +272,7 @@ async function main() {
       },
     });
     console.info(verdict.description);
+    if (verdict.request) console.error(verdict.request);
     if (verdict.state === "failure") process.exitCode = 1;
     return;
   }
@@ -289,6 +281,10 @@ async function main() {
     const sha = (await sh(["git", "rev-parse", "HEAD"])).trim();
     console.info(mainDescription(current));
     await status(repo, sha, "success", mainDescription(current), url);
+    const report = mainReport(current);
+    console.info(report);
+    if (Bun.env.GITHUB_STEP_SUMMARY)
+      await appendFile(Bun.env.GITHUB_STEP_SUMMARY, report);
     const pulls = JSON.parse(
       await sh([
         "gh",
@@ -303,9 +299,11 @@ async function main() {
       ]),
     ) as Array<{ number: number; headRefOid: string }>;
     for (const pull of pulls) {
-      const verdict = rejudge(current, await recorded(repo, pull.headRefOid));
-      if (!verdict) continue; // Not measured yet; its own PR run will.
+      const delta = parseDelta(await recorded(repo, pull.headRefOid));
+      if (!delta) continue; // Not measured yet; its own PR run will.
+      const verdict = judge(current, delta);
       console.info(`#${pull.number}: ${verdict.description}`);
+      if (verdict.request) console.error(verdict.request);
       await status(
         repo,
         pull.headRefOid,

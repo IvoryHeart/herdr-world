@@ -146,6 +146,52 @@ describe("one Chat for both runtimes", () => {
     expect(sends(w)).toEqual([]);
   });
 
+  test("a core agent's desk read names what it made on core's own connection", async () => {
+    const { t, call, transcript } = await setup();
+    const report = join(transcript, "..", "core-report.md");
+    await writeFile(report, "# Report\n");
+    const record = {
+      type: "assistant",
+      uuid: "core-write",
+      cwd: join(transcript, ".."),
+      timestamp: "2026-11-23T10:00:00.000Z",
+      message: {
+        role: "assistant",
+        content: [
+          {
+            type: "tool_use",
+            id: "call_core_write",
+            name: "Write",
+            input: { file_path: "core-report.md", content: "# Report" },
+          },
+        ],
+      },
+    };
+    await writeFile(
+      transcript,
+      `${await readFile(transcript, "utf8")}${JSON.stringify(record)}\n`,
+    );
+    const { quests } = (await call("agent_quest.list", {
+      pane_ids: [t],
+    })) as {
+      quests: Array<{
+        pane_id: string;
+        artefacts?: Array<{
+          title: string;
+          exists: boolean;
+          made_by: { connection_id: string; pane_id: string; agent: string };
+        }>;
+      }>;
+    };
+    const [entry] = quests;
+    expect(entry?.pane_id).toBe(t);
+    const made = entry?.artefacts?.find((a) => a.title === "core-report.md");
+    expect(made?.exists).toBe(true);
+    expect(made?.made_by.pane_id).toBe(t);
+    expect(made?.made_by.agent).toBe("claude");
+    expect(made?.made_by.connection_id).toBeTruthy();
+  });
+
   test("a message goes through core's send to the program the person saw", async () => {
     const { w, t, call, recipient } = await setup();
     const shown = (await call("agent_conversation.get")) as {
@@ -385,6 +431,21 @@ describe("one Chat for both runtimes", () => {
     expect(shown.messages.map((m) => m.text)).toEqual(
       expect.arrayContaining([QUESTION, ANSWER]),
     );
+  });
+
+  test("a Codex rollout its process holds open names the session a move resumes", async () => {
+    // The shape the real process record gave for an idle Codex on core,
+    // started by typing `codex` into the terminal's shell.
+    const id = "019a0000-0000-7000-8000-0000000000b2";
+    const rollout = `/home/example/.codex/sessions/2026/11/22/rollout-2026-11-22T14-41-23-${id}.jsonl`;
+    const { host, t } = await setup("codex", "idle", false, {
+      ...files,
+      findAgentSessionForProcess: async (agent) =>
+        agent === "codex" ? { kind: "path", value: rollout } : null,
+    });
+    expect(await host.agentSessions().knownSession(t, "codex")).toMatchObject({
+      id,
+    });
   });
 
   test("a Codex session the person links is read for that program only", async () => {

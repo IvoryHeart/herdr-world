@@ -55,7 +55,23 @@ if (process.env.APARTMENTS_DOM !== "1") {
     "../testing/apartmentsFixture"
   );
   const { setApartmentsClient } = await import("./useApartments");
-  const { fixtureResidents } = await import("../testing/apartmentsFixture");
+  const { fixtureLoglessResident, fixtureResidents } = await import(
+    "../testing/apartmentsFixture"
+  );
+  const { bridge } = await import("../../api");
+  const { resetUsageFixture } = await import("../usage/usageFixture");
+  const { resetUsageStores } = await import("../usage/usageStore");
+  const { provideUsageOpener } = await import("../usage/usageOpener");
+  // The service is never reached: usage reads fail unless the fixture is on.
+  bridge.call = (async () => {
+    throw new Error("no service in this test");
+  }) as typeof bridge.call;
+  /** `?usageFixture` as a page load: usage reads answer synthetic runs. */
+  function usageFixtureOn(on: boolean) {
+    history.replaceState(null, "", on ? "/?usageFixture" : "/");
+    resetUsageFixture();
+    resetUsageStores();
+  }
   setApartmentsClient(fixtureApartmentsClient(Date.now()));
   const { ApartmentsDialog, resumeRooms } = await import("./ApartmentsDialog");
   const { fixtureHost, fixtureWorld } = await import("../board/boardFixture");
@@ -83,22 +99,22 @@ if (process.env.APARTMENTS_DOM !== "1") {
     // The fixture answers on the next tick.
     await act(async () => new Promise((resolve) => setTimeout(resolve, 0)));
     const dialog = () =>
-      host.querySelector<HTMLElement>(
+      document.body.querySelector<HTMLElement>(
         '[role="dialog"][aria-label="Apartments"]',
       )!;
     return {
       dialog,
       names: () =>
-        [...host.querySelectorAll(".apartments-row strong")].map(
+        [...document.body.querySelectorAll(".apartments-row strong")].map(
           (name) => name.textContent,
         ),
       button: (text: string) =>
-        [...host.querySelectorAll<HTMLButtonElement>("button")].find((item) =>
-          item.textContent?.includes(text),
+        [...document.body.querySelectorAll<HTMLButtonElement>("button")].find(
+          (item) => item.textContent?.includes(text),
         )!,
       closed: () => closed,
       async search(text: string) {
-        const input = host.querySelector<HTMLInputElement>(
+        const input = document.body.querySelector<HTMLInputElement>(
           'input[aria-label="Search residents"]',
         )!;
         await act(async () => {
@@ -340,6 +356,111 @@ if (process.env.APARTMENTS_DOM !== "1") {
     await esc();
     expect(view.closed()).toBe(1);
     await view.unmount();
+  });
+
+  test("each resident shows its own week of usage; unknown and not-available say so", async () => {
+    usageFixtureOn(true);
+    const now = Date.now();
+    const ada = fixtureResidents(now).find((r) => r.name === "ada")!;
+    setApartmentsClient(
+      fixtureApartmentsClient(now, [
+        fixtureLoglessResident(now),
+        // The next run in ada's shell terminal: usage counted them as one.
+        {
+          ...ada,
+          id: "r-fixture-next-run",
+          name: "babbage",
+          session_id: "0f0e0d0c-0000-4000-8000-0000000000bb",
+          moved_out_at: ada.moved_out_at - 1000,
+        },
+      ]),
+    );
+    const view = await mount();
+    await act(async () => new Promise((resolve) => setTimeout(resolve, 0)));
+    const lines = () =>
+      Object.fromEntries(
+        [...view.dialog().querySelectorAll(".apartments-list li")].map(
+          (item) => [
+            item.querySelector(".apartments-row strong")!.textContent,
+            {
+              text: item.querySelector(".apartments-usage")?.textContent,
+              tag: item.querySelector(".apartments-usage")?.tagName,
+            },
+          ],
+        ),
+      );
+    const shown = lines();
+    expect(shown.ada!.text).toMatch(
+      /^This week, with 1 other run in its terminal: at work .+ · waited on you .+ · .+ tokens$/,
+    );
+    expect(shown.babbage!.text).toBe(shown.ada!.text);
+    expect(shown.grace!.text).toMatch(/^This week: at work /);
+    // Two runs of linus (a resumed session) add up.
+    expect(shown.linus!.text).toBe(
+      "This week: at work 5 h · waited on you 0 min · 14M tokens",
+    );
+    // A resident World never counted says why its usage is unknown.
+    expect(shown.hopper).toEqual({
+      text: "Usage unknown: World did not record it while it ran",
+      tag: "P",
+    });
+    expect(shown.hamilton!.text).toEndWith(
+      "tokens and cost not available for this harness",
+    );
+    // Outside Town nothing opens Usage, so the line is text.
+    expect(shown.ada!.tag).toBe("P");
+    await view.unmount();
+    setApartmentsClient(fixtureApartmentsClient(Date.now()));
+    usageFixtureOn(false);
+  });
+
+  test("in Town a resident's line closes Apartments and opens Breakdown on that agent", async () => {
+    usageFixtureOn(true);
+    const opened: unknown[][] = [];
+    const unregister = provideUsageOpener((...args) => {
+      opened.push(args);
+    });
+    const view = await mount();
+    await act(async () => new Promise((resolve) => setTimeout(resolve, 0)));
+    const line = () =>
+      view
+        .dialog()
+        .querySelector<HTMLButtonElement>(
+          'button.apartments-usage[aria-label$="Open ada in Usage"]',
+        );
+    expect(line()).not.toBeNull();
+    await act(async () => line()!.click());
+    expect(view.closed()).toBe(1);
+    expect(opened).toEqual([
+      ["breakdown", { ids: ["fixture-agent-5"], label: "ada", why: null }],
+    ]);
+    // A resident with no usage this week still opens its own Breakdown.
+    const hopper = view
+      .dialog()
+      .querySelector<HTMLButtonElement>(
+        'button.apartments-usage[aria-label$="Open hopper in Usage"]',
+      );
+    expect(hopper?.textContent).toBe(
+      "Usage unknown: World did not record it while it ran",
+    );
+    await act(async () => hopper!.click());
+    expect(opened[opened.length - 1]).toEqual([
+      "breakdown",
+      {
+        ids: [],
+        label: "hopper",
+        why: "World did not record it while it ran",
+      },
+    ]);
+    // The opened resident shows the same line under its heading.
+    await act(async () => view.button("grace").click());
+    const detail = view
+      .dialog()
+      .querySelector(".apartments-detail-head .apartments-usage");
+    expect(detail?.textContent).toStartWith("This week: at work");
+    unregister();
+    await view.unmount();
+    usageFixtureOn(false);
   });
 
   test("resume rooms are the resident's own host, connected and current", () => {

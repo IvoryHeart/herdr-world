@@ -22,22 +22,37 @@ const unavailable = (detail: string): ApartmentHistory => ({
   report: null,
 });
 
+type ResidentSession = Pick<
+  ApartmentResident,
+  "harness" | "session_id" | "cwd"
+>;
+type ResolvedResident = Awaited<ReturnType<typeof resolveAgentSessionInfo>>;
+
 /**
- * A finished agent's conversation, read from its harness's own transcript
- * on its host with the same resolver and projection Chat uses. Only the
- * recorded session ID names the transcript; the terminal no longer exists,
- * so nothing is asked of Herdr.
+ * A finished agent's transcript on its host, found from its recorded session
+ * ID with the resolver Chat uses (the terminal no longer exists, so nothing
+ * is asked of Herdr), or why it cannot be found.
  */
-export async function readApartmentHistory(
-  resident: Pick<ApartmentResident, "harness" | "session_id" | "cwd">,
+export async function resolveResidentSession(
+  resident: ResidentSession,
   files: AgentSessionFileAccess,
-): Promise<ApartmentHistory> {
+): Promise<
+  | {
+      ok: true;
+      resolved: ResolvedResident & {
+        file: NonNullable<ResolvedResident["file"]>;
+      };
+    }
+  | { ok: false; detail: string }
+> {
   const harness = resident.harness ?? "";
   if (!resident.session_id)
-    return unavailable(
-      "World did not see this agent's session, so its history cannot be found.",
-    );
-  let resolved: Awaited<ReturnType<typeof resolveAgentSessionInfo>>;
+    return {
+      ok: false,
+      detail:
+        "World did not see this agent's session, so its history cannot be found.",
+    };
+  let resolved: ResolvedResident;
   try {
     resolved = await resolveAgentSessionInfo(
       { pane_id: "apartment", agent: harness },
@@ -55,14 +70,31 @@ export async function readApartmentHistory(
       context,
     );
   } catch (error) {
-    return unavailable(
-      `World cannot read ${harness || "this harness"}'s history: ${(error as Error).message}`,
-    );
+    return {
+      ok: false,
+      detail: `World cannot read ${harness || "this harness"}'s history: ${(error as Error).message}`,
+    };
   }
   if (resolved.status !== "ok" || !resolved.file)
-    return unavailable(
-      resolved.detail || "The agent's transcript is no longer on its host.",
-    );
+    return {
+      ok: false,
+      detail:
+        resolved.detail || "The agent's transcript is no longer on its host.",
+    };
+  return { ok: true, resolved: { ...resolved, file: resolved.file } };
+}
+
+/**
+ * A finished agent's conversation, read from its harness's own transcript
+ * on its host with the same resolver and projection Chat uses.
+ */
+export async function readApartmentHistory(
+  resident: ResidentSession,
+  files: AgentSessionFileAccess,
+): Promise<ApartmentHistory> {
+  const found = await resolveResidentSession(resident, files);
+  if (!found.ok) return unavailable(found.detail);
+  const { resolved } = found;
   try {
     const projection = await readSessionProjection(
       resolved.agent,

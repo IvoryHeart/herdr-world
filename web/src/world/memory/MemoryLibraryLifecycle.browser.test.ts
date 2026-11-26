@@ -4,6 +4,7 @@ import { mkdtemp, readFile, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { basename, join } from "node:path";
 import { stopChrome } from "../../browserChrome";
+import { assetUrlImports } from "../testing/assetUrlImports";
 
 const chrome =
   Bun.env.CHROME_BIN ||
@@ -52,6 +53,9 @@ test.skipIf(!chrome)(
         ],
         outdir: dir,
         target: "browser",
+        // The Library's reader can show a PDF (#1327), so PDF.js's worker
+        // URL is in the bundle.
+        plugins: [assetUrlImports],
       });
       if (!build.success) throw new Error(build.logs.join("\n"));
       for (const asset of build.outputs)

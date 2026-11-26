@@ -7,7 +7,6 @@ const base = {
   sha,
   runUrl,
   owner: "example-owner",
-  revertBranchExists: false,
 } as const;
 
 test("the first red main commit opens an issue naming its PR and prepares a revert", () => {
@@ -23,23 +22,14 @@ test("the first red main commit opens an issue naming its PR and prepares a reve
   expect(plan.issueBody).toContain(`${sha}, the merge of #42 (Add a widget)`);
   expect(plan.issueBody).toContain(runUrl);
   expect(redShaOf(plan.issueBody)).toBe(sha);
-  expect(plan.createRevert).toBe(true);
-  expect(plan.revertBranch).toBe("revert/main-01234567");
-  expect(plan.revertTitle).toBe(
-    "Revert #42 (Add a widget) (main red at 01234567)",
-  );
-  const body = plan.revertBody(7);
-  expect(body).toContain("#7");
-  expect(body).toContain("Changelog: none");
+  expect(plan).not.toHaveProperty("createRevert");
+  expect(plan.issueBody).toContain("No automatic revert PR");
 });
 
 test("a commit without a merged PR is named by its hash", () => {
   const plan = planMainGate({ ...base, conclusion: "failure" });
   if (plan.kind !== "open") throw new Error("expected an issue");
   expect(plan.issueTitle).toBe("main is red at 01234567 after a direct commit");
-  expect(plan.revertTitle).toBe(
-    "Revert commit 01234567 (main red at 01234567)",
-  );
 });
 
 test("while a main-red issue is open, later red commits only comment on it", () => {
@@ -68,8 +58,6 @@ test("a green run at or after the red commit closes the issue and its revert", (
   ).toMatchObject({
     kind: "resolve",
     issue: 7,
-    // The red commit's revert, not one named after the green commit.
-    revertBranch: "revert/main-fedcba98",
   });
   // A late green run of an older commit leaves a newer break open.
   expect(
@@ -89,11 +77,10 @@ test("the same commit failing again after its issue closed reuses the issue and 
     ...base,
     conclusion: "failure",
     closedIssueForSha: 7,
-    revertBranchExists: true,
   });
   if (plan.kind !== "open") throw new Error("expected an issue");
   expect(plan.reopen).toBe(7);
-  expect(plan.createRevert).toBe(false);
+  expect(plan).not.toHaveProperty("createRevert");
 });
 
 test("the red commit marker round-trips and ignores other text", () => {
@@ -118,27 +105,9 @@ test("a red tip of an untested batch names every merge and prepares no revert", 
   expect(plan.issueBody).toContain("- #42 (Older) at 11111111");
   expect(plan.issueBody).toContain("- commit 22222222 at 22222222");
   expect(plan.issueBody).toContain("- #44 (Newest) at 01234567 (tested)");
-  expect(plan.issueBody).toContain("No revert was prepared");
-  expect(plan.createRevert).toBe(false);
+  expect(plan.issueBody).toContain("No automatic revert PR");
+  expect(plan).not.toHaveProperty("createRevert");
   expect(redShaOf(plan.issueBody)).toBe(sha);
-});
-
-test("a batch's alert explains the missing revert without claiming one exists", () => {
-  const plan = planMainGate({
-    ...base,
-    conclusion: "failure",
-    untested: [{ sha: "1111111111111111111111111111111111111111" }],
-  });
-  if (plan.kind !== "open") throw new Error("expected an issue");
-  expect(plan.createRevert).toBe(false);
-  expect(plan.revertSkipped).toBe("batch");
-  const existing = planMainGate({
-    ...base,
-    conclusion: "failure",
-    revertBranchExists: true,
-  });
-  if (existing.kind !== "open") throw new Error("expected an issue");
-  expect(existing.revertSkipped).toBe("exists");
 });
 
 test("a range longer than the list counts the merges it leaves out", () => {

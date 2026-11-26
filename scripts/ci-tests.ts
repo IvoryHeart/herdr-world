@@ -1,7 +1,10 @@
 import assert from "node:assert/strict";
 import { mkdirSync } from "node:fs";
 import type { ValidationSelection } from "./validation-scope";
-import { worldBrowserShards } from "./world-browser-suites";
+import {
+  worldBrowserParallelSuites,
+  worldBrowserShards,
+} from "./world-browser-suites";
 
 export function selectedCITests(
   selection: ValidationSelection,
@@ -37,41 +40,75 @@ export function selectedCITests(
   return files;
 }
 
+export function ciTestBatches(
+  selection: ValidationSelection,
+  lane: string,
+  shard?: string,
+) {
+  const files = selectedCITests(selection, lane, shard);
+  if (lane !== "world")
+    return files.length ? [{ files, parallel: lane === "unit" ? 1 : 2 }] : [];
+  const parallel = new Set(worldBrowserParallelSuites);
+  return [
+    { files: files.filter((file) => !parallel.has(file)), parallel: 1 },
+    { files: files.filter((file) => parallel.has(file)), parallel: 2 },
+  ].filter((batch) => batch.files.length);
+}
+
 if (import.meta.main) {
   const [lane, shard] = process.argv.slice(2);
   const selection = JSON.parse(
     process.env.HERDR_CI_SELECTION || "null",
   ) as ValidationSelection;
   assert(selection && lane, "Missing CI selection");
-  const files = selectedCITests(selection, lane, shard);
-  if (files.length) {
-    mkdirSync(".agents/delivery", { recursive: true });
-    const child = Bun.spawn(
-      [
-        process.execPath,
-        lane === "world"
-          ? "scripts/run-world-tests.ts"
-          : "scripts/run-tests.ts",
-        ...files,
-        "--parallel=1",
-        "--max-concurrency=2",
-        ...(lane === "web"
-          ? [
-              "--reporter=junit",
-              `--reporter-outfile=.agents/delivery/web-browser-${shard?.replace("/", "-of-") || "all"}.xml`,
-            ]
-          : []),
-      ],
-      { stdin: "inherit", stdout: "inherit", stderr: "inherit" },
-    );
-    const stop = () => child.kill("SIGTERM");
-    process.on("SIGINT", stop);
-    process.on("SIGTERM", stop);
-    try {
-      process.exitCode = await child.exited;
-    } finally {
-      process.off("SIGINT", stop);
-      process.off("SIGTERM", stop);
+  const runs =
+    lane === "world" ? Number(process.env.HERDR_CI_WORLD_RUNS || 1) : 1;
+  assert(runs === 1 || runs === 3, "World browser runs must be 1 or 3");
+  const batches = ciTestBatches(selection, lane, shard);
+  if (!batches.length) console.info(`${lane}: no affected suites`);
+  passes: for (let pass = 1; pass <= runs; pass++) {
+    for (const { files, parallel } of batches) {
+      mkdirSync(".agents/delivery", { recursive: true });
+      const child = Bun.spawn(
+        [
+          process.execPath,
+          lane === "world"
+            ? "scripts/run-world-tests.ts"
+            : "scripts/run-tests.ts",
+          ...files,
+          `--parallel=${parallel}`,
+          `--max-concurrency=${lane === "world" ? 1 : 2}`,
+          ...(lane === "web"
+            ? [
+                "--reporter=junit",
+                `--reporter-outfile=.agents/delivery/web-browser-${shard?.replace("/", "-of-") || "all"}.xml`,
+              ]
+            : []),
+        ],
+        {
+          stdin: "inherit",
+          stdout: "inherit",
+          stderr: "inherit",
+          env: {
+            ...process.env,
+            ...(lane === "world"
+              ? {
+                  HERDR_WORLD_TEST_LABEL: `${process.env.HERDR_WORLD_TEST_LABEL || "local"}${runs > 1 ? `-pass-${pass}` : ""}-${parallel === 1 ? "isolated" : "parallel"}`,
+                }
+              : {}),
+          },
+        },
+      );
+      const stop = () => child.kill("SIGTERM");
+      process.on("SIGINT", stop);
+      process.on("SIGTERM", stop);
+      try {
+        process.exitCode = await child.exited;
+      } finally {
+        process.off("SIGINT", stop);
+        process.off("SIGTERM", stop);
+      }
+      if (process.exitCode !== 0) break passes;
     }
-  } else console.info(`${lane}: no affected suites`);
+  }
 }

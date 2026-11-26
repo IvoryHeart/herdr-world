@@ -1,5 +1,5 @@
 import { AnswerDeliverySign } from "./AnswerDeliverySign";
-import { Fragment, memo, useMemo, useRef } from "react";
+import { Fragment, memo, useMemo } from "react";
 import { ChevronsLeft, ChevronsRight, Plus } from "lucide-react";
 import { ConnectionRecoveryBanner } from "../ConnectionRecoveryBanner";
 import { ColorSwatchButton } from "../../components/ColorSwatch";
@@ -13,12 +13,12 @@ import type { TownBuildingSigns } from "./townBuildingSigns";
 import type { TownRoomActions } from "./TownCanvas";
 import { ReceptionEntry, portrait } from "./TownReceptionEntry";
 import { TownReceptionMarquee } from "./TownReceptionMarquee";
-import { townRoomCardMeta } from "./townNameplates";
 import {
   TownRoomOverviewSummary,
   TownRoomPlaque,
   type TownPlaceCardContent,
 } from "./TownRoomPlaque";
+import { TownRoomOverviewCard } from "./TownRoomOverviewCard";
 import { TownDeskTitle } from "./TownDeskTitle";
 import { TownStepBubble } from "./TownStepBubble";
 import { TownFuelMark } from "./TownFuelMark";
@@ -30,6 +30,9 @@ import { TownPostOffice } from "./TownPostOffice";
 import { TownLibrary } from "./TownLibrary";
 import { TownShipyard } from "./TownShipyard";
 import { TownWarehouse } from "./TownWarehouse";
+import type { TownPlaces } from "./townPlaces";
+import { TownPlacesContext } from "./useTownPlace";
+import "./townPlaces.css";
 import type { OfficeQualifiedTarget } from "../officeProjectionTypes";
 import {
   townPlaceSummary,
@@ -168,6 +171,7 @@ export const TownWorldLayer = memo(function TownWorldLayer({
   signs,
   layers,
   boards,
+  places,
   summary,
   openDeskKey,
   openReceptionKey,
@@ -188,6 +192,8 @@ export const TownWorldLayer = memo(function TownWorldLayer({
   layers: TownBuildingLayers;
   /** Keeps the reception boards and the billboard off what they'd cover. */
   boards: TownBoardPlacement;
+  /** What each place's building opens; place components register (#1170). */
+  places: TownPlaces;
   model: TownModel;
   askingKeys: ReadonlySet<string>;
   /**
@@ -235,9 +241,6 @@ export const TownWorldLayer = memo(function TownWorldLayer({
   onRoomCardPress?: TownRoomCardPress;
   onFocusTarget(target: TownTarget): void;
 }) {
-  // A card press the town took ends as the town's tap; only keyboard
-  // activation (or an untaken press) zooms through the card's own click.
-  const cardPressTaken = useRef(false);
   // Context fills, for a tired look at nearly full agents' seats.
   const usage = useContextUsage(true);
   const terminalAsksByHost = useMemo(() => {
@@ -295,7 +298,7 @@ export const TownWorldLayer = memo(function TownWorldLayer({
       return null;
     };
   return (
-    <>
+    <TownPlacesContext.Provider value={places}>
       <TownCityBillboard center={layout.center} boardRef={boards.cityRef} />
       <TownPostOffice layout={layout} renderer={renderer} />
       <TownWarehouse layout={layout} renderer={renderer} />
@@ -544,7 +547,6 @@ export const TownWorldLayer = memo(function TownWorldLayer({
               if (!room) return null;
               const c = townRoomCounts(model, room);
               const label = room.accessibleLabel ?? room.displayLabel;
-              const total = Math.max(1, c.agents);
               const seatCell =
                 placed.foldActionCells?.[0] ??
                 placed.cells.find((cell) => !cell.deskKey);
@@ -659,67 +661,22 @@ export const TownWorldLayer = memo(function TownWorldLayer({
                       )}
                       open={room.key === openRoomKey}
                     >
-                      <button
-                        type="button"
-                        className={`town-room-card${c.blocked ? " town-room-card-waiting" : ""}${selectedKey === room.key ? " town-selected" : ""}`}
-                        style={
-                          {
-                            "--room-w": `${placed.w * T}px`,
-                            "--carpet": roomCarpet(room.key),
-                            // Presses pass to the town: a pan, or a hold that
-                            // lifts the table beneath.
-                            touchAction: "none",
-                          } as React.CSSProperties
+                      <TownRoomOverviewCard
+                        room={room}
+                        label={label}
+                        counts={c}
+                        overflow={overflow}
+                        width={placed.w * T}
+                        carpet={roomCarpet(room.key)}
+                        selected={selectedKey === room.key}
+                        onPress={
+                          onRoomCardPress
+                            ? (event, press) =>
+                                onRoomCardPress(event, room.key, press)
+                            : undefined
                         }
-                        aria-label={`${label}${room.runtimeTag ? ` (${room.runtimeTag})` : ""}: ${c.desks} desks, ${c.working} working${c.blocked ? `, ${c.blocked} need you` : ""}${c.done ? `, ${c.done} done` : ""}. Zoom in.`}
-                        onPointerDown={(event) => {
-                          cardPressTaken.current =
-                            onRoomCardPress?.(
-                              event.nativeEvent,
-                              room.key,
-                              (event.target as Element).closest?.(
-                                ".town-room-card-name",
-                              )
-                                ? "card-name"
-                                : "card",
-                            ) ?? false;
-                        }}
-                        onClick={(event) => {
-                          const taken =
-                            cardPressTaken.current && event.detail > 0;
-                          cardPressTaken.current = false;
-                          if (!taken) onActivateRoom(room.key);
-                        }}
-                        tabIndex={-1}
-                      >
-                        <span className="town-room-card-name">{label}</span>
-                        {room.runtimeTag ? (
-                          <span className="town-room-card-runtime">
-                            {room.runtimeTag}
-                          </span>
-                        ) : null}
-                        {c.blocked ? (
-                          <span className="town-room-card-badge">
-                            !{c.blocked}
-                          </span>
-                        ) : null}
-                        <span className="town-room-card-meta">
-                          {townRoomCardMeta(c, overflow)}
-                        </span>
-                        <span className="town-room-card-bar" aria-hidden="true">
-                          {(
-                            ["working", "blocked", "done", "idle"] as const
-                          ).map((status) =>
-                            c[status] ? (
-                              <i
-                                key={status}
-                                data-status={status}
-                                style={{ flexGrow: c[status] / total }}
-                              />
-                            ) : null,
-                          )}
-                        </span>
-                      </button>
+                        onActivate={() => onActivateRoom(room.key)}
+                      />
                     </TownRoomOverviewSummary>
                   ) : null}
                   {visible.tagRooms.has(room.key)
@@ -964,6 +921,18 @@ export const TownWorldLayer = memo(function TownWorldLayer({
             : roomActions.onMoveAgent(key)
         }
       />
-    </>
+    </TownPlacesContext.Provider>
   );
 });
+
+/**
+ * The room whose card a mouse opens zoomed out: the room under it, or the
+ * room of the table or agent under it.
+ */
+export function townHoveredRoomKey(model: TownModel, hover: string | null) {
+  if (hover === null) return null;
+  if (model.rooms.has(hover)) return hover;
+  return (
+    model.desks.get(hover)?.roomKey ?? model.agents.get(hover)?.roomKey ?? null
+  );
+}

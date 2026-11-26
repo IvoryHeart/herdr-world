@@ -1,3 +1,4 @@
+import { moveMismatches, moveWitnesses } from "./agent-move";
 import { coreWitnesses } from "./herdr-core-runtime";
 import { seenMismatches, seenWitnesses } from "./herdr-core-seen";
 import type { Model } from "./traces";
@@ -20,6 +21,12 @@ export const composedCases = [
     witnesses: seenWitnesses,
     mismatches: seenMismatches,
   },
+  {
+    name: "agent-move",
+    witnesses: moveWitnesses,
+    mismatches: moveMismatches,
+  },
+  { name: "ide-lifecycle", witnesses: [], mismatches: [] },
 ] as const;
 
 export function replayTracesPerSeed(name: Model) {
