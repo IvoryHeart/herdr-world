@@ -143,7 +143,7 @@ bun run test:install-linux
 # Reuse an already packaged candidate instead of rebuilding it:
 bun run test:install-linux --reuse --version 0.0.0-rc.1
 # Pin the real core release; the default is latest:
-bun run test:install-linux --core-version 0.1.21
+bun run test:install-linux --core-version 0.1.22
 # Diagnose one scenario:
 bun run test:install-linux --reuse --version 0.0.0-rc.1 --case stopped
 ```

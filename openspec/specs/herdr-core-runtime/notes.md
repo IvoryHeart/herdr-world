@@ -32,6 +32,9 @@
 - `server/src/herdr-core/harness-start.test.ts`
 - `server/src/herdr-core/testing/capture-harness-start.ts`
 - `server/src/herdr-core/testing/recorded/core-0.1.21-harness-start.json`
+- `server/src/herdr-core/core.live.test.ts` (native status in the unified read model)
+- `server/src/herdr-core/harnesses.live.test.ts` (ready, blocked and completed reports)
+- `scripts/herdr-core-smoke.ts` (checksum-verified newest-release live suites)
 - `server/src/herdr-core/`
 
 **Pitfalls:**
@@ -124,8 +127,9 @@ no control for it. Platform and harness limits apply across the table.
   A newer TUI using a supported protocol can connect; it is outside this verified
   version range. Upgrade World for an unsupported protocol. Never downgrade a
   live server to make it connect.
-- **herdr-core:** **0.1.21** is the verified baseline. There is no version pin
-  or read-only certification gate: older and newer releases can connect when
+- **herdr-core:** **0.1.22** is the verified baseline, also checked against
+  **0.1.21**. There is no version pin or read-only certification gate: older
+  and newer releases can connect when
   they provide the required methods and features. A missing feature is refused
   with a reason. Before 0.1.21, attaching an observer can move a terminal to
   core's headless size; World reports the move. The daily and manual
@@ -140,7 +144,7 @@ no control for it. Platform and harness limits apply across the table.
   World can install core on local Windows x64; Windows SSH setup is manual.
   Windows hosts support terminals and native runtime controls, but not the
   Unix-based file, Git, worktree, transcript-history or usage tools.
-- **Core releases:** unreleased changes after **0.1.21** wait for the next
+- **Core releases:** unreleased changes after **0.1.22** wait for the next
   core release. Released versions retain read-write support; the smoke flags
   drift. The [protocol questions](spec.md#upstream-questions-q1q11)
   record the remaining upstream boundaries.

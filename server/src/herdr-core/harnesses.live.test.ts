@@ -23,7 +23,9 @@ int main(int argc, char **argv) {
   while (fgets(line, sizeof(line), stdin)) {
     printf("\\033]7501;state=working:app=%s\\033\\\\", app);
     usleep(100000);
-    printf("\\033]7501;state=%s:app=%s\\033\\\\", strncmp(line,"question",8)==0 ? "blocked" : "idle", app);
+    // Claude/Codex report done for a result; idle means ready without one.
+    const char *finished = strcmp(app,"claude")==0 || strcmp(app,"codex")==0 ? "done" : "idle";
+    printf("\\033]7501;state=%s:app=%s\\033\\\\", strncmp(line,"question",8)==0 ? "blocked" : finished, app);
   }
   return 0;
 }`;
@@ -68,6 +70,14 @@ for (const name of coreHarnessNames())
               !!w!.record(address)?.foreground &&
               w!.record(address)?.reported === true,
           );
+          const ready = (
+            await w.lease().runtime.operations.listTerminals()
+          ).panes?.find((pane) => pane.pane_id === address);
+          expect(ready).toMatchObject({ agent: name, agent_status: "idle" });
+          const nativeIdle = JSON.parse(
+            await core.hc("get", "--json", address),
+          );
+          expect(nativeIdle.status.state).toBe("idle");
           const token = coreRecipientToken(
             w.lease().runtime.core.epoch!.coreId,
             w.record(address),
@@ -85,6 +95,10 @@ for (const name of coreHarnessNames())
               (w!.record(address)?.status as { state?: string })?.state ===
               "blocked",
           );
+          const nativeBlocked = JSON.parse(
+            await core.hc("get", "--json", address),
+          );
+          expect(nativeBlocked.status.state).toBe("blocked");
           const rows = await w.lease().runtime.operations.listTerminals();
           expect(rows.panes).toEqual(
             expect.arrayContaining([
@@ -101,13 +115,15 @@ for (const name of coreHarnessNames())
               text: "finish",
             }),
           ).toMatchObject({ status: "sent" });
+          const finished =
+            name === "claude" || name === "codex" ? "done" : "idle";
           await until(
             () =>
               (w!.record(address)?.status as { state?: string })?.state ===
-              "idle",
+              finished,
           );
           const native = JSON.parse(await core.hc("get", "--json", address));
-          expect(native.status.state).toBe("idle");
+          expect(native.status.state).toBe(finished);
           expect(native.labels["herdr.space"]).toBeTruthy();
           expect(native.labels["herdr.tab"]).toBeTruthy();
           expect(
