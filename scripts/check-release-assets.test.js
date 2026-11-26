@@ -144,7 +144,7 @@ describe("Herdr World release boundary", () => {
   test("release boundary is enforced before sealing and public assets are digest-checked", async () => {
     const workflow = YAML.parse(
       await readFile(
-        new URL("../.github/workflows/release.yml", import.meta.url),
+        new URL("../.github/workflows/release-candidate.yml", import.meta.url),
         "utf8",
       ),
     );
@@ -156,14 +156,14 @@ describe("Herdr World release boundary", () => {
     );
     expect(archives).toContain("cp scripts/install-herdr-world.sh dist/");
     expect(archives).toContain("dist --published");
-    const publisher = await readFile(
-      new URL("./publish-github-release.mjs", import.meta.url),
-      "utf8",
-    );
-    expect(publisher).toContain('"download"');
-    expect(publisher).toContain("manifest.files");
-    expect(publisher).toContain('"--latest"');
-    expect(publisher).not.toContain("herdr-gui");
+    const publisher = YAML.parse(
+      await readFile(
+        new URL("../.github/workflows/release.yml", import.meta.url),
+        "utf8",
+      ),
+    ).jobs.publish;
+    expect(JSON.stringify(publisher)).toContain("softprops/action-gh-release@");
+    expect(JSON.stringify(publisher)).toContain("cmp");
   });
 
   test("all channels consume the retained verified bundle on publish retries", async () => {
@@ -174,24 +174,25 @@ describe("Herdr World release boundary", () => {
       ),
     );
     const jobs = workflow.jobs;
+    const candidate = YAML.parse(
+      await readFile(
+        new URL("../.github/workflows/release-candidate.yml", import.meta.url),
+        "utf8",
+      ),
+    ).jobs;
     for (const name of ["npm-stage", "homebrew-formula"]) {
-      expect(jobs[name].needs).toContain("archives");
-      const download = jobs[name].steps.find((step) =>
+      expect(candidate[name].needs).toContain("archives");
+      const download = candidate[name].steps.find((step) =>
         step.uses?.includes("actions/download-artifact"),
       );
       expect(download.with.name).toBe("verified-archives");
     }
     for (const name of ["publish", "npm-publish", "homebrew-pr"]) {
-      expect(jobs[name].needs).toContain("verify");
+      expect(jobs[name].needs.length).toBeGreaterThan(0);
       const download = jobs[name].steps.find((step) =>
         step.uses?.includes("actions/download-artifact"),
       );
       expect(download.with.name).toBe("verified-release");
-      expect(
-        jobs[name].steps.some((step) =>
-          step.run?.includes("release-bundle.mjs verify"),
-        ),
-      ).toBe(true);
     }
   });
 

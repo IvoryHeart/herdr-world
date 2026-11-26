@@ -418,7 +418,7 @@ for (const [rule, value] of metadataCases) {
     }));
 }
 
-test("the real pre-push hook blocks intended and existing PR bodies before delivery", () =>
+test("the real pre-push hook privacy step blocks intended and existing PR bodies", () =>
   repository(({ root, base }) => {
     const bin = join(root, "bin");
     mkdirSync(bin);
@@ -427,7 +427,7 @@ test("the real pre-push hook blocks intended and existing PR bodies before deliv
       `#!/bin/sh
 case "$1" in
   scripts/check-privacy.ts) shift; exec "$REAL_BUN" "$PRIVACY_SCRIPT" "$@" ;;
-  scripts/check-push-policy.ts) shift; exec "$REAL_BUN" "$POLICY_SCRIPT" "$@" ;;
+  run) [ "$2" = format:check ] && exit 0 ;;
 esac
 printf '%s\\n' "$*" >> "$DELIVERY_COMMANDS"
 `,
@@ -439,7 +439,8 @@ printf '%s\\n' "$*" >> "$DELIVERY_COMMANDS"
     const bodyFile = join(root, "body.md");
     const value = metadataCases[0][1];
     writeFileSync(bodyFile, `Safe summary\n${value}\n`);
-    for (const intended of [true, false]) {
+    for (const leak of ["intended body", "existing body", "existing title"]) {
+      const intended = leak === "intended body";
       const result = spawnSync(
         "sh",
         [join(import.meta.dir, "../.githooks/pre-push")],
@@ -452,18 +453,19 @@ printf '%s\\n' "$*" >> "$DELIVERY_COMMANDS"
             PATH: `${bin}:${process.env.PATH}`,
             REAL_BUN: process.execPath,
             PRIVACY_SCRIPT: script,
-            POLICY_SCRIPT: join(import.meta.dir, "check-push-policy.ts"),
             DELIVERY_COMMANDS: join(root, "delivery-commands"),
             HERDR_WORLD_PR_BODY: intended ? bodyFile : "",
             EXISTING_PR: JSON.stringify({
-              body: intended ? "Safe remote body" : value,
-              baseRefOid: base,
+              title: leak === "existing title" ? value : "Safe title",
+              body: leak === "existing body" ? value : "Safe remote body",
             }),
           },
         },
       );
       expect(result.status).toBe(1);
-      expect(result.stderr).toContain('"PR body":');
+      expect(result.stderr).toContain(
+        leak === "existing title" ? '"PR title":1:' : '"PR body":',
+      );
       expect(result.stderr).toContain("privacy/claude-session-link");
       expect(result.stderr).not.toContain(value);
       expect(existsSync(join(root, "delivery-commands"))).toBe(false);

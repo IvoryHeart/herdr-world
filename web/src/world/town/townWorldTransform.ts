@@ -69,8 +69,8 @@ const FOCUS_READERS = TOWN_ZOOM_FOCUS_READERS.join(",");
  * How long the overlay stays its own compositor layer after the camera last
  * moved. While it moves, the browser moves the composited layer instead of
  * re-rasterizing its many children each frame (which showed undrawn tiles);
- * once still, it goes back to an ordinary layer, so text is rasterized at the
- * settled zoom exactly as before.
+ * once still, the raster hint is removed so text is rasterized at the
+ * settled zoom. The 3D translation retains the compositor layer between gestures.
  *
  * @internal
  */
@@ -131,7 +131,10 @@ export class TownWorldTransform {
 
   /** The overlay at `(tx, ty)` and scale `z`, as the canvas draws it. */
   place(tx: number, ty: number, z: number) {
-    const transform = `translate(${tx}px, ${ty}px) scale(${z})`;
+    // Establish the compositor layer on the first paint, before input can
+    // move it. Promoting on the first pan raced raster workers on two-core
+    // runners and presented two frames with missing overlay tiles.
+    const transform = `translate3d(${tx}px, ${ty}px, 0) scale(${z})`;
     if (transform !== this.transform) {
       // The first pose is where Town opens, not motion.
       if (this.transform) this.moved();

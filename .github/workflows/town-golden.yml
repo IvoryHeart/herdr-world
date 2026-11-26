@@ -22,6 +22,20 @@ on:
         - cron: "43 3 * * *"
     push:
         branches: [main]
+        paths:
+            - "web/**"
+            - "shared/**"
+            - "scripts/town-golden*"
+            - "scripts/capture-*"
+            - "scripts/test-chrome*"
+            - "scripts/ci-golden-scope*"
+            - "scripts/ci-content-key.ts"
+            - "scripts/affected.ts"
+            - "scripts/chrome-*"
+            - "tools/chrome/**"
+            - "package.json"
+            - "bun.lock"
+            - ".github/workflows/town-golden.yml"
     workflow_dispatch:
         inputs:
             stability:

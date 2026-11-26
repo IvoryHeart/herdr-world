@@ -169,7 +169,7 @@ test("only readers get the zoom, and only when it changes", () => {
   const clock = fakeClock();
   const world = new TownWorldTransform(layer, clock);
   world.place(10, 20, 2);
-  expect(style.transform).toBe("translate(10px, 20px) scale(2)");
+  expect(style.transform).toBe("translate3d(10px, 20px, 0) scale(2)");
   expect(selectors).toEqual([TOWN_ZOOM_READERS.join(",")]);
   for (const reader of readers) {
     expect(reader.style.getPropertyValue("--z")).toBe("2");
@@ -187,7 +187,7 @@ test("only readers get the zoom, and only when it changes", () => {
   world.dispose();
 });
 
-test("the overlay is its own layer only while the camera moves", () => {
+test("the overlay retains its initial compositor layer and releases the raster hint after motion", () => {
   const style = fakeStyle();
   const layer = Object.assign(new EventTarget(), {
     style,
@@ -195,8 +195,9 @@ test("the overlay is its own layer only while the camera moves", () => {
   }) as unknown as HTMLElement;
   const clock = fakeClock();
   const world = new TownWorldTransform(layer, clock);
-  // Where Town opens is not motion: it renders as a settled Town does.
+  // Establish the layer before the first movement; keep text rasterization free at rest.
   world.place(0, 0, 1);
+  expect(style.transform).toBe("translate3d(0px, 0px, 0) scale(1)");
   expect(style.willChange).toBe("");
   world.place(1, 0, 1);
   expect(style.willChange).toBe("transform");

@@ -4,7 +4,7 @@
 
 **Surfaces:**
 
-- [Real-runtime release walk and pre-tag gate](../../../docs/release.md#real-runtime-release-walk) covers packaged runtime/agent launch journeys and receipts.
+- [Three owner release steps](../../../docs/release.md#three-owner-steps) and the native walk cover tested packages and automatic recovery.
 - Installers, updates, releases, contributor delivery and the public documentation site.
 - Server feature wiring and presence composition: [contributor guide](../../../docs/development.md#verification).
 
@@ -33,11 +33,29 @@
 - `server/src/testing/`
 - `web/src/features/`
 - `web/src/testing/`
+- `release-please-config.json` (patch increments by default; explicit dispatch overrides select minor/major releases)
+- `.release-please-manifest.json`
+- `version.txt`
+- `scripts/release-plan.ts`
+- `scripts/release-pr.test.ts` (actual workflow shell/config and ephemeral CLI version override; automatic same-repository CI dispatch)
+- `scripts/release-validation.test.ts` (publisher ordering and tag-only Homebrew release environment; npm keeps OIDC)
+- `scripts/ci-merge-queue.test.ts` (merge-group trigger, Linux graph and queue checkout, exact Delivery checks name, full validation without PR reuse, and side-workflow event audit)
+- `scripts/dependabot-event.ts` (GitHub event sender and PR author identity gate)
+- `scripts/dependabot-policy.test.ts` (bot impact-line exemption, exact metadata identities, retained privacy and test scope)
+- `scripts/release-publication.test.ts`
+- `scripts/release-seal.ts` (seal record of every contract job's result; Release reuses retained bytes only from an all-green record of the same run)
+- `herdr-plugin.toml`
+- `scripts/install-plugin.ps1`
+- `scripts/install-plugin.test.ts`
+- `scripts/install-plugin.windows.test.ts`
 - `scripts/release-walk.ts`
-- `scripts/release-walk-gate.ts`
+- `scripts/release-channel-upgrade.py`
+- `scripts/release-npm-smoke.ts`
+- `scripts/pipeline-retry.ts`
+- `server/src/config/service-executable.ts`
+- `server/src/cli/update-finish.ts`
+- `server/src/config/homebrew-handoff.ts` (Homebrew upgrade restart from the post-install sandbox, signalling only the launchd job for World's label or the systemd unit's main process; startup move of a keg-pinned definition)
 - `scripts/release-walk/`
-- `scripts/prepare-release.ts`
-- `scripts/prepare-release.test.ts`
 - `server/src/config/service-discovery.ts`
 - `server/src/config/service-uninstall.test.ts`
 - `scripts/`
@@ -65,8 +83,17 @@
 - Agent discovery starts with native OpenSpec capability and active-change lists,
   then capability specs, notes and their Code paths. Public feature rendering
   belongs to `build:site`; internal notes parsing also serves source-ownership checks.
+- Verified Dependabot PR events waive only description impact lines; both sender
+  and author must be `dependabot[bot]` with type `Bot`. The usual test selection
+  remains authoritative. Exact bot metadata identities and unchanged license
+  attribution rules are documented in [contributor guidance](../../../CONTRIBUTING.md#privacy-before-publication).
 
 ## Usage reference
+
+- **Merge queue.** After owner approval, a PR joins main's queue and CI validates
+  its combined commit with current main under **Delivery checks**, without PR
+  result reuse. GitHub merges after checks and review requirements pass. Only CI
+  subscribes directly to merge groups; see [CI ownership](../../../docs/ci-pipelines.md).
 
 ## World update notifications
 

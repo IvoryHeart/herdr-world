@@ -314,12 +314,10 @@ selects another accessible repository. Run it again after delivery to compare th
 same window definition; do not infer an improvement from a different sample size.
 The [pipeline guide](ci-pipelines.md#health-and-delivery-measures) defines the
 request caps, sampling and missing incident links. Save an intended PR description
-before the first push when it contains policy exemptions:
-`HERDR_WORLD_PR_BODY=/tmp/pr-body.md git push`. The hook checks the complete PR diff
-against that body and the existing PR’s immutable base (including stacks), or
-the newer `origin/<base branch>` commit that base leads to, before
-running the delivery gate; `check:pr-body` remains the
-explicit check before opening the PR.
+before pushing: `HERDR_WORLD_PR_BODY=/tmp/pr-body.md git push`. The pre-push
+privacy step scans that body (or the existing PR's description) and the existing
+PR title; description policy runs in CI, and `check:pr-body` remains the explicit
+check before opening the PR.
 
 The runner creates HOME and every XDG directory before launching Bun (a preload
 cannot change Bun's cached home), removes inherited runtime/account settings and
@@ -507,12 +505,11 @@ discovered from `web/src/world/*.browser.tsx`. Inventory checks reject missing
 or duplicate assignments. The required Delivery checks status succeeds only when
 repository validation, every World shard and the web browser job pass.
 Markdown-only and exact-head reuse keep their existing shorter paths.
-Release packaging requires repository validation, all six shards and the web
-browser job to pass. **Web browser tests** runs the
-Chrome-driven suites outside World (`webBrowserSuites` in the same inventory) one
-file at a time; an inventory check rejects an unlisted one.
-Prepare Release validates its generated working tree in one checkout with one file
-worker; it retains the complete World suite, with one active World case at a time.
+PR CI supplies Linux source/browser evidence; main reports the same immutable
+PR result without heavy checks. Release tags build/test installed channel bytes
+before sealing. Release-please updates version/changelog metadata and dispatches
+ordinary PR CI automatically. **Web browser tests** runs the Chrome-driven suites outside
+World (`webBrowserSuites`) one file at a time.
 
 Each World run writes JUnit results and per-file timings under `.agents/delivery/`.
 CI uploads them as `world-browser-N-attempt-M` artifacts, and the web job's JUnit results as `web-browser-attempt-M`, including on test failure. Compare

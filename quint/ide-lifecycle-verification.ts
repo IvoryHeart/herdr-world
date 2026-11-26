@@ -1,6 +1,7 @@
 import assert from "node:assert/strict";
 import { readFile, readdir, writeFile } from "node:fs/promises";
 import { resolve } from "node:path";
+import { runVerificationPool } from "../scripts/verification-pool";
 import {
   ideCounterexamples,
   ideSteps,
@@ -16,8 +17,16 @@ type Harness = {
     label: string,
     args: string[],
     expectedViolation?: boolean,
+    signal?: AbortSignal,
   ): Promise<string>;
   mutate(fault: "ide-queue" | "ide-start-epoch"): Promise<string>;
+  signal?: AbortSignal;
+  /** Exhaustive checks run at once; CI gives this model a whole two-CPU shard. */
+  controlWorkers?: number;
+  withControlWorker?: (
+    work: (signal?: AbortSignal) => Promise<void>,
+    signal: AbortSignal,
+  ) => Promise<void>;
 };
 
 const MODEL = "quint/ide-lifecycle.qnt";
@@ -54,15 +63,16 @@ const SAMPLED: [string, string][] = [
   ["pure val MAX_CLICKS = 4", "pure val MAX_CLICKS = 6"],
   ["pure val MAX_ATT = 2", "pure val MAX_ATT = 3"],
 ];
+/** Longest control first (hosted CI, 2026-11-24), so a worker pool ends evenly. */
 const FLAGS = [
-  "KEEP_ROUTES",
-  "LOST_IS_FAILED",
-  "STOP_TREE_ONLY",
-  "OLD_LIST",
-  "OLD_STOP",
-  "NO_VOID",
-  "OLD_START_EPOCH",
   "OLD_QUEUE",
+  "OLD_START_EPOCH",
+  "OLD_STOP",
+  "KEEP_ROUTES",
+  "OLD_LIST",
+  "STOP_TREE_ONLY",
+  "NO_VOID",
+  "LOST_IS_FAILED",
 ] as const;
 
 /**
@@ -78,7 +88,12 @@ export async function runIdeLifecycleVerification(h: Harness) {
     await writeFile(resolve(h.output, name), text);
     return `${h.artifacts}/${name}`;
   };
-  const verify = (label: string, path: string, broken = false) =>
+  const verify = (
+    label: string,
+    path: string,
+    broken: boolean,
+    signal?: AbortSignal,
+  ) =>
     h.command(
       label,
       [
@@ -93,14 +108,43 @@ export async function runIdeLifecycleVerification(h: Harness) {
         "3",
       ],
       broken,
+      signal,
     );
   await h.command("ide-lifecycle-types", ["typecheck", MODEL]);
-  assert.match(
-    await verify("ide-lifecycle-verification", MODEL),
-    /No violation found/,
-  );
+
+  // Every exhaustive TLC check is independent and single-threaded. CI runs
+  // them two at a time on this model's own shard, longest first, so the
+  // model fits its shard deadline on slower runners (#1346); local pools
+  // keep one at a time. Each design decision turned back must break the
+  // model; the default and deep variants must not.
   const deep = await write("ide-lifecycle-deep.qnt", variant(source, DEEP));
-  assert.match(await verify("ide-lifecycle-deep", deep), /No violation found/);
+  const deepSource = variant(source, CONTROL);
+  const checks: { label: string; path: string; broken: boolean }[] = [
+    { label: "ide-lifecycle-verification", path: MODEL, broken: false },
+    { label: "ide-lifecycle-deep", path: deep, broken: false },
+  ];
+  for (const flag of FLAGS)
+    checks.push({
+      label: `ide-lifecycle-${flag}`,
+      path: await write(
+        `ide-lifecycle-${flag}.qnt`,
+        variant(deepSource, [
+          [`pure val ${flag} = false`, `pure val ${flag} = true`],
+        ]),
+      ),
+      broken: true,
+    });
+  await runVerificationPool(
+    checks,
+    h.controlWorkers ?? 1,
+    h.signal ?? new AbortController().signal,
+    async ({ label, path, broken }, signal) => {
+      const log = await verify(label, path, broken, signal);
+      if (!broken) assert.match(log, /No violation found/, label);
+    },
+    h.withControlWorker,
+  );
+  const controls = FLAGS.map((flag) => `model-${flag}`);
 
   const sampled = await write(
     "ide-lifecycle-sampled.qnt",
@@ -160,20 +204,6 @@ export async function runIdeLifecycleVerification(h: Harness) {
     ])
       assert(witnessed.has(needed), `seed ${seed} never replayed ${needed}`);
     replayWitnessesBySeed[seed] = [...witnessed].sort();
-  }
-
-  // Each design decision turned back must break the model.
-  const deepSource = variant(source, CONTROL);
-  const controls: string[] = [];
-  for (const flag of FLAGS) {
-    const path = await write(
-      `ide-lifecycle-${flag}.qnt`,
-      variant(deepSource, [
-        [`pure val ${flag} = false`, `pure val ${flag} = true`],
-      ]),
-    );
-    await verify(`ide-lifecycle-${flag}`, path, true);
-    controls.push(`model-${flag}`);
   }
 
   // The counterexamples the model found in the first design, kept as

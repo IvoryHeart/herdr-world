@@ -2,6 +2,13 @@ import { createRoot } from "react-dom/client";
 import { bridge, type BridgeControlMsg } from "../api";
 import type { Pane } from "../types";
 import { AgentChat, type Conversation } from "./AgentChat";
+import { AgentHistoryChat } from "./AgentHistoryChat";
+import type { HistoryEntry } from "./agentHistory";
+import { groupHistoryChatItems } from "./agentHistoryView";
+import {
+  historyDecorationKey,
+  type HistoryDecorator,
+} from "./historyDecoration";
 import { ChatComposer } from "./chat/ChatComposer";
 import { InspectorChat } from "./InspectorChat";
 import { requestChatInputFocus } from "../chatFocus";
@@ -1747,7 +1754,10 @@ async function run() {
 
     // A long, busy transcript stays responsive: History's window arrives once
     // and each change brings only what changed, so nothing re-reads or
-    // re-renders the whole conversation. No task may block for 200 ms.
+    // re-renders the whole conversation. No task may block for 200 ms. This
+    // bundle runs React's development build, whose per-element diagnostics
+    // make each update several times dearer than in the product; the check
+    // below that counts what an update redraws holds on any machine.
     {
       worldSourcesStore.publishSettled({
         ...EMPTY_WORLD_SOURCES,
@@ -1907,6 +1917,116 @@ async function run() {
         Math.max(0, ...longTasks) < 200,
         `A busy conversation blocked the page: long tasks ${JSON.stringify(longTasks.map(Math.round))}`,
       );
+
+      // A live update redraws only the tool blocks it changed: the new block,
+      // and a block whose step evidence changed. The update brings a new item
+      // list and a new token map, as Chat's does; Chat's decorator is asked
+      // only about the changed blocks' steps, not every step in the window.
+      {
+        const at = "2026-10-22T09:00:00Z";
+        const entries: HistoryEntry[] = [];
+        for (let index = 0; index < 40; index += 1) {
+          entries.push({
+            id: `redraw-${index}`,
+            role: index % 2 ? "assistant" : "user",
+            kind: "message",
+            text: `Message ${index}`,
+            sent_at: at,
+          } as HistoryEntry);
+          for (let tool = 0; tool < 4; tool += 1)
+            entries.push({
+              id: `redraw-${index}-tool-${tool}`,
+              role: "tool",
+              kind: tool % 2 ? "tool_result" : "tool_call",
+              tool_name: "Bash",
+              source_call_id: `redraw-${index}-call-${tool >> 1}`,
+              text: "",
+              text_bytes: 10,
+              text_hash: `r${index}-${tool}`,
+              sent_at: at,
+            } as HistoryEntry);
+        }
+        const tokens = (list: HistoryEntry[], failed: string | null) =>
+          new Map(
+            list
+              .filter((entry) => entry.source_call_id)
+              .map((entry) => [
+                historyDecorationKey(entry),
+                entry.source_call_id === failed ? "failed" : "ok",
+              ]),
+          );
+        const asked: string[] = [];
+        const decorate: HistoryDecorator = (target, token) => {
+          if (target.type !== "step") return undefined;
+          asked.push((target.step.call ?? target.step.result)!.id);
+          return token === "failed" ? { state: "error" } : undefined;
+        };
+        const listRef = { current: null as HTMLDivElement | null };
+        const contentRef = { current: null as HTMLDivElement | null };
+        const onOpen = () => {};
+        const host = document.createElement("div");
+        host.style.cssText = "display:flex;height:400px;width:600px";
+        document.body.append(host);
+        const redrawRoot = createRoot(host);
+        const show = (list: HistoryEntry[], failed: string | null) =>
+          redrawRoot.render(
+            <AgentHistoryChat
+              items={groupHistoryChatItems(list)}
+              listRef={listRef}
+              contentRef={contentRef}
+              onOpen={onOpen}
+              decorate={decorate}
+              decorationTokens={tokens(list, failed)}
+            />,
+          );
+        show(entries, null);
+        await settle();
+        const firstAsks = asked.length;
+        asked.length = 0;
+        const next = [
+          ...entries,
+          {
+            id: "redraw-new-message",
+            role: "assistant",
+            kind: "message",
+            text: "Live update.",
+            sent_at: at,
+          } as HistoryEntry,
+          {
+            id: "redraw-new-call",
+            role: "tool",
+            kind: "tool_call",
+            tool_name: "Bash",
+            source_call_id: "redraw-new",
+            text: "",
+            text_bytes: 10,
+            text_hash: "new",
+            sent_at: at,
+          } as HistoryEntry,
+        ];
+        show(next, "redraw-3-call-0");
+        await settle();
+        check(
+          firstAsks === 80,
+          `The redraw fixture should ask about 80 steps at first, asked ${firstAsks}`,
+        );
+        check(
+          JSON.stringify([...new Set(asked)].sort()) ===
+            JSON.stringify([
+              "redraw-3-tool-0",
+              "redraw-3-tool-2",
+              "redraw-new-call",
+            ]),
+          `A live update redrew tool blocks it did not change: asked about ${JSON.stringify([...new Set(asked)].sort().slice(0, 8))} (${asked.length} asks)`,
+        );
+        check(
+          host.querySelectorAll(".agent-history-chat-tools-errors").length ===
+            1,
+          "A block whose step evidence changed did not redraw its error count",
+        );
+        redrawRoot.unmount();
+        host.remove();
+      }
 
       // In the Inspector's window body, at the body sizes of a phone
       // (390×844), a laptop (1280×800), a half screen (960×1080), a wide

@@ -11,6 +11,7 @@ import {
 } from "../../browserChrome";
 import { buildWorldBrowserBundle } from "../testing/browserBundles";
 import { SWIFTSHADER_FLAGS } from "../testing/chromeRendering";
+import { gestureTrace } from "../testing/frameTrace";
 import { connectCapture } from "../testing/connectCapture";
 
 /*
@@ -19,8 +20,8 @@ import { connectCapture } from "../testing/connectCapture";
  * the scale scene). Counts, not milliseconds, so it holds on CI's
  * SwiftShader: Town draws per animation frame while panning, elements
  * restyled per zoom frame, layouts forced inside Town's frames, raster work
- * and frames shown with undrawn content while panning, and Town draws while
- * typing in the composer.
+ * and frames shown with undrawn tiles while panning and zooming, and Town
+ * draws while typing in the composer.
  */
 
 const chrome =
@@ -40,6 +41,8 @@ type TraceEvent = {
   dur?: number;
   tid: number;
   pid: number;
+  id?: string;
+  id2?: { local?: string; global?: string };
   args?: Record<string, any>;
 };
 
@@ -61,6 +64,17 @@ const RESTYLED_PER_ZOOM_FRAME_CEILING = 400;
  * overlay as it moved took about 2.5 and 5.8 (#1248).
  */
 const RASTER_PER_PAN_FRAME = [1.5, 4];
+/**
+ * Share of the frames shown during a pan or zoom that may still have a tile
+ * being rastered. The overlay moves as one composited layer; when the raster
+ * workers fall behind (two starved cores, like a loaded CI runner), Chrome
+ * shows a frame before a tile the motion uncovered is drawn, and draws it in
+ * the next. There at most 2 of about 58 pan frames did, and 1 zoom frame
+ * (#1384). Patchy drawing leaves tiles missing in many frames. Its pre-#1318
+ * cause, re-rasterizing the overlay as it moves, shows here as raster work
+ * (about 150 tasks per home pan) and fails RASTER_PER_PAN_FRAME.
+ */
+const UNDRAWN_SHARE = 1 / 20;
 
 test.skipIf(!chrome)(
   "Town pans at the display's rate, zooms without restyling its overlay and quiets for the composer",
@@ -158,28 +172,63 @@ test.skipIf(!chrome)(
             "disabled-by-default-devtools.timeline.frame",
             "benchmark",
             "cc",
+            "blink.user_timing",
           ].join(","),
           transferMode: "ReportEvents",
         });
+        // PipelineReporter can arrive during this trace for a frame that
+        // began before Tracing.start. Mark the actual gesture in Chrome's
+        // clock so cold setup frames cannot count as missing pan content.
+        await evaluate(
+          'performance.clearMarks(); performance.mark("world-gesture-start")',
+        );
         const result = await run();
+        await evaluate('performance.mark("world-gesture-end")');
         await command("Tracing.end");
         await complete.promise;
-        return { result, events: [...events] };
+        return {
+          result,
+          events: gestureTrace(
+            [...events],
+            "world-gesture-start",
+            "world-gesture-end",
+          ),
+        };
       };
       const draws = () =>
         evaluate("window.__HERDR_TOWN_RENDERER__.frames") as Promise<number>;
 
-      const missing = (events: TraceEvent[]) =>
-        events.filter((event) => {
-          const frame = event.args?.frame_reporter;
-          return (
-            event.name === "PipelineReporter" &&
-            frame &&
-            (frame.has_missing_content ||
+      /**
+       * Frames shown during the gesture, and how many of them had a tile not
+       * yet drawn. Chrome can report one shown frame twice: its own
+       * PipelineReporter and a FORKED or STATE_PRESENTED_PARTIAL one for a
+       * main frame presented in it. Both end at the frame's presentation,
+       * so frames are counted by that end time.
+       */
+      const shownFrames = (events: TraceEvent[]) => {
+        const begun = new Map<string, TraceEvent>();
+        const frames = new Map<string, boolean>();
+        for (const event of [...events].sort((a, b) => a.ts - b.ts)) {
+          if (event.name !== "PipelineReporter") continue;
+          const key = `${event.pid}:${event.id2?.local ?? event.id2?.global ?? event.id}`;
+          if (event.ph === "b") begun.set(key, event);
+          if (event.ph !== "e") continue;
+          const frame = begun.get(key)?.args?.frame_reporter;
+          begun.delete(key);
+          if (!String(frame?.state).startsWith("STATE_PRESENTED")) continue;
+          const undrawn = Boolean(
+            frame.has_missing_content ||
               frame.checkerboarded_needs_raster ||
-              frame.checkerboarded_needs_record)
+              frame.checkerboarded_needs_record,
           );
-        }).length;
+          const shown = String(event.ts);
+          frames.set(shown, frames.get(shown) || undrawn);
+        }
+        return {
+          shown: frames.size,
+          undrawn: [...frames.values()].filter(Boolean).length,
+        };
+      };
       /** Style or layout work inside animation frames: forced by script. */
       const forced = (events: TraceEvent[]) => {
         const frames = events.filter(
@@ -229,7 +278,7 @@ test.skipIf(!chrome)(
         });
         return {
           ...run.result,
-          missing: missing(run.events),
+          ...shownFrames(run.events),
           forced: forced(run.events),
           raster: rasterTasks(run.events),
         };
@@ -246,7 +295,7 @@ test.skipIf(!chrome)(
         return {
           ...run.result,
           restyled: restyled(run.events),
-          missing: missing(run.events),
+          ...shownFrames(run.events),
           forced: forced(run.events),
         };
       };
@@ -303,8 +352,12 @@ test.skipIf(!chrome)(
         // Town draws on (nearly) every animation frame while panning; with a
         // wait before each frame it drew on about every other one.
         expect(run.draws).toBeGreaterThanOrEqual(run.ticks * 0.9);
-        // No frame shows undrawn tiles; no layout is forced inside a frame.
-        expect(run.missing).toBe(0);
+        // Hardly a shown frame has a tile still being drawn; no layout is
+        // forced inside a frame.
+        expect(run.shown).toBeGreaterThan(0);
+        expect(run.undrawn).toBeLessThanOrEqual(
+          Math.ceil(run.shown * UNDRAWN_SHARE),
+        );
         expect(run.forced).toBe(0);
         // The overlay moves as one composited layer, not re-rasterized
         // tile by tile on every frame. At desk scale a pan uncovers new
@@ -318,7 +371,10 @@ test.skipIf(!chrome)(
         expect(zoom.draws).toBeGreaterThan(5);
         // A zoom frame restyles the zoom's readers, not the overlay.
         expect(zoom.restyled).toBeLessThan(RESTYLED_PER_ZOOM_FRAME_CEILING);
-        expect(zoom.missing).toBe(0);
+        expect(zoom.shown).toBeGreaterThan(0);
+        expect(zoom.undrawn).toBeLessThanOrEqual(
+          Math.ceil(zoom.shown * UNDRAWN_SHARE),
+        );
         expect(zoom.forced).toBe(0);
       }
       // Ambient motion keeps its own pace, not the display's.

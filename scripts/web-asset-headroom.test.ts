@@ -108,13 +108,17 @@ test("a budget-only main merge re-judges a feature against the new policy", asyn
   }
 });
 
-test("the workflow judges PRs and re-judges them on every main push", async () => {
+test("the workflow judges relevant PRs and main pushes with the same web inputs", async () => {
   const workflow = Bun.YAML.parse(
     await Bun.file(
       new URL("../.github/workflows/web-asset-headroom.yml", import.meta.url),
     ).text(),
   ) as any;
-  expect(workflow.on.push).toEqual({ branches: ["main"] });
+  expect(workflow.on.push.branches).toEqual(["main"]);
+  expect(workflow.on.push.paths).toEqual(workflow.on.pull_request.paths);
+  expect(workflow.on.push.paths).toContain("web/**");
+  expect(workflow.on.push.paths).toContain("shared/**");
+  expect(workflow.on.push.paths).not.toContain("server/**");
   expect(workflow.permissions.statuses).toBe("write");
   const runs = workflow.jobs.headroom.steps.map((step: any) => step.run);
   expect(runs).toContain("bun scripts/web-asset-headroom.ts pr");
