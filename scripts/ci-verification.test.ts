@@ -49,11 +49,13 @@ test("three disjoint model groups cover the complete canonical inventory", () =>
     expect(() => verificationShard(index)).toThrow();
 });
 
-test("the core model owns a dedicated two-CPU shard before its controls parallelize", () => {
-  const shard = [1, 2, 3]
-    .map(verificationShard)
-    .find((models) => models.includes("herdr-core-runtime"));
-  expect(shard).toEqual(["herdr-core-runtime"]);
+test("the core and IDE models each own a dedicated two-CPU shard before their controls parallelize", () => {
+  for (const model of ["herdr-core-runtime", "ide-lifecycle"]) {
+    const shard = [1, 2, 3]
+      .map(verificationShard)
+      .find((models) => models.includes(model));
+    expect(shard).toEqual([model]);
+  }
 });
 
 test("the newest complete attempt per group is mandatory; omissions, duplicates and foreign runs fail", () => {

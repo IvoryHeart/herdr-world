@@ -138,9 +138,13 @@ artifacts, selects each newest attempt, requires complete model coverage and
 current source/tool identity, and verifies every group's retained accounting.
 It publishes one canonical manifest including the three resource records. The
 single-machine canonical gate is unchanged and still rejects filters.
-The long core runtime model owns a dedicated shard. Its independent fault controls
-run two at a time within that shard's existing resource envelope. Each worker
-reuses its owned checker sequentially, avoiding a JVM startup for each fault.
+The long core runtime and IDE lifecycle models each own a dedicated shard; the
+third shard runs every other model, two at a time. Their independent exhaustive
+checks (core fault controls; the IDE default, deep and eight flag checks) run
+two at a time within that shard's existing resource envelope. Run one at a time,
+the IDE checks alone took about 565 seconds on a fast hosted runner and passed
+the 930-second shard deadline on one about 1.55 times slower (#1346). Each worker
+reuses its owned checker sequentially, avoiding a JVM startup for each check.
 Each command retains its 240-second deadline; the session shares the existing
 outer worker deadline, memory cap and cancellation/drain. A checker failure
 ends the worker instead of relaunching a failed check. Every model fault, trace
