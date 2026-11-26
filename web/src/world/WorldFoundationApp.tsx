@@ -37,6 +37,7 @@ import { worldObjectForHosts } from "./worldFilters";
 import { useHostsFilter } from "./hostsFilter";
 import { HostsControl, selectedHostCount } from "./HostsControl";
 import { useHostGrouping } from "./useHostGroups";
+import { installRuntimeGroupingControl } from "./worldCommands";
 import { worldHosts } from "../worldHosts";
 import { WorldNavigator } from "./WorldNavigator";
 import { useSpacesTabWindowArrangement } from "./useSpacesTabWindowArrangement";
@@ -262,6 +263,8 @@ export default function WorldFoundationApp() {
     worldRuntimeStore.start();
     // Preferences arrive in the same publication as topology.
     const offSettings = followPublishedUiSettings(worldRuntimeStore);
+    // Settings' "Group runtimes" reads and changes the published grouping.
+    installRuntimeGroupingControl();
     // Open again in a core float shell takes authority from this read model.
     const offFloat = provideFloatShellAuthority(
       coreAuthorityFrom(worldRuntimeStore),

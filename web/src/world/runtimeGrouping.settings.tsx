@@ -9,9 +9,7 @@
 import { Building2 } from "lucide-react";
 import { defineSettings } from "../settings/registry";
 import type { RuntimeGrouping } from "../../../shared/hostGrouping";
-import { publishedRuntimeGrouping } from "./runtimeGrouping";
-import { worldRuntimeStore } from "./runtimeStore";
-import { setRuntimeGroupingThroughWorld } from "./worldCommands";
+import { runtimeGroupingControl } from "./runtimeGrouping";
 
 defineSettings("runtime-grouping", [
   {
@@ -37,10 +35,7 @@ defineSettings("runtime-grouping", [
     ],
     icon: <Building2 size={15} />,
     scope: "world",
-    subscribe: (listener) => {
-      const off = worldRuntimeStore.subscribe(listener);
-      return () => void off();
-    },
+    subscribe: runtimeGroupingControl.subscribe,
     control: {
       type: "choice",
       options: [
@@ -55,12 +50,12 @@ defineSettings("runtime-grouping", [
           words: ["separate", "apart", "herdr-core", "herdr-tui"],
         },
       ],
-      get: () => publishedRuntimeGrouping(),
+      // World's published grouping.
+      get: () => runtimeGroupingControl.get(),
       set: (_host, value) => {
         // The control keeps showing the published value until World
         // publishes the change; a failure is reported.
-        const grouping = worldRuntimeStore.get().hostGrouping?.grouping ?? null;
-        void setRuntimeGroupingThroughWorld(grouping, value as RuntimeGrouping);
+        runtimeGroupingControl.set(value as RuntimeGrouping);
       },
     },
   },

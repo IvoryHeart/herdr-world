@@ -5,7 +5,6 @@ import {
   type RuntimeGrouping,
 } from "../../../shared/hostGrouping";
 import { readOfficePreferences } from "./officePreferences";
-import { worldRuntimeStore } from "./runtimeStore";
 
 /**
  * World's "Group runtimes" setting (#1307) in this browser. The browser keeps
@@ -23,12 +22,45 @@ import { worldRuntimeStore } from "./runtimeStore";
  * value is stored meanwhile, so it never replaces an explicit choice.
  */
 
-/** The value the views show: World's published grouping. */
-export function publishedRuntimeGrouping(): RuntimeGrouping {
-  return (
-    worldRuntimeStore.get().hostGrouping?.grouping ?? RUNTIME_GROUPING_DEFAULT
-  );
+/**
+ * The Settings control's way to World's published grouping. The Settings
+ * catalog loads apart from the World views and this module loads with the
+ * page's settings store, so neither imports the replica: the World app hands
+ * over a reader of the replica and its World command
+ * (world/worldCommands.ts `installRuntimeGroupingControl`). It holds no
+ * value of its own.
+ */
+type RuntimeGroupingControl = {
+  get(): RuntimeGrouping;
+  subscribe(listener: () => void): () => void;
+  set(value: RuntimeGrouping): void;
+};
+
+let control: RuntimeGroupingControl | null = null;
+const controlListeners = new Set<() => void>();
+const notifyControl = () => {
+  for (const listener of controlListeners) listener();
+};
+
+/** The World app's reader and command; installed once per page. */
+export function provideRuntimeGroupingControl(next: RuntimeGroupingControl) {
+  if (control) return;
+  control = next;
+  next.subscribe(notifyControl);
+  notifyControl();
 }
+
+/** What the Settings control shows and does. */
+export const runtimeGroupingControl = {
+  get: (): RuntimeGrouping => control?.get() ?? RUNTIME_GROUPING_DEFAULT,
+  set: (value: RuntimeGrouping) => control?.set(value),
+  subscribe(listener: () => void) {
+    controlListeners.add(listener);
+    return () => {
+      controlListeners.delete(listener);
+    };
+  },
+};
 
 type PreferenceStorage = Pick<Storage, "getItem" | "setItem">;
 type LegacyOffer = (value: RuntimeGrouping) => Promise<unknown>;

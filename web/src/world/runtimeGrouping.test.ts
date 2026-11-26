@@ -1,6 +1,11 @@
 import { expect, test } from "bun:test";
 import { OFFICE_PREFERENCES_KEY } from "./officePreferences";
-import { createRuntimeGroupingMigration } from "./runtimeGrouping";
+import type { RuntimeGrouping } from "../../../shared/hostGrouping";
+import {
+  createRuntimeGroupingMigration,
+  provideRuntimeGroupingControl,
+  runtimeGroupingControl,
+} from "./runtimeGrouping";
 
 function storage(entries: Record<string, string> = {}) {
   const values = new Map(Object.entries(entries));
@@ -57,4 +62,35 @@ test("a refused offer is swallowed; the next connection tries again", async () =
   migration.connect(async () => void (tries += 1));
   migration.adopt(null);
   expect(tries).toBe(2);
+});
+
+test("the Settings control shows and changes World's published grouping, holding none of its own", () => {
+  // Before the World app hands over the replica: the default, and a change
+  // goes nowhere.
+  expect(runtimeGroupingControl.get()).toBe("machine");
+  runtimeGroupingControl.set("runtime");
+  let published: RuntimeGrouping = "machine";
+  const replicaListeners = new Set<() => void>();
+  const commands: RuntimeGrouping[] = [];
+  let shown = 0;
+  const off = runtimeGroupingControl.subscribe(() => void (shown += 1));
+  provideRuntimeGroupingControl({
+    get: () => published,
+    subscribe: (listener) => {
+      replicaListeners.add(listener);
+      return () => void replicaListeners.delete(listener);
+    },
+    set: (value) => void commands.push(value),
+  });
+  // A change is a World command; the control keeps the published value.
+  runtimeGroupingControl.set("runtime");
+  expect(commands).toEqual(["runtime"]);
+  expect(runtimeGroupingControl.get()).toBe("machine");
+  // World publishes it: the control follows.
+  const before = shown;
+  published = "runtime";
+  for (const listener of replicaListeners) listener();
+  expect(shown).toBe(before + 1);
+  expect(runtimeGroupingControl.get()).toBe("runtime");
+  off();
 });

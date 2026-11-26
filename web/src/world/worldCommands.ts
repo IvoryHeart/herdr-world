@@ -6,11 +6,13 @@
  */
 
 import {
+  RUNTIME_GROUPING_DEFAULT,
   RUNTIME_GROUPING_SETTING_KEY,
   type RuntimeGrouping,
 } from "../../../shared/hostGrouping";
 import { bridge } from "../api";
 import { store } from "../store";
+import { provideRuntimeGroupingControl } from "./runtimeGrouping";
 import { worldRuntimeStore } from "./runtimeStore";
 import {
   inProgress,
@@ -107,7 +109,7 @@ export async function renameRoomThroughWorld(
  * `expected` was shown, records both in its change history and publishes
  * the result; every view follows the publication. Nothing is held here.
  */
-export async function setRuntimeGroupingThroughWorld(
+async function setRuntimeGroupingThroughWorld(
   expected: RuntimeGrouping | null,
   value: RuntimeGrouping,
 ) {
@@ -138,4 +140,18 @@ export async function setRuntimeGroupingThroughWorld(
   } catch (cause) {
     failed(cause instanceof Error ? cause.message : String(cause));
   }
+}
+
+/** Give the Settings control World's published grouping and its command. */
+export function installRuntimeGroupingControl() {
+  const published = () => worldRuntimeStore.get().hostGrouping?.grouping;
+  provideRuntimeGroupingControl({
+    get: () => published() ?? RUNTIME_GROUPING_DEFAULT,
+    subscribe: (listener) => {
+      const off = worldRuntimeStore.subscribe(listener);
+      return () => void off();
+    },
+    set: (value) =>
+      void setRuntimeGroupingThroughWorld(published() ?? null, value),
+  });
 }
