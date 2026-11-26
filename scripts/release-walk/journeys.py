@@ -1,6 +1,7 @@
 import base64
 import contextlib
 import json
+import os
 from pathlib import Path
 import secrets
 import shutil
@@ -12,14 +13,14 @@ from world import World
 
 
 class Fixture:
-    def __init__(self, root, tools, telemetry, tui=True, core=True, signed_home=None):
+    def __init__(self, root, tools, telemetry, tui=True, core=True):
         self.root = root
         self.tools = tools
         self.telemetry = telemetry
         self.tui = tui
         self.core = core
         self.env = environment(root, tools, 'walk-' + secrets.token_hex(6), tui,
-                               telemetry.path, signed_home, core=core)
+                               telemetry.path, core=core)
 
     def __enter__(self):
         self.stack = contextlib.ExitStack()
@@ -290,36 +291,21 @@ def assert_listing(rows, entries, agents):
         assert found and found.get('agent') == agent['kind'], context + 'herdr-world ls omitted a runtime agent'
 
 
-def chat_reply(world, fixture, agent):
-    connection, pane = agent['connection'], agent['pane']
-    params = dict(pane_id=pane['pane_id'])
-    if agent['runtime'] == 'herdr-core':
-        params['recipient'] = pane['core_recipient']
-    world.rpc('agent_conversation.watch', {'pane_id': pane['pane_id']}, connection)
-    read = lambda: world.rpc('agent_conversation.get', params, connection)
-    conversation = world.observe(read,
-                                 lambda item: bool(item.get('session_fingerprint')) or bool((item.get('pending_prompt') or {}).get('trust')),
-                                 'Chat never bound the signed-in harness session')
-    trust = conversation.get('pending_prompt') or {}
-    if trust.get('trust'):
-        world.rpc('agent_conversation.trust', {**params, 'prompt_fingerprint': trust['fingerprint'], 'choice': 'confirm'}, connection)
-        conversation = world.observe(read, lambda item: bool(item.get('session_fingerprint')),
-                                     'Chat never bound the trusted harness session')
-    token = 'WALK_REPLY_' + secrets.token_hex(12)
-    sent = world.rpc('agent_conversation.send', {**params, 'session_fingerprint': conversation['session_fingerprint'],
-                     'text': f'Reply with exactly {token}. Do not use any tools.'}, connection)
-    assert sent.get('status') in ('sent', 'pending'), 'Chat refused the signed-in prompt'
-    reply = world.observe(lambda: world.rpc('agent_conversation.get', params, connection),
-                          lambda item: any(message['role'] == 'assistant' and token in message['text']
-                                           for message in item.get('messages', [])),
-                          'model reply never became readable in Chat', timeout=180)
-    assert any(message['role'] == 'user' and token in message['text'] for message in reply['messages']), 'Chat lost the sent prompt'
-    pane_for(world, connection, agent['result'], require_classified=True)
+def install(source, binary):
+    """Put a release at the binary path as a new file, like an installer does.
+
+    Copying over the previous binary rewrites the same inode. macOS caches a
+    signed executable's code signature per vnode, so the new contents can be
+    killed at exec before printing anything (darwin-x64 walk, #1246).
+    """
+    staged = binary.with_name(binary.name + '.new')
+    shutil.copy2(source, staged)
+    os.replace(staged, binary)
 
 
 def upgrade(walk, candidate, baseline, fixture):
     binary = fixture.root / 'upgrade-world'
-    shutil.copy2(baseline, binary)
+    install(baseline, binary)
     settings = fixture.root / 'world/settings.json'
     settings.parent.mkdir(mode=0o700, parents=True, exist_ok=True)
     settings.write_text(json.dumps(dict(version=1, title_suffix='Release walk preserved', repositories={},
@@ -346,7 +332,7 @@ def upgrade(walk, candidate, baseline, fixture):
         world.rpc('connections.set_default', {'id': 'walk-core'})
         cookie = world.cookie
         saved = json.loads((settings.parent / 'connections.json').read_text())
-    shutil.copy2(candidate, binary)
+    install(candidate, binary)
     with World(binary, fixture.root, env, cookie) as world:
         assert world.request('/api/login', {'password': 'wrong-synthetic-password'}).status in (401, 403), 'upgrade accepted the wrong sign-in password'
         invalid_cookie = world.cookie.split('=', 1)[0] + '=invalid-synthetic-session'

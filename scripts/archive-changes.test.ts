@@ -142,37 +142,16 @@ test("pinned CLI archives a valid delta and stops at a real requirement conflict
   }
 });
 
-test("archive workflow serializes one reviewed bot branch and never publishes main", () => {
-  const workflow = Bun.YAML.parse(
-    readFileSync(
+test("the retired archive bot cannot restart a broken branch on main pushes", () => {
+  expect(
+    existsSync(
       new URL("../.github/workflows/openspec-archive.yml", import.meta.url),
-      "utf8",
     ),
-  ) as {
-    on: { push: { branches: string[] } };
-    concurrency: { group: string; "cancel-in-progress": boolean };
-    jobs: { archive: { if: string; steps: { run?: string }[] } };
-  };
-  expect(workflow.on.push.branches).toEqual(["main"]);
-  expect(workflow.concurrency).toEqual({
-    group: "openspec-archive",
-    "cancel-in-progress": false,
-  });
-  expect(workflow.jobs.archive.if).toBe("github.ref == 'refs/heads/main'");
-  const commands = workflow.jobs.archive.steps
-    .map((s) => s.run ?? "")
-    .join("\n");
-  expect(commands).toContain("branch=bot/openspec-archive");
-  expect(commands).toContain("git merge --no-edit origin/main");
-  expect(commands).toContain('git push origin "HEAD:refs/heads/$branch"');
-  expect(commands).not.toContain("--force");
-  expect(commands).toContain("archive_status=$?");
-  expect(commands).toContain('exit "$archive_status"');
-  expect(commands).not.toMatch(
-    /git push[^\n]*\bmain\b|gh pr merge|--auto|--draft/,
-  );
+  ).toBe(false);
 });
 
+// This launches the pinned CLI for every completed delta, so its work grows
+// with the repository and exceeds Bun's five-second default under the full lane.
 test("repository completed changes archive past the legacy already-synced baseline", () => {
   const root = mkdtempSync(join(tmpdir(), "archive-baseline-"));
   try {
@@ -203,4 +182,4 @@ test("repository completed changes archive past the legacy already-synced baseli
   } finally {
     rmSync(root, { recursive: true, force: true });
   }
-});
+}, 30_000);

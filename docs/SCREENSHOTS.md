@@ -63,8 +63,10 @@ receipts and inspect all five originals, especially Town floors/buildings/desks.
 ## Town golden-image report
 
 The advisory [Town golden images workflow](../.github/workflows/town-golden.yml)
-compares the production `TownCanvas` (Pixi scene and DOM overlays) with five stored
-PNGs on PR changes and main pushes. It is separate from required Delivery checks.
+compares the production `TownCanvas` (Pixi scene and DOM overlays) with stored
+PNGs at five viewports, including weather scenes (19 captures per run), on
+renderer-related PRs, pushes to main, a nightly schedule and manual dispatch. The
+report remains advisory and separate from required Delivery checks.
 The fixture contains only synthetic hosts, four rooms, sixteen desks and mixed
 working, blocked, finished and idle agents, and the harbour shows the synthetic
 `ready` Shipyard pipeline read in memory. Its usage read is synthetic and
@@ -77,6 +79,18 @@ World or Herdr, contact a runtime, or capture a user's browser. The surrounding 
 Inspector, gestures and runtime effects retain their existing tests. The isolated
 canvas does not publish Library hosts, so it shows no Library sign; supported-host
 signs and unsupported-host absence are covered by the Library tests.
+
+The phone, portrait and linux-half viewports and the seven phone weather scenes
+render a narrow Town. Since
+[#1351](https://github.com/IvoryHeart/herdr-world/issues/1351) a narrow Town
+stands the Library, Observatory, Post Office, Shipyard and Warehouse as buildings
+with their full signs, instead of folding them into small signs on the Town
+center's wings and a one-line Post Office sign. Their references were redrawn for
+that change: in CI run
+[45367851102](https://github.com/IvoryHeart/herdr-world/actions/runs/45367851102)
+16,085 phone, 53,222 portrait, 46,470 linux-half and 15,885–27,543 pixels per
+phone weather scene differed from the folded references. The wide references
+(linux-wide, mac-laptop and the laptop weather scenes) are unchanged.
 
 The fixture fixes its random seed, wall clock, 16 ms frame clock, dark theme,
 100% interface scale and DPR 1. Motion stays enabled. Fonts load before layout;
@@ -101,6 +115,30 @@ font hinting, and compares decoded RGBA pixels exactly. There is **no tolerance*
 mask or automatic golden refresh. Chrome, fonts and goldens must be reviewed
 together when the reference renderer changes.
 
+The DOM overlay (`.town-world`) follows the camera with a fractional translate
+and scale. During the settle the camera moves through 6,000 ms of test time in
+real task turns, so Chrome's compositor commits land at load-dependent points of
+that motion, and Chrome keeps raster-scale history on each composited layer. The
+same final transform therefore once rasterized the Add room doorway edges one
+channel level apart between page loads (134 linux-half pixels and one portrait
+pixel in CI run
+[45070932409](https://github.com/IvoryHeart/herdr-world/actions/runs/45070932409),
+[#1259](https://github.com/IvoryHeart/herdr-world/issues/1259)). CPU
+rasterization and repaint or frame barriers did not remove it.
+The fixture now holds the overlay unpainted (`visibility: hidden !important`)
+while the scene settles; it still mounts, lays out and runs every production
+step. At the checkpoint the fixture removes the hold and waits two real
+animation frames, so Chrome creates the overlay's layers once, at the final
+transform (`web/src/world/testing/town-golden/overlayHold.ts`). The cold-pan fix
+in `townWorldTransform.ts` retains that layer with a 3D translation from the
+first paint, preventing missing overlay tiles when a gesture starts. This also
+changes Chrome's rasterization of the Shipyard signs at the laptop and wide
+viewports. Their nine reference images include that intentional change; the
+remaining ten references are unchanged. Reverting only the translation to 2D
+matches all prior references, while the production 3D translation matches the
+updated references. Keep the production transform in the fixture so the report
+continues to detect changes to those signs.
+
 Install the pinned browser using the existing [development guidance](development.md#verification),
 then run through the browser queue:
 
@@ -111,8 +149,8 @@ TOWN_GOLDEN=1 TOWN_GOLDEN_RUNS=20 TOWN_GOLDEN_OUTPUT=.agents/town-golden-stabili
 ```
 
 `CHROME_BIN` must name the pinned browser. A run uses a fresh Chrome profile;
-each viewport gets a new page. The ordinary report captures five images once;
-stability mode allows at most twenty runs (100 captures). The five images total
+each viewport gets a new page. The ordinary report captures nineteen images once;
+stability mode allows at most twenty runs (380 captures). The five base images total
 under 12 million pixels at DPR 1; ordinary CI has a 15-minute job ceiling. Ordinary test
 gates skip the opt-in visual test, while the comparison's unit tests stay required.
 
@@ -132,14 +170,13 @@ below, which still require real synthetic runtime work.
 
 ### Hosted stability and production visual negative control
 
-Opt into hosted acceptance by applying the `town-golden-stability` PR label before
-pushing the candidate, or by selecting `stability: true` in workflow dispatch
-once the workflow is available on the default branch. Label changes alone do not
-start or cancel a report. Remove the label when later candidates need only the ordinary
-one-run report. Both modes stay advisory; the stability job has a finite 40-minute
-ceiling to cover twenty runs plus the negative control.
+For hosted acceptance, open **Actions → Town golden images → Run workflow**,
+choose the candidate branch and select **stability**; on a PR, the
+`town-golden-stability` label selects the same mode. Every mode stays advisory;
+stability has a finite 40-minute ceiling to cover twenty runs plus the negative
+control.
 
-Stability mode first compares 100 captures against unchanged stored goldens.
+Stability mode first compares 380 captures against unchanged stored goldens.
 It then temporarily moves the actual production `.town-zoom` control by one CSS
 pixel (`right: 16px` → `17px`) in `web/src/world/town/town.css`
 and runs the same five-viewport harness in a
@@ -161,7 +198,7 @@ defaults to `.agents/town-golden-control/` (override with
 `TOWN_GOLDEN_CONTROL_OUTPUT`). It includes `mutation.diff`, each child's exit code,
 logs and full capture report, the actual SwiftShader renderer strings, mismatch
 PNGs, and a restored-source/reference-hash check in `control.json`.
-CI places it inside the same `town-golden` artifact as the complete 100-capture
+CI places it inside the same `town-golden` artifact as the complete 380-capture
 report. Reports identify the checked-out source commit and GitHub run ID, so
 review evidence can be tied to the exact candidate without refreshing goldens.
 

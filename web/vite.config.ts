@@ -2,6 +2,7 @@ import { fileURLToPath } from "node:url";
 import { defineConfig } from "vite";
 import react from "@vitejs/plugin-react";
 import { currentBuildVersion } from "../scripts/build-version";
+import { precompressAssetsPlugin } from "../scripts/precompress-assets";
 import packageJson from "./package.json";
 
 const appVersion = currentBuildVersion(
@@ -15,7 +16,8 @@ export default defineConfig(({ mode }) => {
   const devtools =
     mode === "development" || process.env.HERDR_WORLD_BUILD_DEVTOOLS === "1";
   return {
-    plugins: [react()],
+    // Hashed /assets/* ship with brotli and gzip variants (#1245).
+    plugins: [react(), precompressAssetsPlugin()],
     define: {
       __HERDR_WORLD_VERSION__: JSON.stringify(appVersion),
       // World's development tools (event traces, renderer counters) exist only
@@ -90,6 +92,12 @@ export default defineConfig(({ mode }) => {
                 tags: ["$initial"],
               },
               {
+                // The Library, its Town sign and Chat's Made summary read memory and
+                // the artefact shelf together; keep both clients in one lazy asset.
+                name: "memoryClient",
+                test: /src[\\/]world[\\/]memory[\\/](?:memoryClient|artefactShelfClient)\.ts$/,
+              },
+              {
                 // Feature-only icons and name dictionaries share one lazy asset.
                 name: "feature-icons",
                 test: /node_modules[\\/](?:lucide-react|unique-names-generator)[\\/]/,
@@ -126,6 +134,8 @@ export default defineConfig(({ mode }) => {
         "/api": { target: "http://127.0.0.1:8788" },
         // Installation metadata is instance-specific, including in development.
         "/manifest.json": { target: "http://127.0.0.1:8788" },
+        // Code view: installed IDEs World proxies under /ide/<instance>/.
+        "/ide/": { target: "http://127.0.0.1:8788", ws: true },
         // Let an unauthenticated dev client reach the bridge login page instead
         // of repeatedly loading the Vite SPA at /login and redirecting again.
         "/login": { target: "http://127.0.0.1:8788" },

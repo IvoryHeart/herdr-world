@@ -1,9 +1,11 @@
 /**
  * Town's buildings stand for machines (#1047, #1198). By default a building
  * is one machine (this computer or one SSH destination), holding the rooms of
- * every runtime World holds there; with the "Town buildings" setting on "One
- * per runtime" (or `?townBuildings=runtime`) each runtime keeps its own
- * building, as before.
+ * every runtime World holds there; with World's "Group runtimes" setting
+ * (runtimeGrouping.ts, #1307) on "One per runtime" (or
+ * `?townBuildings=runtime`) each runtime keeps its own building, as before.
+ * Which runtimes share a building is worldHosts.ts `runtimeGroupKey`, the
+ * one rule the navigator and Desk group by too.
  *
  * Presentation only. A room, desk, pane or agent keeps its own `hostKey`,
  * `workspaceRef`, `tabRef` and pane refs (connection ID and generation): room
@@ -25,7 +27,7 @@
 
 import type { ConnectionSummary } from "../../api";
 import type { State } from "../../store/types";
-import { worldHosts } from "../../worldHosts";
+import { runtimeGroupKey, runtimeTag, worldHosts } from "../../worldHosts";
 import type {
   HerdrOfficeProjection,
   OfficeAgent,
@@ -35,10 +37,10 @@ import type {
   OfficeReception,
   OfficeRoom,
 } from "../herdrOfficeProjection";
-import type { TownBuildings } from "../officePreferences";
+import type { RuntimeGrouping } from "../runtimeGrouping";
 import { officeReadModel, setOfficeReadModel } from "../officeReadModel";
 
-export type TownBuildingsMode = TownBuildings;
+export type TownBuildingsMode = RuntimeGrouping;
 
 /** The building an office item stands in: its own host's, unless merged. */
 export const townBuildingOf = (item: {
@@ -47,38 +49,29 @@ export const townBuildingOf = (item: {
 }) => item.buildingKey ?? item.hostKey;
 
 /**
- * The Town buildings setting ("host": one building per machine), unless the page's `?townBuildings=machine` or
- * `?townBuildings=runtime` names a layout for comparing the two.
+ * The "Group runtimes" setting (default: one building per machine), unless
+ * the page's `?townBuildings=machine` or `?townBuildings=runtime` names a
+ * layout for comparing the two.
  */
 export function townBuildingsMode(
   search: string,
-  setting: TownBuildingsMode = "host",
+  setting: TownBuildingsMode = "machine",
 ): TownBuildingsMode {
   const flag = new URLSearchParams(search).get("townBuildings");
   if (flag === "runtime") return "runtime";
-  return flag === "machine" || flag === "host" ? "host" : setting;
+  return flag === "machine" || flag === "host" ? "machine" : setting;
 }
 
 /** What Town needs to know of each runtime connection World holds. */
 export type TownRuntime = {
   id: string;
   runtime: "herdr" | "herdr-core";
-  /** This computer, or one SSH destination, as the service groups hosts. */
+  /** This computer, or one SSH destination (worldHosts.ts `machine`). */
   machine: string;
   /** Equal for connections of one runtime endpoint (worldHosts.ts). */
   endpoint: string;
   writable: boolean;
 };
-
-function machineOf(
-  connection: Pick<ConnectionSummary, "id" | "type" | "ssh_destination">,
-) {
-  if (connection.type === "local") return "local";
-  if (connection.type === "ssh" && connection.ssh_destination)
-    return `ssh:${connection.ssh_destination}`;
-  // An older catalogue without profile fields: a machine of its own.
-  return `connection:${connection.id}`;
-}
 
 let cachedRuntimes: {
   connections: State["connections"];
@@ -96,18 +89,15 @@ export function townRuntimes(
     cachedRuntimes.coreConnections === state.coreConnections
   )
     return cachedRuntimes.runtimes;
-  const profiles = new Map<
-    string,
-    Pick<ConnectionSummary, "id" | "type" | "ssh_destination" | "read_only">
-  >();
+  const profiles = new Map<string, Pick<ConnectionSummary, "read_only">>();
   for (const each of state.coreConnections ?? []) profiles.set(each.id, each);
   for (const each of state.connections) profiles.set(each.id, each);
   const runtimes = worldHosts(state).map((host): TownRuntime => {
-    const profile = profiles.get(host.id) ?? { id: host.id };
+    const profile = profiles.get(host.id) ?? {};
     return {
       id: host.id,
       runtime: host.runtime,
-      machine: machineOf(profile),
+      machine: host.machine,
       endpoint: host.endpoint,
       writable: profile.read_only !== true,
     };
@@ -122,7 +112,7 @@ export function townRuntimes(
 
 /** How a room's runtime reads on its plaque, card and in Move menus. */
 export function townRuntimeTag(runtime: TownRuntime["runtime"]) {
-  return runtime === "herdr" ? "Herdr TUI" : runtime;
+  return runtimeTag(runtime);
 }
 
 type Plan = {
@@ -137,7 +127,7 @@ type Plan = {
   /** Building key by office host key, for a machine's later runtimes. */
   buildingOf: Map<string, string>;
   /** A room's runtime, in buildings of more than one runtime. */
-  tagOf: Map<string, string>;
+  tagOf: Map<string, { tag: string; kind: TownRuntime["runtime"] }>;
   /** Room order offset, so a machine's runtimes' rooms stay apart. */
   orderOffset: Map<string, number>;
   /** A merged building's first host, stale only when all its runtimes are. */
@@ -255,40 +245,39 @@ function plan(
     [...views.placeOf].map(([kept, anchor]) => [kept.key, anchor]),
   );
   const buildingOf = new Map<string, string>();
-  const tagOf = new Map<string, string>();
+  const tagOf: Plan["tagOf"] = new Map();
   const orderOffset = new Map<string, number>();
   const primaryStale = new Map<string, boolean>();
-  if (mode === "host") {
-    const byMachine = new Map<string, OfficeHost[]>();
-    for (const host of shownHosts(known, hidden, placeOf)) {
-      const machine = runtimeOf.get(host.connectionId)!.machine;
-      byMachine.set(machine, [...(byMachine.get(machine) ?? []), host]);
-    }
-    for (const members of byMachine.values()) {
-      if (members.length < 2) continue;
-      // The first runtime in Town's order keys the building, whatever its
-      // state, so rooms never change building when a runtime drops.
-      const [first, ...later] = members as [OfficeHost, ...OfficeHost[]];
-      const kinds = members.map(
-        (host) => runtimeOf.get(host.connectionId)!.runtime,
-      );
-      members.forEach((host, index) => {
-        const kind = kinds[index]!;
-        const tag = townRuntimeTag(kind);
-        const label = (placeOf.get(host.key) ?? host).displayLabel;
-        // Two runtimes of one kind on a machine: their names tell them apart.
-        tagOf.set(
-          host.key,
+  const byGroup = new Map<string, OfficeHost[]>();
+  for (const host of shownHosts(known, hidden, placeOf)) {
+    const group = runtimeGroupKey(runtimeOf.get(host.connectionId)!, mode);
+    byGroup.set(group, [...(byGroup.get(group) ?? []), host]);
+  }
+  for (const members of byGroup.values()) {
+    if (members.length < 2) continue;
+    // The first runtime in Town's order keys the building, whatever its
+    // state, so rooms never change building when a runtime drops.
+    const [first, ...later] = members as [OfficeHost, ...OfficeHost[]];
+    const kinds = members.map(
+      (host) => runtimeOf.get(host.connectionId)!.runtime,
+    );
+    members.forEach((host, index) => {
+      const kind = kinds[index]!;
+      const tag = townRuntimeTag(kind);
+      const label = (placeOf.get(host.key) ?? host).displayLabel;
+      // Two runtimes of one kind on a machine: their names tell them apart.
+      tagOf.set(host.key, {
+        tag:
           kinds.filter((each) => each === kind).length > 1
             ? `${tag} · ${label}`
             : tag,
-        );
-        if (index) orderOffset.set(host.key, index * RUNTIME_ORDER_STRIDE);
+        kind,
       });
-      for (const host of later) buildingOf.set(host.key, first.key);
-      const stale = members.every((host) => host.stale);
-      if (stale !== first.stale) primaryStale.set(first.key, stale);
-    }
+      if (index) orderOffset.set(host.key, index * RUNTIME_ORDER_STRIDE);
+    });
+    for (const host of later) buildingOf.set(host.key, first.key);
+    const stale = members.every((host) => host.stale);
+    if (stale !== first.stale) primaryStale.set(first.key, stale);
   }
   const signature = JSON.stringify([
     [...hidden],
@@ -401,7 +390,8 @@ function apply(
       ? memo(cache.rooms, item, () => ({
           ...placed(item),
           ...(tagOf.has(item.hostKey) && {
-            runtimeTag: tagOf.get(item.hostKey),
+            runtimeTag: tagOf.get(item.hostKey)!.tag,
+            runtimeKind: tagOf.get(item.hostKey)!.kind,
             buildingOrder: item.order + (orderOffset.get(item.hostKey) ?? 0),
           }),
           ...(placeOf.has(item.hostKey) && {

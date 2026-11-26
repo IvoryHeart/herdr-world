@@ -1,0 +1,329 @@
+.world-view-stage[aria-label="code view"] {
+  padding: 0;
+  overflow: hidden;
+}
+.code-view {
+  height: 100%;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  color: var(--text);
+  background: var(--bg);
+}
+/* One thin line: VS Code gets the rest of the view, edge to edge. */
+.code-view-bar {
+  flex: none;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  min-height: 30px;
+  padding: 2px 6px 2px 10px;
+  border-bottom: 1px solid var(--border);
+  background: var(--panel);
+  font-size: 12.5px;
+}
+.code-view-bar > * {
+  flex: none;
+}
+.code-view-mark {
+  color: var(--accent);
+}
+.code-view-project select,
+.code-view-provider select {
+  max-width: min(280px, 45vw);
+  padding: 2px 6px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--input-bg, var(--panel-2));
+  color: var(--text);
+  font: inherit;
+  font-weight: 650;
+}
+.code-view-where {
+  flex: 0 1 auto;
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  min-width: 0;
+  overflow: hidden;
+  color: var(--muted);
+  font-size: 12px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.code-view-bar-spacer {
+  flex: 1;
+}
+.code-view-provider-label {
+  color: var(--muted);
+  font-size: 12px;
+}
+.code-view-bar-action {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  min-height: 24px;
+  padding: 2px 8px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--panel-2);
+  color: var(--text);
+  font-size: 12.5px;
+  text-decoration: none;
+}
+.code-view-bar-action:hover {
+  border-color: var(--accent);
+}
+.code-view-rail-toggle[aria-expanded="true"] {
+  border-color: var(--accent);
+  color: var(--accent);
+}
+.code-view-rail-count {
+  min-width: 16px;
+  padding: 0 4px;
+  border-radius: 999px;
+  background: var(--panel);
+  font-size: 10.5px;
+  font-weight: 700;
+  text-align: center;
+}
+.code-view-body {
+  position: relative;
+  flex: 1;
+  min-height: 0;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+}
+.code-view[data-rail="open"] .code-view-body {
+  grid-template-columns: minmax(0, 1fr) 240px;
+}
+.code-view-stage {
+  position: relative;
+  min-width: 0;
+  min-height: 0;
+  display: flex;
+  background: var(--bg);
+}
+/* Every loaded workbench fills the stage; those behind are hidden in place
+   at full size, so each keeps its layout (#1262). */
+.code-view-frame {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  border: 0;
+  background: var(--bg);
+}
+.code-view-frame[data-front="false"] {
+  visibility: hidden;
+  pointer-events: none;
+}
+.code-view-reloaded {
+  position: absolute;
+  z-index: 1;
+  top: 8px;
+  left: 50%;
+  transform: translateX(-50%);
+  max-width: calc(100% - 24px);
+  margin: 0;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 6px 6px 12px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--panel);
+  box-shadow: 0 6px 20px rgb(0 0 0 / 28%);
+  font-size: 12px;
+}
+.code-view-panel {
+  flex: 1;
+  display: grid;
+  place-items: center;
+  padding: 24px;
+  overflow: auto;
+}
+.code-view-panel > div {
+  display: grid;
+  justify-items: center;
+  gap: 10px;
+  max-width: 560px;
+  text-align: center;
+}
+.code-view-panel h2 {
+  margin: 0;
+  font-size: 18px;
+}
+.code-view-panel p {
+  margin: 0;
+  line-height: 1.45;
+}
+.code-view-panel .primary {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  min-height: 34px;
+  padding-inline: 14px;
+}
+.code-view-integration {
+  justify-items: stretch !important;
+  text-align: left !important;
+  width: min(560px, 100%);
+}
+.code-view-muted {
+  margin: 0;
+  color: var(--muted);
+  font-size: 13px;
+}
+.code-view-note {
+  max-width: 440px;
+  padding: 8px 10px;
+  border-radius: 8px;
+  background: var(--warning-soft);
+  color: var(--warning-text);
+  font-size: 12.5px;
+}
+.code-view-error,
+.code-view-failed [role="alert"] {
+  color: var(--danger-text);
+  font-size: 13px;
+  overflow-wrap: anywhere;
+}
+.code-view-spin {
+  animation: code-view-spin 1s linear infinite;
+  vertical-align: -3px;
+}
+@keyframes code-view-spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .code-view-spin {
+    animation: none;
+  }
+}
+.code-view-context {
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  padding: 12px;
+  overflow: auto;
+  border-left: 1px solid var(--border);
+  background: var(--panel);
+}
+.code-view-context-group h3 {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin: 0 0 6px;
+  color: var(--muted);
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.5px;
+  text-transform: uppercase;
+}
+.code-view-context-group h3 span {
+  padding: 0 6px;
+  border-radius: 999px;
+  background: var(--panel-2);
+  font-size: 10.5px;
+}
+.code-view-context-group ul {
+  display: grid;
+  gap: 3px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+.code-view-leaf {
+  width: 100%;
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  padding: 5px 8px;
+  border-color: transparent;
+  background: transparent;
+  text-align: left;
+}
+.code-view-leaf:hover:not(:disabled) {
+  background: var(--panel-2);
+}
+.code-view-leaf-name {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.code-view-leaf-status {
+  flex: none;
+  color: var(--muted);
+  font-size: 11px;
+}
+.code-view-leaf[data-status="blocked"] .code-view-leaf-status {
+  color: var(--warning-text);
+  font-weight: 650;
+}
+.code-view-leaf[data-status="working"] .code-view-leaf-status {
+  color: var(--accent);
+}
+.code-view-context-rooms {
+  margin: auto 0 0;
+  color: var(--muted);
+  font-size: 11.5px;
+}
+@media (max-width: 760px) {
+  .code-view[data-rail="open"] .code-view-body {
+    grid-template-columns: minmax(0, 1fr);
+    grid-template-rows: minmax(0, 1fr) auto;
+  }
+  .code-view-context {
+    max-height: 40vh;
+    border-top: 1px solid var(--border);
+    border-left: 0;
+  }
+  .code-view-mark,
+  .code-view-bar-action > span:not(.code-view-rail-count) {
+    display: none;
+  }
+}
+.code-view-detached-actions {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: 8px;
+}
+.code-view-detached-actions button {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  min-height: 34px;
+}
+/* Over the IDE, not beside it: the list is a glance, then gone. */
+.code-view-servers {
+  position: absolute;
+  z-index: 2;
+  top: 8px;
+  right: 8px;
+  display: grid;
+  gap: 8px;
+  width: min(440px, calc(100% - 16px));
+  max-height: calc(100% - 16px);
+  overflow: auto;
+  padding: 12px;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  background: var(--panel-2, var(--panel));
+  box-shadow: 0 10px 30px rgb(0 0 0 / 25%);
+}
+.code-view-servers-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+.code-view-servers h2 {
+  margin: 0;
+  font-size: 15px;
+}

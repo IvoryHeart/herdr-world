@@ -4,74 +4,44 @@ import process from "node:process";
 import { fileURLToPath, URL } from "node:url";
 
 const publicRoot = fileURLToPath(new URL("../server/public/", import.meta.url));
-// Town and Board are the visual views, each a lazy chunk with its own
-// renderer or layout code; Ranger, commit history and the diff worker add
-// bounded lazy assets. Retiring Office, Tree and Graph (and Office's character
-// sprites) left 129 files and 13.0 MiB, so the budgets keep a little headroom.
-// File splits (store, Chat) and lazy features add small chunks without adding
-// bytes: 144 files on 2026-10-23, 24 of them under 2 KiB (re-export facades and
-// shared helpers). Merging small shared chunks into one group pulled lazy code
-// into the startup bundle (initial JS 313 -> 686 KiB), so the file count gets
-// headroom instead; total bytes and the initial budgets are what users pay for
-// and stay as they are. The always-mounted herdr-core kill confirmation
-// shares ConfirmDialog with Town and Board, splitting ModalDialogs into its
-// own chunk (181 files on 2026-11-11). End shell confirms the same way from
-// the float shell's lazy chunk, which moves that confirmation and the float
-// shell's read model into one shared chunk and its CSS (185 files, no new
-// bytes, on 2026-11-17).
-// The #981 Code view design study adds three standalone, on-demand static
-// assets (HTML, CSS and JS), without adding to the application's eager graph.
-// Account for those files explicitly; byte and startup budgets remain binding.
-// New room's dialog reads each connection's recent folders, which splits the
-// World runtime store into a lazy chunk of its own (190 files with #981, no new
-// bytes or initial load, on 2026-11-19).
-// The one Integrations screen (#1008) in Configuration shares the sources,
-// usage-metrics and connection-manager modules with World's views, so they
-// become their own small chunks (+3 files after removing the two retired
-// dialogs, no new bytes on the initial load).
-// #1035 Settings (one registry and one search) loads as two lazy
-// chunks and a stylesheet; its catalog shares small stores with Town, chat and
-// the command box, which split into chunks of their own (+6 files and about
-// 35 KiB, with no initial load, on 2026-11-20). Retiring the Configuration
-// dialog split its tabs into lazy Settings pages (Runtime, connection,
-// Integrations, instance name, speech, worktree command) with their
-// stylesheets: +12 files and fewer total bytes (212 files, 15.3 MiB).
-const maxFileCount = 212;
-// PDF.js and its worker (1.66 MiB) load only when a PDF is drawn by it, on
-// browsers without a PDF viewer (Roamgate R#537). Ruling S4 raised only this
-// total, from 13.25 MiB; assertLazyPdfAssets keeps them out of the initial load.
-// The Integrations screen (#1008, +17 KB) fit main alone, but main
-// grew under it to 13 KB of headroom; 15.3 MiB carries both, initial budgets
-// unchanged (2026-11-19). The lazy #1035 Settings adds about 35 KiB
-// on top of it (15.31 MiB together, so 15.4 MiB on 2026-11-20).
-// The Usage screens (#1029: Budget, Runs at once, Tokens and Breakdown, with
-// the testing fixture) load with Town's lazy chunk and add about 57 KiB.
-// Main grew under it (Settings pages), so its delta on main projects to
-// 15.41 MiB; 15.5 MiB carries both, initial budgets unchanged (2026-11-20).
-// The Town harbour and warehouse (#1028) fit main alone, but main's Library
-// (#1082) grew under it: 15.42 MiB together, so 15.5 MiB, initial budgets
-// unchanged (2026-11-20).
-// Apartments (#1011: the resident search/history dialog, its store and Town's
-// apartment building) add about 18.7 KB to lazy chunks; startup budgets are
-// unchanged.
-// The combined Usage/harbour/Apartments merge measures 15.55 MiB; 15.6 MiB
-// carries those lazy features together, with startup budgets unchanged.
-// Resident avatars (#1069) share Town's sprites in lazy Apartments chunks;
-// main measures 15.503 MiB within the same 15.6 MiB total (2026-11-20).
-// Merging the Weather source and its published Town consumer (#1040/#1100)
-// with main's Apartments and post-office work measures 16,270,139 bytes
-// (15.5164 MiB): 17,211 bytes above 15.5 MiB. Account for the combined
-// delivered features at 15.6 MiB; file, help-picture and startup limits stay.
-// Town's quiet-agent mark (#1130: rule, hourglass and Busy sub-line, all in
-// the lazy Town chunk) adds about 5 KB, still within 15.6 MiB (2026-11-21).
-// The Quiet agents help card's four pictures (#1220, about 90 KB) and #1198's Town
-// buildings took main past 15.6 MiB. The maintainer approved growth up to 20 MiB on 2026-11-22.
-// 16.5 MiB leaves headroom so feature PRs stop raising this line one by one,
-// until #1228 moves the budget into a reviewed data file. A bundle-size
-// assessment is tracked separately; file, help-picture and startup limits stay.
-const maxTotalBytes = 16.5 * 1024 * 1024;
+/** Validate the reviewed whole-bundle policy, including a short reason history. */
+export function parseBundleBudget(text) {
+  const value = JSON.parse(text);
+  if (
+    !value ||
+    !Number.isSafeInteger(value.bytes) ||
+    value.bytes <= 0 ||
+    !Number.isSafeInteger(value.files) ||
+    value.files <= 0 ||
+    !Array.isArray(value.history) ||
+    !value.history.length ||
+    value.history.some((reason) => typeof reason !== "string" || !reason.trim())
+  )
+    throw new Error(
+      "scripts/web-asset-budget.json needs positive integer bytes/files and a nonempty reason history",
+    );
+  return { bytes: value.bytes, files: value.files };
+}
+
 /** Whole-bundle budgets, also projected onto current main for open PRs. */
-export const BUNDLE_BUDGET = { files: maxFileCount, bytes: maxTotalBytes };
+export const BUNDLE_BUDGET = parseBundleBudget(
+  await readFile(new URL("./web-asset-budget.json", import.meta.url), "utf8"),
+);
+
+export const BUDGET_REQUEST =
+  "Request a separate owner-approved PR changing only scripts/web-asset-budget.json, with bytes/files and a short history reason. Feature PRs must not edit the budget or scripts/check-web-assets.mjs.";
+
+/** Exact minimum policy change; equality passes and reductions need no raise. */
+export function budgetRaiseRequest(size, budget = BUNDLE_BUDGET) {
+  const raises = ["bytes", "files"]
+    .filter((key) => size[key] > budget[key])
+    .map(
+      (key) =>
+        `${key}: ${budget[key]} -> ${size[key]} (+${size[key] - budget[key]})`,
+    );
+  if (raises.length)
+    return `Web asset budget exceeded: ${raises.join("; ")}. ${BUDGET_REQUEST}`;
+}
 // Help pictures (#1025, web/public/help/) are generated per help entry at two
 // sizes and two themes, and load only when a help card is shown. They have
 // their own budget so that adding help never competes with code for bytes:
@@ -197,7 +167,14 @@ export function assertNoRuntimeCode(name, text) {
     throw new Error(`${name} compiles code at run time (eval or Function)`);
 }
 
-/** Counts the bundle, leaving out the help pictures' own folder. */
+/** Build-time `.br`/`.gz` variant suffixes (shared/precompressedAssets.ts). */
+const PRECOMPRESSED_SUFFIXES = { ".br": "brotliBytes", ".gz": "gzipBytes" };
+
+/**
+ * Counts the bundle, leaving out the help pictures' own folder. Budgets stay
+ * on what the build makes: a precompressed `.br`/`.gz` variant beside its file
+ * is not a file or bytes of its own, only reported as its compressed size.
+ */
 export async function collectAssetStats(
   root = publicRoot,
   exclude = [HELP_PICTURE_DIRECTORY],
@@ -205,10 +182,12 @@ export async function collectAssetStats(
   const directories = [root];
   let fileCount = 0;
   let totalBytes = 0;
+  const compressed = { brotliBytes: 0, gzipBytes: 0 };
 
   while (directories.length) {
     const directory = directories.pop();
     const entries = await readdir(directory, { withFileTypes: true });
+    const names = new Set(entries.map((entry) => entry.name));
     for (const entry of entries) {
       const path = `${directory}/${entry.name}`;
       if (entry.isDirectory()) {
@@ -217,16 +196,23 @@ export async function collectAssetStats(
         continue;
       }
       const metadata = await stat(path);
+      const suffix = entry.name.slice(-3);
+      const variant = PRECOMPRESSED_SUFFIXES[suffix];
+      if (variant && names.has(entry.name.slice(0, -3))) {
+        compressed[variant] += metadata.size;
+        continue;
+      }
       fileCount += 1;
       totalBytes += metadata.size;
     }
   }
 
-  return { fileCount, totalBytes };
+  return { fileCount, totalBytes, ...compressed };
 }
 
 async function checkAssets() {
-  const { fileCount, totalBytes } = await collectAssetStats(publicRoot);
+  const { fileCount, totalBytes, brotliBytes, gzipBytes } =
+    await collectAssetStats(publicRoot);
   const help = await collectAssetStats(
     `${publicRoot}/${HELP_PICTURE_DIRECTORY}`,
     [],
@@ -263,8 +249,8 @@ async function checkAssets() {
     }
   }
   const checks = [
-    ["files", fileCount, maxFileCount, 1, "files"],
-    ["total", totalBytes, maxTotalBytes, 1024 * 1024, "MiB"],
+    ["files", fileCount, BUNDLE_BUDGET.files, 1, "files"],
+    ["total", totalBytes, BUNDLE_BUDGET.bytes, 1024 * 1024, "MiB"],
     ["help pictures", help.fileCount, maxHelpPictureFiles, 1, "files"],
     ["help pictures", help.totalBytes, maxHelpPictureBytes, 1024 * 1024, "MiB"],
     ["initial JS", jsBytes, maxInitialJsBytes, 1024, "KiB"],
@@ -277,6 +263,8 @@ async function checkAssets() {
     (exceeded ? process.stderr : process.stdout).write(message);
     if (exceeded) process.exitCode = 1;
   }
+  const request = budgetRaiseRequest({ files: fileCount, bytes: totalBytes });
+  if (request) process.stderr.write(`${request}\n`);
   if (process.env.HERDR_WORLD_BUILD_DEVTOOLS !== "1") {
     const shipped = devtoolsAssets(await textAssets(publicRoot));
     if (shipped.length) {
@@ -286,6 +274,10 @@ async function checkAssets() {
       process.exitCode = 1;
     } else process.stdout.write("web assets: no development tools\n");
   }
+  // Reported after the raw budget: what browsers download from World.
+  process.stdout.write(
+    `web asset precompressed: brotli ${(brotliBytes / 1024 / 1024).toFixed(1)} MiB, gzip ${(gzipBytes / 1024 / 1024).toFixed(1)} MiB\n`,
+  );
 }
 
 /** Every text asset (scripts, styles, pages) under the public root. */

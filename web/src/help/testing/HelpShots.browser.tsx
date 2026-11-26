@@ -1,13 +1,14 @@
 /*
  * The help pictures' stage (scripts/help-pictures.ts): the production Town,
- * Board or an agent's Chat with the website's synthetic scene
- * (web/src/world/testing/site-shots/), World's view picker over it, in one
+ * Board, Code or an agent's Chat with the website's synthetic scene
+ * (web/src/world/testing/site-shots/), World's view picker over it (not
+ * over Code, whose picture is the whole view at the crop's size), in one
  * size and theme. `window.helpShots.show(control, press)` presses what opens
  * the control or brings it into view, rings it as Try does and returns where
  * it is; `hide()` undoes
  * that. Nothing contacts World, Herdr or GitHub.
  *
- *   ?scene=town|board|chat&theme=light|dark&phone=1
+ *   ?scene=town|board|code|chat&theme=light|dark&phone=1
  */
 window.__HERDR_WORLD_RENDERER_DEBUG__ = "counters";
 let seed = 0x68656c70;
@@ -22,6 +23,8 @@ import { AgentChat } from "../../components/AgentChat";
 import type { Pane } from "../../types";
 import type { TownQuietMarks } from "../../world/town/TownBoard";
 import BoardView from "../../world/BoardView";
+import CodeView from "../../world/code/CodeView";
+import { fixtureIdeClient, type IdeClient } from "../../world/code/ideClient";
 import { TownMasterFigure } from "../../world/TownMasterCard";
 import { quietGreetingForTest } from "../../world/townMasterGreeting";
 import {
@@ -29,6 +32,7 @@ import {
   noAction,
   siteBoardStore,
   siteBoardWorld,
+  siteCodeWorld,
   SiteTown,
   siteTownScene,
 } from "../../world/testing/site-shots/siteStage";
@@ -47,7 +51,11 @@ import "../../world/windows/windows.css";
 import "../helpPanel.css";
 
 const params = new URLSearchParams(location.search);
-const scene = (params.get("scene") ?? "town") as "town" | "board" | "chat";
+const scene = (params.get("scene") ?? "town") as
+  | "town"
+  | "board"
+  | "code"
+  | "chat";
 const phone = params.get("phone") === "1";
 const theme = params.get("theme") === "light" ? "light" : "dark";
 document.documentElement.dataset.theme = theme;
@@ -138,7 +146,8 @@ async function settle(limit = 8000) {
   }
 }
 
-const view: WorldView = scene === "board" ? "board" : "town";
+const view: WorldView =
+  scene === "board" ? "board" : scene === "code" ? "code" : "town";
 const hosts = {
   connections: [
     {
@@ -148,6 +157,7 @@ const hosts = {
       state: "ready" as const,
       generation: 1,
       endpoint: "site-host-0",
+      machine: "site-host-0",
     },
     {
       id: "site-host-1",
@@ -156,6 +166,7 @@ const hosts = {
       state: "ready" as const,
       generation: 1,
       endpoint: "site-host-1",
+      machine: "site-host-1",
     },
   ],
   ids: null,
@@ -184,10 +195,14 @@ const chatPane: Pane = {
 
 /** Shows or clears the quiet marks; set while the Town stage is mounted. */
 let setQuietShown: (shown: boolean) => void = noAction;
+/** Swaps in the town of two runtimes; set while the Town stage is mounted. */
+let setRuntimesShown: (shown: boolean) => void = noAction;
 
 function Stage() {
   const [quietShown, setShown] = useState(false);
   setQuietShown = setShown;
+  const [runtimesShown, setRuntimes] = useState(false);
+  setRuntimesShown = setRuntimes;
   if (scene === "board")
     return (
       <div style={{ position: "fixed", inset: 0, display: "flex" }}>
@@ -197,6 +212,29 @@ function Stage() {
           onSelect={noAction}
           onOpen={async () => {}}
           store={boardStore!}
+        />
+      </div>
+    );
+  if (scene === "code")
+    return (
+      <div
+        style={{
+          position: "fixed",
+          top: 0,
+          left: 0,
+          // The picture's crop (scripts/help-declarations.ts): the whole
+          // view fits one picture, its project and Open button in reach.
+          width: phone ? 390 : 640,
+          height: phone ? 300 : 400,
+          overflow: "hidden",
+        }}
+      >
+        <CodeView
+          world={codeWorld!}
+          onOpenAgent={noAction}
+          onOpenTerminal={noAction}
+          client={codeClient!}
+          secure
         />
       </div>
     );
@@ -224,14 +262,41 @@ function Stage() {
       </div>
     );
   return (
-    <div className="town-stage" style={{ position: "fixed", inset: 0 }}>
+    // Town's view shell carries its colour tokens (townAsks.css), as the
+    // town center ring's medallions and labels read them.
+    <div
+      className="town-stage town-view-shell"
+      style={{ position: "fixed", inset: 0 }}
+    >
       <TownMasterFigure />
-      <SiteTown scene={town!} quiet={quietShown ? quiet! : undefined} />
+      {/* A fresh town for each scene, so the usual one is as at load. */}
+      <SiteTown
+        key={runtimesShown ? "runtimes" : "town"}
+        scene={runtimesShown ? runtimesTown! : town!}
+        quiet={quietShown ? quiet! : undefined}
+      />
     </div>
   );
 }
 
 const town = scene === "town" ? siteTownScene() : null;
+/**
+ * The same town with its two hosts as one machine's two runtimes, so room
+ * plaques carry runtime icons. Only the runtimes' own picture shows it
+ * (helpShots.show), so the other Town pictures stay as they were.
+ */
+const runtimesTown =
+  scene === "town" ? siteTownScene(undefined, { runtimes: true }) : null;
+let runtimesSwapped = false;
+
+/** Swaps the Town stage and waits until the new town has settled. */
+async function swapTown(runtimes: boolean) {
+  setRuntimesShown(runtimes);
+  runtimesSwapped = runtimes;
+  await frames(10);
+  while (!stats()?.ready) await frame();
+  await settle(12_000);
+}
 
 /**
  * Two working agents have gone quiet (useTownQuiet.ts), so the town board
@@ -255,6 +320,20 @@ function quietMarks(scene: NonNullable<typeof town>): TownQuietMarks {
 const quiet = town ? quietMarks(town) : null;
 const boardStore = scene === "board" ? siteBoardStore() : null;
 const boardWorld = scene === "board" ? siteBoardWorld() : null;
+const codeWorld = scene === "code" ? siteCodeWorld() : null;
+// code-server enabled and nothing started: a project on this computer ready
+// to open, with its agents and terminals beside it. Opening is never pressed.
+const codeClient = scene === "code" ? siteIdeClient() : null;
+function siteIdeClient(): IdeClient {
+  const client = fixtureIdeClient("ssh");
+  return {
+    ...client,
+    status: async (refresh) => ({
+      ...(await client.status(refresh)),
+      localConnections: ["site-host-0"],
+    }),
+  };
+}
 
 /** Shown and inside the screen: a Town sign can be out of the camera's view. */
 function onScreen(element: Element | null) {
@@ -277,7 +356,11 @@ const helpShots = {
     createRoot(document.getElementById("root")!).render(
       <>
         <Stage />
-        {phone ? picker : <div className="zen-dock">{picker}</div>}
+        {scene === "code" ? null : phone ? (
+          picker
+        ) : (
+          <div className="zen-dock">{picker}</div>
+        )}
       </>,
     );
     if (scene === "town") {
@@ -297,6 +380,7 @@ const helpShots = {
       setQuietShown(true);
       await frames(20);
     }
+    if (control === "town.runtime" && runtimesTown) await swapTown(true);
     if (!onScreen(document.querySelector(`[data-help="${control}"]`))) {
       for (const selector of press) {
         const button = document.querySelector<HTMLElement>(selector);
@@ -329,6 +413,7 @@ const helpShots = {
     pressed = [];
     setQuietShown(false);
     await frames(20);
+    if (runtimesSwapped) await swapTown(false);
   },
 };
 

@@ -1,4 +1,4 @@
-import { afterEach, expect, test } from "bun:test";
+import { afterEach, expect, setDefaultTimeout, test } from "bun:test";
 import { createHash } from "node:crypto";
 import {
   mkdtempSync,
@@ -11,6 +11,10 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { openWorldLedger, type WorldLedgerStorage } from "./world-storage";
 import type { OutboxEffect } from "./world-protocol";
+
+// Each open starts a SQLite worker; slow Windows runners take over a second
+// per open, so two opens and their writes can pass Bun's 5 s default.
+setDefaultTimeout(30_000);
 
 const roots: string[] = [];
 const opened: WorldLedgerStorage[] = [];

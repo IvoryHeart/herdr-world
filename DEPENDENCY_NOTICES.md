@@ -288,15 +288,18 @@ shipped by the packages are reproduced in `DEPENDENCY_LICENSES.md`.
 | fast-string-width | 3.0.2 | MIT |
 | fast-wrap-ansi | 0.2.2 | MIT |
 | fastq | 1.20.3 | ISC |
+| fd-package-json | 2.0.0 | MIT |
 | fdir | 6.5.0 | MIT |
 | fetch-blob | 3.2.0 | MIT |
 | fill-range | 7.1.1 | MIT |
+| formatly | 0.11.4 | MIT |
 | formdata-polyfill | 4.0.10 | MIT |
 | gaxios | 7.3.1 | Apache-2.0 |
 | gcp-metadata | 8.1.2 | Apache-2.0 |
 | get-east-asian-width | 1.6.0 | MIT |
 | get-east-asian-width | 1.7.0 | MIT |
 | get-nonce | 1.0.1 | MIT |
+| get-tsconfig | 4.14.3 | MIT |
 | gifuct-js | 2.1.2 | MIT |
 | glob-parent | 5.1.2 | ISC |
 | google-auth-library | 10.9.1 | Apache-2.0 |
@@ -328,11 +331,13 @@ shipped by the packages are reproduced in `DEPENDENCY_LICENSES.md`.
 | jiti | 2.7.0 | MIT |
 | js-base64 | 3.9.2 | BSD-3-Clause |
 | js-binary-schema-parser | 2.0.3 | MIT |
+| jscpd | 5.4.3 | MIT |
 | jsdom | 30.1.3 | MIT |
 | json-bigint | 1.0.0 | MIT |
 | json-schema-to-ts | 3.1.1 | MIT |
 | jwa | 2.0.1 | MIT |
 | jws | 4.0.1 | MIT |
+| knip | 6.48.0 | ISC |
 | lightningcss | 1.33.0 | MPL-2.0 |
 | log-symbols | 7.0.1 | MIT |
 | long | 5.3.2 | Apache-2.0 |
@@ -366,8 +371,11 @@ shipped by the packages are reproduced in `DEPENDENCY_LICENSES.md`.
 | oniguruma-to-es | 4.3.6 | MIT |
 | openai | 7.19.0 | Apache-2.0 |
 | ora | 9.4.1 | MIT |
+| oxc-parser | 0.156.0 | MIT |
+| oxc-resolver | 11.24.2 | MIT |
 | oxlint | 1.89.0 | MIT |
 | p-retry | 4.6.2 | MIT |
+| package-manager-detector | 1.9.0 | MIT |
 | parse-svg-path | 0.2.0 | MIT |
 | parse5 | 8.0.1 | MIT |
 | partial-json | 0.1.7 | MIT |
@@ -395,6 +403,7 @@ shipped by the packages are reproduced in `DEPENDENCY_LICENSES.md`.
 | regex-utilities | 2.3.0 | MIT |
 | regex | 6.1.0 | MIT |
 | require-from-string | 2.0.2 | MIT |
+| resolve-pkg-maps | 1.0.0 | MIT |
 | restore-cursor | 5.1.0 | MIT |
 | retry | 0.12.0 | MIT |
 | retry | 0.13.1 | MIT |
@@ -411,6 +420,7 @@ shipped by the packages are reproduced in `DEPENDENCY_LICENSES.md`.
 | shiki | 4.5.0 | MIT |
 | signal-exit | 3.0.7 | ISC |
 | signal-exit | 4.1.0 | ISC |
+| smol-toml | 1.9.1 | BSD-3-Clause |
 | source-map-js | 1.2.2 | BSD-3-Clause |
 | space-separated-tokens | 2.0.2 | MIT |
 | standardwebhooks | 1.1.1 | MIT |
@@ -418,6 +428,7 @@ shipped by the packages are reproduced in `DEPENDENCY_LICENSES.md`.
 | string-width | 8.3.0 | MIT |
 | stringify-entities | 4.0.4 | MIT |
 | strip-ansi | 7.2.0 | MIT |
+| strip-json-comments | 5.0.3 | MIT |
 | style-mod | 4.1.3 | MIT |
 | tiny-lru | 11.4.7 | BSD-3-Clause |
 | tinyglobby | 0.2.17 | MIT |
@@ -432,6 +443,7 @@ shipped by the packages are reproduced in `DEPENDENCY_LICENSES.md`.
 | typebox | 1.3.27 | MIT |
 | typebox | 1.3.37 | MIT |
 | typescript | 7.0.2 | Apache-2.0 |
+| unbash | 6.0.5 | ISC |
 | undici-types | 8.11.2 | MIT |
 | undici-types | 8.3.0 | MIT |
 | undici | 8.12.3 | MIT |
@@ -448,6 +460,7 @@ shipped by the packages are reproduced in `DEPENDENCY_LICENSES.md`.
 | vite | 8.3.6 | MIT |
 | w3c-keyname | 2.2.8 | MIT |
 | w3c-xmlserializer | 6.0.0 | MIT |
+| walk-up-path | 4.0.0 | ISC |
 | web-push | 3.6.7 | MPL-2.0 |
 | web-streams-polyfill | 3.3.3 | MIT |
 | webidl-conversions | 8.0.1 | BSD-2-Clause |

@@ -1,3 +1,4 @@
+import { homedir } from "node:os";
 import packageJson from "../../package.json";
 import { currentBuildVersion } from "../../scripts/build-version";
 import { cliCommands, runCli, topLevelHelp } from "./cli";
@@ -7,6 +8,7 @@ import {
   RECOMMENDED_PASSWORD_LENGTH,
 } from "./config/auth-token";
 import { resolveDataPaths } from "./config/data-paths";
+import { movePinnedHomebrewService } from "./config/homebrew-handoff";
 import { runPluginCommand } from "./config/plugin-command";
 import {
   browserUrlFor,
@@ -21,6 +23,7 @@ import { createShutdownController } from "./connections/shutdown";
 import { describeListenerStartError } from "./connections/startup";
 import { runAgentCheckoutCommand } from "./herdr/agent-checkout";
 import { runTaskSummaryCommand } from "./herdr/task-summary";
+import { isSupervisorManagedEnvironment } from "./http/update";
 import { herdrAdapter, systemClock, systemScheduler } from "./service/ports";
 import { openStorage } from "./service/storage";
 import { createWorldService, type WorldService } from "./service/world-service";
@@ -62,6 +65,21 @@ if (cliResult === CONTINUE_TO_SERVER) {
 } else if (cliResult !== null) {
   process.exit(cliResult);
 }
+// A Homebrew upgrade restarts the service on the new keg; a definition an
+// older World wrote still names its own keg, which `brew cleanup` removes.
+// This runs before the listener and the data-folder lock: moving it to opt
+// restarts the service and ends this process.
+const movedService = await movePinnedHomebrewService({
+  execPath: process.execPath,
+  platform: process.platform,
+  homeDir: homedir(),
+  supervised: isSupervisorManagedEnvironment(process.env),
+  log: (message) => console.log(message),
+});
+if (movedService !== null && movedService !== 0)
+  console.error(
+    `Moving the service definition to Homebrew's opt path failed (exit ${movedService}); starting from the current path.`,
+  );
 const config = loadServerConfig(APP_VERSION, {
   helpText: () => topLevelHelp(cliCommandList),
 });

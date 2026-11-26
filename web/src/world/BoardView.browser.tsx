@@ -278,12 +278,16 @@ const binState = () => ({
   closing: [],
   outcomes: [],
   bus: {
-    interval_ms: 240_000,
-    trip_ms: 120_000,
-    next_ms: 60_000,
+    speed_kmh: 36,
+    route_m: binStopped ? 500 : 0,
+    trip_ms: binStopped ? 120_000 : 0,
     elapsed_ms: binStopped ? 30_000 : null,
     stopped: binStopped,
     trip: binStopped ? 1 : null,
+    next_ms: 60_000,
+    next_route_m: 500,
+    next_trip_ms: 120_000,
+    next_measured: false,
   },
 });
 const originalAskCall = bridge.call.bind(bridge);

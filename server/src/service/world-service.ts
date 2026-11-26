@@ -14,7 +14,6 @@ import { createRuntimeAssistantContext } from "./assistant-context";
 import { HerdrClient } from "../bridge/herdr-client";
 import { createServiceForwards } from "./forward-service";
 import { sweepOrphanedSshMasters } from "../bridge/ssh-master";
-import type { SshTunnelConfig } from "../bridge/ssh-tunnel";
 import { WorldSnapshotAdmission } from "../bridge/world-snapshot-admission";
 import { acquireInstanceLock } from "../config/instance-lock";
 import { publishInstanceAddress } from "./instance-address";
@@ -41,9 +40,10 @@ import {
   serializeHerdrEventEnvelope,
 } from "../connections/protocol";
 import type { LegacyConnectionRuntime } from "../connections/runtime";
-import { createSshProfileRuntimeConfig } from "../connections/ssh-profile-runtime";
 import { bindListenerBeforeConnectionStart } from "../connections/startup";
 import { STARTUP_DEFAULT_CONNECTION_ID } from "../connections/types";
+import type { IdeService } from "../ide/service";
+import { createWorldIde } from "../ide/world-ide";
 import {
   createHerdrSetupHandlers,
   herdrSetupGuardForProfile,
@@ -52,26 +52,30 @@ import { createWebPushService } from "../notifications/web-push";
 import { connectionTaskPush } from "../notifications/task-push";
 import type { ObservedSnapshots, RpcServices } from "../rpc/context";
 import { composeSources, runSourceProcess } from "../sources/composition";
-import { ShipyardService } from "../shipyard/service";
+import { composeShipyard } from "../shipyard/composition";
 import { profileCheckoutHost, ShipyardProjects } from "../shipyard/projects";
-import { ShipyardInstances } from "../shipyard/instances";
-import { shipyardInstanceIdentity } from "../shipyard/identity";
-import { createShipyardHttp } from "../shipyard/http";
 import { withIntegrations } from "../integrations/http";
 import { herdrEventName } from "../utils/herdr-events";
 import { serverLogger } from "../utils/logger";
 import { afterHerdrClose } from "../world/board-closing";
-import { createApartmentsService } from "./apartments-service";
+import { apartmentsKey } from "../features/apartments/register";
+import { createApartmentsService } from "../features/apartments/service";
+import { createArtefactShelf } from "../world/artefact-shelf";
 import { createBinService } from "./bin-service";
 import { inFlightWork } from "./in-flight";
 import type { createMoveQueue } from "../world/desk-move";
+import { createMoveSettle } from "../world/move-settle";
 import { reconcileReadyInterest } from "../world/interest-prune";
 import { serializeWorldInvalidation } from "../world/invalidation";
+import { usageKey } from "../features/usage/register";
 import { composeWorldUsage, type ComposedWorldUsage } from "./usage-analytics";
 import { createUsageTelemetry } from "./usage-telemetry";
 import { createRevisionPublisher } from "../world/revision-publisher";
+import { startSettingsFocus } from "../world/focus";
+import { profileRuntimeConfig } from "./profile-runtime-config";
 import { WorldSnapshotService } from "../world/snapshot";
 import { createWorldCliService } from "../world/world-cli-service";
+import { ownerAlertConnection } from "../world/owner-alert-connection";
 import { createWorldAskPeers } from "./world-ask-peers";
 import { createAssistantLoader } from "./assistant-loader";
 import { memoryKey } from "../features/memory/register";
@@ -134,28 +138,34 @@ async function compose(
   const snapshotAdmission = new WorldSnapshotAdmission();
   /** Town moves run one at a time per connection (see world/desk-move). */
   const townMoveQueues = new Map<string, ReturnType<typeof createMoveQueue>>();
+  const moveSettle = createMoveSettle();
+  let publishFocusChanged: (revision: number) => void = () => {};
+  const focus = await startSettingsFocus({
+    clock,
+    scheduler,
+    settings,
+    publish: (revision) => publishFocusChanged(revision),
+    log: (message) => logger.warn(message),
+  });
   const webPush = createWebPushService({
     path: paths.webPush,
     warn: (message) => logger.warn(message),
+    held: () => focus.held(),
   });
   const { officeObservability, handleOfficeObservability } =
     await createUsageTelemetry(settings, () => clock.now(), logger);
-  const downstreamConnectionConfig = {
-    socketPath: config.socketPath,
-    clientSocketPath: config.clientSocketPath,
-    sshHost: config.sshHost,
-    session: config.session,
-    hasExplicitSocketPath: config.hasExplicitSocketPath,
-    hasExplicitClientSocketPath: config.hasExplicitClientSocketPath,
-  };
   const { auth, update } = createServiceHttpHandlers(
     config,
     sessionSecret,
     deps.scheduleProcessExit,
   );
   let connectionRevision = 0;
+  let worldIde: IdeService | null = null;
   function publishConnectionsChanged() {
     if (stopping) return;
+    // A reconnect or change detaches IDEs attached under the old one (they
+    // run on), and reattaches to those whose connection is back.
+    void worldIde?.reconcile();
     broadcast(
       JSON.stringify({
         control: {
@@ -217,6 +227,7 @@ async function compose(
   let features: ReturnType<typeof composeFeatures> | undefined = undefined;
   const board = () => storage.board();
   const revisionPublisher = createRevisionPublisher(clients, safeSend);
+  publishFocusChanged = revisionPublisher("world_focus_changed", "world-focus");
   // Profiles stay World's; per-terminal settings live in Herdr pane metadata.
   const {
     profiles,
@@ -239,11 +250,18 @@ async function compose(
     publish: publishBoardChanged,
     sources: () => ({ connectionManager, coreControl: coreRpc }),
   });
+  // herdr-core has no toasts: alert through a Herdr connection (#1156).
+  const ownerAlert = () =>
+    ownerAlertConnection(
+      connectionManager.list(),
+      connectionManager.defaultId(),
+      connectionProfiles.profilesById(),
+    );
   const askPeers = createWorldAskPeers({
     titleSuffix: async () => (await settings.read()).title_suffix,
     profiles: () => connectionProfiles.profilesById(),
     coreIds: () => connectionProfiles.coreList().map((entry) => entry.id),
-    defaultId: () => connectionManager.defaultId(),
+    alertConnectionId: () => ownerAlert(),
     ledger: () => storage.ledger(),
   });
   const worldCli = createWorldCliService({
@@ -251,6 +269,7 @@ async function compose(
     peers: askPeers.peers,
     homeName: askPeers.homeName,
     askRuntimes: askPeers.askRuntimes,
+    ownerAlertConnection: ownerAlert,
     memory: () => features!.get(memoryKey),
     core: () => coreCallers,
     board,
@@ -272,10 +291,17 @@ async function compose(
     publishBoard: publishBoardChanged,
     broadcast: (line) => broadcast(line, "world-ledger"),
   });
+  // The bin is made below; a core runtime seen before then holds nothing.
+  const binCore: {
+    generation?(connectionId: string, generation: number): void;
+  } = {};
   const { core, rpc: coreRpc } = composeCore({
     logger: logger.child("connections"),
     changed: publishConnectionsChanged,
-    observed: publishWorldInvalidation,
+    observed: (connectionId, generation) => {
+      binCore.generation?.(connectionId, generation);
+      publishWorldInvalidation(connectionId, generation);
+    },
     profiles: () => connectionProfiles,
     topology: storage.coreTopology,
     // Its pages are always this service's sockets.
@@ -297,21 +323,13 @@ async function compose(
     connections: () => connectionManager,
     publish: revisionPublisher("world_bin_changed", "world-bin"),
     log: (message) => logger.warn(message),
-    retiring: (entries) => apartments.apartments.retire(entries),
+    info: (message) => logger.info(message),
+    retiring: (entries) =>
+      features!.get(apartmentsKey).apartments.retire(entries),
   });
+  binCore.generation = (connectionId, generation) =>
+    bin.registry.retireConnectionGeneration(connectionId, generation);
   void bin.start();
-  /** Apartments: the records finished agents leave (shared/apartments.ts). */
-  const apartments = createApartmentsService({
-    port: storage.apartments,
-    now: () => clock.now(),
-    tui: () => connectionManager,
-    core: () => coreRpc,
-    sources: () => worldSources.current(),
-    board,
-    profiles: () => storage.profiles(),
-    publish: revisionPublisher("world_apartments_changed", "world-apartments"),
-    log: (message) => logger.warn(message),
-  });
   const {
     observe: observeHost,
     retire: retireTerminalMarks,
@@ -354,7 +372,7 @@ async function compose(
   const connectionManager = new ConnectionManager<LegacyConnectionRuntime>(
     connectionBootstrap.defaultConnectionId,
     (status) => {
-      worldUsage?.connectionStatus(status);
+      features?.connectionStatus(status);
       focusedAcquisition.reconcile();
       deskWatches.reconcile();
       publishConnectionsChanged();
@@ -365,8 +383,6 @@ async function compose(
         !["error", "disconnected"].includes(status.state),
       );
       bin.connectionStatus(status);
-      apartments.apartments.connectionStatus(status);
-      features?.connectionStatus(status);
       publishWorldInvalidation(status.id, status.generation);
       const fields = {
         connection: status.id,
@@ -473,12 +489,21 @@ async function compose(
       publishWorldInvalidation(connectionId, generation, "late"),
     undefined,
     () => terminalMarks.worldWatchlist.list(),
-    apartments.fresh((id, generation, panes, at, agents) => {
-      if (connectionManager.has(id))
-        observeHost(id, generation, panes, at, agents);
-      worldUsage?.activity.observeFresh(id, generation, panes, at, agents);
-    }),
-    apartments.complete(ownedBy(connectionManager, observeTerminalSettings)),
+    (...args) =>
+      features!
+        .get(apartmentsKey)
+        .fresh((id, generation, panes, at, agents) => {
+          if (connectionManager.has(id))
+            observeHost(id, generation, panes, at, agents);
+          worldUsage?.activity.observeFresh(id, generation, panes, at, agents);
+        })(...args),
+    (...args) => {
+      // Both runtimes: a held agent that ended by itself leaves the bin.
+      bin.registry.observeComplete(...args);
+      features!
+        .get(apartmentsKey)
+        .complete(ownedBy(connectionManager, observeTerminalSettings))(...args);
+    },
     serviceIncarnation,
   );
 
@@ -546,20 +571,7 @@ async function compose(
   ) {
     const identity = connectionIdentityForProfile(profile);
     return (context: ConnectionRuntimeContext) => {
-      const profileConfig: SshTunnelConfig =
-        profile.id === STARTUP_DEFAULT_CONNECTION_ID
-          ? downstreamConnectionConfig
-          : profile.type === "ssh"
-            ? createSshProfileRuntimeConfig(profile)
-            : {
-                socketPath: profile.control_socket_path,
-                clientSocketPath: profile.client_socket_path,
-                sshHost: undefined,
-                session: undefined,
-                hasExplicitSocketPath: true,
-                hasExplicitClientSocketPath: true,
-                ownedRuntimeDirectory: undefined,
-              };
+      const profileConfig = profileRuntimeConfig(profile, config);
       let runtime: LegacyConnectionRuntime;
       try {
         runtime = adapters.herdr.createRuntime({
@@ -709,17 +721,6 @@ async function compose(
     vaultPath: paths.sourceSecrets,
     now: () => clock.now(),
   });
-  const shipyardInstances = new ShipyardInstances(
-    paths.instanceRegistry,
-    paths.root,
-    () => clock.now(),
-    scheduler,
-  );
-  const shipyardIdentity = await shipyardInstanceIdentity(
-    serviceIncarnation,
-    config.appVersion,
-    clock.now(),
-  );
   // Shipyard's lanes are the projects open in the runtimes (#1226).
   const shipyardProjects = new ShipyardProjects({
     run: runSourceProcess,
@@ -731,31 +732,24 @@ async function compose(
         : profileCheckoutHost(connectionProfiles.profilesById().get(id)),
     now: () => clock.now(),
   });
-  const shipyard = new ShipyardService({
+  const shipyard = await composeShipyard({
+    directory: paths.instanceRegistry,
+    dataRoot: paths.root,
+    incarnation: serviceIncarnation,
+    version: config.appVersion,
     run: runSourceProcess,
     source: () => worldSources.shipyardSource(),
     projects: () => shipyardProjects.read(),
-    instances: () => shipyardInstances.read(),
     now: () => clock.now(),
-  });
-  const shipyardHttp = createShipyardHttp(shipyard);
-
-  worldUsage = composeWorldUsage({
-    connectionManager,
-    core,
-    coreRpc,
-    connectionProfiles,
-    observedConnections,
-    worldSnapshots,
-    worldSources,
-    settings,
-    officeObservability,
-    clock,
     scheduler,
-    serviceIncarnation,
-    config,
-    dataRoot: paths.root,
   });
+
+  const ide = (worldIde = createWorldIde({
+    root: paths.root,
+    sshHost: config.sshHost,
+    profiles: connectionProfiles,
+    notify: (message) => stopping || broadcast(message, "world-ide-changed"),
+  }));
   const rpcServices: RpcServices = {
     clock,
     bindings: storage.bindings,
@@ -786,6 +780,7 @@ async function compose(
     safeSend,
     snapshotAdmission,
     townMoveQueues,
+    moveSettle,
     uiSettings: createUiSettingsRpcHandler({
       readSettings: () => settings.read(),
       updateSettings: (update, shouldCommit) =>
@@ -793,16 +788,26 @@ async function compose(
     }),
     ...terminalMarks,
     bin,
-    apartments,
+    focus,
     worldCli,
     worldSnapshots,
-    worldUsage,
+    ide,
     boardElements,
-    worldUsageAnalytics: worldUsage.analytics,
   };
   features = composeFeatures(
-    featureKernel(deps, storage, rpcServices, () => worldSources),
+    featureKernel(
+      deps,
+      storage,
+      rpcServices,
+      () => worldSources,
+      { observedConnections, worldSnapshots, officeObservability },
+      composeWorldUsage,
+      createApartmentsService,
+      createArtefactShelf,
+    ),
   );
+  worldUsage = features.get(usageKey);
+  rpcServices.apartments = features.get(apartmentsKey);
   rpcServices.featureRpc = features.rpc;
   const handleRpc = createRpcDispatcher(rpcServices, legacyRoutingLogger);
 
@@ -865,8 +870,9 @@ async function compose(
             herdrSetup,
             officeObservability: handleOfficeObservability,
             sources: handleWorldSources,
+            ide,
             weatherCli: weatherCliHandler(worldSources),
-            shipyard: { service: shipyard, http: shipyardHttp },
+            shipyard,
             track,
             stopping: () => stopping,
           }),
@@ -884,21 +890,15 @@ async function compose(
       const listenPort = server.port ?? config.port;
       const asksReport = askPeers.start(listenPort, {
         directory: paths.instanceRegistry,
-        selfId: shipyardInstances.id,
+        selfId: shipyard.id,
         now: () => clock.now(),
         scheduler,
         any: ["0.0.0.0", "::"].includes(config.host),
         changed: () => worldCli.peersChanged(),
-        reportChanged: () => shipyardInstances.republish(),
+        reportChanged: () => shipyard.republish(),
         log: (message) => logger.warn(message),
       });
-      shipyardInstances.start(
-        shipyardIdentity,
-        listenPort,
-        config.host,
-        !!config.tls,
-        asksReport,
-      );
+      shipyard.start(listenPort, config.host, !!config.tls, asksReport);
       worldCli.start();
       forwards.listeningOn(server.port ?? config.port);
       features!.listening(listenPort);
@@ -951,16 +951,15 @@ async function compose(
   async function stopService() {
     // Refuse requests (503), reconnects, pushes, Ranger starts and new answer waits.
     stopping = true;
-    if (features!.hasStop("quiesce")) await features!.stop("quiesce");
     worldSources.weather.close();
-    shipyard.close();
-    shipyardInstances.stop();
+    shipyard.stop();
     askPeers.stop();
-    const usageStopped = worldUsage!.close();
+    const featuresStopped = features!.stop("quiesce");
     focusedAcquisition.stop();
     deskWatches.stop();
     connectionProfiles.stopSupervision();
     webPush.stop();
+    focus.stop();
     await worldCli.stop();
     await bin.stop();
     // Drop browser sockets as a process exit does; pages reconnect.
@@ -968,11 +967,12 @@ async function compose(
     try {
       // Stop Ranger then runtimes, failing pending Herdr calls; fenced startup/requests settle.
       await forwards.stop();
+      ide.closeAll(); // IDE servers run on; World only lets go.
       await assistant.dispose();
       if (features!.hasStop("drain")) await features!.stop("drain");
       await connectionManager.stopAll();
       await core.stop();
-      await usageStopped;
+      await featuresStopped;
       await startTask?.catch(() => {});
       await assistant.dispose();
       await drained();
@@ -980,9 +980,8 @@ async function compose(
       try {
         // Finished agents seen so far are written before storage closes;
         // a history census still reading stops.
-        await apartments.stop();
+        await features!.stop("close");
         await closeTerminalMarks();
-        if (features!.hasStop("close")) await features!.stop("close");
         storageOpen = false;
         await storage.close();
       } finally {

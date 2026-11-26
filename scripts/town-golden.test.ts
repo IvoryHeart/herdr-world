@@ -100,7 +100,7 @@ test("report output cannot overwrite the stored references", async () => {
   ).rejects.toThrow("separate from stored goldens");
 });
 
-test("the report workflow stays advisory and retains diagnostic artifacts", async () => {
+test("the report runs automatically, stays advisory and retains diagnostics", async () => {
   type Step = {
     name?: string;
     uses?: string;
@@ -113,14 +113,23 @@ test("the report workflow stays advisory and retains diagnostic artifacts", asyn
       new URL("../.github/workflows/town-golden.yml", import.meta.url),
     ).text(),
   ) as {
+    on: Record<string, unknown>;
     jobs: {
       report: {
+        if?: string;
         "continue-on-error": boolean;
         "timeout-minutes": string;
         steps: Step[];
       };
     };
   };
+  expect(Object.keys(workflow.on).sort()).toEqual([
+    "pull_request",
+    "push",
+    "schedule",
+    "workflow_dispatch",
+  ]);
+  expect(workflow.jobs.report.if).toBeUndefined();
   expect(workflow.jobs.report["continue-on-error"]).toBe(true);
   expect(workflow.jobs.report["timeout-minutes"]).toContain("&& 40 || 15");
   const steps = workflow.jobs.report.steps;
@@ -143,7 +152,7 @@ test("the report workflow stays advisory and retains diagnostic artifacts", asyn
   ).toBe(true);
   expect(
     steps.find((s) => s.uses?.startsWith("actions/upload-artifact"))!.if,
-  ).toBe("always()");
+  ).toBe("always() && steps.scope.outputs.run == 'true'");
   const ci = Bun.YAML.parse(
     await Bun.file(
       new URL("../.github/workflows/ci.yml", import.meta.url),

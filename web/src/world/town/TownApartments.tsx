@@ -7,7 +7,10 @@ import {
 } from "./townApartmentsArrivals";
 import { townApartmentsLot } from "./townApartmentsLot";
 import { TOWN_TILE as T, type TownLayout } from "./townLayout";
+import { useTownPlace } from "./useTownPlace";
 import "./townApartmentsSign.css";
+
+const openTownApartments = () => openApartments();
 
 /**
  * The apartment building's sign (#1011): how many finished agents live
@@ -23,6 +26,9 @@ export const TownApartments = memo(function TownApartments({
   const { residents, verified } = useApartments();
   const { pending, now } = useTownApartmentsArrivals();
   const lot = townApartmentsLot(layout);
+  // The building opens what its sign does (#1170). A town too small for it
+  // still opens Apartments from the town center's Buildings ring (#1261).
+  useTownPlace("apartments", openTownApartments);
   if (!lot) return null;
   const count = townApartmentsCount(residents, pending, now);
   const text = count
@@ -34,6 +40,7 @@ export const TownApartments = memo(function TownApartments({
     <button
       type="button"
       className="town-apartments-sign"
+      data-town-place="apartments"
       data-help="town.apartments"
       data-empty={count ? undefined : true}
       data-count={count}
@@ -42,7 +49,7 @@ export const TownApartments = memo(function TownApartments({
       onPointerDown={(event) => event.stopPropagation()}
       onClick={(event) => {
         event.stopPropagation();
-        openApartments();
+        openTownApartments();
       }}
     >
       <span className="town-apartments-title" aria-hidden="true">

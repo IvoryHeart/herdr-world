@@ -1,7 +1,13 @@
 import {
   type BinCoreConfirmation,
-  BIN_BUS_INTERVAL_MS,
-  BIN_BUS_TRIP_MS,
+  binStopField,
+  type BinStop,
+  BIN_BUS_BOARDING_MS,
+  BIN_BUS_ROUTE_M,
+  BIN_BUS_ROUTE_MAX_M,
+  BIN_BUS_SPEED_KMH,
+  binBusTripMs,
+  binRiderKey,
   type BinEntry,
   type BinOutcome,
   type BinState,
@@ -24,6 +30,8 @@ export type BinAdd = BinTarget & {
   view: BinView;
   /** Its tab is pinned: never close the tab's last pane. */
   preserve_tab?: boolean;
+  /** The Town bus stop it was dropped on, where it waits. */
+  stop?: BinStop;
 };
 
 /**
@@ -34,10 +42,23 @@ export type BinAdd = BinTarget & {
 export type BinCommit = (entries: readonly BinEntry[]) => Promise<void>;
 
 /**
- * The service's bin: reversible holding in memory, and one bus on a fixed
- * schedule. Buses set off every `interval` ms from the service's start; one
- * sets off only when someone is waiting, and everyone waiting boards. When
- * its trip ends the riders are handed to `commit`, which records one durable
+ * A Town's measure of the next trip (world.bin.route): the bus's way from
+ * Apartments past the stops of exactly the agents `ids` and back, in metres,
+ * and how many stops it halts at.
+ */
+export type BinRouteReport = { ids: string[]; route_m: number; stops: number };
+
+/** @internal */
+export const ENDED_BEFORE_BUS =
+  "It ended before the bus came, so nothing was closed.";
+
+/**
+ * The service's bin: reversible holding in memory, and one bus. It sets off
+ * `boarding` ms after the first agent starts waiting, once it is back from
+ * any trip, and everyone waiting boards. Its trip lasts as long as its route
+ * takes at its speed (binBusTripMs): past all its riders' stops and back,
+ * as the first Town to see exactly those riders measured it (route). When its trip ends the
+ * riders are handed to `commit`, which records one durable
  * close intent per entry for the effect runner; the runner reports back
  * through `settle`. Until then, Put back takes an entry out, riding or not,
  * and the bus can be stopped (stopBus) so nothing closes until it goes on.
@@ -47,19 +68,26 @@ export type BinCommit = (entries: readonly BinEntry[]) => Promise<void>;
 export class WorldBinRegistry {
   private revision = 0;
   private readonly entries = new Map<string, BinEntry>();
+  /** When each held entry was put in the bin (wall clock, ms). */
+  private readonly heldAt = new Map<string, number>();
+  /** When each held entry started waiting for a bus (monotonic, ms). */
+  private readonly waitingSince = new Map<string, number>();
   private readonly closing = new Map<string, BinEntry>();
   private outcomes: BinOutcome[] = [];
   private timer: { cancel(): void } | null = null;
   private nextId = 1;
-  /** The schedule's origin: buses set off at anchor + k·interval. */
-  private readonly anchor: number;
   /** When the bus on the map set off, or null when none is out. */
   private trip: number | null = null;
+  /** The bus on the map's route there and back (m) and its trip's length. */
+  private tripRoute = { route_m: 0, trip_ms: 0 };
+  /** A Town's measure of the next trip, for the riders `key` (binRiderKey). */
+  private measured: { key: string; route_m: number; stops: number } | null =
+    null;
   /** When someone stopped the bus on the map, or null while it drives. */
   private stoppedAt: number | null = null;
   private trips = 0;
-  private readonly interval: number;
-  private readonly tripMs: number;
+  private readonly boarding: number;
+  private readonly tripMs: (route_m: number, stops: number) => number;
 
   constructor(
     private readonly deps: {
@@ -70,17 +98,24 @@ export class WorldBinRegistry {
       commit: BinCommit;
       publish(revision: number): void;
       log?(message: string): void;
-      interval_ms?: number;
-      trip_ms?: number;
+      /** The bin's journey, one line per step, for the service journal. */
+      info?(message: string): void;
+      /** How long the bus waits for riders after the first starts waiting. */
+      boarding_ms?: number;
+      /** A trip's length for its route (binBusTripMs). */
+      trip_ms?: (route_m: number, stops: number) => number;
     },
   ) {
-    this.anchor = deps.clock.monotonic();
-    this.interval = deps.interval_ms ?? BIN_BUS_INTERVAL_MS;
-    this.tripMs = Math.min(deps.trip_ms ?? BIN_BUS_TRIP_MS, this.interval);
+    this.boarding = deps.boarding_ms ?? BIN_BUS_BOARDING_MS;
+    this.tripMs = deps.trip_ms ?? binBusTripMs;
   }
 
   list(): BinState {
     const now = this.deps.clock.monotonic();
+    const out = this.trip !== null;
+    const at = this.departure();
+    const waiting = this.waiting();
+    const next = this.nextRoute();
     return {
       epoch: this.deps.epoch,
       revision: this.revision,
@@ -88,13 +123,19 @@ export class WorldBinRegistry {
       closing: [...this.closing.values()].map((entry) => ({ ...entry })),
       outcomes: [...this.outcomes],
       bus: {
-        interval_ms: this.interval,
-        trip_ms: this.tripMs,
-        next_ms: this.departure(now) - now,
+        speed_kmh: BIN_BUS_SPEED_KMH,
+        route_m: out ? this.tripRoute.route_m : 0,
+        trip_ms: out ? this.tripRoute.trip_ms : 0,
         elapsed_ms:
           this.trip === null ? null : (this.stoppedAt ?? now) - this.trip,
         stopped: this.stoppedAt !== null,
         trip: this.trip === null ? null : this.trips,
+        next_ms: at === null ? null : Math.max(0, at - now),
+        next_route_m: next.route_m,
+        next_trip_ms: waiting.length
+          ? this.tripMs(next.route_m, next.stops)
+          : 0,
+        next_measured: next.measured,
       },
     };
   }
@@ -124,6 +165,11 @@ export class WorldBinRegistry {
     const id = `bin-${this.deps.epoch}-${this.nextId++}`;
     // A bus already on the map has collected its riders: this one waits.
     this.entries.set(id, { ...target, id, riding: false });
+    this.heldAt.set(id, this.deps.clock.now());
+    this.waitingSince.set(id, this.deps.clock.monotonic());
+    this.deps.info?.(
+      `Bin holds ${id}: ${target.runtime ?? "herdr"} ${target.connection_id} generation ${target.connection_generation} pane ${target.pane_id} terminal ${target.terminal_id}`,
+    );
     this.changed();
     return this.list();
   }
@@ -134,13 +180,43 @@ export class WorldBinRegistry {
    * the bus has left the map and its close is recorded.
    */
   restore(id: string): BinState {
-    if (!this.entries.delete(id)) return this.list();
-    // A stopped bus with nobody left aboard has nothing to wait for.
+    if (!this.forget(id)) return this.list();
+    this.deps.info?.(`Bin put back ${id}`);
+    this.resumeIfEmpty();
+    this.changed();
+    return this.list();
+  }
+
+  /**
+   * A Town's measure of the next trip: its way past the stops of everyone
+   * waiting and back, on that Town's roads. It stands only for exactly the
+   * agents it names, while they are the ones waiting: a measure for others
+   * (from a page that has yet to see a change) is ignored, and the first
+   * measure of those waiting stands, so pages with different layouts never
+   * undo each other. A trip's route is fixed once its bus sets off.
+   */
+  route(report: BinRouteReport): BinState {
+    const ids = report?.ids;
+    const metres = report?.route_m;
+    const stops = report?.stops;
     if (
-      this.stoppedAt !== null &&
-      ![...this.entries.values()].some((entry) => entry.riding)
+      !Array.isArray(ids) ||
+      !ids.length ||
+      ids.length > MAX_ENTRIES ||
+      ids.some((id) => typeof id !== "string") ||
+      typeof metres !== "number" ||
+      !Number.isFinite(metres) ||
+      metres < 0 ||
+      metres > BIN_BUS_ROUTE_MAX_M ||
+      !Number.isSafeInteger(stops) ||
+      stops < 1 ||
+      stops > ids.length
     )
-      this.resumeTrip();
+      throw new Error("invalid bin route");
+    const key = binRiderKey(ids);
+    const waiting = binRiderKey(this.waiting().map((entry) => entry.id));
+    if (key !== waiting || this.measured?.key === key) return this.list();
+    this.measured = { key, route_m: Math.round(metres), stops };
     this.changed();
     return this.list();
   }
@@ -162,6 +238,19 @@ export class WorldBinRegistry {
     this.resumeTrip();
     this.changed();
     return this.list();
+  }
+
+  /**
+   * A stopped bus with nobody left aboard has nothing to wait for: however
+   * its last rider left (put back, ended by itself, or its host restarted),
+   * it drives on, so later agents still board and close.
+   */
+  private resumeIfEmpty() {
+    if (
+      this.stoppedAt !== null &&
+      ![...this.entries.values()].some((entry) => entry.riding)
+    )
+      this.resumeTrip();
   }
 
   private resumeTrip() {
@@ -196,7 +285,10 @@ export class WorldBinRegistry {
         entry.connection_id === connectionId &&
         entry.connection_generation !== generation
       ) {
-        this.entries.delete(id);
+        this.forget(id);
+        this.deps.info?.(
+          `Bin dropped ${id}: ${connectionId} is now generation ${generation}`,
+        );
         this.record({
           id,
           label: entry.label,
@@ -207,13 +299,64 @@ export class WorldBinRegistry {
         });
         changed = true;
       }
-    if (changed) this.changed();
+    if (!changed) return;
+    this.resumeIfEmpty();
+    this.changed();
+  }
+
+  /**
+   * A complete pane list of a connection's runtime, read from `readAt`
+   * (wall clock): a held agent, waiting or riding, whose pane and terminal
+   * it no longer has has ended by itself. It leaves the bin with nothing
+   * closed, instead of waiting invisibly for a bus that would only find it
+   * gone. A list read before the agent was held cannot witness its end.
+   */
+  observeComplete(
+    connectionId: string,
+    generation: number,
+    panes: readonly Record<string, unknown>[],
+    readAt: number,
+  ) {
+    const paneIds = new Set<unknown>(panes.map((pane) => pane.pane_id));
+    const terminalIds = new Set<unknown>(panes.map((pane) => pane.terminal_id));
+    let changed = false;
+    for (const [id, entry] of this.entries) {
+      const heldAt = this.heldAt.get(id);
+      if (
+        entry.connection_id !== connectionId ||
+        entry.connection_generation !== generation ||
+        heldAt === undefined ||
+        readAt <= heldAt ||
+        paneIds.has(entry.pane_id) ||
+        terminalIds.has(entry.terminal_id)
+      )
+        continue;
+      this.forget(id);
+      this.deps.info?.(
+        `Bin dropped ${id}: pane ${entry.pane_id} terminal ${entry.terminal_id} ended ${entry.riding ? "on the bus" : "at the stop"}`,
+      );
+      this.record({
+        id,
+        label: entry.label,
+        view: entry.view,
+        result: "gone",
+        closed_tab: false,
+        detail: ENDED_BEFORE_BUS,
+      });
+      changed = true;
+    }
+    if (!changed) return;
+    this.resumeIfEmpty();
+    this.changed();
   }
 
   /** The durable close finished (or will never be sent). */
   settle(id: string, outcome: Omit<BinOutcome, "id" | "label" | "view">) {
     const entry = this.closing.get(id);
     this.closing.delete(id);
+    this.deps.info?.(
+      `Bin close of ${id}: ${outcome.result}${outcome.detail ? ` (${outcome.detail})` : ""}`,
+    );
     this.record({
       id,
       label: entry?.label ?? "Agent",
@@ -229,10 +372,43 @@ export class WorldBinRegistry {
     this.timer = null;
   }
 
-  /** The first scheduled departure after `now`. */
-  private departure(now: number) {
-    const k = Math.floor((now - this.anchor) / this.interval) + 1;
-    return this.anchor + k * this.interval;
+  /** Those waiting for a bus: held, and not aboard the one out. */
+  private waiting() {
+    return [...this.entries.values()].filter((entry) => !entry.riding);
+  }
+
+  /**
+   * The next trip's route, for those waiting now: a Town's measure of
+   * exactly them, else `BIN_BUS_ROUTE_M` with each of them a stop.
+   */
+  private nextRoute(): { route_m: number; stops: number; measured: boolean } {
+    const waiting = this.waiting();
+    if (!waiting.length) return { route_m: 0, stops: 0, measured: false };
+    const key = binRiderKey(waiting.map((entry) => entry.id));
+    if (this.measured?.key === key)
+      return {
+        route_m: this.measured.route_m,
+        stops: this.measured.stops,
+        measured: true,
+      };
+    return { route_m: BIN_BUS_ROUTE_M, stops: waiting.length, measured: false };
+  }
+
+  /**
+   * When the next bus sets off (monotonic): `boarding` after the first of
+   * those waiting started to, and never before the bus out is back. Null
+   * when nobody waits, or while the bus out is stopped.
+   */
+  private departure(): number | null {
+    if (this.stoppedAt !== null) return null;
+    const since = this.waiting().map(
+      (entry) => this.waitingSince.get(entry.id) ?? 0,
+    );
+    if (!since.length) return null;
+    const at = Math.min(...since) + this.boarding;
+    return this.trip === null
+      ? at
+      : Math.max(at, this.trip + this.tripRoute.trip_ms);
   }
 
   private changed() {
@@ -253,12 +429,14 @@ export class WorldBinRegistry {
     let run: () => void;
     if (this.stoppedAt !== null) return;
     if (this.trip !== null) {
-      at = this.trip + this.tripMs;
+      at = this.trip + this.tripRoute.trip_ms;
       run = () => this.arrive();
-    } else if (this.entries.size) {
-      at = this.departure(now);
-      run = () => this.setOff(at);
-    } else return;
+    } else {
+      const departure = this.departure();
+      if (departure === null) return;
+      at = departure;
+      run = () => this.setOff();
+    }
     this.timer = this.deps.scheduler.schedule(
       () => {
         this.timer = null;
@@ -268,12 +446,19 @@ export class WorldBinRegistry {
     );
   }
 
-  /** The bus sets off: everyone waiting boards. */
-  private setOff(at: number) {
+  /** The bus sets off: everyone waiting boards, and its route sets its trip. */
+  private setOff() {
     if (this.trip !== null || !this.entries.size) return this.schedule();
-    this.trip = at;
+    const riders = [...this.entries.values()];
+    const { route_m, stops } = this.nextRoute();
+    this.measured = null;
+    this.trip = this.deps.clock.monotonic();
+    this.tripRoute = { route_m, trip_ms: this.tripMs(route_m, stops) };
     this.trips += 1;
-    for (const entry of this.entries.values()) entry.riding = true;
+    for (const entry of riders) entry.riding = true;
+    this.deps.info?.(
+      `Bin bus ${this.trips} set off with ${riders.length} aboard: ${route_m} m there and back, ${this.tripRoute.trip_ms} ms`,
+    );
     this.changed();
   }
 
@@ -290,9 +475,12 @@ export class WorldBinRegistry {
   private depart(due: BinEntry[]) {
     const leaving = due.map((entry) => ({ ...entry }));
     for (const entry of leaving) {
-      this.entries.delete(entry.id);
+      this.forget(entry.id);
       this.closing.set(entry.id, entry);
     }
+    this.deps.info?.(
+      `Bin closing ${leaving.map((entry) => entry.id).join(", ")}`,
+    );
     this.changed();
     this.deps.commit(leaving).catch((error: unknown) => {
       // Only a write storage refused before sending is known not to be
@@ -310,6 +498,13 @@ export class WorldBinRegistry {
             detail: NOT_RECORDED,
           });
     });
+  }
+
+  /** Take a held entry out of the bin; false when it was not held. */
+  private forget(id: string) {
+    this.heldAt.delete(id);
+    this.waitingSince.delete(id);
+    return this.entries.delete(id);
   }
 
   private record(outcome: BinOutcome) {
@@ -350,7 +545,9 @@ function coreConfirmation(value: unknown): BinCoreConfirmation {
   };
 }
 
-function normalize(input: BinAdd): Omit<BinEntry, "id" | "riding"> {
+function normalize(
+  input: BinAdd,
+): Omit<BinEntry, "id" | "riding" | "route_m" | "stop"> {
   for (const key of [
     "connection_id",
     "workspace_id",
@@ -390,5 +587,6 @@ function normalize(input: BinAdd): Omit<BinEntry, "id" | "riding"> {
       ? input.view
       : "other",
     preserve_tab: input.preserve_tab === true,
+    ...binStopField(input.stop),
   };
 }

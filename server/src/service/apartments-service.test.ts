@@ -1,6 +1,6 @@
 import { expect, test } from "bun:test";
 import { memoryApartmentsPort } from "../storage/apartments";
-import { createApartmentsService } from "./apartments-service";
+import { createApartmentsService } from "../features/apartments/service";
 
 const NOW = 1_800_000_000_000;
 const SESSION = "0a1b2c3d-4e5f-4a6b-8c7d-9e0f1a2b3c4d";
@@ -42,7 +42,7 @@ test("a core agent's session Chat knows is the one its resident keeps", async ()
   });
   const pane = { pane_id: "t1", terminal_id: "t1", agent: "claude" };
   service.fresh(() => {})("core", 1, [pane], NOW - 1000, [], {});
-  service.complete(() => {})("core", 1, []);
+  service.complete(() => {})("core", 1, [], 0);
   await service.apartments.settled();
   expect(asked).toEqual(["t1:claude"]);
   expect(service.apartments.list().residents[0]).toMatchObject({
@@ -122,7 +122,7 @@ test("a resident keeps its avatar, its profile and its table's colour", async ()
   ];
   const topology = { workspaces: [{ workspace_id: "w1", label: "alpha" }] };
   service.fresh(() => {})("local", 1, panes, NOW - 1000, [], topology);
-  service.complete(() => {})("local", 1, []);
+  service.complete(() => {})("local", 1, [], 0);
   await service.apartments.settled();
   const kept = Object.fromEntries(
     service.apartments
@@ -198,7 +198,7 @@ test("a spawned resident keeps the colour it inherited from its parent", async (
   ];
   const topology = { workspaces: [{ workspace_id: "w1", label: "alpha" }] };
   service.fresh(() => {})("local", 1, panes, NOW - 1000, [], topology);
-  service.complete(() => {})("local", 1, []);
+  service.complete(() => {})("local", 1, [], 0);
   await service.apartments.settled();
   const colors = Object.fromEntries(
     service.apartments

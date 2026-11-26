@@ -27,6 +27,7 @@ export const townCanvasCases = {
   ],
   portrait: [
     [1080, 1920, "extended", 0],
+    // The same town/viewport, focused on real camera flights under slow frames.
     [1080, 1920, "extended", 300],
   ],
   fold: [
@@ -46,5 +47,8 @@ export const townCanvasCases = {
     [1440, 900, "navigation", 0],
     [412, 915, "core", 0],
     [1440, 900, "core", 0],
+    // Each building opens its window, one frame for all (#1170).
+    [1440, 900, "places", 0],
+    [390, 844, "places", 0],
   ],
 } satisfies Record<string, TownCanvasCase[]>;

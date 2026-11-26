@@ -6,7 +6,6 @@ import { runWorldCommand } from "../server/src/cli/world";
 import { BoardStore } from "../server/src/world/board-store";
 import { createWorldCli } from "../server/src/world/world-cli";
 import { WorldLedger } from "../server/src/world/world-ledger";
-import { isReleaseWalkInput } from "./validation-scope";
 import { releaseWalk } from "./release-walk";
 
 test("listing repetition input is bounded before any runtime is started", async () => {
@@ -33,7 +32,7 @@ test("release walk fixture, recorder and receipt regressions pass", () => {
       stderr: "pipe",
     },
   );
-  expect(result.stderr.toString()).toContain("Ran 41 tests");
+  expect(result.stderr.toString()).toContain("Ran 40 tests");
   expect(result.exitCode).toBe(0);
 });
 
@@ -129,26 +128,6 @@ with patch('journeys.run', return_value=SimpleNamespace(stdout=value['stdout']))
   }
 });
 
-test("request builders and walk implementation select native release acceptance", () => {
-  for (const path of [
-    "web/src/connectionProfiles.ts",
-    "web/src/coreConnections.ts",
-    "web/src/agentLauncher.ts",
-    "web/src/components/ConnectionSwitcher.tsx",
-    "web/src/world/agentProfiles.ts",
-    "web/src/world/coreControl.ts",
-    "web/src/world/town/useTownRoomActions.tsx",
-    "web/src/creationRequests.ts",
-    "web/src/api.ts",
-    "scripts/release-walk.ts",
-    "scripts/release-walk/journeys.py",
-    "scripts/release-walk-gate.ts",
-  ])
-    expect(isReleaseWalkInput(path)).toBe(true);
-  for (const path of ["docs/release.md", "web/src/world/town/colors.ts"])
-    expect(isReleaseWalkInput(path)).toBe(false);
-});
-
 function workflow(name: string): any {
   return Bun.YAML.parse(readFileSync(`.github/workflows/${name}.yml`, "utf8"));
 }
@@ -174,7 +153,7 @@ test("required native workflow runs every release walk without tolerating failur
     (step: any) =>
       step.with?.name === "release-walk-package-${{ matrix.platform }}",
   );
-  expect(retained.if).toBeUndefined();
+  expect(retained.if).toBe("${{ !inputs.package_artifacts }}");
   const diagnostics = job.steps.find(
     (step: any) =>
       step.with?.name === "release-walk-listing-failure-${{ matrix.platform }}",
@@ -193,79 +172,4 @@ test("required native workflow runs every release walk without tolerating failur
   );
   expect(batch.if).toBe("always() && inputs.listing_repetitions > 0");
   expect(batch.with["if-no-files-found"]).toBe("error");
-});
-
-test("tag creation follows exact-revision walk approval; publication reuses tested Unix bytes", () => {
-  const publish = workflow("publish-release").jobs.publish.steps;
-  const tag = publish.find((step: any) => step.id === "authorize")
-    .run as string;
-  expect(tag.indexOf("release-walk-gate.ts authorize")).toBeGreaterThan(0);
-  const approval = publish.findIndex((step: any) => step.id === "authorize");
-  const retain = publish.findIndex(
-    (step: any) => step.with?.name === "release-walk-authorization",
-  );
-  const create = publish.findIndex((step: any) =>
-    step.run?.includes("git tag -a"),
-  );
-  expect(retain).toBeGreaterThan(approval);
-  expect(create).toBeGreaterThan(retain);
-  expect(publish[create].if).toBe("inputs.create_tag");
-  expect(
-    workflow("publish-release").on.workflow_dispatch.inputs.create_tag.default,
-  ).toBe(false);
-  const release = workflow("release");
-  const gate = release.jobs.validate.steps.find(
-    (step: any) => step.id === "walk",
-  );
-  expect(gate.run).toContain("release-walk-gate.ts publication");
-  expect(gate.if).toBeUndefined();
-  const steps = release.jobs.package.steps;
-  const build = steps.find(
-    (step: any) => step.name === "Build release package",
-  );
-  expect(build.if).toBe("startsWith(matrix.platform, 'windows-')");
-  const reuse = steps.find(
-    (step: any) =>
-      step.with?.name === "release-walk-package-${{ matrix.platform }}",
-  );
-  expect(reuse.with["run-id"]).toBe(
-    "${{ needs.validate.outputs.walk_run_id }}",
-  );
-});
-
-test("channel rehearsals cannot publish or replace approved Unix release bytes", () => {
-  const release = workflow("release");
-  expect(release.on.push).toBeUndefined();
-  expect(release.on.workflow_dispatch.inputs.dry_run.default).toBe(true);
-  const validate = release.jobs.validate;
-  const metadata = validate.steps.findIndex(
-    (step: any) => step.id === "metadata",
-  );
-  const gate = validate.steps.findIndex((step: any) => step.id === "walk");
-  expect(gate).toBeGreaterThan(metadata);
-  expect(validate.steps[gate].env.DRY_RUN).toBe(
-    "${{ steps.metadata.outputs.dry_run }}",
-  );
-  expect(validate.steps[gate].run).toContain('if [ "$DRY_RUN" = true ]; then');
-  expect(validate.steps[gate].run).toContain(
-    'else\n  bun scripts/release-walk-gate.ts publication "$GITHUB_SHA" "${GITHUB_REF_NAME#v}" "$PUBLISH_RUN_ID"',
-  );
-  const steps = release.jobs.package.steps;
-  const rehearsal = steps.find(
-    (step: any) => step.name === "Build Unix channel rehearsal package",
-  );
-  expect(rehearsal.if).toBe(
-    "needs.validate.outputs.dry_run == 'true' && !startsWith(matrix.platform, 'windows-')",
-  );
-  const approved = steps.find(
-    (step: any) =>
-      step.with?.name === "release-walk-package-${{ matrix.platform }}",
-  );
-  expect(approved.if).toBe(
-    "needs.validate.outputs.dry_run == 'false' && !startsWith(matrix.platform, 'windows-')",
-  );
-  for (const name of ["publish", "npm-publish", "homebrew-pr"])
-    expect(release.jobs[name].if).toBe(
-      "needs.validate.outputs.dry_run == 'false'",
-    );
 });

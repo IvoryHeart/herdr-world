@@ -7,6 +7,7 @@ for (const [key, value] of Object.entries({
   document: browser.document,
   navigator: browser.navigator,
   Event: browser.Event,
+  CustomEvent: browser.CustomEvent,
   HTMLElement: browser.HTMLElement,
   Element: browser.Element,
   Node: browser.Node,

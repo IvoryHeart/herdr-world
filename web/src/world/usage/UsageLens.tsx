@@ -42,6 +42,7 @@ import {
   type UsagePaceVerdict,
   type UsageRunView,
 } from "./usageModel";
+import type { UsageAgentFilter } from "./usageOpener";
 import { useUsageAnalytics, type UsageReadState } from "./usageStore";
 
 export type UsageTab = "budget" | "runs" | "tokens" | "breakdown";
@@ -58,25 +59,35 @@ const TABS: [UsageTab, string][] = [
  * (docs/usage-analytics.md). Town's observatory opens it. It is a layer:
  * Escape, Back or a press outside closes it. Numbers it has no reading for
  * say "unknown". `world` names agents and rooms; without it they are
- * "Earlier agent" and "Earlier room".
+ * "Earlier agent" and "Earlier room". `initialFilter` opens Breakdown on
+ * one agent (a resident of Apartments, #1101) until it is cleared.
  */
 export function UsageLens({
   initialTab = "budget",
+  initialFilter = null,
   onClose,
   anchor,
   world,
+  framed = false,
 }: {
+  /**
+   * Inside a window (Town's PlaceWindow, #1170), which owns the layer and
+   * the close button.
+   */
+  framed?: boolean;
   initialTab?: UsageTab;
+  initialFilter?: UsageAgentFilter | null;
   onClose(): void;
   anchor?: () => Element | null;
   world?: WorldObject;
 }) {
   const sectionRef = useRef<HTMLElement | null>(null);
-  useLayer(true, onClose, {
+  useLayer(!framed, onClose, {
     element: () => sectionRef.current,
     anchors: () => [anchor?.() ?? null],
   });
   const [tab, setTab] = useState<UsageTab>(initialTab);
+  const [filter, setFilter] = useState(initialFilter);
   const state = useUsageAnalytics("run", "7d");
   const now = useNow();
   useEffect(() => {
@@ -107,14 +118,16 @@ export function UsageLens({
             </button>
           ))}
         </div>
-        <button
-          type="button"
-          className="work-lens-icon"
-          aria-label="Close Usage"
-          onClick={onClose}
-        >
-          <X size={16} aria-hidden="true" />
-        </button>
+        {framed ? null : (
+          <button
+            type="button"
+            className="work-lens-icon"
+            aria-label="Close Usage"
+            onClick={onClose}
+          >
+            <X size={16} aria-hidden="true" />
+          </button>
+        )}
       </header>
       <div
         id="usage-panel"
@@ -122,7 +135,14 @@ export function UsageLens({
         role="tabpanel"
         aria-labelledby={`usage-tab-${tab}`}
       >
-        <UsageBody tab={tab} state={state} now={now} world={world} />
+        <UsageBody
+          tab={tab}
+          state={state}
+          now={now}
+          world={world}
+          filter={filter}
+          onClearFilter={() => setFilter(null)}
+        />
       </div>
     </section>
   );
@@ -143,11 +163,15 @@ function UsageBody({
   state,
   now,
   world,
+  filter,
+  onClearFilter,
 }: {
   tab: UsageTab;
   state: UsageReadState;
   now: number;
   world?: WorldObject;
+  filter: UsageAgentFilter | null;
+  onClearFilter(): void;
 }) {
   if (state.status !== "ready")
     return (
@@ -161,7 +185,14 @@ function UsageBody({
   if (tab === "budget") return <BudgetTab data={data} now={now} />;
   if (tab === "runs") return <RunsTab data={data} />;
   if (tab === "breakdown")
-    return <UsageBreakdown runs={usageRuns(data)} world={world} />;
+    return (
+      <UsageBreakdown
+        runs={usageRuns(data)}
+        world={world}
+        filter={filter}
+        onClearFilter={onClearFilter}
+      />
+    );
   return <TokensTab data={data} />;
 }
 

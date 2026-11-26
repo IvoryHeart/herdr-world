@@ -34,6 +34,12 @@ const towns: [string, TownInput, TownShape | "narrow"][] = [
   ["empty, wide", town({}), TOWN_SHAPES.wide],
   ["empty, phone", town({}), "narrow"],
   ["one building, phone", town({ a: [1] }), "narrow"],
+  // A phone's civic row widens its town (#1351).
+  [
+    "three buildings, phone",
+    town({ a: [2], b: [1], c: [4] }),
+    TOWN_SHAPES.phone,
+  ],
   ["one tall building", town({ a: [3, 3, 2, 2, 1, 1] }), TOWN_SHAPES.medium],
   [
     "two streets",

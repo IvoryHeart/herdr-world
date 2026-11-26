@@ -28,11 +28,11 @@ the whole repository for a scoped change.
 
 Commit with the existing read-only pre-commit format/lint guard when committing
 is part of the requested handoff. For PR delivery, push
-the complete candidate once and let the pre-push hook run
-`bun run check:changed` for code: static checks and affected non-browser units.
+the complete candidate once. The pre-push hook runs read-only formatting and
+privacy only; CI runs static checks and affected non-browser units.
 Gate or configuration changes run all non-browser units locally; browser and
 behavioral acceptance run in CI under required `Delivery checks`.
-`HERDR_WORLD_PREPUSH=full` explicitly opts into every local lane. A
+`bun run check:delivery` explicitly runs every local lane. A
 Markdown-only follow-up may use
 `bun run check:docs` when this worktree has a successful code gate on an ancestor. CI
 tests the proposed merge of the PR base and head. Description edits and label
@@ -49,13 +49,12 @@ Do not issue 30-second status loops or separate `ps`/`gh pr checks` probes while
 the blocking command is running. Do not add a Codex lifecycle hook for polling;
 it cannot intercept `write_stdin`.
 
-Use the [changelog fragment policy](../../../changes/README.md) for format,
-timing and exemptions; mention the fragment or the specific no-change reason
-in the PR description.
+Use `fix:` or `feat:` PR titles for user-facing release notes. Release-please
+updates the changelog and version in its reviewed PR; do not add change fragments.
 Prepare the PR body in a local file after committing the candidate. Run
 `bun run check:pr-body <file>` (append the base ref for a stacked PR), then use
 that same file with `gh pr create --body-file <file>` to open one ready PR.
-The check shares CI's changelog, source-coverage, spec and verification impact
+The check shares CI's source-coverage, spec and verification impact
 policies against the committed PR diff. Every non-documentation PR needs two
 plain lines without bold labels:
 
@@ -83,8 +82,7 @@ claim fails. Changes under `openspec/specs/` or `openspec/changes/` forbid
 `Spec impact: none`. Changes under `quint/`, `verification/` or an owner in
 `verification/coverage/` forbid `Verification impact: none`, including files
 under directory owners. This is a cheap consistency check, not a substitute for
-review of the assessment and evidence. Before the first push, supply the intended
-body through `HERDR_WORLD_PR_BODY=<file>` so the same policy runs locally.
+review of the assessment and evidence. Before the first push, run the exact body through `check:pr-body` explicitly.
 Preserve independent review and CI. For a local-only handoff, finish after the
 requested artifacts
 and one explicit full check; a PR is not required to count the work as delivered.

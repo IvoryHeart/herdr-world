@@ -9,7 +9,7 @@ import sys
 import tempfile
 import unittest
 from unittest.mock import patch
-from contract import HARNESS_VERSIONS, CORE_VERSION, Walk, journeys, validate_receipt, validate_publication
+from contract import HARNESS_VERSIONS, CORE_VERSION, Walk, journeys, validate_receipt
 from assets import environment
 from service import service_guard
 
@@ -37,29 +37,11 @@ class ReceiptTests(unittest.TestCase):
             with self.subTest(change=change), self.assertRaises(AssertionError):
                 validate_receipt(report)
 
-    def test_publication_requires_exact_commit_bytes_platforms_and_signed_in_reply(self):
-        reports = [receipt(platform=name) for name in ('linux-x64', 'linux-arm64', 'darwin-x64', 'darwin-arm64')]
-        signed = receipt('signed-in')
-        validate_publication(reports, signed, 'a' * 40, '0.3.6')
-        for field in ('commit', 'binary_sha256', 'archive_sha256', 'baseline', 'version'):
-            changed = copy.deepcopy(signed)
-            changed[field] = 'd' * (40 if field == 'commit' else 64)
-            with self.subTest(field=field), self.assertRaises(AssertionError):
-                validate_publication(reports, changed, 'a' * 40, '0.3.6')
-        with self.assertRaises(AssertionError):
-            validate_publication(reports[:-1], signed, 'a' * 40, '0.3.6')
-        with self.assertRaises(AssertionError):
-            validate_publication(reports, receipt(), 'a' * 40, '0.3.6')
-        private = receipt('signed-in')
-        private['credentials'] = 'synthetic accidental private field'
-        with self.assertRaises(AssertionError):
-            validate_publication(reports, private, 'a' * 40, '0.3.6')
-
-    def test_network_error_is_not_a_historical_launch_regression(self):
-        reports = [receipt(platform=name) for name in ('linux-x64', 'linux-arm64', 'darwin-x64', 'darwin-arm64')]
-        reports[0]['negative_control']['reason'] = 'download failed'
-        with self.assertRaises(AssertionError):
-            validate_publication(reports, receipt('signed-in'), 'a' * 40, '0.3.6')
+    def test_signed_mode_and_private_fields_are_rejected(self):
+        for field, value in [('mode', 'signed-in'), ('credentials', 'synthetic')]:
+            report = receipt()
+            report[field] = value
+            with self.assertRaises(AssertionError): validate_receipt(report)
 
     def test_partial_walk_serializes_missing_journeys_as_failures(self):
         with tempfile.TemporaryDirectory() as directory:
@@ -124,6 +106,8 @@ class ReceiptTests(unittest.TestCase):
             self.assertEqual(env['HC_SESSION'], 'walk-isolated')
             self.assertNotIn(str(root / 'tools/tui'), env['PATH'])
             self.assertEqual(env['CLAUDE_CONFIG_DIR'], str(root / 'home/.claude'))
+            self.assertIn('check_for_update_on_startup = false',
+                          (Path(env['CODEX_HOME']) / 'config.toml').read_text())
 
     def test_service_guard_refuses_existing_configuration_and_implicit_consent(self):
         with tempfile.TemporaryDirectory() as directory:

@@ -46,7 +46,7 @@
   “nothing waiting” or permission to release. The existing GitHub Sources switch
   and service user's `gh` sign-in apply. Reads share a bounded cache and deadline.
 - Running World listeners report their versions, ports and known source branches
-  in a private local registry. Isolated previews can opt into one shared registry;
+  in a private per-user registry shared by default, including isolated previews;
   expired reports are stale and have no open action. Only fresh loopback reports
   provide navigation URLs, usable from the service machine. No remote host or
   port discovery runs, and agent runtimes are not treated as World deployments.
@@ -86,10 +86,9 @@
   running World reads as stopped reporting without **Open**. GitHub off, no
   repository or no project with a release leaves an empty sea, without piers,
   and the sign says how to go on. A phone or portrait
-  Town has the same harbour right of its stacked buildings: drag or pinch to
-  reach it, or tap the **Shipyard** signpost on the town center's left wing
-  (a dot per project in its colour and lamp, and an arrow), which flies to
-  the sea with the promenade and a whole pier across the screen. Calm Town
+  Town has the same harbour right of its stacked buildings and the library
+  and observatory: drag or pinch to reach it; at home zoom the promenade and
+  a whole pier fit across the screen. Calm Town
   and reduced motion stop the bobbing and
   sailing. Open pull requests are the warehouse's, not the harbour's.
 - **Work → Releases** (Board's Work lens and Town's harbour): main's checks,

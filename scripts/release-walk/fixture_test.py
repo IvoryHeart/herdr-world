@@ -18,21 +18,12 @@ class FixtureTests(unittest.TestCase):
             config = Path(env['CODEX_HOME']) / 'config.toml'
             self.assertTrue(config.exists(), 'pinned Codex needs its own update policy')
             self.assertIs(tomllib.loads(config.read_text())['check_for_update_on_startup'], False)
-            signed = root / 'signed'
-            (signed / '.claude').mkdir(parents=True)
-            (signed / '.codex').mkdir()
-            existing = signed / '.codex/config.toml'
-            existing.write_text('model = "synthetic-model"\n')
-            env = environment(root / 'other', root / 'tools', 'walk-signed', True,
-                              root / 'events.sock', signed_home=signed)
-            self.assertEqual(Path(env['CODEX_HOME']), signed / '.codex')
-            self.assertEqual(existing.read_text(), 'model = "synthetic-model"\n')
 
     def test_private_runtime_paths_fit_macos_even_for_holder_sockets(self):
         with tempfile.TemporaryDirectory(prefix='world-walk-', dir='/tmp') as directory:
             root = Path(directory)
             runtime_dirs = set()
-            for journey in ('herdr-core', 'both', 'upgrade', 'signed'):
+            for journey in ('herdr-core', 'both', 'upgrade', 'quick'):
                 home = root / journey
                 session = 'walk-0123456789ab'
                 with patch.dict(os.environ, {'XDG_RUNTIME_DIR': '/owner/run'}):

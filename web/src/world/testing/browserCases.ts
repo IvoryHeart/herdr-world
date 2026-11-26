@@ -48,7 +48,7 @@ export const hostFilterCases: {
       "filters",
       "cold-host",
       "navigator",
-      "nonempty-filter",
+      "empty-filter",
       "actions",
       "watches",
       "watch-unavailable",

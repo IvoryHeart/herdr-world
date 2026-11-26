@@ -8,10 +8,12 @@ import {
   type ShipyardFixtureMode,
 } from "./shipyard/shipyardFixture";
 import { TownShipyard } from "./town/TownShipyard";
+import { townBrowserClock } from "./town/townBrowserClock";
 import { TownCamera } from "./town/townCamera";
 import { townHarbourLot, townLanesShown } from "./town/townHarbour";
 import { layoutTown, townShapeFor } from "./town/townLayout";
 import { townPhoneShape } from "./town/townLots";
+import { TownWorldTransform } from "./town/townWorldTransform";
 import "../styles/tokens.css";
 import "../styles/base.css";
 import "./town/town.css";
@@ -72,15 +74,25 @@ async function run() {
     },
     shape,
   ).layout;
-  shipyardStore.useFetch((input) => {
+  const lot = townHarbourLot(layout);
+  const released = shipyardFixtureCatalog(mode, Date.now()).repositories.filter(
+    (repo) => repo !== FIXTURE_UNRELEASED,
+  );
+  const shown = townLanesShown(lot, released.length);
+  const more = released.length > shown ? 1 : 0;
+  const partial = query.has("partial") && more > 0;
+  const remaining = Promise.withResolvers<void>();
+  if (!partial) remaining.resolve();
+  shipyardStore.useFetch(async (input) => {
     const repo = new URL(String(input), location.href).searchParams.get("repo");
+    // Reproduce the failing CI schedule: all visible lamps arrive before any
+    // overflow project. Hold actual store reads, rather than sleeping under load.
+    if (repo && released.indexOf(repo) >= shown) await remaining.promise;
     const now = Date.now();
-    return Promise.resolve(
-      Response.json(
-        repo
-          ? shipyardFixtureSnapshot(mode, now, repo)
-          : shipyardFixtureCatalog(mode, now),
-      ),
+    return Response.json(
+      repo
+        ? shipyardFixtureSnapshot(mode, now, repo)
+        : shipyardFixtureCatalog(mode, now),
     );
   });
   const stage = document.createElement("div");
@@ -98,25 +110,26 @@ async function run() {
     createElement(TownShipyard, { layout, renderer: { current: null } }),
   );
 
-  const lot = townHarbourLot(layout);
-  const released = shipyardFixtureCatalog(mode, Date.now()).repositories.filter(
-    (repo) => repo !== FIXTURE_UNRELEASED,
-  );
-  const shown = townLanesShown(lot, released.length);
   const lamps = () => [
     ...world.querySelectorAll<HTMLElement>(".town-harbour-lamp"),
   ];
-  await until(
-    () =>
-      lamps().length === shown &&
-      world.querySelector(".town-harbour-ship") !== null,
-    `${shown} lanes with ships`,
-  );
-  const more = released.length > shown ? 1 : 0;
-  check(
-    world.querySelectorAll(".town-harbour-pier").length === shown + more,
-    `${world.querySelectorAll(".town-harbour-pier").length} piers for ${shown + more} lanes`,
-  );
+  const piers = () => world.querySelectorAll(".town-harbour-pier").length;
+  const hasShip = () => world.querySelector(".town-harbour-ship") !== null;
+  // Lanes appear as each project's releases arrive: with exactly `shown`
+  // projects read there are `shown` lamps but no "+N" lane yet, so wait for
+  // every pier, not only the lamps.
+  const ready = () =>
+    lamps().length === shown && piers() === shown + more && hasShip();
+  if (partial) {
+    await until(
+      () => lamps().length === shown && piers() === shown && hasShip(),
+      `${shown} lamps before the overflow reads`,
+    );
+    check(!ready(), "partial release reads admitted before the overflow pier");
+    remaining.resolve();
+  }
+  await until(ready, `${shown} lanes with ships and ${shown + more} piers`);
+  check(piers() === shown + more, `${piers()} piers for ${shown + more} lanes`);
   check(
     !world.querySelector(`[aria-label="Shipping lane ${FIXTURE_UNRELEASED}"]`),
     "a project with no release has a lane",
@@ -130,13 +143,13 @@ async function run() {
     inset: { top: 0, right: 0, bottom: 0, left: 0 },
   });
   const limits = camera.limits!;
-  const place = () => {
-    const tx = width / 2 - camera.x * camera.z;
-    const ty = height / 2 - camera.y * camera.z;
-    world.style.transform = `translate(${tx}px, ${ty}px) scale(${camera.z})`;
-    world.style.setProperty("--z", String(camera.z));
-    world.style.setProperty("--iz", String(1 / camera.z));
-  };
+  const transform = new TownWorldTransform(world, townBrowserClock);
+  const place = () =>
+    transform.place(
+      width / 2 - camera.x * camera.z,
+      height / 2 - camera.y * camera.z,
+      camera.z,
+    );
   const zooms = { widest: limits.min, home: limits.home, closest: limits.max };
   for (const [name, z] of Object.entries(zooms))
     for (const lamp of lamps()) {

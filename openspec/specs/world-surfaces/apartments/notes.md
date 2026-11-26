@@ -4,7 +4,7 @@
 
 **Surfaces:**
 
-- Town's green building sign, town center ring and Board's hub (**Past sessions**) open one Apartments dialog.
+- Town's green building sign, town center ring (**Buildings**) and Board's hub (**Past sessions**) open one Apartments dialog.
 - Search opens resident detail, Read history, Resume in room and confirmed Evict on desktop/phone.
 - ?apartments-preview=avatars supplies one-load synthetic appearance cases and removes itself.
 - TUI resume opens the new terminal; core reports it back. Claude/Codex resume on the original host.
@@ -13,6 +13,7 @@
 
 - `web/src/world/apartments/`
 - `shared/apartments.ts`
+- `server/src/features/apartments/` (construction, RPC declarations/handlers and close lifecycle)
 - `server/src/world/apartments.ts`
 - `server/src/world/apartment-census.ts`
 - `server/src/world/apartment-resume.ts`
@@ -74,10 +75,10 @@ resident: an ending World sees replaces the found record of that session.
   room; a town too small for it hides the building), where the bus brings
   binned agents to its door and the sign's count goes up as each walks in
   (see **Bin and bus** under [Visual control plane](../notes.md#visual-control-plane)),
-  from **Apartments** in
+  from **Buildings** → **Apartments** in
   the town center ring, or from **Past sessions** in Board's hub (Board's
-  plain name). All three read the same residents, and the ring and hub show
-  how many live there.
+  plain name). All three read the same residents; the sign and hub show
+  how many live there, the ring does not.
 - Each resident shows its avatar, as Town and Inspector show a live agent:
   its Town character on its terminal colour, with its harness's icon, in the
   list (with its harness, project, room and host) and larger in the opened
@@ -89,9 +90,33 @@ resident: an ending World sees replaces the found record of that session.
   avatars, or World found it in its harness's history) shows the nearest: its profile's look, else a profile of the same
   harness, else World's default character; hovering the avatar says which.
   Its colour then falls back to the plain tile.
+- Each resident shows its own usage this week under its row and in the
+  opened resident, worded as an agent card's line: "This week: at work 3 h ·
+  waited on you 0 min · 7.1M tokens". A harness World reads no log of
+  (Cursor, OpenCode and others) reads "tokens and cost not available for
+  this harness". World counts a resident under the usage agents it ran as
+  while World watched it, in its own harness session only (a resumed
+  session adds its new run; another session later in the same terminal
+  starts its own count). Runs of one harness that follow each other in one
+  shell terminal (a crew terminal's fixer, then its next fixer) share one
+  usage agent, so their lines read "This week, with 1 other run in its
+  terminal: …" with the shared numbers. World counts only agents it watched
+  at work, so an unknown line says why: "found in its history, World kept no
+  usage for it" (ended before this World watched it, ran outside it, or left
+  into a shell before a World restart), "World
+  did not record it while it ran" (from before World kept usage), or
+  "nothing recorded this week". A fresh World data folder therefore shows
+  usage only for agents that end after it started watching them: close an
+  agent's terminal, or leave it into a shell, and it moves in with its
+  usage.
+  While the read is not in the line is empty. In Town, clicking the line
+  closes Apartments and opens Usage on **Breakdown** filtered to that
+  resident, even when its usage is unknown (Breakdown then says "Nothing
+  measured"); from Board's hub the line is text only.
 - `?apartments-preview=avatars` in the page's address shows synthetic
-  residents, one per avatar case, for that load only (the page removes it at
-  once; nothing is saved).
+  residents, one per avatar case and one OpenCode resident, for that load
+  only (the page removes it at once; nothing is saved). Add `&usageFixture`
+  for synthetic usage lines.
 - A resident whose session runs again at a desk is hidden while it runs, and
   returns when it stops, also when its terminal stays open with a shell. Its
   newer end is recorded when that terminal closes. A transcript written in the last 10 minutes is left

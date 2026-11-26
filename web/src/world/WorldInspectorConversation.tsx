@@ -70,6 +70,7 @@ import {
   worldInspectorWindowId,
   type WorldInspectorConversation,
 } from "./worldTerminalPresentation";
+import { useArtefactFileRequests } from "./artefactOpen";
 import {
   INSPECTOR_TERMINAL_FILE_EVENT,
   inspectorTerminalFileAdmitted,
@@ -248,7 +249,7 @@ function InspectorResources({
         workspaces: core.snapshot?.workspaces ?? [],
         tabs: core.snapshot?.tabs ?? [],
         panes: core.snapshot?.panes ?? [],
-        status: coreLive ? hostTopology.status : ("disconnected" as const),
+        status: coreLive ? ("connected" as const) : ("disconnected" as const), // its core's, not Herdr's
         catalogueReady: coreLive,
       }
     : hostTopology;
@@ -609,6 +610,12 @@ function InspectorResources({
     workspace,
   ]);
 
+  useArtefactFileRequests(conversation, !!(scope && workspace), (entry) => {
+    onChange({ view: "files" });
+    onResourceFocus();
+    loadFile(entry);
+  });
+
   useEffect(() => {
     if (conversation.view !== "files" || !scope || fileSelection.entry) return;
     const path = readResourceFileSelection(worldLocalStorage, scope);
@@ -727,7 +734,7 @@ function InspectorResources({
   const presentationStale =
     status !== "connected" ||
     !catalogueReady ||
-    !baseConnectionClient.isCurrent();
+    (!core && !baseConnectionClient.isCurrent());
   // A worktree being re-read (its binding changed) holds only the views that
   // read it: Files, Changes and Commits. Chat and Terminal stay live; on Chat
   // nothing re-reads the worktree until one of those views opens.

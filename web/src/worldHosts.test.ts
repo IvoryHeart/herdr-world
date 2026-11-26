@@ -2,7 +2,13 @@ import { expect, test } from "bun:test";
 import type { ConnectionSummary } from "./api";
 import {
   hostCount as countHosts,
+  hostGroupOf,
+  runtimeGroupKey,
+  worldHostGroups,
+  hostsFilterByMachine,
+  machineStatus,
   worldHosts,
+  worldMachines,
   type CoreConnectionProfileSummary,
 } from "./worldHosts";
 
@@ -59,14 +65,14 @@ test("automatic and saved connections to the same local runtime count once", () 
   expect(hostCount(connections.slice(0, 1))).toBe(1);
 });
 
-test("distinct local endpoints and disconnected hosts remain counted", () => {
+test("local endpoints are one machine; disconnected hosts remain counted", () => {
   expect(
     hostCount([
       connection("local"),
       connection("other", { client_socket_path: "/tmp/other-client.sock" }),
       connection("offline", { type: "ssh", state: "disconnected" }),
     ]),
-  ).toBe(3);
+  ).toBe(2);
 });
 
 test("matching SSH endpoints count once without conflating destinations", () => {
@@ -85,11 +91,11 @@ test("matching SSH endpoints count once without conflating destinations", () => 
   ).toBe(2);
 });
 
-test("unknown endpoints are distinct and an empty catalogue counts zero", () => {
+test("unknown machines are distinct and an empty catalogue counts zero", () => {
   expect(
     hostCount([
-      connection("first", { control_socket_path: undefined }),
-      connection("second", { control_socket_path: undefined }),
+      connection("first", { type: undefined }),
+      connection("second", { type: undefined }),
     ]),
   ).toBe(2);
   expect(hostCount([])).toBe(0);
@@ -126,10 +132,11 @@ test("herdr-core hosts join the one host list after Herdr's, with their runtime"
       generation: 3,
     },
   ]);
-  expect(countHosts(hosts)).toBe(2);
+  // Both run on this computer: one machine.
+  expect(countHosts(hosts)).toBe(1);
 });
 
-test("core profiles of one core count once; other cores and sessions count apart", () => {
+test("a machine's cores count once; other destinations count apart", () => {
   const remote = { type: "ssh" as const, ssh_destination: "core.example.test" };
   expect(
     countHosts(
@@ -145,7 +152,7 @@ test("core profiles of one core count once; other cores and sessions count apart
         ],
       }),
     ),
-  ).toBe(4);
+  ).toBe(3);
 });
 
 test("a core ID the Herdr catalogue already lists stays the Herdr host", () => {
@@ -168,4 +175,119 @@ test("unchanged catalogue slices return the same list (stable for React)", () =>
   expect(worldHosts(sources)).not.toBe(
     worldHosts({ ...sources, coreConnections: [core("box")] }),
   );
+});
+
+test("one machine per computer or SSH destination, holding each runtime", () => {
+  const hosts = worldHosts({
+    connections: [
+      connection("local", { label: "Local" }),
+      connection("remote", {
+        type: "ssh",
+        ssh_destination: "box.example.test",
+      }),
+      connection("old", { type: undefined }),
+    ],
+    coreConnections: [
+      core("local-core", { label: "Local core", state: "reconnecting" }),
+      core("remote-core", { type: "ssh", ssh_destination: "box.example.test" }),
+    ],
+  });
+  expect(worldMachines(hosts)).toEqual([
+    {
+      machine: "local",
+      label: "Local",
+      ids: ["local", "local-core"],
+      status: "1 of 2 reconnecting",
+    },
+    {
+      machine: "ssh:box.example.test",
+      label: "remote",
+      ids: ["remote", "remote-core"],
+      status: "ready",
+    },
+    { machine: "connection:old", label: "old", ids: ["old"], status: "ready" },
+  ]);
+  expect(worldMachines(hosts)).toBe(worldMachines(hosts));
+});
+
+test("a machine's status names each state its runtimes are not ready in", () => {
+  expect(machineStatus(["ready", "ready"])).toBe("ready");
+  expect(machineStatus(["disconnected", "disconnected"])).toBe("disconnected");
+  expect(machineStatus(["ready", "reconnecting", "disconnected"])).toBe(
+    "1 of 3 reconnecting, 1 of 3 disconnected",
+  );
+});
+
+test("a selection saved per connection widens to its whole machine", () => {
+  const hosts = worldHosts({
+    connections: [
+      connection("local"),
+      connection("remote", {
+        type: "ssh",
+        ssh_destination: "box.example.test",
+      }),
+    ],
+    coreConnections: [core("local-core")],
+  });
+  expect(hostsFilterByMachine(null, hosts)).toBeNull();
+  expect(hostsFilterByMachine([], hosts)).toEqual([]);
+  expect(hostsFilterByMachine(["local"], hosts)).toEqual([
+    "local",
+    "local-core",
+  ]);
+  expect(hostsFilterByMachine(["local-core"], hosts)).toEqual([
+    "local-core",
+    "local",
+  ]);
+  const whole = ["remote"];
+  expect(hostsFilterByMachine(whole, hosts)).toBe(whole);
+  // An ID the catalogue does not list (yet) is kept for pruning to decide.
+  expect(hostsFilterByMachine(["gone", "local"], hosts)).toEqual([
+    "gone",
+    "local",
+    "local-core",
+  ]);
+});
+
+test("one grouping rule: a machine's runtimes together, or each runtime apart", () => {
+  const hosts = worldHosts({
+    connections: [
+      connection("tui"),
+      connection("remote", {
+        type: "ssh",
+        ssh_destination: "dev.example.test",
+      }),
+    ],
+    coreConnections: [core("core")],
+  });
+  const byMachine = worldHostGroups(hosts, "machine");
+  expect(
+    byMachine.map((group) => [
+      group.key,
+      group.label,
+      group.hosts.map(({ id }) => id),
+    ]),
+  ).toEqual([
+    ["local", "tui", ["tui", "core"]],
+    ["ssh:dev.example.test", "remote", ["remote"]],
+  ]);
+  expect(worldHostGroups(hosts, "machine")).toBe(byMachine);
+  const byRuntime = worldHostGroups(hosts, "runtime");
+  expect(byRuntime.map((group) => group.hosts.map(({ id }) => id))).toEqual([
+    ["tui"],
+    ["remote"],
+    ["core"],
+  ]);
+  // The Hosts list's machines are the same groups.
+  expect(worldMachines(hosts).map(({ ids }) => ids)).toEqual(
+    byMachine.map((group) => group.hosts.map(({ id }) => id)),
+  );
+  const groupOf = hostGroupOf(hosts, "machine");
+  expect(groupOf("core")).toBe(groupOf("tui"));
+  expect(groupOf("unknown")).toBeUndefined();
+  expect(hostGroupOf(hosts, "runtime")("core")).not.toBe(
+    hostGroupOf(hosts, "runtime")("tui"),
+  );
+  expect(runtimeGroupKey(hosts[0]!, "machine")).toBe("local");
+  expect(runtimeGroupKey(hosts[0]!, "runtime")).toBe("runtime:tui");
 });

@@ -153,6 +153,10 @@ failure records; they cannot complete a manifest. CLI memory is capped at 512 MB
 in addition to checker JVM bounds. Interrupted top-level checks always fail and
 force retirement after ten seconds if ordinary cancellation cannot finish.
 
+The [agent move case](../verification/contracts/agent-move-audit.md) checks every
+bounded runtime move with TLC and replays three sampled seeds through the real
+`moveAgentAcross`; four model faults and two production mutants are rejected.
+
 The [Claude tap ownership case](../verification/contracts/claude-tap-lock.md)
 checks all eight bounded live/dead suspension schedules, replays their real
 filesystem commit histories and retains unsafe live-owner stealing as a rejected

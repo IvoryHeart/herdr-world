@@ -1,13 +1,16 @@
 import { ArrowLeft, Inbox, X } from "lucide-react";
 import {
   useEffect,
+  useLayoutEffect,
   useMemo,
   useRef,
   useState,
   useSyncExternalStore,
+  type ReactNode,
 } from "react";
 import { createPortal } from "react-dom";
 import { AgentMark } from "../components/AgentMark";
+import { PlaceWindow } from "./PlaceWindow";
 import { useLayoutPreferences } from "../layoutPreferences";
 import { useSystemBack } from "../systemBack";
 import { useNow } from "./handoffs";
@@ -44,6 +47,7 @@ import { preloadWorkspaceInspector } from "./inspectorPreload";
 import { sharedPresence, useOwnerPresence } from "./presence";
 import { arrivedWhileAway } from "./sinceYouLeft";
 import { useAttentionBadge } from "./attentionBadge";
+import { focusHeld, useFocus } from "./focus";
 import "./needsYouTab.css";
 
 /**
@@ -134,7 +138,10 @@ export function NeedsYouTabBadge({
 }: {
   world: Pick<WorldObject, "leaves">;
 }) {
-  useAttentionBadge(useWaitingCount(world));
+  const count = useWaitingCount(world);
+  // A focus session keeps the tab title and app icon plain (#1131).
+  const held = focusHeld(useFocus().state);
+  useAttentionBadge(held ? 0 : count);
   return null;
 }
 
@@ -160,73 +167,157 @@ export function NeedsYouHost({
   const count = useWaitingCount(world);
   // A full screen on a phone: an agent window opened from it (Chat about
   // this) is a newer screen, so Back closes that first and returns here.
-  useSystemBack(shared.open && mobile, closeNeedsYou, "screen");
+  // The post office's window (#1170) is a layer of its own (PlaceWindow).
+  const asWindow = shared.open && shared.window === true;
+  useSystemBack(shared.open && mobile && !asWindow, closeNeedsYou, "screen");
   // Chat about this opens the Inspector; fetch it while the list is open.
   useEffect(
     () => (shared.open ? preloadWorkspaceInspector() : undefined),
     [shared.open],
   );
-  const sheet = shared.open && mobile;
+  const sheet = shared.open && mobile && !asWindow;
   const panel = useRef<HTMLElement | null>(null);
   usePhoneSheetFocus(sheet, panel, shared.request);
-  if (!shared.open)
-    return mobile || !count ? null : (
-      <button
-        type="button"
-        className="needs-you-handle"
-        aria-label={`Show Needs you: ${count}`}
-        onClick={() => openNeedsYou()}
-      >
-        <AgentMark kind="needs" />
-        <span>Needs you</span>
-        <b>{count}</b>
-      </button>
-    );
-  const tab = (
-    <aside
-      ref={panel}
-      className={`needs-you-tab${mobile ? " is-sheet" : ""}`}
-      aria-label="Needs you"
-      {...(mobile ? { role: "dialog", "aria-modal": true, tabIndex: -1 } : {})}
-    >
-      <header className="needs-you-head">
-        {mobile ? (
-          <button
-            type="button"
-            className="needs-you-back"
-            aria-label="Back"
-            title="Back"
-            data-layer-back
-            onClick={closeNeedsYou}
-          >
-            <ArrowLeft size={20} aria-hidden="true" />
-          </button>
-        ) : null}
-        <h2>Needs you</h2>
-        {count ? <b className="needs-you-head-count">{count}</b> : null}
-        {mobile ? null : (
-          <button
-            type="button"
-            className="needs-you-icon needs-you-close"
-            aria-label="Hide Needs you"
-            title="Hide Needs you"
-            onClick={closeNeedsYou}
-          >
-            <X size={16} aria-hidden="true" />
-          </button>
-        )}
-      </header>
-      <NeedsYouList
-        world={world}
-        request={shared.request}
-        openOutbox={shared.openOutbox}
-        onChat={onChat}
-        onOpenTerminal={onOpenTerminal}
-      />
-    </aside>
+  const slot = useListSlot();
+  // Leaving the window for an agent or the Outbox closes it over the view.
+  const leaving =
+    <T extends unknown[]>(go: (...args: T) => void) =>
+    (...args: T) => {
+      if (asWindow) closeNeedsYou();
+      go(...args);
+    };
+  const outbox = shared.openOutbox;
+  // One mounted list for every frame (#1170): opening the post office's
+  // window over an open tab, and closing it back, keeps an unsent answer.
+  const list = shared.open
+    ? createPortal(
+        <NeedsYouList
+          world={world}
+          request={shared.request}
+          openOutbox={outbox ? leaving(outbox) : null}
+          onChat={leaving(onChat)}
+          onOpenTerminal={leaving(onOpenTerminal)}
+        />,
+        slot,
+      )
+    : null;
+  return (
+    <>
+      {list}
+      {needsYouFrame()}
+    </>
   );
-  // On a phone the list is its own screen above the app.
-  return mobile ? createPortal(tab, document.body) : tab;
+
+  function needsYouFrame(): ReactNode {
+    if (asWindow) {
+      return (
+        <PlaceWindow
+          name="needs-you"
+          label="Needs you"
+          className="needs-you-window"
+          closeLabel="Hide Needs you"
+          onClose={closeNeedsYou}
+          title={
+            <>
+              <h2>Needs you</h2>
+              {count ? <b className="needs-you-head-count">{count}</b> : null}
+            </>
+          }
+        >
+          <ListFrame slot={slot} />
+        </PlaceWindow>
+      );
+    }
+    if (!shared.open)
+      return mobile || !count ? null : (
+        <button
+          type="button"
+          className="needs-you-handle"
+          aria-label={`Show Needs you: ${count}`}
+          onClick={() => openNeedsYou()}
+        >
+          <AgentMark kind="needs" />
+          <span>Needs you</span>
+          <b>{count}</b>
+        </button>
+      );
+    const tab = (
+      <aside
+        ref={panel}
+        className={`needs-you-tab${mobile ? " is-sheet" : ""}`}
+        aria-label="Needs you"
+        {...(mobile
+          ? { role: "dialog", "aria-modal": true, tabIndex: -1 }
+          : {})}
+      >
+        <header className="needs-you-head">
+          {mobile ? (
+            <button
+              type="button"
+              className="needs-you-back"
+              aria-label="Back"
+              title="Back"
+              data-layer-back
+              onClick={closeNeedsYou}
+            >
+              <ArrowLeft size={20} aria-hidden="true" />
+            </button>
+          ) : null}
+          <h2>Needs you</h2>
+          {count ? <b className="needs-you-head-count">{count}</b> : null}
+          {mobile ? null : (
+            <button
+              type="button"
+              className="needs-you-icon needs-you-close"
+              aria-label="Hide Needs you"
+              title="Hide Needs you"
+              onClick={closeNeedsYou}
+            >
+              <X size={16} aria-hidden="true" />
+            </button>
+          )}
+        </header>
+        <ListFrame slot={slot} />
+      </aside>
+    );
+    // On a phone the list is its own screen above the app.
+    return mobile ? createPortal(tab, document.body) : tab;
+  }
+}
+
+/**
+ * The list's own element: the tab, its phone sheet and the post office's
+ * window each show it inside their frame, so changing frame moves the
+ * mounted list instead of starting a new one.
+ */
+function useListSlot() {
+  const [slot] = useState(() => {
+    const element = document.createElement("div");
+    element.className = "needs-you-slot";
+    element.style.display = "contents";
+    return element;
+  });
+  return slot;
+}
+
+/** Where a frame shows the list (`useListSlot`). */
+function ListFrame({ slot }: { slot: HTMLElement }) {
+  const frame = useRef<HTMLDivElement | null>(null);
+  useLayoutEffect(() => {
+    const at = frame.current;
+    if (!at) return;
+    at.append(slot);
+    return () => {
+      if (slot.parentNode === at) slot.remove();
+    };
+  }, [slot]);
+  return (
+    <div
+      ref={frame}
+      className="needs-you-frame"
+      style={{ display: "contents" }}
+    />
+  );
 }
 
 /** An agent window (Chat about this) covers the phone list while open. */

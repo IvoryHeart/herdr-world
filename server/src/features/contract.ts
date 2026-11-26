@@ -17,6 +17,24 @@ type Connections<T extends ConnectionRuntime> = Pick<
 /** Ports only: no listener, shutdown, authentication or default runtime authority. */
 export type FeatureKernel = Readonly<
   Pick<WorldServiceDeps, "clock" | "scheduler"> & {
+    createUsage: typeof import("../service/usage-analytics").composeWorldUsage;
+    createApartments: typeof import("./apartments/service").createApartmentsService;
+    createArtefactShelf: typeof import("../world/artefact-shelf").createArtefactShelf;
+    paths: Pick<WorldServiceDeps["paths"], "root">;
+    config: Pick<WorldServiceDeps["config"], "sshHost">;
+    serviceIncarnation: string;
+    profiles: Pick<RpcServices["connectionProfiles"], "list">;
+    coreHost: import("../rpc/core").CoreRpcServices["host"];
+    observations: {
+      observedConnections: {
+        list(): import("../world/runtime-registry").WorldRuntimeStatus[];
+      };
+      worldSnapshots: NonNullable<RpcServices["worldSnapshots"]>;
+      officeObservability: Pick<
+        import("../world/observability").OfficeObservabilityService,
+        "snapshot"
+      >;
+    };
     logger: RpcServices["logger"];
     clients: Pick<RpcServices["clients"], "has">;
     settings: WorldStorage["settings"];
@@ -32,6 +50,15 @@ export type FeatureKernel = Readonly<
     coreHostRuntime: (
       ...args: Parameters<import("../rpc/core").CoreRpcServices["hostRuntime"]>
     ) => import("../memory/service").MemoryLease["runtime"];
+    coreApartmentRuntime: (
+      ...args: Parameters<import("../rpc/core").CoreRpcServices["hostRuntime"]>
+    ) => Pick<
+      import("../herdr-core/host-runtime").CoreHostRuntime,
+      "agentSessionFiles" | "agentSessions"
+    >;
+    coreGit: (
+      ...args: Parameters<import("../rpc/core").CoreRpcServices["hostRuntime"]>
+    ) => import("../herdr-core/host-runtime").CoreHostRuntime["worktreeGit"];
     sources(): Awaited<ReturnType<typeof composeSources>>;
     board: WorldStorage["board"];
   }
@@ -42,8 +69,21 @@ export function featureKernel(
   storage: WorldStorage,
   rpc: RpcServices,
   sources: FeatureKernel["sources"],
+  observations: FeatureKernel["observations"],
+  createUsage: FeatureKernel["createUsage"],
+  createApartments: FeatureKernel["createApartments"],
+  createArtefactShelf: FeatureKernel["createArtefactShelf"],
 ): FeatureKernel {
   return Object.freeze({
+    createUsage,
+    createApartments,
+    createArtefactShelf,
+    paths: deps.paths,
+    config: deps.config,
+    serviceIncarnation: rpc.serviceIncarnation!,
+    profiles: rpc.connectionProfiles,
+    coreHost: (id) => rpc.coreControl!.host(id),
+    observations,
     clock: deps.clock,
     scheduler: deps.scheduler,
     logger: rpc.logger,
@@ -55,6 +95,8 @@ export function featureKernel(
     connections: () => rpc.connectionManager,
     core: () => rpc.core!.manager,
     coreHostRuntime: (lease) => rpc.coreControl!.hostRuntime(lease),
+    coreApartmentRuntime: (lease) => rpc.coreControl!.hostRuntime(lease),
+    coreGit: (lease) => rpc.coreControl!.hostRuntime(lease).worktreeGit,
     sources,
   });
 }

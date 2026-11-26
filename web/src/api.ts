@@ -219,6 +219,8 @@ export class Bridge {
   private connectTimer: ReturnType<typeof setTimeout> | null = null;
   private heartbeatTimer: ReturnType<typeof setInterval> | null = null;
   private heartbeatInFlight = false;
+  /** When the current socket last delivered anything (Date.now). */
+  private lastInboundAt = 0;
   private reconnectEnabled = true;
   private _status: ConnectionStatus = "disconnected";
   private _activeConnectionId = STARTUP_DEFAULT_CONNECTION_ID;
@@ -239,6 +241,7 @@ export class Bridge {
     private readonly connectTimeoutMs = CONNECT_TIMEOUT_MS,
     private readonly reconnectDelayMs = 1500,
     private readonly decodeSnapshot = decodeWorldSnapshot,
+    private readonly heartbeatTimeoutMs = HEARTBEAT_TIMEOUT_MS,
   ) {}
 
   get status() {
@@ -457,6 +460,7 @@ export class Bridge {
     };
     ws.onmessage = (ev) => {
       if (this.ws !== ws) return;
+      this.lastInboundAt = Date.now();
       this.onMessage(ev.data);
     };
     ws.onerror = () => {
@@ -511,12 +515,18 @@ export class Bridge {
   private runHeartbeatProbe() {
     if (this.heartbeatInFlight) return;
     this.heartbeatInFlight = true;
-    this.call("bridge.ping", {}, HEARTBEAT_TIMEOUT_MS).then(
+    const sentAt = Date.now();
+    this.call("bridge.ping", {}, this.heartbeatTimeoutMs).then(
       () => {
         this.heartbeatInFlight = false;
       },
       () => {
         this.heartbeatInFlight = false;
+        // A slow link that still delivers is alive: the ping's reply waits
+        // behind what the service sent before it (snapshots and frames
+        // during an agent move). Closing it then drops the replies still on
+        // their way, so only a socket silent for the whole wait is dead.
+        if (this.lastInboundAt > sentAt) return;
         // A rejected ping can also arrive because the socket was already
         // torn down (rejectPending during handleDisconnect). Only a live
         // connection may be force-reconnected; otherwise the extra

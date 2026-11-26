@@ -86,6 +86,8 @@ test("Pages deploys on main pushes or manual dispatch and checks installer avail
     branches: ["main"],
     paths: [
       "site/**",
+      "herdr-plugin.toml",
+      "CHANGELOG.md",
       "openspec/specs/**",
       "openspec/changes/**",
       "scripts/pages-features.ts",
@@ -214,9 +216,10 @@ test("only a fully published stable release dispatches Pages from main", async (
   };
   const handoff = release.jobs["deploy-pages"];
   expect(handoff).toBeDefined();
-  expect(handoff.needs).toEqual(["publish", "npm-publish", "homebrew-pr"]);
+  expect(handoff.needs).toEqual(["publish", "npm-publish"]);
+  // Tagged bytes pass channel acceptance; Pages is independent of the tap.
   expect(handoff.if).toBe(
-    "startsWith(github.ref, 'refs/tags/v') && !contains(github.ref_name, '-rc.')",
+    "${{ !cancelled() && !failure() && !contains(github.ref_name, '-rc.') }}",
   );
   expect(handoff.permissions).toEqual({ actions: "write" });
   expect(handoff.steps).toHaveLength(1);

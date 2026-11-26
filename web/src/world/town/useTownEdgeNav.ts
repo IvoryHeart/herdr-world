@@ -172,17 +172,18 @@ export function useTownEdgeNav(
     [rendererRef],
   );
   const [arrowStore] = useState(() => new TownEdgeArrowStore());
-  const keepOut = useRef<{ at: number; rects: TownEdgeRect[] }>({
-    at: -Infinity,
-    rects: [],
-  });
-  /** The Town board and the zoom group, which arrows keep out of. */
-  const edgeKeepOut = () => {
-    const now = performance.now();
+  const keepOut = useRef<{
+    at: number;
+    rects: TownEdgeRect[];
+    timer: number | null;
+  }>({ at: -Infinity, rects: [], timer: null });
+  /** Reads where the board and the zoom group sit, outside any frame. */
+  const measureKeepOut = () => {
+    const cache = keepOut.current;
+    cache.timer = null;
     const host = hostRef.current;
     const shell = host?.parentElement;
-    if (now - keepOut.current.at < 500 || !shell || !host)
-      return keepOut.current.rects;
+    if (!shell || !host) return;
     const origin = host.getBoundingClientRect();
     const rects: TownEdgeRect[] = [];
     for (const element of shell.querySelectorAll(
@@ -197,8 +198,32 @@ export function useTownEdgeNav(
           bottom: box.bottom - origin.top,
         });
     }
-    keepOut.current = { at: now, rects };
-    return rects;
+    const changed = JSON.stringify(rects) !== JSON.stringify(cache.rects);
+    cache.at = performance.now();
+    cache.rects = rects;
+    if (changed && arrowsShown.current)
+      rendererRef.current?.invalidate("edge-arrows");
+  };
+  useEffect(() => {
+    measureKeepOut();
+    return () => {
+      const { timer } = keepOut.current;
+      if (timer !== null) window.clearTimeout(timer);
+      keepOut.current.timer = null;
+    };
+    // The measurement reads refs only.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+  /**
+   * The Town board and the zoom group, which arrows keep out of. Measured at
+   * most every 500 ms in a task of its own: a read inside the frame forced a
+   * layout of the whole overlay (#1248).
+   */
+  const edgeKeepOut = () => {
+    const cache = keepOut.current;
+    if (performance.now() - cache.at >= 500 && cache.timer === null)
+      cache.timer = window.setTimeout(measureKeepOut, 0);
+    return cache.rects;
   };
   const [pulse, setPulse] = useState<TownPulse | null>(null);
   const pulseSeq = useRef(0);

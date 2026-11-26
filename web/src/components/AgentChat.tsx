@@ -47,6 +47,7 @@ import type {
 } from "./chat/types";
 import "./chat/blocks/now.css";
 import { ChatStatusBadge } from "./chat/blocks/status-badge";
+import { ChatMadeSummary, chatMadeCards, useChatMade } from "./chat/ChatMade";
 import { useCurrentUsageStop } from "../world/town/townOutOfFuel";
 import { useOutOfFuelTrialPane } from "../world/town/townOutOfFuelTrial";
 import { usageStopText } from "../../../shared/usageStop";
@@ -521,6 +522,12 @@ export function AgentChat({
       window.removeEventListener("keydown", keydown);
     };
   }, [agentName, canStop, stop]);
+  // What it made (#1327), from its host's Library shelf.
+  const made = useChatMade(
+    connectionClient.connectionId,
+    pane.pane_id,
+    conversation,
+  );
   // A new turn clears the last stop note.
   useEffect(() => {
     if (liveStatus !== "working") setStopNote("");
@@ -656,6 +663,7 @@ export function AgentChat({
           <ListTree size={13} /> Details
         </button>
       </div>
+      <ChatMadeSummary artefacts={made} />
       {misdelivered.map((delivery) => (
         <div key={delivery.id} className="agent-chat-misdelivered" role="alert">
           {delivery.evidence === "herdr" ? (
@@ -831,6 +839,7 @@ export function AgentChat({
                     },
                   ]
                 : []),
+              ...chatMadeCards(made),
               ...placedSends(
                 [...pending, ...commands],
                 recipientLabel ??
