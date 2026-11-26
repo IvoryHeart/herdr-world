@@ -279,8 +279,11 @@ const cases = [
       "an older watch capture cannot remove its replacement in generation 1",
   },
 ];
+// Each control builds its own bundle (by index) and runs it in its own
+// process, whose tests make their own temporary folders: they run side by
+// side, as many at a time as the runner allows.
 for (const [index, control] of cases.entries())
-  test(`compiled terminal-mark control: ${control.name}`, async () => {
+  test.concurrent(`compiled terminal-mark control: ${control.name}`, async () => {
     let replaced = false;
     const output = join(root, `${index}.test.js`);
     const built = await Bun.build({
