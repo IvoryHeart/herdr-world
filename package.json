@@ -86,7 +86,7 @@
     "clean": "rm -rf web/dist server/public server/src/public-files.gen.ts server/herdr-world server/herdr-world.exe server/herdr-world.map server/herdr-world-* && bun run clean:bun-build",
     "start:server": "bun run --filter herdr-world-server start",
     "spec": "openspec",
-    "spec:check": "openspec validate --all --strict --no-interactive",
+    "spec:check": "openspec validate --all --strict --no-interactive && openspec validate --archived --strict --no-interactive",
     "typecheck:bun": "bun scripts/check-bun-types.ts",
     "verification:setup": "bun scripts/verification-setup.ts",
     "verification:diagnostic-control": "bun scripts/verification-diagnostic-control.ts",
@@ -106,7 +106,7 @@
   "devDependencies": {
     "@babel/parser": "^8.0.8",
     "@biomejs/biome": "2.6.2",
-    "@fission-ai/openspec": "1.12.0",
+    "@fission-ai/openspec": "2.1.1",
     "@types/jsdom": "^30.0.0",
     "@types/proper-lockfile": "4.1.4",
     "@types/web-push": "^3.6.4",

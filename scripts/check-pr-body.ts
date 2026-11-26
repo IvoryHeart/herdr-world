@@ -133,6 +133,7 @@ export function checkPrBodyText(
     execFileSync("git", args, { cwd, encoding: "utf8" }).trim();
   const base = git("rev-parse", "--verify", `${baseRef}^{commit}`);
   const head = git("rev-parse", "--verify", `${headRef}^{commit}`);
+  const comparisonBase = git("merge-base", base, head);
   const paths = changedPathsBetween(cwd, base, head);
   const sourcePaths = changedPathsBetween(cwd, base, head, {
     includeDeleted: false,
@@ -143,7 +144,16 @@ export function checkPrBodyText(
   );
   return [
     ...scanPrivacyText(body, "PR body", dependabot).map(formatPrivacyFinding),
-    ...assessSpecEdits(paths),
+    ...assessSpecEdits(paths, (path) => {
+      try {
+        return [
+          git("show", `${comparisonBase}:${path}`),
+          git("show", `${head}:${path}`),
+        ];
+      } catch {
+        return undefined;
+      }
+    }),
     ...(dependabot
       ? []
       : assessContractImpacts(
