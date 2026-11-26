@@ -1,5 +1,6 @@
 import {
   useEffect,
+  useRef,
   useState,
   type CSSProperties,
   type PointerEvent as ReactPointerEvent,
@@ -25,6 +26,8 @@ import {
   useTownCurrentUsage,
   type TownUsagePlace,
 } from "./townPlaceUsage";
+import { TownRuntimeIcon } from "./TownRuntimeIcon";
+import { townPlaqueCard, useTownPlaqueCardOpen } from "./townPlaqueCard";
 import "./townRoomPlaque.css";
 
 /** A place card's content: its summary is made when the card first opens. */
@@ -35,8 +38,9 @@ export type TownPlaceCardContent = {
 };
 
 /**
- * The card a place's name opens on hover, focus or a tap: its part of the
- * Town summary and its economy today. Nothing is built or read until the card
+ * The card a place's name opens (a room's on a click or tap of its plaque, a
+ * table's on hover, focus or a tap): its part of the Town summary and its
+ * economy today. Nothing is built or read until the card
  * opens, so a dense town pays only for the names someone points at; each
  * opening refreshes the usage, at most once per the service's interval.
  */
@@ -103,10 +107,16 @@ export function TownRoomOverviewSummary({
 }
 
 /**
- * Constant-size text within the room's projected width. Hover, focus or a tap
- * opens one card below it: the room's summary, then Move before, the Move
- * handle, Move after, Rename and Close. Dragging the handle, or the name (a
- * touch hold on a phone), carries the room anywhere in its building.
+ * Constant-size text standing just above the room's floor, within its
+ * projected width, so no desk or agent of its top row sits under it. A click
+ * or tap on the title (Enter or Space when focused) opens one card below it:
+ * the room's summary, then Move before, the Move handle, Move after, Rename
+ * and Close. Hover and focus alone open nothing; another click on the title,
+ * a press outside the plaque or Escape closes the card, and only one room's
+ * card is open at a time (townPlaqueCard.ts). Dragging the handle, or the
+ * name (a touch hold on a phone), carries the room anywhere in its building;
+ * a tap on the name reaches the card through the town's gesture
+ * (townInteraction.ts), so a drag never opens it.
  */
 export function TownRoomPlaque({
   room,
@@ -129,7 +139,7 @@ export function TownRoomPlaque({
   card?: TownPlaceCardContent;
   /**
    * A press on the name or the Move handle, passed to the town: a drag there
-   * carries the room.
+   * carries the room, and a tap on the name toggles the card.
    */
   onNamePress?(
     event: PointerEvent,
@@ -137,6 +147,33 @@ export function TownRoomPlaque({
   ): boolean;
 }) {
   const { opened, open } = usePlaceCard();
+  const shown = useTownPlaqueCardOpen(room.key);
+  const plaque = useRef<HTMLDivElement>(null);
+  // The town took the name's last press: its tap toggles the card there.
+  const namePressTaken = useRef(false);
+  useEffect(() => {
+    if (shown) open();
+  });
+  useEffect(() => {
+    if (!shown) return;
+    const outside = (event: PointerEvent) => {
+      if (!plaque.current?.contains(event.target as Node))
+        townPlaqueCard.close(room.key);
+    };
+    const escape = (event: KeyboardEvent) => {
+      if (event.key !== "Escape") return;
+      event.preventDefault();
+      event.stopPropagation();
+      townPlaqueCard.close(room.key);
+    };
+    document.addEventListener("pointerdown", outside, true);
+    window.addEventListener("keydown", escape, true);
+    return () => {
+      document.removeEventListener("pointerdown", outside, true);
+      window.removeEventListener("keydown", escape, true);
+    };
+  }, [shown, room.key]);
+  useEffect(() => () => townPlaqueCard.close(room.key), [room.key]);
   const movable = Boolean(
     actions.onMoveRoom && actions.canMoveRoom?.(room.key),
   );
@@ -146,7 +183,9 @@ export function TownRoomPlaque({
     (press: "plaque-name" | "plaque-move") =>
     (event: ReactPointerEvent<HTMLElement>) => {
       if (event.pointerType === "mouse" ? event.button === 0 : event.isPrimary)
-        onNamePress?.(event.nativeEvent, press);
+        namePressTaken.current =
+          (onNamePress?.(event.nativeEvent, press) ?? false) &&
+          press === "plaque-name";
     };
   const active = counts.working + counts.blocked;
   // Agents out of fuel are not active: they wait for their limit to reset.
@@ -154,29 +193,51 @@ export function TownRoomPlaque({
     counts.outOfFuel ? `, ${counts.outOfFuel} out of fuel` : ""
   }`;
   // In a building of more than one runtime, the room's runtime tells two
-  // rooms of the same name apart (townBuildings.ts).
+  // rooms of the same name apart (townBuildings.ts): an icon beside the
+  // name, so the name reads first, and words in its tooltip and label.
   const tag = room.runtimeTag;
   return (
     <div
-      className="town-room-plaque"
+      ref={plaque}
+      className={`town-room-plaque${shown ? " is-open" : ""}`}
       style={{ "--room-w": `${width}px` } as CSSProperties}
       role="group"
       aria-label={`${label}${tag ? ` (${tag})` : ""}: ${activityLabel}`}
+      aria-expanded={shown}
       tabIndex={0}
-      onPointerEnter={open}
-      onFocus={open}
-      onPointerDown={(event) => {
-        if (event.pointerType === "touch")
-          event.currentTarget.focus({ preventScroll: true });
+      onKeyDown={(event) => {
+        if (
+          event.target !== event.currentTarget ||
+          (event.key !== "Enter" && event.key !== " ")
+        )
+          return;
+        event.preventDefault();
+        townPlaqueCard.toggle(room.key);
       }}
     >
-      <div className="town-room-plaque-heading">
+      <div
+        className="town-room-plaque-heading"
+        // Each press starts untaken; the name's own press may take it.
+        onPointerDownCapture={() => {
+          namePressTaken.current = false;
+        }}
+        onClick={(event) => {
+          // The town's gesture already toggled the card for a pressed name.
+          const taken = namePressTaken.current && event.detail > 0;
+          namePressTaken.current = false;
+          if (taken || (event.target as Element).closest?.("button")) return;
+          townPlaqueCard.toggle(room.key);
+        }}
+      >
         {color ? (
           <ColorSwatchButton
             className="town-plaque-action town-place-color"
             label={`Colour of room ${label}`}
             {...color}
           />
+        ) : null}
+        {tag && room.runtimeKind ? (
+          <TownRuntimeIcon kind={room.runtimeKind} tag={tag} />
         ) : null}
         <span
           className={`town-room-plaque-name${movable ? " is-movable" : ""}${
@@ -191,11 +252,6 @@ export function TownRoomPlaque({
         >
           {label}
         </span>
-        {tag ? (
-          <span className="town-room-plaque-runtime" title={`Runtime: ${tag}`}>
-            {tag}
-          </span>
-        ) : null}
         <span
           className={`town-room-plaque-count${active === 0 ? " is-inactive" : ""}`}
           title={activityLabel}
@@ -212,7 +268,9 @@ export function TownRoomPlaque({
         {tag ? (
           <p className="town-room-plaque-runtime-line">Runtime: {tag}</p>
         ) : null}
-        {card && opened ? <TownPlaceCardSummary content={card} /> : null}
+        {card && (opened || shown) ? (
+          <TownPlaceCardSummary content={card} />
+        ) : null}
         <div
           className="town-room-plaque-actions"
           role="group"

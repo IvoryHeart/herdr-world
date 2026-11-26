@@ -5,6 +5,9 @@
  * called, where it is or what it is doing, as Pane Search matches.
  */
 
+import { HARNESS_CHOICES } from "../../../shared/agentProfile";
+import { HARNESS_LABELS } from "../../../shared/harnessLabels";
+import { agentStateWord } from "./agentMarks";
 import { officeDeskLabel } from "./officeAgent";
 import { officeDeskKey } from "./officeRoom";
 import type {
@@ -25,6 +28,26 @@ export function worldTextMatches(text: string, words: readonly string[]) {
   return words.length > 0 && words.every((word) => text.includes(word));
 }
 
+/**
+ * Words for what an agent or terminal runs and how it is (#1329): its runtime
+ * ("herdr-core", or the TUI's "herdr tui"), its harness's id, its name as the
+ * profile editor gives it ("Claude", "Codex") and its full product name
+ * ("Claude Code", HARNESS_LABELS) and its state's one word ("Needs you",
+ * "Working", "Offline"), so a search for any of them finds it.
+ */
+function worldLeafTraitWords(leaf: WorldLeafObject) {
+  const harness = leaf.kind === "agent" ? leaf.pane.agent : undefined;
+  return [
+    leaf.runtime === "herdr-core" ? "herdr-core core" : "herdr tui",
+    harness,
+    harness ? HARNESS_CHOICES[harness]?.label : undefined,
+    harness ? HARNESS_LABELS[harness] : undefined,
+    leaf.kind === "agent"
+      ? agentStateWord(leaf.status, { offline: leaf.stale })
+      : undefined,
+  ];
+}
+
 export function worldNodeSearchText(node: WorldObjectNode) {
   const leaf = node.kind === "agent" || node.kind === "terminal" ? node : null;
   return [
@@ -38,6 +61,7 @@ export function worldNodeSearchText(node: WorldObjectNode) {
     leaf?.agentLabel,
     leaf?.agentName,
     leaf?.modelLabel,
+    ...(leaf ? worldLeafTraitWords(leaf) : []),
     leaf?.taskSummary,
   ]
     .filter(Boolean)
@@ -54,7 +78,7 @@ export function worldSearchMatches(world: WorldObject, rawQuery: string) {
   );
 }
 
-export type WorldSearchKind =
+type WorldSearchKind =
   | "building"
   | "room"
   | "table"
@@ -146,6 +170,7 @@ function leafResult(
     leaf.spaceLabel,
     leaf.tabLabel,
     leaf.status,
+    ...worldLeafTraitWords(leaf),
   ]);
   const summary = (leaf.taskSummary ?? "").toLocaleLowerCase();
   if (!worldTextMatches(`${besides} ${summary}`, words)) return null;

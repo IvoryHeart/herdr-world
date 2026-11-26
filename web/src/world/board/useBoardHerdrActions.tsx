@@ -32,6 +32,8 @@ import { sharedDeskStore, type WorldDeskStore } from "../deskStateStore";
 import { useSystemBack } from "../../systemBack";
 import { markReviewed, useReviewedWork } from "../useReviewedWork";
 import { townPaneIdentity } from "../town/townChat";
+import { townRuntimes } from "../town/townBuildings";
+import { store as worldStore } from "../../store";
 import type { WorldLeafObject } from "../worldObject";
 import type { BoardDocumentStore } from "./boardDocument";
 import {
@@ -42,6 +44,12 @@ import {
   type BoardWorkspace,
 } from "./boardModel";
 import { BoardPeek } from "./BoardPeek";
+import {
+  cardAgentAddress,
+  otherRuntimeRooms,
+  requestAgentHandoff,
+  workspaceRoom,
+} from "../town/townRuntimeMove";
 
 type Notify = (kind: "ok" | "error", text: string) => void;
 
@@ -469,6 +477,35 @@ export function useBoardHerdrActions({
       }}
     />
   );
+  // Move to…: a single-agent card goes to a room on another runtime.
+  const peekedFrom =
+    peeked && model.workspaceByKey.get(peeked.tab.workspaceKey);
+  const handoff = peekedFrom && cardAgentAddress(peeked.tab, peekedFrom);
+  const endpoints =
+    handoff &&
+    new Map(
+      townRuntimes(worldStore.get()).map((each) => [each.id, each.endpoint]),
+    );
+  const moveTo = endpoints
+    ? otherRuntimeRooms(model.workspaces, handoff, (id) =>
+        endpoints.get(id),
+      ).map((room) => ({
+        key: room.key,
+        label: `${room.label} · ${model.hostByKey.get(room.hostKey)?.label ?? ""}`,
+        onChoose() {
+          const name = boardAgentName(peeked!.pane);
+          setPeek(null);
+          notify("ok", `Moving ${name} to ${room.label}…`);
+          void requestAgentHandoff(handoff, workspaceRoom(room)).then(
+            (outcome) =>
+              outcome.status === "moved"
+                ? notify("ok", `${name} moved to ${room.label}`)
+                : notify("error", outcome.message),
+            (cause: unknown) => notify("error", String(cause)),
+          );
+        },
+      }))
+    : [];
   const overlay =
     peek && peeked ? (
       <BoardPeek
@@ -496,6 +533,7 @@ export function useBoardHerdrActions({
               }
             : undefined
         }
+        moveTo={moveTo}
         onClose={() => setPeek(null)}
         onHold={(held) => {
           hover.current.held = held;

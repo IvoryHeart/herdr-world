@@ -15,6 +15,7 @@ import { comparePixels } from "./pixels";
 import { setTownDaylightMode } from "../../town/townDaylight";
 import { setTownWeatherMode } from "../../town/townWeather";
 import { TOWN_GOLDEN_WEATHER } from "./weatherScenes";
+import { holdTownOverlay } from "./overlayHold";
 import { shipyardStore } from "../../shipyard/shipyardStore";
 import {
   shipyardFixtureCatalog,
@@ -127,6 +128,8 @@ async function prepare() {
     null,
     TOWN_PRESENTATION_BOUNDS,
   );
+  // The DOM overlay paints only at the checkpoint (overlayHold.ts, #1289).
+  const revealOverlay = holdTownOverlay(document);
   const GOLDEN_POST = {
     counts: { asks: 1, needs: 2, done: 3, outbox: 1 },
   } as const;
@@ -163,6 +166,9 @@ async function prepare() {
   const stats = window.__HERDR_TOWN_RENDERER__!;
   if (stats.lastError || stats.flying || stats.walking || stats.desks !== 16)
     throw new Error(`Town did not settle: ${JSON.stringify(stats)}`);
+  const realFrame = clock.real.requestAnimationFrame;
+  if (!realFrame) throw new Error("Real animation frames are unavailable");
+  await revealOverlay(realFrame);
   return {
     gpu,
     width: innerWidth,

@@ -607,6 +607,11 @@ terminal to. Each browser keeps its own Hosts filter, drafts and shortcuts.
 
 <a id="networking"></a>
 
+> **Before you start:** To use Visual Studio Code in **Code**, open World at
+> `http://localhost:<port>` on the computer running World, or at a trusted
+> HTTPS address such as [Tailscale Serve](#tailscale). Plain
+> `http://<lan-ip>:<port>` shows **Visual Studio Code needs a secure address**.
+
 Pick the route that matches what you want to do:
 
 | Your goal | Route | What you need |

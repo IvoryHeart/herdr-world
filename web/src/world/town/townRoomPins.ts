@@ -103,10 +103,10 @@ export type TownRoomMovesLatest = {
 
 /**
  * The room actions the plaques use, with room moves filled in from the town
- * shown: a room can move when its host can change rooms and it has another
+ * shown: a room can move when its runtime permits placement and it has another
  * room in its building, and Move before or after swaps it with its
- * neighbour in reading order. Tidy rooms (any building whose host can change
- * its rooms, even with one room) lays a building's rooms out afresh
+ * neighbour in reading order. Tidy rooms (any building with a movable room,
+ * even just one) lays its movable rooms out around the fixed ones
  * and glides them there (`renderer`); its Undo puts them back.
  */
 export function useTownRoomMoves(
@@ -134,21 +134,25 @@ export function townRoomMoves(
 ): TownRoomActions {
   const { onPlaceRooms, canMoveRoom } = roomActions;
   if (!onPlaceRooms) return roomActions;
+  const canPlace = (key: string) => {
+    const room = model.rooms.get(key);
+    return Boolean(room && !room.stale && (canMoveRoom?.(key) ?? true));
+  };
   const movable = (roomKey: string) =>
-    (canMoveRoom?.(roomKey) ?? true) && townRoomDrag(roomKey, model) !== null;
-  // Tidy rooms needs only a room its host can change: unlike a drag, a lone
+    townRoomDrag(roomKey, model, canPlace) !== null;
+  // Tidy rooms needs only a movable room: unlike a drag, a lone
   // room left far from its spot still has a building to compact.
   const tidyRoom = (hostKey: string) =>
     layout.buildings
       .find((b) => b.hostKey === hostKey)
-      ?.rooms.find((placed) => {
-        const room = model.rooms.get(placed.key);
-        return (
-          room?.canOpenInSpaces &&
-          !room.stale &&
-          (canMoveRoom?.(placed.key) ?? true)
-        );
-      })?.key;
+      ?.rooms.find((placed) => canPlace(placed.key))?.key;
+  const currentCanPlace = (key: string) =>
+    latest.current.roomActions.canMoveRoom?.(key) ?? canPlace(key);
+  const stayedRooms = (placement: TownRoomPlacement) =>
+    placement.order.filter((key) => !currentCanPlace(key));
+  const reportStayed = (keys: readonly string[]) => {
+    if (keys.length) latest.current.roomActions.onRoomsStayed?.(keys);
+  };
   /** Save a building's rooms where they glide to. */
   const glide = async (
     hostKey: string,
@@ -156,9 +160,11 @@ export function townRoomMoves(
     label: string,
   ) => {
     const place = latest.current.roomActions.onPlaceRooms ?? onPlaceRooms;
+    const kept = stayedRooms(placement);
     renderer?.current?.beginGlide(hostKey);
     const result = await place(placement.order[0]!, placement, label);
     renderer?.current?.finishGlide(result);
+    if (result === "moved") reportStayed(kept);
     return result;
   };
   return {
@@ -168,31 +174,39 @@ export function townRoomMoves(
       const other = movable(roomKey)
         ? townRoomNeighbor(layout, roomKey, step)
         : null;
-      return other
+      return other && canPlace(other.key)
         ? { label: model.rooms.get(other.key)?.displayLabel ?? "room" }
         : null;
     },
     onMoveRoom: (roomKey, step) => {
-      const placement = townRoomSwap(layout, roomKey, step);
+      const placement = townRoomSwap(layout, roomKey, step, canPlace);
       if (placement?.changed) void onPlaceRooms(roomKey, placement);
     },
     canTidyRooms: (hostKey) => tidyRoom(hostKey) !== undefined,
     onTidyRooms: (hostKey) => {
       const placement = tidyRoom(hostKey)
-        ? townRoomTidy(layout, hostKey)
+        ? townRoomTidy(latest.current.layout, hostKey, currentCanPlace)
         : null;
       if (!placement) return;
       const host = model.hosts.get(hostKey)?.displayLabel ?? "This building";
       const tidied = latest.current.roomActions.onRoomsTidied;
-      if (!placement.changed) return tidied?.(host, null);
-      const before = townBuildingSpots(layout, hostKey);
+      if (!placement.changed) {
+        reportStayed(stayedRooms(placement));
+        return tidied?.(host, null);
+      }
+      const before = townBuildingSpots(latest.current.layout, hostKey);
       void glide(hostKey, placement, `${host}'s rooms`).then((result) => {
         if (result !== "moved") return;
         tidied?.(host, async () => {
-          const undo = townRoomRestore(latest.current.layout, hostKey, before);
-          return undo?.changed
-            ? glide(hostKey, undo, `${host}'s rooms`)
-            : "returned";
+          const undo = townRoomRestore(
+            latest.current.layout,
+            hostKey,
+            before,
+            currentCanPlace,
+          );
+          if (undo?.changed) return glide(hostKey, undo, `${host}'s rooms`);
+          if (undo) reportStayed(stayedRooms(undo));
+          return "returned";
         });
       });
     },

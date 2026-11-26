@@ -50,4 +50,8 @@ test("admission refuses unregistered feature handlers before routing; presence k
   clients.add(ws);
   await call("world.presence.seen");
   expect(replies.at(-1).result.previous).toBeGreaterThanOrEqual(previous);
+  await call("world.apartments.list");
+  expect(replies.at(-1).error.message).toContain(
+    "Apartments need World storage",
+  );
 });

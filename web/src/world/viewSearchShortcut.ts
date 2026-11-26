@@ -42,11 +42,15 @@ export function keyTakenByViewSearch(event: KeyboardEvent): boolean {
   return takenBySearch.has(event) || viewSearchShortcutApplies(event);
 }
 
-/** Puts the cursor in the mounted view's search on the `view.search` keys. */
-export function useViewSearchShortcut(onSearch: () => void) {
+/**
+ * Opens World's one search (the command box, worldFinder.ts) on the
+ * `view.search` keys, as its key does.
+ */
+export function useViewSearchShortcut(onSearch: () => void, enabled = true) {
   const onSearchRef = useRef(onSearch);
   onSearchRef.current = onSearch;
   useEffect(() => {
+    if (!enabled) return;
     const onKeyDown = (event: KeyboardEvent) => {
       if (!viewSearchShortcutApplies(event)) return;
       takenBySearch.add(event);
@@ -57,5 +61,5 @@ export function useViewSearchShortcut(onSearch: () => void) {
     // own find, keeps the key when it claims it.
     window.addEventListener("keydown", onKeyDown);
     return () => window.removeEventListener("keydown", onKeyDown);
-  }, []);
+  }, [enabled]);
 }

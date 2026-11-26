@@ -20,9 +20,16 @@ import "../styles/tokens.css";
 import "../styles/base.css";
 import "../styles/vendor.css";
 import { quietGreetingForTest } from "./townMasterGreeting";
+import { setTownDaylightMode } from "./town/townDaylight";
 
 // The Town Master's greeting would sit over what these checks press.
 quietGreetingForTest();
+// CI draws Town's WebGL in software (SwiftShader), where night's lightmap
+// doubles each frame's cost and the run's cost would follow the runner's
+// clock. These checks are about creation, not light.
+setTownDaylightMode("day");
+// The renderer's counters say when a Town that mounted has drawn (view()).
+window.__HERDR_WORLD_RENDERER_DEBUG__ = "counters";
 
 const failures: string[] = [];
 window.addEventListener("error", (event) =>
@@ -35,8 +42,12 @@ function check(condition: unknown, message: string) {
   if (!condition) failures.push(message);
 }
 const settle = () => new Promise((resolve) => setTimeout(resolve, 40));
-async function until(condition: () => unknown, message: string) {
-  const deadline = performance.now() + 8_000;
+async function until(
+  condition: () => unknown,
+  message: string,
+  timeoutMs = 8_000,
+) {
+  const deadline = performance.now() + timeoutMs;
   while (performance.now() < deadline) {
     if (condition()) return;
     await new Promise<void>((resolve) =>
@@ -392,12 +403,40 @@ for (const host of hosts) {
     },
   });
 }
-function view(name: string) {
+/**
+ * How long a Town that has just mounted may take to start its renderer and
+ * draw once. In software WebGL that start (a WebGL context, every texture
+ * uploaded) takes seconds, and longer on a loaded runner; it is waited for
+ * here, apart from the creation checks' own deadlines.
+ */
+const TOWN_START_MS = 45_000;
+async function view(name: string) {
   const select = document.querySelector<HTMLSelectElement>(
     '[aria-label="World view"]',
   )!;
+  const town = () => window.__HERDR_TOWN_RENDERER__;
+  const mounted = select.value === "town" ? null : (town()?.mounts ?? 0);
   select.value = name;
   select.dispatchEvent(new Event("change", { bubbles: true }));
+  // Navigation updates the URL before React commits. Release held creation
+  // replies only once the destination view has rendered and run its effects.
+  await until(
+    () =>
+      document
+        .querySelector(".world-foundation-shell")
+        ?.getAttribute("data-view") === name &&
+      document.documentElement.getAttribute("data-world-view") === name,
+    `Committed ${name} view`,
+  );
+  // Leaving another view mounts Town afresh. Let it start and draw before
+  // what follows is timed, so a creation's deadline measures its handoff,
+  // not a cold renderer.
+  if (name === "town" && mounted !== null)
+    await until(
+      () => (town()?.mounts ?? 0) > mounted && town()?.ready === true,
+      "Town's renderer started and drew",
+      TOWN_START_MS,
+    );
 }
 function visiblePane(paneId: string) {
   return [
@@ -1061,8 +1100,7 @@ async function run() {
     `Add room created in ${String(roomCreate.params.cwd)}, not the chosen folder`,
   );
   for (const name of ["town", "desk", "board"]) {
-    view(name);
-    await settle();
+    await view(name);
     const beforeTab = created;
     await action("New tab");
     await createdInspector(beforeTab + 1);
@@ -1110,8 +1148,7 @@ async function run() {
       viewChangeCount + 1,
     "held creation dispatched before view change",
   );
-  view("board");
-  await settle();
+  await view("board");
   heldMutation = null;
   viewGate.resolve();
   await createdInspector(viewChangeCount + 1);
@@ -1151,8 +1188,15 @@ async function run() {
     lastCreated && !visiblePane(lastCreated.pane_id),
     "Late creation reopened an Inspector after explicit close",
   );
-  view("spaces");
-  await settle();
+  // Close the Inspectors the cases above left open. Each one remounts its
+  // terminal whenever a visual view mounts again, so a dozen of them made
+  // each completion below wait on that remount, not on its own creation.
+  await action("Close all terminal windows");
+  await until(
+    () => !document.querySelector(".world-managed-window"),
+    "earlier Inspectors closed",
+  );
+  await view("spaces");
   const count = created;
   await store.createTab("a");
   await until(
@@ -1174,8 +1218,7 @@ async function run() {
     ["town", "spaces"],
   ] as const) {
     for (const kind of ["tab", "workspace"] as const) {
-      view(from);
-      await settle();
+      await view(from);
       await store.focusWorkspace("a");
       const gate = Promise.withResolvers<void>();
       heldMutation = gate.promise;
@@ -1191,8 +1234,7 @@ async function run() {
           calls.filter((call) => call.method === method).length > beforeCalls,
         `${from} ${kind} pending dispatch`,
       );
-      view(to);
-      await settle();
+      await view(to);
       const inspectorsBeforeCompletion = document.querySelectorAll(
         ".world-managed-window",
       ).length;
@@ -1215,8 +1257,7 @@ async function run() {
     }
   }
 
-  view("spaces");
-  await settle();
+  await view("spaces");
   const first = alpha.panes.find((pane) => pane.pane_id === "a-1-pane")!;
   const sibling = {
     ...first,

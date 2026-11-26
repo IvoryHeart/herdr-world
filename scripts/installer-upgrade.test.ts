@@ -454,28 +454,19 @@ test("installer processes cannot inherit real World or remote-runtime configurat
   }
 });
 
-test("Delivery checks require the pre-merge installer upgrade matrix", async () => {
+test("Delivery checks use Linux only while native installer acceptance belongs to tags/nightly", async () => {
   const workflow = Bun.YAML.parse(
     await Bun.file(
       new URL("../.github/workflows/ci.yml", import.meta.url),
     ).text(),
   ) as any;
-  expect(workflow.jobs.delivery.needs).toContain("installer-upgrade");
-  expect(workflow.jobs["installer-upgrade"]).toMatchObject({
-    uses: "./.github/workflows/installer-upgrade.yml",
-    needs: "validation-scope",
-    if: "needs.validation-scope.outputs.packaging == 'true'",
-  });
-  // ci-delivery-result requires success whenever packaging is selected and
-  // accepts a skip only when the shared plan declares it inapplicable.
+  expect(workflow.jobs.delivery.needs).not.toContain("installer-upgrade");
+  expect(workflow.jobs["installer-upgrade"]).toBeUndefined();
   const gates = workflow.jobs.delivery.steps.filter(
     (step: any) => step.run === "bun scripts/ci-delivery-result.ts",
   );
   expect(gates).toHaveLength(2);
-  for (const gate of gates)
-    expect(gate.env.INSTALLER_RESULT).toBe(
-      "${{ needs.installer-upgrade.result }}",
-    );
+  for (const gate of gates) expect(gate.env.INSTALLER_RESULT).toBeUndefined();
 });
 
 test("installer upgrades run native released artifacts on every supported platform", async () => {
@@ -508,7 +499,6 @@ test("installer upgrades run native released artifacts on every supported platfo
   expect(Object.keys(workflow.on)).toEqual([
     "workflow_call",
     "workflow_dispatch",
-    "schedule",
   ]);
   expect(workflow.permissions).toEqual({ contents: "read" });
   expect(job.strategy["fail-fast"]).toBe(false);

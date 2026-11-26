@@ -161,6 +161,8 @@ export type CoreLaunchRequest = {
   text: string;
   /** The terminal whose agent asked for this one: a display stamp only. */
   spawnedBy?: string;
+  /** The folder to start in, instead of the room's (an agent move's own). */
+  cwd?: string;
 };
 
 export type CoreLaunchOutcome =
@@ -319,7 +321,7 @@ export async function launchCore(
       };
     }
   }
-  const cwd = folderOf(lease, doc, request.workspaceId);
+  const cwd = request.cwd ?? folderOf(lease, doc, request.workspaceId);
   const taken = new Set(
     lease.runtime.core.mirror
       .terminals()

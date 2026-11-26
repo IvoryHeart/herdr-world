@@ -2,6 +2,16 @@ name: Release walk
 
 on:
   workflow_call:
+    inputs:
+      baseline_tag:
+        type: string
+        default: ""
+      version:
+        type: string
+        default: ""
+      package_artifacts:
+        type: boolean
+        default: false
   workflow_dispatch:
     inputs:
       listing_repetitions:
@@ -15,6 +25,7 @@ permissions:
 jobs:
   baseline:
     name: Freeze previous published release for the walk
+    if: inputs.baseline_tag == ''
     runs-on: ubuntu-latest
     outputs:
       tag: ${{ steps.baseline.outputs.tag }}
@@ -32,6 +43,7 @@ jobs:
   walk:
     name: Release walk (${{ matrix.platform }})
     needs: baseline
+    if: always() && (needs.baseline.result == 'success' || (needs.baseline.result == 'skipped' && inputs.baseline_tag != ''))
     runs-on: ${{ matrix.runner }}
     timeout-minutes: 45
     strategy:
@@ -61,9 +73,15 @@ jobs:
       - name: Select exact package version
         id: version
         env:
+          VERSION_INPUT: ${{ inputs.version }}
           PR: ${{ github.event_name == 'pull_request' }}
         run: |
-          bun -e 'const text = await Bun.file("herdr-plugin.toml").text(); const version = process.env.PR === "true" ? `0.0.0-rc.${process.env.GITHUB_RUN_NUMBER}` : text.match(/^version = "([^"]+)"/m)[1]; console.log(`version=${version}`)' >> "$GITHUB_OUTPUT"
+          bun -e 'const text = await Bun.file("herdr-plugin.toml").text(); const version = process.env.VERSION_INPUT || (process.env.PR === "true" ? `0.0.0-rc.${process.env.GITHUB_RUN_NUMBER}` : text.match(/^version = "([^"]+)"/m)[1]); console.log(`version=${version}`)' >> "$GITHUB_OUTPUT"
+      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8
+        if: inputs.package_artifacts
+        with:
+          name: herdr-world-${{ matrix.platform }}
+          path: dist
       - name: Start the disposable runner user manager
         if: runner.os == 'Linux'
         run: |
@@ -74,8 +92,12 @@ jobs:
       - name: Walk the release build on real runtimes and signed-out harnesses
         env:
           GH_TOKEN: ${{ github.token }}
+          USE_PACKAGE: ${{ inputs.package_artifacts }}
           LISTING_REPETITIONS: ${{ inputs.listing_repetitions || 0 }}
-        run: bun run test:release-walk --disposable-host --version "${{ steps.version.outputs.version }}" --baseline-tag "${{ needs.baseline.outputs.tag }}" --listing-repetitions "$LISTING_REPETITIONS" --report "${{ runner.temp }}/release-walk/report.json"
+        run: |
+          archive=()
+          if [ "$USE_PACKAGE" = true ]; then archive=(--archive "dist/herdr-world-v${{ steps.version.outputs.version }}-${{ matrix.platform }}.tar.xz"); fi
+          bun run test:release-walk --disposable-host --version "${{ steps.version.outputs.version }}" --baseline-tag "${{ inputs.baseline_tag || needs.baseline.outputs.tag }}" "${archive[@]}" --listing-repetitions "$LISTING_REPETITIONS" --report "${{ runner.temp }}/release-walk/report.json"
       - name: Record historical launch proof
         if: always() && matrix.platform == 'linux-x64'
         run: |
@@ -106,6 +128,7 @@ jobs:
           if-no-files-found: error
           retention-days: 30
       - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7
+        if: ${{ !inputs.package_artifacts }}
         with:
           name: release-walk-package-${{ matrix.platform }}
           path: |

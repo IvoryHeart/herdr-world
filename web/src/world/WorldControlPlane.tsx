@@ -18,7 +18,7 @@ import type { AgentStartFrom } from "./agentStarts";
 import { useDeskReveal } from "./deskReveal";
 import { DeskView } from "./DeskView";
 import { useStableCallback } from "./useStableCallback";
-import { LazyCodeView as CodeView } from "./code/LazyCodeView";
+import { KeptCodeView } from "./code/KeptCodeView";
 import { GroupsWindow } from "./groups/GroupsWindow";
 import {
   floatingTerminalGeometryId,
@@ -427,9 +427,7 @@ export function WorldControlPlane(props: WorldControlPlaneProps) {
       else openInBackground(id, view);
     },
   );
-  // The Town Master never greets over the welcome that asks for a first
-  // connection, nor over an open window or sheet (TownMasterGreetingHost).
-  const greetingHeld =
+  const connectionRequired =
     controller.hosts.length === 0 && inspectorConversations.length === 0;
   const greetingWindowsOpen =
     needsYouOpen ||
@@ -451,7 +449,7 @@ export function WorldControlPlane(props: WorldControlPlaneProps) {
       {active && (view === "town" || view === "board" || view === "desk") ? (
         <TownMasterGreetingHost
           world={presentedWorld}
-          held={greetingHeld}
+          held={connectionRequired}
           windowsOpen={greetingWindowsOpen}
         />
       ) : null}
@@ -516,168 +514,237 @@ export function WorldControlPlane(props: WorldControlPlaneProps) {
       {/* The browser tab and app icon count what Needs you lists, in every
           view (Spaces too) and in preview scenes. */}
       <NeedsYouTabBadge world={world} />
-      {controller.hosts.length === 0 && inspectorConversations.length === 0 ? (
+      {connectionRequired ? (
         <WorldConnectionRequired status={connectionSelection.status} />
-      ) : (
-        <div
-          ref={worldViewLayoutRef}
-          className={`world-view-layout ${showSelectionProfile || contextRailInspector ? "has-context" : ""}`}
-        >
-          {active ? (
-            <NeedsYouHost
-              // The Hosts filter applies, as in every view.
-              world={world}
-              onChat={(id) => {
-                const node = world.nodeById.get(id);
-                void applySelection(
-                  id,
-                  node ? worldNodeOpenView(node, "chat") : null,
-                ).catch(() => undefined);
-              }}
-              onOpenTerminal={(id) =>
-                void openTerminalById(id).catch(() => undefined)
-              }
-            />
-          ) : null}
-          <section className="world-view-stage" aria-label={`${view} view`}>
-            {active ? (
-              <Suspense
-                fallback={
-                  <div className="world-view-loading">Loading view…</div>
-                }
-              >
-                <WorldViewErrorBoundary key={view}>
-                  {view === "desk" ? (
-                    <MemoDeskView
-                      world={world}
+      ) : null}
+      {/* Hidden and inert behind it: keeps loaded workbenches (#1262). */}
+      <div
+        ref={worldViewLayoutRef}
+        className={`world-view-layout ${showSelectionProfile || contextRailInspector ? "has-context" : ""}`}
+        inert={connectionRequired}
+      >
+        {active && !connectionRequired ? (
+          <NeedsYouHost
+            // The Hosts filter applies, as in every view.
+            world={world}
+            onChat={(id) => {
+              const node = world.nodeById.get(id);
+              void applySelection(
+                id,
+                node ? worldNodeOpenView(node, "chat") : null,
+              ).catch(() => undefined);
+            }}
+            onOpenTerminal={(id) =>
+              void openTerminalById(id).catch(() => undefined)
+            }
+          />
+        ) : null}
+        <section className="world-view-stage" aria-label={`${view} view`}>
+          {active && !connectionRequired ? (
+            <Suspense
+              fallback={<div className="world-view-loading">Loading view…</div>}
+            >
+              <WorldViewErrorBoundary key={view}>
+                {view === "desk" ? (
+                  <MemoDeskView
+                    world={world}
+                    aggregate={aggregateWorld}
+                    onOpen={stableOpenNodeById}
+                    onReveal={stableRevealDeskAgent}
+                    reading={
+                      deskReadingPane && contextRailInspector
+                        ? contextRailInspector.nodeId
+                        : null
+                    }
+                    onPreview={
+                      deskReadingPane ? stablePreviewTerminalById : null
+                    }
+                    onCloseReading={stableCloseDeskReading}
+                  />
+                ) : view === "code" ? null : view === "town" ? (
+                  <Suspense
+                    fallback={
+                      <div className="world-view-loading">Loading Town…</div>
+                    }
+                  >
+                    <TownView
+                      world={presentedWorld}
                       aggregate={aggregateWorld}
-                      onOpen={stableOpenNodeById}
-                      onReveal={stableRevealDeskAgent}
-                      reading={
-                        deskReadingPane && contextRailInspector
-                          ? contextRailInspector.nodeId
-                          : null
+                      onOpenInspectorView={stableOpenInspectorView}
+                      toolbarPortal={viewToolbarPortal}
+                      selectedId={selectedId}
+                      onSelect={stableSelectNode}
+                      floatingTerminals={inspectorConversations}
+                      onConversationNodeAnchorsChange={
+                        setVisualConversationAnchors
                       }
-                      onPreview={
-                        deskReadingPane ? stablePreviewTerminalById : null
-                      }
-                      onCloseReading={stableCloseDeskReading}
-                    />
-                  ) : view === "code" ? (
-                    <CodeView
-                      world={world}
-                      onOpenAgent={stableOpenInspectorView}
                       onOpenTerminal={stableOpenTerminalById}
                     />
-                  ) : view === "town" ? (
-                    <Suspense
-                      fallback={
-                        <div className="world-view-loading">Loading Town…</div>
-                      }
-                    >
-                      <TownView
-                        world={presentedWorld}
-                        aggregate={aggregateWorld}
-                        onOpenInspectorView={stableOpenInspectorView}
-                        toolbarPortal={viewToolbarPortal}
-                        selectedId={selectedId}
-                        onSelect={stableSelectNode}
-                        floatingTerminals={inspectorConversations}
-                        onConversationNodeAnchorsChange={
-                          setVisualConversationAnchors
-                        }
-                        onOpenTerminal={stableOpenTerminalById}
-                      />
-                    </Suspense>
-                  ) : (
-                    <Suspense
-                      fallback={
-                        <div className="world-view-loading">Loading Board…</div>
-                      }
-                    >
-                      <BoardView
-                        world={presentedWorld}
-                        toolbarPortal={viewToolbarPortal}
-                        selectedId={selectedId}
-                        conversationNodeIds={conversationNodeIds}
-                        onSelect={stableSelectNode}
-                        onOpen={stableOpenNodeById}
-                        onOpenFiles={(id) =>
-                          stableOpenInspectorView(id, "files")
-                        }
-                        onNodeAnchorsChange={setVisualConversationAnchors}
-                      />
-                    </Suspense>
-                  )}
-                </WorldViewErrorBoundary>
-              </Suspense>
+                  </Suspense>
+                ) : (
+                  <Suspense
+                    fallback={
+                      <div className="world-view-loading">Loading Board…</div>
+                    }
+                  >
+                    <BoardView
+                      world={presentedWorld}
+                      toolbarPortal={viewToolbarPortal}
+                      selectedId={selectedId}
+                      conversationNodeIds={conversationNodeIds}
+                      onSelect={stableSelectNode}
+                      onOpen={stableOpenNodeById}
+                      onOpenFiles={(id) => stableOpenInspectorView(id, "files")}
+                      onNodeAnchorsChange={setVisualConversationAnchors}
+                    />
+                  </Suspense>
+                )}
+              </WorldViewErrorBoundary>
+            </Suspense>
+          ) : null}
+          <KeptCodeView
+            shown={active && view === "code" && !connectionRequired}
+            world={world}
+            onOpenAgent={stableOpenInspectorView}
+            onOpenTerminal={stableOpenTerminalById}
+          />
+        </section>
+        {connectionRequired ? null : (
+          <>
+            {showSelectionProfile && selected ? (
+              <aside
+                className="world-context-rail"
+                ref={contextRailRef}
+                aria-label="World context"
+              >
+                <WorldIntentProfile
+                  node={selected}
+                  currentGeneration={currentSelectionGeneration}
+                  inspectorOpen={Boolean(contextRailInspector)}
+                  intentOpening={intentOpening}
+                  resourceError={intentError}
+                  onActivateHost={async () => {
+                    window.dispatchEvent(
+                      new Event(WORKSPACE_INSPECTOR_CLOSE_EVENT),
+                    );
+                    retireInspectors();
+                    await activateWorldNodeHost(selected);
+                  }}
+                  onClose={closeIntent}
+                />
+              </aside>
             ) : null}
-          </section>
-          {showSelectionProfile && selected ? (
-            <aside
-              className="world-context-rail"
-              ref={contextRailRef}
-              aria-label="World context"
+            {!showSelectionProfile && intentError ? (
+              <p className="world-panel-error" role="alert">
+                {intentError}
+              </p>
+            ) : null}
+            {visibleFloatingInspectors.map((conversation) => {
+              const target =
+                floatingWindowAnchors[worldInspectorWindowId(conversation)];
+              return presentedWorld.nodeById.get(conversation.nodeId)
+                ?.generation === conversation.runtimeGeneration && target ? (
+                <ConversationConnector
+                  key={worldInspectorWindowId(conversation)}
+                  feed={visualConversationAnchors}
+                  nodeId={conversation.nodeId}
+                  target={target}
+                />
+              ) : null;
+            })}
+            <WindowSurface
+              state={managedWindows}
+              dispatch={windowCommand}
+              stage={windowStage}
+              compact={compactArrangement}
+              onLayer={setWindowLayer}
             >
-              <WorldIntentProfile
-                node={selected}
-                currentGeneration={currentSelectionGeneration}
-                inspectorOpen={Boolean(contextRailInspector)}
-                intentOpening={intentOpening}
-                resourceError={intentError}
-                onActivateHost={async () => {
-                  window.dispatchEvent(
-                    new Event(WORKSPACE_INSPECTOR_CLOSE_EVENT),
+              {({
+                entry,
+                geometry,
+                stage,
+                workArea,
+                zIndex,
+                active: windowActive,
+              }) => {
+                const panel = panels.find(
+                  (candidate) => candidate.id === entry.id,
+                );
+                if (panel)
+                  return (
+                    <WindowFrame
+                      key={entry.id}
+                      id={entry.id}
+                      label={`${panel.label} window`}
+                      geometry={geometry}
+                      restoreGeometry={
+                        entry.maximized ||
+                        entry.placement.kind !== "floating" ||
+                        managedWindows.focusMode
+                          ? entry.floating
+                          : undefined
+                      }
+                      stage={stage}
+                      workArea={workArea}
+                      zIndex={zIndex}
+                      active={windowActive}
+                      compact={compactArrangement}
+                      // In Town a panel takes the Town window look, as the
+                      // Inspector does.
+                      className={`world-panel-frame ${
+                        view === "town" ? "is-town-skin theme-scope-dark" : ""
+                      }`}
+                      onRaise={() =>
+                        windowCommand({ type: "raise", id: entry.id })
+                      }
+                      onPlace={(rect) =>
+                        windowCommand({ type: "place", id: entry.id, rect })
+                      }
+                      onSnap={(target) =>
+                        windowCommand({ type: "snap", id: entry.id, target })
+                      }
+                      onMaximize={() =>
+                        windowCommand({ type: "maximize", id: entry.id })
+                      }
+                    >
+                      <WorldPanelWindow
+                        label={panel.label}
+                        onBody={panelBodyRef(entry.id)}
+                        controls={{
+                          compact: compactArrangement,
+                          maximized:
+                            entry.maximized || managedWindows.focusMode,
+                          onMinimize: () =>
+                            windowCommand({ type: "minimize", id: entry.id }),
+                          onMaximize: () =>
+                            windowCommand({ type: "maximize", id: entry.id }),
+                          onClose: panel.onClose,
+                          onSnap: (target) =>
+                            windowCommand({
+                              type: "snap",
+                              id: entry.id,
+                              target,
+                            }),
+                          onFit: (side) => fitWindowToSide(entry.id, side),
+                          onFloat: () =>
+                            windowCommand({ type: "float", id: entry.id }),
+                          // A panel is a detail of its view: Back closes it.
+                          back: {
+                            label: `Back to ${view[0]!.toUpperCase()}${view.slice(1)}`,
+                          },
+                        }}
+                      />
+                    </WindowFrame>
                   );
-                  retireInspectors();
-                  await activateWorldNodeHost(selected);
-                }}
-                onClose={closeIntent}
-              />
-            </aside>
-          ) : null}
-          {!showSelectionProfile && intentError ? (
-            <p className="world-panel-error" role="alert">
-              {intentError}
-            </p>
-          ) : null}
-          {visibleFloatingInspectors.map((conversation) => {
-            const target =
-              floatingWindowAnchors[worldInspectorWindowId(conversation)];
-            return presentedWorld.nodeById.get(conversation.nodeId)
-              ?.generation === conversation.runtimeGeneration && target ? (
-              <ConversationConnector
-                key={worldInspectorWindowId(conversation)}
-                feed={visualConversationAnchors}
-                nodeId={conversation.nodeId}
-                target={target}
-              />
-            ) : null;
-          })}
-          <WindowSurface
-            state={managedWindows}
-            dispatch={windowCommand}
-            stage={windowStage}
-            compact={compactArrangement}
-            onLayer={setWindowLayer}
-          >
-            {({
-              entry,
-              geometry,
-              stage,
-              workArea,
-              zIndex,
-              active: windowActive,
-            }) => {
-              const panel = panels.find(
-                (candidate) => candidate.id === entry.id,
-              );
-              if (panel)
+                const conversation = inspectorConversations.find(
+                  (candidate) => worldInspectorWindowId(candidate) === entry.id,
+                );
+                if (!conversation) return null;
                 return (
                   <WindowFrame
                     key={entry.id}
                     id={entry.id}
-                    label={`${panel.label} window`}
+                    label={conversation.label + " Inspector"}
                     geometry={geometry}
                     restoreGeometry={
                       entry.maximized ||
@@ -691,196 +758,129 @@ export function WorldControlPlane(props: WorldControlPlaneProps) {
                     zIndex={zIndex}
                     active={windowActive}
                     compact={compactArrangement}
-                    // In Town a panel takes the Town window look, as the
-                    // Inspector does.
-                    className={`world-panel-frame ${
+                    // Town draws its one window in the Town prototype's look;
+                    // Board and Desk keep the calm shell look.
+                    className={`world-floating-terminal ${
                       view === "town" ? "is-town-skin theme-scope-dark" : ""
                     }`}
-                    onRaise={() =>
-                      windowCommand({ type: "raise", id: entry.id })
-                    }
-                    onPlace={(rect) =>
-                      windowCommand({ type: "place", id: entry.id, rect })
-                    }
-                    onSnap={(target) =>
-                      windowCommand({ type: "snap", id: entry.id, target })
-                    }
+                    onTerminalActivate={(paneId) => {
+                      const snapshot = connectionSnapshot(
+                        store.get(),
+                        conversation.connectionId,
+                      );
+                      if (
+                        snapshot.selectedPaneId ===
+                        (paneId ?? conversation.paneId)
+                      )
+                        return;
+                      const node = paneId
+                        ? worldNodeForInspectorPaneFocus(
+                            aggregateWorld,
+                            conversation,
+                            paneId,
+                          )
+                        : undefined;
+                      void focusFloatingInspector(
+                        conversation,
+                        true,
+                        undefined,
+                        node ?? undefined,
+                      ).catch(() => undefined);
+                    }}
+                    onRaise={(explicit) => {
+                      if (explicit) intentRequestRef.current++;
+                      inspectorFocusIntentRef.current += 1;
+                      windowCommand({ type: "raise", id: entry.id });
+                    }}
+                    onPlace={(rect) => {
+                      writeFloatingTerminalGeometry(
+                        worldLocalStorage,
+                        floatingTerminalGeometryId(conversation),
+                        rect,
+                      );
+                      // Resizing a dock from its inner edge keeps it docked,
+                      // and Town remembers the width.
+                      const dockWidth = dockedWidthAfterPlace(
+                        entry,
+                        rect,
+                        windowStage,
+                      );
+                      rememberTownDock(
+                        worldLocalStorage,
+                        floatingTerminalGeometryId(conversation),
+                        dockWidth !== null && entry.placement.kind === "snap"
+                          ? entry.placement.target
+                          : "float",
+                        dockWidth ?? undefined,
+                      );
+                      windowCommand({ type: "place", id: entry.id, rect });
+                    }}
+                    onSnap={(target) => {
+                      rememberTownDock(
+                        worldLocalStorage,
+                        floatingTerminalGeometryId(conversation),
+                        target,
+                      );
+                      windowCommand({ type: "snap", id: entry.id, target });
+                    }}
                     onMaximize={() =>
                       windowCommand({ type: "maximize", id: entry.id })
                     }
+                    onBoundsChange={(bounds) =>
+                      setFloatingWindowAnchors((current) => {
+                        const previous = current[entry.id];
+                        return previous === bounds ||
+                          (previous &&
+                            bounds &&
+                            previous.left === bounds.left &&
+                            previous.top === bounds.top &&
+                            previous.right === bounds.right &&
+                            previous.bottom === bounds.bottom)
+                          ? current
+                          : { ...current, [entry.id]: bounds };
+                      })
+                    }
+                    onPortalChange={(portal) =>
+                      setFloatingInspectorPortals((current) =>
+                        current[entry.id] === portal
+                          ? current
+                          : { ...current, [entry.id]: portal },
+                      )
+                    }
                   >
-                    <WorldPanelWindow
-                      label={panel.label}
-                      onBody={panelBodyRef(entry.id)}
-                      controls={{
-                        compact: compactArrangement,
-                        maximized: entry.maximized || managedWindows.focusMode,
-                        onMinimize: () =>
-                          windowCommand({ type: "minimize", id: entry.id }),
-                        onMaximize: () =>
-                          windowCommand({ type: "maximize", id: entry.id }),
-                        onClose: panel.onClose,
-                        onSnap: (target) =>
-                          windowCommand({
-                            type: "snap",
-                            id: entry.id,
-                            target,
-                          }),
-                        onFit: (side) => fitWindowToSide(entry.id, side),
-                        onFloat: () =>
-                          windowCommand({ type: "float", id: entry.id }),
-                        // A panel is a detail of its view: Back closes it.
-                        back: {
-                          label: `Back to ${view[0]!.toUpperCase()}${view.slice(1)}`,
-                        },
-                      }}
-                    />
+                    {!world.hosts.some(
+                      (host) => host.connectionId === conversation.connectionId,
+                    ) && (
+                      <div className="world-window-scope" role="status">
+                        <span>
+                          Outside Hosts filter · {conversation.hostLabel}
+                        </span>
+                        <button
+                          type="button"
+                          onClick={() =>
+                            hostsFilter.setIds(
+                              hostsFilter.ids === null
+                                ? null
+                                : [
+                                    ...new Set([
+                                      ...hostsFilter.ids,
+                                      conversation.connectionId,
+                                    ]),
+                                  ],
+                            )
+                          }
+                        >
+                          Reveal in Hosts
+                        </button>
+                      </div>
+                    )}
                   </WindowFrame>
                 );
-              const conversation = inspectorConversations.find(
-                (candidate) => worldInspectorWindowId(candidate) === entry.id,
-              );
-              if (!conversation) return null;
-              return (
-                <WindowFrame
-                  key={entry.id}
-                  id={entry.id}
-                  label={conversation.label + " Inspector"}
-                  geometry={geometry}
-                  restoreGeometry={
-                    entry.maximized ||
-                    entry.placement.kind !== "floating" ||
-                    managedWindows.focusMode
-                      ? entry.floating
-                      : undefined
-                  }
-                  stage={stage}
-                  workArea={workArea}
-                  zIndex={zIndex}
-                  active={windowActive}
-                  compact={compactArrangement}
-                  // Town draws its one window in the Town prototype's look;
-                  // Board and Desk keep the calm shell look.
-                  className={`world-floating-terminal ${
-                    view === "town" ? "is-town-skin theme-scope-dark" : ""
-                  }`}
-                  onTerminalActivate={(paneId) => {
-                    const snapshot = connectionSnapshot(
-                      store.get(),
-                      conversation.connectionId,
-                    );
-                    if (
-                      snapshot.selectedPaneId ===
-                      (paneId ?? conversation.paneId)
-                    )
-                      return;
-                    const node = paneId
-                      ? worldNodeForInspectorPaneFocus(
-                          aggregateWorld,
-                          conversation,
-                          paneId,
-                        )
-                      : undefined;
-                    void focusFloatingInspector(
-                      conversation,
-                      true,
-                      undefined,
-                      node ?? undefined,
-                    ).catch(() => undefined);
-                  }}
-                  onRaise={(explicit) => {
-                    if (explicit) intentRequestRef.current++;
-                    inspectorFocusIntentRef.current += 1;
-                    windowCommand({ type: "raise", id: entry.id });
-                  }}
-                  onPlace={(rect) => {
-                    writeFloatingTerminalGeometry(
-                      worldLocalStorage,
-                      floatingTerminalGeometryId(conversation),
-                      rect,
-                    );
-                    // Resizing a dock from its inner edge keeps it docked,
-                    // and Town remembers the width.
-                    const dockWidth = dockedWidthAfterPlace(
-                      entry,
-                      rect,
-                      windowStage,
-                    );
-                    rememberTownDock(
-                      worldLocalStorage,
-                      floatingTerminalGeometryId(conversation),
-                      dockWidth !== null && entry.placement.kind === "snap"
-                        ? entry.placement.target
-                        : "float",
-                      dockWidth ?? undefined,
-                    );
-                    windowCommand({ type: "place", id: entry.id, rect });
-                  }}
-                  onSnap={(target) => {
-                    rememberTownDock(
-                      worldLocalStorage,
-                      floatingTerminalGeometryId(conversation),
-                      target,
-                    );
-                    windowCommand({ type: "snap", id: entry.id, target });
-                  }}
-                  onMaximize={() =>
-                    windowCommand({ type: "maximize", id: entry.id })
-                  }
-                  onBoundsChange={(bounds) =>
-                    setFloatingWindowAnchors((current) => {
-                      const previous = current[entry.id];
-                      return previous === bounds ||
-                        (previous &&
-                          bounds &&
-                          previous.left === bounds.left &&
-                          previous.top === bounds.top &&
-                          previous.right === bounds.right &&
-                          previous.bottom === bounds.bottom)
-                        ? current
-                        : { ...current, [entry.id]: bounds };
-                    })
-                  }
-                  onPortalChange={(portal) =>
-                    setFloatingInspectorPortals((current) =>
-                      current[entry.id] === portal
-                        ? current
-                        : { ...current, [entry.id]: portal },
-                    )
-                  }
-                >
-                  {!world.hosts.some(
-                    (host) => host.connectionId === conversation.connectionId,
-                  ) && (
-                    <div className="world-window-scope" role="status">
-                      <span>
-                        Outside Hosts filter · {conversation.hostLabel}
-                      </span>
-                      <button
-                        type="button"
-                        onClick={() =>
-                          hostsFilter.setIds(
-                            hostsFilter.ids === null
-                              ? null
-                              : [
-                                  ...new Set([
-                                    ...hostsFilter.ids,
-                                    conversation.connectionId,
-                                  ]),
-                                ],
-                          )
-                        }
-                      >
-                        Reveal in Hosts
-                      </button>
-                    </div>
-                  )}
-                </WindowFrame>
-              );
-            }}
-          </WindowSurface>
-        </div>
-      )}
+              }}
+            </WindowSurface>
+          </>
+        )}
+      </div>
       <Suspense fallback={null}>
         {inspectorConversations.map((conversation) => (
           <WorldInspectorConversationView

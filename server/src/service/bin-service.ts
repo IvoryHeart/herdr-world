@@ -40,6 +40,8 @@ export function createBinService(deps: {
   };
   publish(revision: number): void;
   log(message: string): void;
+  /** The bin's journey, step by step, for the service journal. */
+  info?(message: string): void;
   /** herdr-core connections, whose closes are native kills. */
   core?: () => ConnectionManager<CoreConnectionRuntime> | null;
   /** The bus has left with these riders: they are being retired. */
@@ -70,6 +72,7 @@ export function createBinService(deps: {
     },
     publish: deps.publish,
     log: deps.log,
+    info: deps.info,
   });
   const closer = createBinCloser({
     ledger: deps.ledger,

@@ -5,8 +5,10 @@ name: Web asset headroom
 on:
   pull_request:
     types: [opened, synchronize, reopened]
+    paths: ["web/**", "shared/**", "package.json", "bun.lock", "scripts/*web-asset*", ".github/workflows/web-asset-headroom.yml"]
   push:
     branches: [main]
+    paths: ["web/**", "shared/**", "package.json", "bun.lock", "scripts/*web-asset*", ".github/workflows/web-asset-headroom.yml"]
 
 permissions:
   contents: read
@@ -19,7 +21,7 @@ concurrency:
 
 jobs:
   headroom:
-    # Not the status's name: require the "Web asset headroom" status, which a
+    # Not the status's name: advisory "Web asset headroom" status, which a
     # main push can update after this job has finished.
     name: Measure web asset headroom
     runs-on: ubuntu-latest

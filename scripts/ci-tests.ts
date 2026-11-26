@@ -61,49 +61,54 @@ if (import.meta.main) {
     process.env.HERDR_CI_SELECTION || "null",
   ) as ValidationSelection;
   assert(selection && lane, "Missing CI selection");
+  const runs =
+    lane === "world" ? Number(process.env.HERDR_CI_WORLD_RUNS || 1) : 1;
+  assert(runs === 1 || runs === 3, "World browser runs must be 1 or 3");
   const batches = ciTestBatches(selection, lane, shard);
   if (!batches.length) console.info(`${lane}: no affected suites`);
-  for (const { files, parallel } of batches) {
-    mkdirSync(".agents/delivery", { recursive: true });
-    const child = Bun.spawn(
-      [
-        process.execPath,
-        lane === "world"
-          ? "scripts/run-world-tests.ts"
-          : "scripts/run-tests.ts",
-        ...files,
-        `--parallel=${parallel}`,
-        `--max-concurrency=${lane === "world" ? 1 : 2}`,
-        ...(lane === "web"
-          ? [
-              "--reporter=junit",
-              `--reporter-outfile=.agents/delivery/web-browser-${shard?.replace("/", "-of-") || "all"}.xml`,
-            ]
-          : []),
-      ],
-      {
-        stdin: "inherit",
-        stdout: "inherit",
-        stderr: "inherit",
-        env: {
-          ...process.env,
-          ...(lane === "world"
-            ? {
-                HERDR_WORLD_TEST_LABEL: `${process.env.HERDR_WORLD_TEST_LABEL || "local"}-${parallel === 1 ? "isolated" : "parallel"}`,
-              }
-            : {}),
+  passes: for (let pass = 1; pass <= runs; pass++) {
+    for (const { files, parallel } of batches) {
+      mkdirSync(".agents/delivery", { recursive: true });
+      const child = Bun.spawn(
+        [
+          process.execPath,
+          lane === "world"
+            ? "scripts/run-world-tests.ts"
+            : "scripts/run-tests.ts",
+          ...files,
+          `--parallel=${parallel}`,
+          `--max-concurrency=${lane === "world" ? 1 : 2}`,
+          ...(lane === "web"
+            ? [
+                "--reporter=junit",
+                `--reporter-outfile=.agents/delivery/web-browser-${shard?.replace("/", "-of-") || "all"}.xml`,
+              ]
+            : []),
+        ],
+        {
+          stdin: "inherit",
+          stdout: "inherit",
+          stderr: "inherit",
+          env: {
+            ...process.env,
+            ...(lane === "world"
+              ? {
+                  HERDR_WORLD_TEST_LABEL: `${process.env.HERDR_WORLD_TEST_LABEL || "local"}${runs > 1 ? `-pass-${pass}` : ""}-${parallel === 1 ? "isolated" : "parallel"}`,
+                }
+              : {}),
+          },
         },
-      },
-    );
-    const stop = () => child.kill("SIGTERM");
-    process.on("SIGINT", stop);
-    process.on("SIGTERM", stop);
-    try {
-      process.exitCode = await child.exited;
-    } finally {
-      process.off("SIGINT", stop);
-      process.off("SIGTERM", stop);
+      );
+      const stop = () => child.kill("SIGTERM");
+      process.on("SIGINT", stop);
+      process.on("SIGTERM", stop);
+      try {
+        process.exitCode = await child.exited;
+      } finally {
+        process.off("SIGINT", stop);
+        process.off("SIGTERM", stop);
+      }
+      if (process.exitCode !== 0) break passes;
     }
-    if (process.exitCode !== 0) break;
   }
 }

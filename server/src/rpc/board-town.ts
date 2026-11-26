@@ -200,6 +200,12 @@ async function dispatchBoardTownRpc(
               allow_close_room: p.allow_close_room === true,
             },
       );
+      // A desk that just moved refuses a runtime move until it settles.
+      if (result.status === "moved")
+        rpc.services.moveSettle?.mark({
+          connection_id: route.connectionId,
+          tab_id: result.tab_id,
+        });
       sendReply({ id, result }, method);
     } catch (error) {
       sendError(`${method}-error`, error);

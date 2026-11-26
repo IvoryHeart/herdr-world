@@ -1,0 +1,10 @@
+/*
+ * A place's building under the pointer (townPlaces.ts, #1170): its sign
+ * lights as the sign itself does under hover, so the house reads as the
+ * same button.
+ */
+.town-world [data-town-place][data-place-hovered] {
+  filter: brightness(1.12);
+  outline: 2px solid rgb(255 209 102 / 0.75);
+  outline-offset: 2px;
+}

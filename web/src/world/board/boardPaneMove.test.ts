@@ -2,6 +2,12 @@ import { expect, test } from "bun:test";
 import { fixtureHost, fixtureWorld } from "./boardFixture";
 import { projectBoard } from "./boardModel";
 import { moveBoardPane, type BoardPaneMoveRequest } from "./boardPaneMove";
+import {
+  cardAgentAddress,
+  otherRuntimeRooms,
+  requestAgentHandoff,
+  workspaceRoom,
+} from "../town/townRuntimeMove";
 
 function fixture() {
   const spaces = [
@@ -104,4 +110,171 @@ test("a missing move outcome stays uncertain instead of claiming rollback", asyn
     rolled_back: false,
     topology_known: false,
   });
+});
+
+test("a one-agent card dropped on another runtime's tab resumes there", async () => {
+  const { model, request } = fixture();
+  const source = request.target;
+  const sourceWorkspace = request.targetWorkspace;
+  const target = model.tabs.find((tab) => tab.hostKey !== source.hostKey)!;
+  const targetWorkspace = model.workspaceByKey.get(target.workspaceKey)!;
+  const calls: unknown[] = [];
+  const outcome = await moveBoardPane(
+    {
+      source,
+      target,
+      pane: source.panes[0]!,
+      sourceWorkspace,
+      targetWorkspace,
+    },
+    false,
+    () => {
+      throw new Error("must not move a pane");
+    },
+    async (method, params) => {
+      calls.push({ method, params });
+      return { status: "moved", target: { tab_id: "t9", workspace_id: "w9" } };
+    },
+  );
+  expect(outcome).toEqual({
+    status: "moved",
+    tab_id: "t9",
+    workspace_id: "w9",
+  });
+  expect(calls).toEqual([
+    {
+      method: "world.agent.move",
+      params: {
+        move_id: expect.stringMatching(/^[0-9a-f]{24}$/),
+        source: {
+          connection_id: "alpha",
+          generation: 1,
+          workspace_id: sourceWorkspace.nativeId,
+          tab_id: source.nativeId,
+          pane_id: source.panes[0]!.leaf.pane.pane_id,
+          terminal_id: source.panes[0]!.leaf.terminalId,
+          color_key: source.key,
+        },
+        destination: {
+          connection_id: "beta",
+          generation: 1,
+          workspace_id: targetWorkspace.nativeId,
+        },
+      },
+    },
+  ]);
+});
+
+test("with nothing to resume the move asks, and goes fresh only once confirmed", async () => {
+  const { model, request } = fixture();
+  const target = model.tabs.find(
+    (tab) => tab.hostKey !== request.target.hostKey,
+  )!;
+  const room = workspaceRoom(model.workspaceByKey.get(target.workspaceKey)!);
+  const source = cardAgentAddress(request.target, request.targetWorkspace);
+  const sent: unknown[] = [];
+  const call = (async (_method: string, params: { fresh?: boolean }) => {
+    sent.push(params.fresh ?? false);
+    return params.fresh
+      ? { status: "moved", target: { tab_id: "t9", workspace_id: "w9" } }
+      : {
+          status: "confirm",
+          message: "It starts fresh there. Move it anyway?",
+        };
+  }) as never;
+  const asked: string[] = [];
+  expect(
+    await requestAgentHandoff(source, room, call, (message) => {
+      asked.push(message);
+      return false;
+    }),
+  ).toEqual({ status: "refused", reason: "cancelled", message: "Not moved." });
+  expect(sent).toEqual([false]);
+  expect(
+    await requestAgentHandoff(source, room, call, () => true),
+  ).toMatchObject({ status: "moved", tab_id: "t9" });
+  expect(sent).toEqual([false, false, true]);
+  expect(asked).toEqual(["It starts fresh there. Move it anyway?"]);
+});
+
+test("a refused move shows the service's own reason and words, not a blanket busy", async () => {
+  const { model, request } = fixture();
+  const target = model.tabs.find(
+    (tab) => tab.hostKey !== request.target.hostKey,
+  )!;
+  const room = workspaceRoom(model.workspaceByKey.get(target.workspaceKey)!);
+  const source = cardAgentAddress(request.target, request.targetWorkspace);
+  const message =
+    "Ada didn't start there: No harness. It resumed where it was.";
+  const call = (async () => ({
+    status: "refused",
+    reason: "start_failed",
+    message,
+  })) as never;
+  expect(await requestAgentHandoff(source, room, call)).toEqual({
+    status: "refused",
+    reason: "start_failed",
+    message,
+  });
+});
+
+test("Move to… offers only rooms of another runtime: a second view of the same Herdr is not one", () => {
+  const rooms = [
+    { key: "a", connectionId: "tui", stale: false },
+    { key: "b", connectionId: "tui-saved", stale: false },
+    { key: "c", connectionId: "core", stale: false },
+    { key: "d", connectionId: "core-old", stale: true },
+  ];
+  const endpoint = new Map([
+    ["tui", "herdr:local:/synthetic/herdr.sock"],
+    ["tui-saved", "herdr:local:/synthetic/herdr.sock"],
+    ["core", "core:local:/synthetic/core.sock"],
+    ["core-old", "core:local:/synthetic/old.sock"],
+  ]);
+  const keys = (from: string) =>
+    otherRuntimeRooms(rooms, { connection_id: from }, (id) =>
+      endpoint.get(id),
+    ).map((room) => room.key);
+  expect(keys("tui")).toEqual(["c"]);
+  expect(keys("tui-saved")).toEqual(["c"]);
+  expect(keys("core")).toEqual(["a", "b"]);
+});
+
+test("a move whose socket closed mid-way asks, once back, how that move ended", async () => {
+  const { model, request } = fixture();
+  const target = model.tabs.find(
+    (tab) => tab.hostKey !== request.target.hostKey,
+  )!;
+  const room = workspaceRoom(model.workspaceByKey.get(target.workspaceKey)!);
+  const source = cardAgentAddress(request.target, request.targetWorkspace);
+  let epoch = 0;
+  const sent: Array<{ move_id?: string; follow?: boolean }> = [];
+  const call = (async (
+    _method: string,
+    params: { move_id?: string; follow?: boolean },
+  ) => {
+    sent.push(params);
+    if (sent.length === 1) {
+      // The heartbeat or the network closed the socket: pending calls fail.
+      epoch += 1;
+      throw new Error("bridge heartbeat timed out");
+    }
+    return { status: "moved", target: { tab_id: "t9", workspace_id: "w9" } };
+  }) as never;
+  const link = { epoch: () => epoch, back: async () => true };
+  expect(
+    await requestAgentHandoff(source, room, call, () => true, link),
+  ).toMatchObject({ status: "moved", tab_id: "t9" });
+  expect(sent).toHaveLength(2);
+  expect(sent[0]!.move_id).toMatch(/^[0-9a-f]{24}$/);
+  expect(sent[1]).toMatchObject({ move_id: sent[0]!.move_id, follow: true });
+  expect(sent[0]!.follow).toBeUndefined();
+
+  // A service error on a live socket is the answer: no follow.
+  const failing = (async () => {
+    throw new Error("Invalid move address.");
+  }) as never;
+  await expect(
+    requestAgentHandoff(source, room, failing, () => true, link),
+  ).rejects.toThrow("Invalid move address.");
 });

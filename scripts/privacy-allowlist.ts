@@ -3,6 +3,11 @@
 // Reuse already-published upstream attribution only in this generated artifact.
 // Values come from main's published baseline, never from the current additions.
 export const publishedAttributionFile = "DEPENDENCY_LICENSES.md";
+// Owner-approved #1325: preserve get-tsconfig/resolve-pkg-maps' MIT copyright.
+// This exact address is allowed only in publishedAttributionFile, never elsewhere.
+export const reviewedAttributionEmails = new Set([
+  ["hiroki.osame", "gmail.com"].join("@"),
+]);
 export const reservedEmailDomain =
   /^(?:[a-z0-9-]+\.)*(?:example\.(?:com|org|net)|example|invalid|test|localhost)$/i;
 export const syntheticHomeUsers = new Set([

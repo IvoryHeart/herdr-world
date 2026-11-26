@@ -43,21 +43,16 @@ import { AgentState } from "../components/AgentMark";
 import { needsYouLeafKey, openNeedsYou } from "./needsYou";
 import type { WorldDeskStore } from "./deskStateStore";
 import type { DeskRevealResult } from "./deskReveal";
-import { DeskOtherHosts } from "./DeskOtherHosts";
+import { DeskOtherHosts, deskHostLabel } from "./DeskOtherHosts";
+import { useHostGroupOf } from "./useHostGroups";
 import { leafPinnedBy, useDeskPins } from "./useDeskPins";
 import { useGreetingAnchor } from "./townMasterGreeting";
-import {
-  keyTakenByViewSearch,
-  useViewSearchShortcut,
-} from "./viewSearchShortcut";
-import {
-  useFoldingSearch,
-  usePhoneViewport,
-  useViewSearchTitle,
-} from "./useFoldingSearch";
-import { Search } from "lucide-react";
+import { keyTakenByViewSearch } from "./viewSearchShortcut";
+import { useFoldingSearch, usePhoneViewport } from "./useFoldingSearch";
+import { ListFilter } from "lucide-react";
 export { otherHostSummaries } from "./DeskOtherHosts";
 import "./DeskView.css";
+import { MadeSummary, artefactsMade, useAgentArtefacts } from "./MadeSummary";
 
 type Lane = "needs" | "review" | "working";
 type Item = {
@@ -248,6 +243,7 @@ export function DeskBoard({
 }) {
   // The Town Master's greeting opens at the summary on wide screens.
   const greetingAnchor = useGreetingAnchor();
+  const groupOf = useHostGroupOf();
   const now = useNow(10_000);
   const asks = useWorldAsks();
   const asking = useMemo(() => asksForWorld(asks, world), [asks, world]);
@@ -263,6 +259,7 @@ export function DeskBoard({
     error: stateError,
   } = useDeskState(agents, client, deskStore);
   const receipts = useTurnReceipts(agents, client, stopIds);
+  const made = useAgentArtefacts(agents);
   const receiptFor = (leaf: WorldLeafObject) => {
     const receipt = receipts(leaf);
     return { ...receipt, current: receipt.current && verified };
@@ -286,10 +283,9 @@ export function DeskBoard({
   };
   const [query, setQuery] = useState("");
   const [toast, setToast] = useState<{ id: string; name: string } | null>(null);
-  // On desktop the search rests as an icon; a phone keeps the box.
+  // Desk's filter narrows its lanes; finding goes through World's one search
+  // (`/`, Cmd+K). On desktop the filter rests as an icon; a phone keeps it.
   const search = useFoldingSearch(query, !usePhoneViewport());
-  const searchTitle = useViewSearchTitle("Search Desk");
-  useViewSearchShortcut(search.expand);
   const [expanded, setExpanded] = useState<string | null>(null);
   const [fullReports, setFullReports] = useState<Map<string, string>>(
     () => new Map(),
@@ -374,10 +370,7 @@ export function DeskBoard({
               ].map((leaf) => [leaf.id, { leaf }]),
             ).values(),
           ];
-  const hostLabel =
-    world.hosts.length === 1
-      ? world.hosts[0]?.label
-      : `${world.hosts.length} hosts`;
+  const hostLabel = deskHostLabel(world, groupOf);
   const oldestWait = needs[0]?.since ? formatSpan(now - needs[0].since) : null;
 
   const previewTimer = useRef<number | undefined>(undefined);
@@ -724,6 +717,7 @@ export function DeskBoard({
             ) : null}
           </div>
         ) : null}
+        <MadeSummary leaf={leaf} items={made.get(leaf.id)} />
         <div className="desk-card-actions">
           <button
             type="button"
@@ -781,6 +775,7 @@ export function DeskBoard({
       showWorkspace ? leaf.spaceLabel : null,
       leaf.tabLabel ? `desk ${leaf.tabLabel}` : null,
       agentFolder(leaf),
+      artefactsMade(made.get(leaf.id)),
     ].filter(Boolean);
     return (
       <li key={leaf.id}>
@@ -891,6 +886,7 @@ export function DeskBoard({
           world={aggregate ?? world}
           filtered={world}
           label={hostLabel}
+          groupOf={groupOf}
           pinned={pinned}
           onReveal={
             onReveal
@@ -926,21 +922,21 @@ export function DeskBoard({
               ref={search.toggleRef}
               type="button"
               className="desk-search-toggle"
-              aria-label="Search Desk"
-              title={searchTitle}
+              aria-label="Filter Desk"
+              title="Filter Desk"
               onClick={search.expand}
             >
-              <Search size={16} aria-hidden="true" />
+              <ListFilter size={16} aria-hidden="true" />
             </button>
           ) : (
             <label className="desk-search" {...search.boxProps}>
-              <span className="desk-search-label">Find</span>
+              <span className="desk-search-label">Filter</span>
               <input
                 ref={search.inputRef}
                 type="search"
                 value={query}
                 placeholder="Agent, workspace, tab, folder or request"
-                aria-label="Find an agent"
+                aria-label="Filter Desk"
                 onChange={(event) => setQuery(event.target.value)}
                 onKeyDown={(event) => {
                   if (event.key === "Escape") {

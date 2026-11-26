@@ -9,6 +9,7 @@ import { githubJson } from "./dependency-security-issues";
 export type DependencyPR = {
   number: number;
   body: string | null;
+  title?: string;
   user: { login: string; type: string };
   base: { sha: string; ref: string; repo: { full_name: string } };
   head: { sha: string; ref: string; repo: { full_name: string } };
@@ -17,6 +18,7 @@ export type Maintenance = {
   head: string;
   body: string;
   files: Record<string, string>;
+  title?: string;
 };
 const manifests = [
   "package.json",
@@ -45,7 +47,6 @@ export function acceptsDependencyPR(pr: DependencyPR, paths: string[]) {
       (path) =>
         manifests.includes(path) ||
         notices.includes(path) ||
-        path === `changes/dependencies-${pr.number}.md` ||
         /^\.github\/workflows\/[\w-]+\.yml$/.test(path),
     )
   );
@@ -79,18 +80,14 @@ export function shippedGraphChanged(base: AppLock, head: AppLock) {
   return shipped(base) !== shipped(head);
 }
 
-export function maintenanceBody(
-  body: string | null,
-  shipped: boolean,
-  number: number,
-) {
+export function maintenanceBody(body: string | null) {
   const clean = (body ?? "")
     .replace(
       /\n?<!-- dependency-maintenance -->[\s\S]*?<!-- \/dependency-maintenance -->\n?/g,
       "",
     )
     .trimEnd();
-  return `${clean}\n\n<!-- dependency-maintenance -->\n${shipped ? `Changelog: changes/dependencies-${number}.md` : "Changelog: none — dependency maintenance changes only development tooling or Actions; the shipped runtime graph is unchanged."}\nSpec impact: none — dependency version updates do not change product or API contracts.\nVerification impact: none — dependency maintenance does not change ordering, ownership, authority or recovery contracts.\nDocumentation impact: dependency notices regenerated; existing product and release instructions remain accurate.\n<!-- /dependency-maintenance -->\n`;
+  return `${clean}\n\n<!-- dependency-maintenance -->\n\nSpec impact: none — dependency version updates do not change product or API contracts.\nVerification impact: none — dependency maintenance does not change ordering, ownership, authority or recovery contracts.\nDocumentation impact: dependency notices regenerated; existing product and release instructions remain accurate.\n<!-- /dependency-maintenance -->\n`;
 }
 
 function git(root: string, ...args: string[]) {
@@ -161,9 +158,6 @@ export async function prepareMaintenance(
       "utf8",
     );
   }
-  if (shipped)
-    files[`changes/dependencies-${pr.number}.md`] =
-      "### Fixed\n\n- Update bundled application dependencies to their maintained versions.\n";
   // Omit identical blobs, so a rebase/retry does not add empty commits.
   for (const [path, text] of Object.entries(files)) {
     try {
@@ -175,7 +169,7 @@ export async function prepareMaintenance(
   }
   await writeFile(
     output,
-    `${JSON.stringify({ head: pr.head.sha, body: maintenanceBody(pr.body, shipped, pr.number), files } satisfies Maintenance)}\n`,
+    `${JSON.stringify({ head: pr.head.sha, body: maintenanceBody(pr.body), title: `${shipped ? "fix" : "chore"}(deps): ${(pr.title ?? "Update dependencies").replace(/^[\w()/-]+:\s*/, "")}`, files } satisfies Maintenance)}\n`,
   );
 }
 
@@ -201,11 +195,7 @@ export async function publishMaintenance(
   )
     throw new Error("Dependency PR identity/revision changed");
   for (const [path, text] of Object.entries(plan.files)) {
-    if (
-      !notices.includes(path) &&
-      path !== `changes/dependencies-${pr.number}.md`
-    )
-      throw new Error("Unexpected generated path");
+    if (!notices.includes(path)) throw new Error("Unexpected generated path");
     if (typeof text !== "string" || text.length > 2_000_000)
       throw new Error("Invalid generated content");
   }
@@ -228,7 +218,7 @@ export async function publishMaintenance(
     const commit = (await request(`/repos/${repository}/git/commits`, {
       method: "POST",
       body: JSON.stringify({
-        message: "docs: maintain dependency notices and changelog",
+        message: "docs: maintain dependency notices",
         tree: tree.sha,
         parents: [plan.head],
       }),
@@ -243,7 +233,10 @@ export async function publishMaintenance(
   }
   await request(`/repos/${repository}/pulls/${pr.number}`, {
     method: "PATCH",
-    body: JSON.stringify({ body: plan.body }),
+    body: JSON.stringify({
+      body: plan.body,
+      ...(plan.title ? { title: plan.title } : {}),
+    }),
   });
   // Token-created commits/metadata do not trigger CI themselves. Explicitly
   // dispatch both gates; dispatches retain the required exact-head checks.

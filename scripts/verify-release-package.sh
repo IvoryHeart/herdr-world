@@ -34,7 +34,12 @@ grep -Fx "$expected_manifest" "$manifest"
 
 extract_dir="$(mktemp -d "${RUNNER_TEMP:-${TMPDIR:-/tmp}}/herdr-world-release.XXXXXX")"
 trap 'rm -rf "$extract_dir"' EXIT
-tar -xJf "dist/$versioned_archive" -C "$extract_dir"
+# On Windows RUNNER_TEMP is a drive path (D:\a\_temp). GNU tar unescapes a -C
+# argument ("\a" becomes a bell character) and reads "D:" as a remote host, so
+# tar never sees that path: it runs inside the folder and reads the archive by
+# its POSIX path ($PWD is /d/a/... in Git Bash).
+archive_path="$PWD/dist/$versioned_archive"
+(cd "$extract_dir" && tar -xJf "$archive_path")
 grep -Fx "herdr-world $version $platform" "$extract_dir/$package_dir/VERSION"
 for legal in LICENSE THIRD_PARTY_NOTICES.md DEPENDENCY_NOTICES.md DEPENDENCY_LICENSES.md UPSTREAM.md; do
   test -f "$extract_dir/$package_dir/$legal"

@@ -1,4 +1,5 @@
 import { installTownMasterFixture } from "../testing/townMasterFixture";
+import { checkSlowTownFlight } from "./townSlowFlight.browser";
 import { checkCoreDesks } from "./coreTownMoves.browser";
 import { prepareTownEdgeDrop } from "./townEdgeScroll.browser";
 import { checkTownEdgeArrows } from "./townEdgeArrows.browser";
@@ -23,6 +24,12 @@ import {
   checkTownRoomPlates,
 } from "./townRoomPlates.browser";
 import { checkApartmentsTry, checkTownCenter } from "./townCenter.browser";
+import { checkTownPlaces } from "./townPlaces.browser";
+import { FeatureHosts } from "../../features/FeatureHosts";
+import { NeedsYouHost } from "../NeedsYouTab";
+import { setApartmentsClient } from "../apartments/useApartments";
+import { setMemoryFixtureForTests } from "../memory/memoryFixture";
+import { fixtureApartmentsClient } from "../testing/apartmentsFixture";
 import { checkTownBusTrip } from "./townBusTrip.browser";
 import type { BinState } from "../../../../shared/bin";
 import { checkTownRoomFold, tapTownControl } from "./townRoomFold.browser";
@@ -72,6 +79,15 @@ import { WorldBin } from "../bin/WorldBin";
 const params = new URL(location.href).searchParams;
 const mode = params.get("mode") ?? "test";
 const scale = params.get("scale") ?? "typical";
+if (scale === "places") {
+  // Synthetic residents and memory, so Apartments and the Library open.
+  setApartmentsClient(fixtureApartmentsClient(Date.now()));
+  setMemoryFixtureForTests(true);
+  // A busy week's usage, so the observatory's sign is at its widest (#1351).
+  const url = new URL(location.href);
+  url.searchParams.set("usageFixture", "busy");
+  history.replaceState(history.state, "", url);
+}
 const failures: string[] = [];
 const check = (condition: boolean, message: string) => {
   if (!condition) failures.push(message);
@@ -84,10 +100,17 @@ if (exactViewport)
     `the ${exactViewport} case ran in a ${window.innerWidth}x${window.innerHeight} CSS viewport`,
   );
 const settle = () => new Promise((resolve) => setTimeout(resolve, 50));
+const progress: { at: number; waitingFor: string; frames: number }[] = [];
+Object.assign(window, { __townCheckProgress: progress });
 async function waitFor(
   condition: () => boolean,
   message: string | (() => string),
 ) {
+  progress.push({
+    at: Math.round(performance.now()),
+    waitingFor: typeof message === "string" ? message : "rendered geometry",
+    frames: window.__HERDR_TOWN_RENDERER__?.frames ?? 0,
+  });
   for (let index = 0; index < 400; index += 1) {
     if (condition()) return;
     await settle();
@@ -670,12 +693,16 @@ const binState = () =>
     closing: [],
     outcomes: [],
     bus: {
-      interval_ms: 240_000,
-      trip_ms: 120_000,
-      next_ms: 60_000,
+      speed_kmh: 36,
+      route_m: 0,
+      trip_ms: 0,
       elapsed_ms: null,
       stopped: false,
       trip: null,
+      next_ms: 60_000,
+      next_route_m: 500,
+      next_trip_ms: 120_000,
+      next_measured: false,
     },
   };
 worldBridge.call = async (method, params) => {
@@ -1259,6 +1286,17 @@ async function run() {
             if (!focus) unfocusedOpens.push(id);
           }}
         />
+        {scale === "places" ? (
+          <>
+            {/* As World's shell mounts them, so each place's window opens. */}
+            <FeatureHosts slot="dialogs" world={world} onOpen={() => {}} />
+            <NeedsYouHost
+              world={world}
+              onChat={() => {}}
+              onOpenTerminal={() => {}}
+            />
+          </>
+        ) : null}
         {launch && scale === "plates" ? (
           <AgentLauncherDialog
             world={world}
@@ -1280,7 +1318,23 @@ async function run() {
   worldSourcesStore.useFetch(async () =>
     Response.json({
       observedAt: 1,
-      sources: [],
+      // The places case's warehouse opens Work once GitHub has answered.
+      sources:
+        scale === "places"
+          ? [
+              {
+                id: "github",
+                label: "GitHub",
+                enabled: true,
+                state: "connected",
+                detail: "Synthetic GitHub",
+                checkedAt: detailReadAt,
+                lastSuccessAt: detailReadAt,
+                itemCount: 1,
+                config: { kind: "github", mergedDays: 7 },
+              },
+            ]
+          : [],
       items: [
         {
           key: "github:pr:example-org/atlas#7",
@@ -1534,6 +1588,34 @@ async function run() {
     "town targets did not finish progressive admission",
   );
 
+  const flightFrameDelay = Number(params.get("flightFrameDelay") ?? 0);
+  if (flightFrameDelay > 0 && mode === "test") {
+    const diagnostics = window.__HERDR_TOWN_RENDERER__!;
+    // The zero-delay case covers the full interaction journey at this exact
+    // viewport. Delaying its camera regression must not repeat all the peeks,
+    // topology mutations and colour bakes before it reaches that regression.
+    try {
+      await checkSlowTownFlight(
+        host,
+        diagnostics,
+        check,
+        waitFor,
+        flightFrameDelay,
+      );
+    } finally {
+      root.unmount();
+    }
+    await settle();
+    check(
+      diagnostics.activeApplications === 0,
+      "slow-flight unmount leaked a renderer",
+    );
+    check(
+      document.querySelectorAll("canvas[data-office-canvas]").length === 0,
+      "slow-flight unmount left a town canvas",
+    );
+    return;
+  }
   if (scale === "core" && mode === "test") {
     await checkCoreDesks(host, worldFor(base.connections), opened, inspected, {
       phone,
@@ -1548,6 +1630,34 @@ async function run() {
   }
   if (scale === "typical" && mode === "test") {
     await checkTownCenter(host, check, waitFor);
+  }
+  if (scale === "places" && mode === "test") {
+    await checkTownPlaces(host, check, waitFor, phone, async () =>
+      // GitHub signed out: the warehouse offers Integrations instead of Work.
+      worldSourcesStore.publishSettled({
+        observedAt: 2,
+        refreshing: false,
+        sources: [
+          {
+            id: "github",
+            label: "GitHub",
+            enabled: true,
+            state: "not_connected",
+            detail: "Synthetic sign-in needed",
+            checkedAt: Date.now(),
+            lastSuccessAt: null,
+            itemCount: 0,
+            config: { kind: "github", mergedDays: 7 },
+          },
+        ],
+        items: [],
+        links: [],
+        actions: [],
+      }),
+    );
+    root.unmount();
+    await settle();
+    return;
   }
   // Same seeded topology as typical, in its own case: the complete trip
   // samples every second, independently of Town's other interactions and
@@ -1743,11 +1853,17 @@ async function run() {
         );
     }
 
-    await checkTownRoomPlates(host, check, waitFor, {
-      connectionId: base.connections[0]!.connectionId,
-      generation: base.connections[0]!.generation,
-      workspaceId: base.connections[0]!.snapshot!.workspaces[0]!.workspace_id,
-    });
+    await checkTownRoomPlates(
+      host,
+      check,
+      waitFor,
+      {
+        connectionId: base.connections[0]!.connectionId,
+        generation: base.connections[0]!.generation,
+        workspaceId: base.connections[0]!.snapshot!.workspaces[0]!.workspace_id,
+      },
+      () => opened.length + inspected.length + selected.length,
+    );
     root.unmount();
     await settle();
     return;
@@ -3044,31 +3160,6 @@ async function run() {
   // The zoom steps (on a phone, − to the whole town and + back home) are
   // scene rules, checked headless in scene/townSceneCamera.test.ts.
 
-  // The slow portrait case deliberately enters without overview cards. Earlier
-  // interactions/expansion may also leave this scenario at a closer level.
-  if (Number(params.get("flightFrameDelay") ?? 0) > 0) {
-    await waitFor(
-      () => !diagnostics.flying,
-      "pre-card camera flight did not finish",
-    );
-    for (let into = 0; into < 6 && diagnostics.level !== "desk"; into += 1) {
-      const before = diagnostics.frames;
-      host.querySelector<HTMLButtonElement>('[aria-label="Zoom in"]')!.click();
-      await waitFor(
-        () => diagnostics.frames > before && !diagnostics.flying,
-        "pre-card desk-entry camera flight did not finish",
-      );
-    }
-    check(
-      diagnostics.level === "desk",
-      "room-card regression must enter at desk level",
-    );
-    check(
-      host.querySelector(".town-room-card") === null,
-      "room-card regression must start without an overview card",
-    );
-  }
-
   await prepareTownRoomCard(host, diagnostics, waitFor);
   await checkOverviewRoomHover(host, check, waitFor);
   // Room card activation still has to zoom into the room from that overview.
@@ -3677,51 +3768,19 @@ async function run() {
       [...host.querySelectorAll<HTMLButtonElement>(".town-room-card")].find(
         (card) => card.textContent?.includes("orbit"),
       );
-    const frameDelay = Number(params.get("flightFrameDelay") ?? 0);
-    const actualRAF = window.requestAnimationFrame.bind(window);
-    if (frameDelay > 0) {
-      await waitFor(
-        () => !diagnostics.flying,
-        "initial camera flight did not finish",
-      );
-      for (let into = 0; into < 3 && diagnostics.level !== "desk"; into += 1) {
-        const before = diagnostics.frames;
-        host
-          .querySelector<HTMLButtonElement>('[aria-label="Zoom in"]')!
-          .click();
-        await waitFor(
-          () => diagnostics.frames > before && !diagnostics.flying,
-          "desk-entry camera flight did not finish",
-        );
-      }
-      check(
-        diagnostics.level === "desk",
-        "slow-frame check did not enter desk level",
-      );
-      window.requestAnimationFrame = (callback) =>
-        actualRAF(() => {
-          setTimeout(() => callback(performance.now()), frameDelay);
-        });
-    }
     const zoomSteps: { frames: number; zoom: number; flying: boolean }[] = [];
-    try {
-      for (let step = 0; step < 6 && !orbitCard(); step += 1) {
-        const beforeFrames = diagnostics.frames;
-        host
-          .querySelector<HTMLButtonElement>('[aria-label="Zoom out"]')!
-          .click();
-        await waitFor(
-          () => diagnostics.frames > beforeFrames && !diagnostics.flying,
-          "zoom-out camera flight did not finish",
-        );
-        zoomSteps.push({
-          frames: diagnostics.frames - beforeFrames,
-          zoom: diagnostics.zoom,
-          flying: diagnostics.flying,
-        });
-      }
-    } finally {
-      if (frameDelay > 0) window.requestAnimationFrame = actualRAF;
+    for (let step = 0; step < 6 && !orbitCard(); step += 1) {
+      const beforeFrames = diagnostics.frames;
+      host.querySelector<HTMLButtonElement>('[aria-label="Zoom out"]')!.click();
+      await waitFor(
+        () => diagnostics.frames > beforeFrames && !diagnostics.flying,
+        "zoom-out camera flight did not finish",
+      );
+      zoomSteps.push({
+        frames: diagnostics.frames - beforeFrames,
+        zoom: diagnostics.zoom,
+        flying: diagnostics.flying,
+      });
     }
     const roomCard = orbitCard();
     check(

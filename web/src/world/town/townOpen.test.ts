@@ -8,6 +8,7 @@ import { projectWorldOffice } from "../herdrOfficeProjection";
 import { townModelFromProjection, townAttention } from "./townModel";
 import {
   inspectTownTerminal,
+  townDeskCardOpens,
   townDeskOpenKey,
   townDeskOpensAtOnce,
   townTargetActionable,
@@ -161,4 +162,19 @@ test("the focused pane wins a desk tap, then an agent that needs you; a crowded 
   expect(townDeskOpenKey(crowded, desk.desk.key)).toBe(null);
   const focused = withPane(crowded, 1, { focused: true });
   expect(townDeskOpenKey(crowded, desk.desk.key)).toBe(focused.key);
+});
+
+test("only a shown table that opens nothing at once takes a card, and a second tap closes it", () => {
+  const cached = office(true);
+  const deskKey = cached.deskRoster[0]!.desk.key;
+  const shown = new Set(["room"]);
+  expect(townDeskCardOpens(cached, deskKey, null, "room", shown)).toBe(true);
+  expect(townDeskCardOpens(cached, deskKey, deskKey, "room", shown)).toBe(
+    false,
+  );
+  expect(townDeskCardOpens(cached, deskKey, null, "other", shown)).toBe(false);
+  expect(townDeskCardOpens(cached, null, null, "room", shown)).toBe(false);
+  const live = office(false);
+  const liveDesk = live.deskRoster[0]!.desk.key;
+  expect(townDeskCardOpens(live, liveDesk, null, "room", shown)).toBe(false);
 });

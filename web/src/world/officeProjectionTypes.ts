@@ -127,6 +127,8 @@ export type OfficeDesk = {
 };
 
 export type OfficeRoom = {
+  /** A live herdr-core room: desks move in through world.core.* or a handoff. */
+  coreOpen?: true;
   key: string;
   hostKey: string;
   /**
@@ -167,6 +169,8 @@ export type OfficeRoom = {
    * building holds rooms of more than one runtime (townBuildings.ts).
    */
   runtimeTag?: string;
+  /** Town only: the runtime whose icon stands beside the room's name. */
+  runtimeKind?: "herdr" | "herdr-core";
 };
 
 export type OfficeReception = {

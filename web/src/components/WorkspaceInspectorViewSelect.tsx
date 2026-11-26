@@ -1,6 +1,7 @@
 import { useRef, useState, type Ref, type KeyboardEvent } from "react";
 import { flushSync } from "react-dom";
 import {
+  ChevronDown,
   SquareTerminal,
   FolderTree,
   MessagesSquare,
@@ -10,7 +11,7 @@ import {
 import { Popover, PopoverContent, PopoverTrigger } from "./ui/popover";
 import "./InterestButton.css";
 import type { InspectorView } from "../workspaceResource";
-export const INSPECTOR_TAB_LABELS: Partial<Record<InspectorView, string>> = {
+const INSPECTOR_TAB_LABELS: Partial<Record<InspectorView, string>> = {
   history: "Chat",
   terminal: "Terminal",
   changes: "Changes",
@@ -27,28 +28,29 @@ export const INSPECTOR_TAB_ORDER: readonly InspectorView[] = [
   "commits",
 ];
 
-const MOBILE_VIEWS: readonly InspectorView[] = [
-  "history",
-  "terminal",
-  "files",
-  "changes",
-];
-
-/** Mobile's primary view switcher; attention belongs to the window menu. */
+/**
+ * The Inspector's one view menu, for a bar too narrow for its tabs: a phone,
+ * or a desktop window narrowed until the tabs no longer fit (#1361). Its
+ * trigger shows the current view; `bar` gives it the look of the active tab,
+ * so the chip left in a narrow desktop bar is the menu. Attention belongs to
+ * the window menu.
+ */
 export function WorkspaceInspectorViewSelect({
   value,
-  availableViews,
+  views,
   historyAvailable,
+  bar = false,
   onChange,
 }: {
   value: InspectorView;
-  availableViews: readonly InspectorView[];
+  /** The views to offer, in the tab bar's order. */
+  views: readonly InspectorView[];
   historyAvailable: boolean;
+  bar?: boolean;
   onChange(view: InspectorView): void;
 }) {
   const [open, setOpen] = useState(false);
   const triggerRef = useRef<HTMLButtonElement>(null);
-  const views = MOBILE_VIEWS.filter((view) => availableViews.includes(view));
   const icons = {
     terminal: SquareTerminal,
     files: FolderTree,
@@ -57,19 +59,34 @@ export function WorkspaceInspectorViewSelect({
     commits: GitGraph,
   };
   const Icon = icons[value];
+  const trigger = (
+    <PopoverTrigger asChild>
+      <button
+        ref={triggerRef}
+        type="button"
+        className={
+          bar
+            ? "is-active workspace-inspector-view-select is-bar"
+            : "interest-button workspace-inspector-view-select"
+        }
+        aria-label={`Inspector view: ${INSPECTOR_TAB_LABELS[value]}`}
+        title={`View: ${INSPECTOR_TAB_LABELS[value]}`}
+      >
+        <Icon size={bar ? 14 : 17} aria-hidden="true" />
+        {bar ? <ChevronDown size={11} aria-hidden="true" /> : null}
+      </button>
+    </PopoverTrigger>
+  );
   return (
     <Popover open={open} onOpenChange={setOpen}>
-      <PopoverTrigger asChild>
-        <button
-          ref={triggerRef}
-          type="button"
-          className="interest-button workspace-inspector-view-select"
-          aria-label={`Inspector view: ${INSPECTOR_TAB_LABELS[value]}`}
-          title={`View: ${INSPECTOR_TAB_LABELS[value]}`}
-        >
-          <Icon size={17} aria-hidden="true" />
-        </button>
-      </PopoverTrigger>
+      {bar ? (
+        // Inside the tab bar's frame, so every skin draws it as a tab.
+        <div className="workspace-inspector-tabs workspace-inspector-view-menu">
+          {trigger}
+        </div>
+      ) : (
+        trigger
+      )}
       <PopoverContent
         className="interest-popover"
         align="end"
@@ -116,14 +133,12 @@ export function WorkspaceInspectorViewSelect({
 /** Keep secondary controls after the four primary views. */
 export function WorkspaceInspectorSecondaryControls({
   commitsAvailable,
-  hideInactiveCommits = false,
   view,
   commitsRef,
   onViewChange,
   onKeyDown,
 }: {
   commitsAvailable: boolean;
-  hideInactiveCommits?: boolean;
   view: InspectorView;
   commitsRef: Ref<HTMLButtonElement>;
   onViewChange(view: InspectorView): void;
@@ -131,7 +146,7 @@ export function WorkspaceInspectorSecondaryControls({
 }) {
   return (
     <>
-      {commitsAvailable && (!hideInactiveCommits || view === "commits") ? (
+      {commitsAvailable ? (
         <div
           className="workspace-inspector-tabs"
           role="tablist"

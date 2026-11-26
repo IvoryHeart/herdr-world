@@ -10,7 +10,7 @@ import { useLayer } from "../../layerStack";
 import { setBinDock } from "./binDock";
 import { store } from "../../store";
 import { tabPinsFor } from "../../tabPins";
-import type { BinView } from "../../../../shared/bin";
+import type { BinStop, BinView } from "../../../../shared/bin";
 import { tabCardKey } from "../../../../shared/terminalColor";
 import { sharedBoardStore } from "../board/boardDocument";
 import type { WorldLeafObject, WorldObject } from "../worldObject";
@@ -30,18 +30,20 @@ import "./bin.css";
 /**
  * Put an agent in the bin: it is held, and Town's next bus takes it. A
  * pinned desk (`pinnedDesk`) or a tab pinned in Spaces never loses its last
- * pane. True once held.
+ * pane. Dropped on a Town bus stop (`stop`), it waits there. True once held.
  */
 export async function putInBin(
   leaf: WorldLeafObject,
   view: BinView,
   pinnedDesk: boolean,
+  stop?: BinStop | null,
 ) {
   const request = binAddRequest(
     leaf,
     view,
     pinnedDesk,
     tabPinsFor(leaf.connectionId),
+    stop,
   );
   let error: string | null;
   if (leaf.coreControl) {
@@ -103,12 +105,14 @@ async function confirmCoreBin(leaf: WorldLeafObject) {
 
 /**
  * Put an agent in the bin from a view's drag: its tab is kept when its desk
- * is pinned in Town (by the tab's card key) or its tab in Spaces.
+ * is pinned in Town (by the tab's card key) or its tab in Spaces. One
+ * dropped on a Town bus stop (`stop`) waits there.
  */
 export function putAgentInBin(
   leaf: WorldLeafObject,
   view: BinView,
   world: Pick<WorldObject, "spaces">,
+  stop?: BinStop | null,
 ) {
   const workspaceIds = new Set(
     world.spaces
@@ -117,7 +121,7 @@ export function putAgentInBin(
   );
   const pins = sharedBoardStore().get().document?.layout.desk_pins ?? {};
   const key = tabCardKey(leaf.connectionId, leaf.tabId, workspaceIds);
-  return putInBin(leaf, view, Boolean(pins[key]));
+  return putInBin(leaf, view, Boolean(pins[key]), stop);
 }
 
 const OUTCOME: Record<string, string> = {
@@ -130,7 +134,7 @@ const OUTCOME: Record<string, string> = {
 /**
  * The bin in every view: a chip while it holds agents (always in Town and on
  * Board, where agents are dragged onto it), and its tray (from the chip, or
- * Town's stops and bus) listing who waits with the time to the next bus,
+ * Town's stops and bus) listing who waits with the time the bus is back at Apartments,
  * with Put back and Close now. A stopped bus is let go from the tray, or
  * goes on as the tray closes. Only Town (`bus`) has a bus to speak of;
  * elsewhere the bin says when it closes what it holds. `dock` (Board's hub)
@@ -260,7 +264,7 @@ export function WorldBin({
                     <small>
                       {town
                         ? entry.riding
-                          ? "On the bus; closes when it leaves"
+                          ? "On the bus; closes at Apartments"
                           : "Waiting for the bus"
                         : entry.riding
                           ? "Closing soon"

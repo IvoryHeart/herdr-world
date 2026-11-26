@@ -159,8 +159,8 @@ export class TownSceneCamera {
       // beside it and the first building under them, down to its lounge
       // where idle agents rest; a tall screen shows the billboard above too.
       // A screen too short for all keeps the whole building and slides the
-      // center up, never past its plaque and doors (#1033), so the
-      // warehouse's folded sign on the center stays in view (#1028).
+      // center up, never past its plaque and doors (#1033). The library and
+      // observatory stand right of the center, a pan away (#1351).
       const x = first ? (first.x + first.w / 2) * T : (layout.width * T) / 2;
       const focus = camera.focusPoint();
       const board =

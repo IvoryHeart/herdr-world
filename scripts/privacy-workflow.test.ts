@@ -1,7 +1,6 @@
 import { expect, test } from "bun:test";
 import { execFileSync, spawnSync } from "node:child_process";
 import {
-  existsSync,
   mkdirSync,
   mkdtempSync,
   readFileSync,
@@ -33,18 +32,18 @@ type Workflow = {
   };
 };
 
-test("privacy CI covers all branches and PRs without scope or metadata bypasses", () => {
+test("privacy CI scans every PR change once without scope or metadata bypasses", () => {
   const workflow = Bun.YAML.parse(
     readFileSync(join(root, ".github/workflows/privacy.yml"), "utf8"),
   ) as Workflow;
-  expect(workflow.on.push).toEqual({ branches: ["**"] });
+  expect(workflow.on.push).toBeUndefined();
   expect(workflow.on.pull_request).toEqual({
-    types: ["opened", "synchronize", "reopened"],
+    types: ["opened", "synchronize", "reopened", "edited"],
   });
   expect(workflow.permissions).toEqual({ contents: "read" });
   expect(workflow.concurrency).toBeUndefined();
   const job = workflow.jobs.privacy;
-  expect(job.if).toBe("github.event.deleted != true");
+  expect(job.if).toBeUndefined();
   expect(job.needs).toBeUndefined();
   expect(job["continue-on-error"]).toBeUndefined();
   const checkout = job.steps.find((step: { uses?: string }) =>
@@ -58,8 +57,11 @@ test("privacy CI covers all branches and PRs without scope or metadata bypasses"
   const scan = job.steps.find((step: { run?: string }) =>
     step.run?.includes("check-privacy.ts"),
   );
+  // No step may stand the scan down once the job runs.
+  for (const step of job.steps as Array<Step & { if?: string }>)
+    expect(step.if).toBeUndefined();
   expect(workflow.on).toHaveProperty("workflow_dispatch");
-  for (const event of ["push", "pull_request", "workflow_dispatch"]) {
+  for (const event of ["pull_request", "workflow_dispatch"]) {
     const directory = mkdtempSync(join(tmpdir(), "privacy-dispatch-"));
     try {
       writeFileSync(join(directory, "bun"), '#!/bin/sh\nprintf "%s" "$*"\n', {
@@ -84,7 +86,6 @@ test("privacy CI covers all branches and PRs without scope or metadata bypasses"
       rmSync(directory, { recursive: true, force: true });
     }
   }
-  expect(scan?.if).toBeUndefined();
   expect(scan?.["continue-on-error"]).toBeUndefined();
 });
 
@@ -170,7 +171,9 @@ test("the real pre-push hook blocks private refs before policy and delivery comm
     expect(result.status).toBe(1);
     expect(result.stderr).toContain("privacy/home-path");
     expect(result.stderr).not.toContain(sensitive);
-    expect(existsSync(join(directory, "other-commands"))).toBe(false);
+    expect(readFileSync(join(directory, "other-commands"), "utf8").trim()).toBe(
+      "run format:check",
+    );
   } finally {
     rmSync(directory, { recursive: true, force: true });
   }

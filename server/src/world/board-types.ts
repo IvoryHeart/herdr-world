@@ -109,6 +109,11 @@ export type BoardDocument = {
 };
 
 export type BoardOp =
+  | {
+      op: "agent.rehome";
+      from: import("../../../shared/agentMove").AgentAddress;
+      to: import("../../../shared/agentMove").AgentAddress;
+    }
   | { op: "element.put"; element: BoardElementInput; rev?: number }
   | { op: "element.delete"; id: string; rev: number }
   | { op: "appearance.prune"; keys: string[] }

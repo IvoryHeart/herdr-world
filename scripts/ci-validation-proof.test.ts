@@ -54,9 +54,8 @@ test("real delivery publishes scoped proof only after all applicable results pas
         VALIDATION_RESULT: staticResult,
         WORLD_RESULT: "skipped",
         BEHAVIORAL_RESULT: "skipped",
-        WINDOWS_PLUGIN_RESULT: "skipped",
         INSTALLER_RESULT: "skipped",
-        LAUNCHD_RESULT: "success",
+        RELEASE_RESULT: "skipped",
         HERDR_CI_SELECTION: JSON.stringify(selection),
       },
     });

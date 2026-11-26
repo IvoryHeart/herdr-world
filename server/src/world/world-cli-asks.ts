@@ -1,4 +1,5 @@
 import { questionAskerKey } from "../../../shared/questionAsker";
+import { askQuestionHint } from "../../../shared/askCommands";
 import { CliError } from "./world-cli-errors";
 import type { CliHost, WorldCliDeps } from "./world-cli";
 import { paneActor } from "./world-cli-actor";
@@ -128,6 +129,28 @@ export async function handleWorldAsk(
   now: () => number,
 ): Promise<unknown> {
   switch (command) {
+    case "ask ls": {
+      if (!actor.verified)
+        refused("listing your questions requires a verified asking terminal");
+      const at = now();
+      return deps.ledger
+        .get()
+        .asks.filter((ask) => canWithdraw(ask.actor, actor))
+        .reverse()
+        .sort((left, right) => right.at - left.at)
+        .map((ask) => ({
+          id: ask.id,
+          state: ask.withdrawn
+            ? "withdrawn"
+            : ask.answer
+              ? "answered"
+              : ask.dismissed
+                ? "dismissed"
+                : "open",
+          age_ms: Math.max(0, at - ask.at),
+          question: ask.question.split(/\r?\n/, 1)[0]!,
+        }));
+    }
     case "ask withdraw": {
       let ask;
       if (params.key !== undefined) {
@@ -168,6 +191,8 @@ export async function handleWorldAsk(
     }
     case "ask": {
       const question = text(params.question, "the question");
+      const hint = askQuestionHint(question);
+      if (hint) usage(hint);
       const key =
         params.key === undefined
           ? undefined
@@ -185,11 +210,14 @@ export async function handleWorldAsk(
       // ledger mutation, so concurrent requests cannot bypass admission.
       const asker = await placeAsker(deps.hosts(), actor);
       // Owner alerts go through Herdr's toasts; a herdr-core asker has none,
-      // so its alert goes through the default Herdr connection.
+      // so its alert goes through the Herdr connection that alerts the owner
+      // (owner-alert-connection.ts), never the default when that is herdr-core.
       const notificationConnection =
         asker.connection_id && !deps.core?.()?.has(asker.connection_id)
           ? asker.connection_id
-          : deps.defaultConnectionId();
+          : deps.ownerAlertConnectionId
+            ? deps.ownerAlertConnectionId()
+            : deps.defaultConnectionId();
       if (key) {
         const known = deps.ledger
           .get()

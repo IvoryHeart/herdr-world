@@ -4,9 +4,11 @@ import { TownBoard, type TownQuietMarks } from "./TownBoard";
 import {
   TownTeamsLayer,
   TownWorldLayer,
+  townHoveredRoomKey,
   type TownRoomCardPress,
 } from "./TownWorldLayer";
 import { TownBuildingSigns } from "./townBuildingSigns";
+import { TownPlaces } from "./townPlaces";
 import { TownBuildingLayers } from "./townBuildingLayers";
 import { TownBoardPlacement } from "./townBoardPlacement";
 import {
@@ -26,7 +28,7 @@ import { TOWN_GESTURES } from "./townGesture";
 import { DEVTOOLS, NO_TRACE, type ViewTrace } from "../devtools/flag";
 import { traceGesture } from "../devtools/trace";
 import { TownZoomControls } from "./TownZoomControls";
-import { townDeskOpensAtOnce } from "./townOpen";
+import { townDeskCardOpens } from "./townOpen";
 import type { HerdrOfficeProjection } from "../herdrOfficeProjection";
 import type {
   WorldCanvasAnchor,
@@ -44,6 +46,7 @@ import {
   TownCenterSign,
   type TownCenterAction,
 } from "./TownCenterMenu";
+import { withBuildingsAction } from "./townCenterBuildings";
 import { TownScene } from "./scene/townScene";
 import { holdTownReflowOnInput } from "./townSceneInput";
 import { sharedTownJoinSeats, type TownJoinSeats } from "./townJoinSeats";
@@ -53,6 +56,8 @@ import { TownHudContext, useTownHud } from "./useTownHud";
 import { TownSceneCamera, townViewport } from "./scene/townSceneCamera";
 import { TownInteraction } from "./scene/townInteraction";
 import { townBrowserClock, townBrowserFrames } from "./townBrowserClock";
+import { TownHostRect } from "./townHostRect";
+import { TownWorldTransform } from "./townWorldTransform";
 import { townSummary, type TownSummary } from "./townSummary";
 import { townCalls } from "./TownRail";
 import {
@@ -75,11 +80,12 @@ import {
   NO_FOLDED_ACTIVITY,
   type TownFoldedActivity,
 } from "./townFoldedActivity";
+import { townPlaqueCard } from "./townPlaqueCard";
 import "./town.css";
 import { markAway, type TownQuestMark } from "./townQuestPennant";
 import { TownBusLayer, useTownBin } from "./TownBusLayer";
 import { TownArrivalLayer, useTownArrivals } from "./TownArrivalLayer";
-import { aimAtBin } from "../bin/binDrop";
+import { townBinDropPorts } from "./townBinDrop";
 import {
   townReceptionTakesAll,
   type TownReceptionTakes,
@@ -336,6 +342,7 @@ export function TownCanvas({
     calm,
     model,
     layout,
+    busRoute: townBin.route,
     teams,
     selectedKey,
     hover,
@@ -369,13 +376,15 @@ export function TownCanvas({
     rendererRef,
   );
   const anchorFrame = useRef<(() => void) | null>(null);
+  const hostRect = useRef<TownHostRect | null>(null);
+  const world = useRef<TownWorldTransform | null>(null);
   const reportAnchors = () => {
     const { onAnchorChange: report, onSelectedAnchorChange: reportSelected } =
       latest.current;
     const renderer = rendererRef.current;
     const host = hostRef.current;
     if ((!report && !reportSelected) || !renderer || !host) return;
-    const rect = host.getBoundingClientRect();
+    const rect = (hostRect.current ??= new TownHostRect(host)).get();
     const { model: m, layout: l } = latest.current;
     const worldAnchor = (key: string | null): WorldCanvasAnchors => {
       const at = townWorldAnchor(key, m, l, (agentKey) =>
@@ -410,6 +419,7 @@ export function TownCanvas({
   const [layers] = useState(() => new TownBuildingLayers());
   const signFrame = () => rendererRef.current?.invalidate("building-sign");
   const [signs] = useState(() => new TownBuildingSigns(signFrame));
+  const [places] = useState(() => new TownPlaces()); // #1170 buildings
   const [boards] = useState(() => new TownBoardPlacement(rendererRef, view));
   const hoverEntry = useCallback(
     (key: string | null, rect?: DOMRect) =>
@@ -451,9 +461,8 @@ export function TownCanvas({
     if (layer) {
       const tx = camera.viewport.width / 2 - camera.x * camera.z;
       const ty = camera.viewport.height / 2 - camera.y * camera.z;
-      layer.style.transform = `translate(${tx}px, ${ty}px) scale(${camera.z})`;
-      layer.style.setProperty("--z", String(camera.z));
-      layer.style.setProperty("--iz", String(1 / camera.z));
+      world.current ??= new TownWorldTransform(layer, townBrowserClock);
+      world.current.place(tx, ty, camera.z);
       boards.place(camera.z, latest.current.layout);
       if (levelRef.current !== level) {
         levelRef.current = level;
@@ -473,9 +482,9 @@ export function TownCanvas({
     ring.place();
     edge.frameArrows(camera, level);
     // Inspected agents walk under a still camera, so their lines follow every
-    // drawn frame. World keeps unchanged anchors, so idle frames commit nothing.
-    if (posed || latest.current.conversationTargets.length > 0)
-      scheduleAnchors();
+    // drawn frame, in it. World keeps unchanged anchors: idle frames commit
+    // nothing.
+    if (posed || latest.current.conversationTargets.length > 0) reportAnchors();
   };
   const onFrameRef = useRef(onFrame);
   onFrameRef.current = onFrame;
@@ -492,6 +501,7 @@ export function TownCanvas({
   useEffect(() => {
     const renderer = rendererRef.current;
     if (!renderer || !hostRef.current) return;
+    hostRect.current?.invalidate();
     view.reframe(latest.current.layout, viewport(), (next) =>
       renderer.setViewport(next),
     );
@@ -579,6 +589,10 @@ export function TownCanvas({
       observer.disconnect();
       anchorFrame.current?.();
       anchorFrame.current = null;
+      hostRect.current?.dispose();
+      hostRect.current = null;
+      world.current?.dispose();
+      world.current = null;
       latest.current.onAnchorChange?.(null);
       latest.current.onSelectedAnchorChange?.(null);
       view.detach();
@@ -647,6 +661,7 @@ export function TownCanvas({
       view,
       stage: () => rendererRef.current,
       world: () => latest.current,
+      canMoveRoom: (k) => latest.current.roomActions.canMoveRoom?.(k) ?? true,
       hovered: () => latest.current.hover,
       setHovered: setHover,
       hover: (hover) => latest.current.onHover?.(hover),
@@ -657,22 +672,17 @@ export function TownCanvas({
       tapCard: (deskKey) => {
         const { tappedDesk: open, model: m, projection: p } = latest.current;
         const roomKey = deskKey ? m.desks.get(deskKey)?.roomKey : undefined;
-        // Only a table drawn with its nameplate, and with no pane a tap
-        // opens at once (townDeskOpensAtOnce), has a card; a second tap on
-        // the same table does what a tap always did.
-        const opens =
-          deskKey !== null &&
-          deskKey !== open &&
-          !townDeskOpensAtOnce(p, deskKey) &&
-          !!roomKey &&
-          hud.visible.tagRooms.has(roomKey);
+        const shown = hud.visible.tagRooms;
+        const opens = townDeskCardOpens(p, deskKey, open, roomKey, shown);
         setTappedDesk(opens ? deskKey : null);
         return opens;
       },
       activateAgent: (key) => latest.current.onActivateAgent(key),
       activateRoom: (key) => latest.current.onActivateRoom(key),
       openReception: setOpenReception,
+      tapRoomName: townPlaqueCard.toggle,
       openCenter: ring.openRing,
+      ...places.ports(document),
       move: (command) => {
         const actions = latest.current.roomActions;
         switch (command.kind) {
@@ -710,16 +720,8 @@ export function TownCanvas({
       },
       held: () => navigator.vibrate?.(12),
       // The bin chip and the bus stops lie over the canvas: a carry over
-      // one is dropped in the bin.
-      binAt: (at) => {
-        if (!at || !latest.current.roomActions.onBinDrop) return aimAtBin(null);
-        const rect = host.getBoundingClientRect();
-        return aimAtBin({ x: rect.left + at.x, y: rect.top + at.y });
-      },
-      bin: (drag) =>
-        drag.kind === "room"
-          ? undefined
-          : latest.current.roomActions.onBinDrop?.(drag.kind, drag.key),
+      // one is dropped in the bin (at that stop).
+      ...townBinDropPorts(host, () => latest.current),
       // Town's targets are live hits and drags: trace a summary of each.
       trace: DEVTOOLS
         ? (before, after, event, effects) =>
@@ -924,6 +926,7 @@ export function TownCanvas({
             signs={signs}
             layers={layers}
             boards={boards}
+            places={places}
             onHoverEntry={hoverEntry}
             selectedKey={selectedKey}
             blockedSince={blockedSince}
@@ -938,17 +941,7 @@ export function TownCanvas({
               (hover !== null && model.desks.has(hover) ? hover : null)
             }
             openReceptionKey={openReception}
-            openRoomKey={
-              // Zoomed out, a mouse anywhere over a room (a table or an
-              // agent in it) opens the room's card.
-              hover === null
-                ? null
-                : model.rooms.has(hover)
-                  ? hover
-                  : (model.desks.get(hover)?.roomKey ??
-                    model.agents.get(hover)?.roomKey ??
-                    null)
-            }
+            openRoomKey={townHoveredRoomKey(model, hover)}
             onActivateRoom={(key) => {
               onActivateRoom(key);
               zoomToRoomKey(key);
@@ -983,7 +976,7 @@ export function TownCanvas({
       />
       {ring.open && lens.ringActions ? (
         <TownCenterMenu
-          actions={lens.ringActions}
+          actions={withBuildingsAction(lens.ringActions, places)}
           viewportWidth={hostRef.current?.clientWidth ?? 0}
           place={ring.place}
           onClose={ring.close}

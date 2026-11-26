@@ -202,6 +202,27 @@
 .town-bus[hidden] {
   display: none;
 }
+/* Over the bus, the way up whichever way it faces: its speed and distance. */
+.town-bus-sign {
+  position: absolute;
+  left: 50%;
+  bottom: 100%;
+  z-index: 1;
+  padding: 1px 3px;
+  translate: -50% -2px;
+  color: #ffb300;
+  font:
+    700 8px / 1 ui-monospace,
+    monospace;
+  white-space: nowrap;
+  background: #1c1722;
+  border: 1px solid #3b3b3b;
+  border-radius: 2px;
+  pointer-events: none;
+}
+.town-bus-sign[hidden] {
+  display: none;
+}
 .town-bus-side,
 .town-bus-end {
   position: absolute;

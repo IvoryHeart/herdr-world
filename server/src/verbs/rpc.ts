@@ -1,5 +1,4 @@
 import { CORE_LOCAL_ADDRESS_PATTERN } from "../../../shared/coreAddress";
-import { USAGE_ANALYTICS_GROUPS } from "../../../shared/usageAnalytics";
 import { Type } from "typebox";
 import { declare, object, policies, text } from "./declaration";
 import { rpcInput, rpcOutput } from "./rpc-contracts";
@@ -234,15 +233,12 @@ export const rpcVerbs = [
   rpc("worktree.list", "read", "runtime"),
   rpc("worktree.open", "reconcilable", "runtime"),
   rpc("worktree.remove", "reconcilable", "runtime"),
-  // Apartments: finished agents' records. Evict names explicit residents.
   rpc(
-    "world.apartments.evict",
-    "reconcilable",
+    "world.agent.move",
+    "opaque",
     "world",
-    object({ ids: Type.Array(text, { minItems: 1, maxItems: 500 }) }),
+    object({ source: Type.Unknown(), destination: Type.Unknown() }),
   ),
-  rpc("world.apartments.history", "read", "world", object({ id: text })),
-  rpc("world.apartments.list", "read", "world"),
   rpc("world.appearance.patch", "reconcilable", "world"),
   rpc("world.appearance.rename", "reconcilable", "world"),
   rpc("world.ask.answer", "reconcilable", "world"),
@@ -284,6 +280,17 @@ export const rpcVerbs = [
   rpc("world.bin.pause", "reconcilable", "world"),
   rpc("world.bin.restore", "reconcilable", "world", object({ id: text })),
   rpc("world.bin.resume", "reconcilable", "world"),
+  // A Town's measure of the next bus's route past the waiting agents' stops.
+  rpc(
+    "world.bin.route",
+    "reconcilable",
+    "world",
+    object({
+      ids: Type.Array(text, { minItems: 1, maxItems: 64 }),
+      route_m: Type.Number({ minimum: 0, maximum: 50_000 }),
+      stops: Type.Integer({ minimum: 1, maximum: 64 }),
+    }),
+  ),
   rpc("world.board.elements.types", "read", "world"),
   rpc("world.board.elements.list", "read", "world"),
   rpc(
@@ -590,36 +597,6 @@ export const rpcVerbs = [
   rpc("world.profiles.get", "read", "world"),
   rpc("world.profiles.save", "reconcilable", "world"),
   rpc("world.snapshot", "read", "world"),
-  rpc(
-    "world.usage.analytics",
-    "read",
-    "world",
-    object({
-      window: Type.Optional(
-        Type.Union([Type.Literal("today"), Type.Literal("7d")]),
-      ),
-      // One list for the API, CLI and screens: a group missing here refuses
-      // every read of it (the Usage screens' `run` read once was).
-      group_by: Type.Optional(
-        Type.Union(USAGE_ANALYTICS_GROUPS.map((group) => Type.Literal(group))),
-      ),
-      connection_id: Type.Optional(text),
-      connection_generation: Type.Optional(Type.Integer({ minimum: 0 })),
-      pane_id: Type.Optional(text),
-      workspace_id: Type.Optional(text),
-      project_id: Type.Optional(text),
-    }),
-  ),
-  rpc(
-    "world.usage.get",
-    "read",
-    "world",
-    object({
-      window: Type.Optional(
-        Type.Union([Type.Literal("today"), Type.Literal("7d")]),
-      ),
-    }),
-  ),
   rpc("world.town_master.set", "reconcilable", "world"),
   rpc("world.watchlist.list", "read", "world"),
   rpc("world.watchlist.pin", "reconcilable", "world"),

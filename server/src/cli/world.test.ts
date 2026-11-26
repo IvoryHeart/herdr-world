@@ -37,6 +37,42 @@ function context() {
 }
 
 describe("parsing", () => {
+  test("ask ls uses result ls's common flags without a state filter", () => {
+    expect(parseWorldArgs("ask", ["ls", "--json"])).toEqual({
+      command: "ask ls",
+      params: {},
+      json: true,
+    });
+    expect(() => parseWorldArgs("ask", ["ls", "--all"])).toThrow();
+    expect(() => parseWorldArgs("ask", ["ls", "extra"])).toThrow();
+  });
+
+  test("command words cannot become questions, including after flags", () => {
+    for (const word of [
+      "ls",
+      "list",
+      "get",
+      "answer",
+      "withdraw",
+      "help",
+      "acknowledge",
+    ]) {
+      for (const question of [word, ` ${word.toUpperCase()} `]) {
+        expect(() => parseWorldArgs("ask", ["--json", question])).toThrow(
+          "herdr-world ask",
+        );
+      }
+      if (word !== "ls")
+        expect(() => parseWorldArgs("ask", [word])).toThrow("herdr-world ask");
+    }
+    expect(parseWorldArgs("ask", ["list the options?"]).params.question).toBe(
+      "list the options?",
+    );
+    expect(parseWorldArgs("ask", ["Proceed?"]).params.question).toBe(
+      "Proceed?",
+    );
+  });
+
   test("ask cause keys and withdrawal use the existing ask command", () => {
     expect(
       parseWorldArgs("ask", ["READY?", "--key", "crew:7", "--owner-only"]),
@@ -119,6 +155,74 @@ describe("parsing", () => {
 });
 
 describe("running", () => {
+  test("ask list and help fail before transport or fallback alerts", async () => {
+    for (const word of [
+      "list",
+      "help",
+      "get",
+      "answer",
+      "withdraw",
+      "acknowledge",
+    ]) {
+      const { context: ctx } = context();
+      let effects = 0;
+      await expect(
+        runWorldCommand(
+          "ask",
+          [word],
+          ctx,
+          async () => {
+            effects++;
+            return { ok: false, code: "unavailable" };
+          },
+          true,
+          () => {
+            effects++;
+            return { shown: true, reason: "unexpected" };
+          },
+        ),
+      ).rejects.toThrow("herdr-world ask");
+      expect(effects).toBe(0);
+    }
+  });
+
+  test("ask ls has result ls's line output, empty output and JSON envelope", async () => {
+    const entries = [
+      { id: "q-example", state: "open", age_ms: 1000, question: "Proceed?" },
+    ];
+    for (const command of ["ask", "result"]) {
+      for (const json of [false, true]) {
+        const { context: ctx, out } = context();
+        expect(
+          await runWorldCommand(
+            command,
+            ["ls", ...(json ? ["--json"] : [])],
+            ctx,
+            async (verb) => {
+              expect(verb).toBe(`${command} ls`);
+              return { ok: true, result: entries };
+            },
+            true,
+          ),
+        ).toBe(0);
+        expect(out).toEqual([
+          json
+            ? JSON.stringify({ ok: true, result: entries })
+            : JSON.stringify(entries[0]),
+        ]);
+      }
+      const { context: ctx, out } = context();
+      await runWorldCommand(
+        command,
+        ["ls"],
+        ctx,
+        async () => ({ ok: true, result: [] }),
+        true,
+      );
+      expect(out).toEqual(["(none)"]);
+    }
+  });
+
   test("a retained answered cause prints its answer in human output", async () => {
     const { context: ctx, out } = context();
     const transport: WorldCliTransport = async () => ({

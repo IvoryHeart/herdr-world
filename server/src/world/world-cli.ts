@@ -117,6 +117,8 @@ export type WorldCliDeps = {
   /** herdr-core connections, for callers inside core terminals (P4). */
   core?(): import("./world-cli-actor").CoreCallerSource | null;
   defaultConnectionId(): string | null;
+  /** Herdr connection alerting for a core/unplaced asker; absent: default. */
+  ownerAlertConnectionId?(): string | null;
   snapshot(): Promise<WorldSnapshotResult>;
   sources?(): Promise<GroupWorkSources>;
   elements?: import("./board-element-service").BoardElementService;
@@ -617,6 +619,8 @@ export function createWorldCli(deps: WorldCliDeps) {
   ): Promise<unknown> {
     if (command.startsWith("memory "))
       return runMemoryCli(deps.memory, command, params, recheck);
+    if (command === "ask" || command.startsWith("ask "))
+      return handleWorldAsk(deps, command, params, actor, now);
     const record = recordWithDeps.bind(null, completion);
     const patchBoard = patchBoardWithDeps.bind(null, deps);
     const changeBoard = changeBoardWithDeps.bind(null, deps);
@@ -824,12 +828,6 @@ export function createWorldCli(deps: WorldCliDeps) {
           null,
         );
       }
-      case "ask":
-      case "ask get":
-      case "ask acknowledge":
-      case "ask answer":
-      case "ask withdraw":
-        return handleWorldAsk(deps, command, params, actor, now);
       case "result": {
         const status = (params.status ?? "done") as ResultStatus;
         if (!RESULT_STATUSES.includes(status))

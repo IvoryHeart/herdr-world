@@ -33,14 +33,12 @@ same PR, including new storage and rendering paths, while its contract delta is
 still active; do not wait for archival. Existing broad directory ownership proves
 source coverage, not that a feature's navigation is current. Do not edit current
 `spec.md` files.
-A main push queues one `bot/openspec-archive` PR: completed changes are applied
-and archived oldest merge date first; incomplete tasks stay active. A conflict
-restores that item's partial writes and stops the batch, retaining earlier
-successful archives in the PR. Even an empty stopped batch fails the workflow and
-names the stopped change in its log and summary. Resolve the named delta in a normal PR
-or on the bot branch before the next batch; the bot merges main without overwriting
-branch repairs. Merge dates use first appearance on main, independent of timezone
-or later edits. The bot never pushes main or merges; independent review still applies.
+The broken automatic archive bot is retired. Completed merged changes synchronize
+through reviewed archive PRs using the pinned helper, oldest merge date first;
+incomplete tasks stay active. A conflict restores that item's partial writes and
+stops the batch while retaining earlier successful archives. Merge dates use first
+appearance on main, independent of timezone or later edits. Never push main or
+merge automatically; independent review remains required.
 The pinned CLI has no bulk command, so `scripts/archive-changes.ts` sequences its
 validated archive command. The feature-map migration archives the five completed
 legacy deltas with `--skip-specs`: they were already synchronized under the old
@@ -151,8 +149,8 @@ modules need ownership and focused evidence in the guide.
 Follow the [candidate-delivery skill](../.agents/skills/candidate-delivery/SKILL.md)
 for the staged formatter, hooks, PR-body check and ready-PR handoff. It owns the
 delivery procedure. [CONTRIBUTING.md](../CONTRIBUTING.md#validation) describes gate
-selection, CI, queue slots and retained logs; [changes/README.md](../changes/README.md)
-owns the fragment format. Use the [PR template](../.github/pull_request_template.md)
+selection, CI, queue slots and retained logs. Release-please owns version/changelog
+updates from squash-merged `fix:`/`feat:` PR titles. Use the [PR template](../.github/pull_request_template.md)
 to record verification and execution evidence, with `unknown` for unavailable data.
 
 ### Post review results
@@ -281,7 +279,7 @@ entry point, Town canvas, Chat and the file-size exception ledger. A source spli
 and a feature touching the same code should land in an agreed order; otherwise
 the feature must deliberately follow the split's new module boundaries.
 
-Use the [changelog fragment policy](../changes/README.md). Bring
+Use `fix:`/`feat:` PR titles for release notes. Bring
 an older branch forward once before final verification, inspect the conflicting
 paths and preserve both behaviors. Do not repeatedly merge main solely to chase
 an unrelated red CI run: first identify the failed leaf job and whether main

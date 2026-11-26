@@ -111,6 +111,28 @@ Town SHALL present a town in which each presented host is one building along a
 road, each admitted Herdr workspace of that host is a room on a carpet inside its
 building, and each admitted tab is a desk in its room.
 
+#### Scenario: Town machine buildings acceptance rules
+
+- **WHEN** World presents Town for a machine with more than one runtime or
+  connection
+- **THEN** by default the runtimes of one machine (its Herdr TUI and
+  herdr-core) SHALL share one building through a display-only building key,
+  each room naming its runtime there; a browser-local Town buildings setting
+  (one per machine, the default, or one per runtime) SHALL restore a building
+  per runtime. The building key SHALL NOT change any entity's host key,
+  qualified references or actions, which stay on the owning connection and
+  generation. Two Herdr TUI connections to one endpoint SHALL present its
+  rooms once, preferring the writable connection.
+
+#### Scenario: One machine, two runtimes, a duplicated connection
+
+- **WHEN** a machine has two Herdr TUI connections to one socket and a
+  herdr-core, and Town buildings is one per machine
+- **THEN** Town shows one building for the machine with each TUI room once and
+  every core room, each room naming its runtime
+- **AND** each room's Move handle, arrows, Rename, Close and New agent act on
+  its own runtime's connection and generation
+
 #### Scenario: Town scene acceptance rules
 
 - **WHEN** World presents or updates Town and its qualified agents
@@ -253,18 +275,36 @@ moves (a tab's number is not its position).
   rebuilt. Town SHALL take its shape from its container's size rather than one
   breakpoint: on a phone, rooms up to four desks wide SHALL form three columns,
   spread across the building rather than one long column, and buildings SHALL
-  stack in one vertical column; on a portrait screen or a half-width window, rooms SHALL form
-  two columns and buildings SHALL stack (or share a street when the window is
-  landscape); on a wide screen, rooms SHALL form three columns and buildings
-  SHALL share one street. Rooms SHALL fill their building's columns in workspace
-  order, and while a scene is live each room SHALL keep its column, so a room
-  that grows moves only the rooms below it in that column. The lounge SHALL stay
+  stack in one vertical column; on a portrait screen or a half-width window, rooms
+  SHALL be up to six desks wide and buildings SHALL stack (or share a street when
+  the window is landscape); on a wide screen, rooms SHALL be up to eight desks
+  wide and buildings SHALL share one street. Outside phones, each building SHALL
+  choose its rooms per row from its rooms' count and sizes so its floor is close
+  to square (about 1:1 to 4:3, wider than tall), up to what fits the view's width
+  (two to five), so a small building stays compact and a large one gets more
+  columns. A browser-local Rooms per row setting (Auto, 2, 3, 4 or 5; Auto by
+  default) SHALL apply a chosen count to every building, phones included, live
+  and without a reload. Rooms SHALL fill their building's columns in workspace
+  order, and while a scene is live each room SHALL keep its column while its
+  building's rooms per row stays the same, so a room that grows moves only the
+  rooms below it in that column. Rooms without a saved spot SHALL fill the
+  building's rows around rooms that have one, so a saved spot never narrows a
+  building below its rooms per row. The lounge SHALL stay
   above the rooms, and the lobby and reception below them. A reflow that would move rooms
   or buildings due to background topology changes SHALL wait while the user
   presses, scrolls or zooms and until a short pause after, and the camera SHALL
   then follow the room in view so it stays where it was. An explicit Fold or
   Expand request SHALL apply its admitted desks and layout immediately, without
   waiting for that ambient quiet period.
+
+#### Scenario: A large building stays about square
+
+- **WHEN** Town is about 1100 px wide and a host's building holds about twenty
+  rooms, one of them moved to a saved spot
+- **THEN** on Auto the building takes more than two rooms per row and its floor
+  is about square, and the moved room keeps its spot
+- **AND WHEN** the user sets Rooms per row to 4 and then to 2
+- **THEN** the building reflows to four and then two rooms per row at once
 
 #### Scenario: A user expands while the reflow guard is active
 
@@ -681,3 +721,29 @@ names that include status text.
 
 - **WHEN** three hosts present eight rooms each with fifteen desks of four panes
 - **THEN** Town renders every room and keeps terminal input acknowledgement within the established budgets
+
+### Requirement: Quiet working agents are marked, not acted on
+
+Town SHALL mark an agent as quiet when Herdr reports it working and its last
+activity time is at least the browser's threshold old.
+
+#### Scenario: Quiet working agents acceptance rules
+
+- **WHEN** World presents or updates Town and its qualified agents
+- **THEN** The threshold SHALL be ten minutes by default, and a setting SHALL
+  offer other values or off. An agent without a last activity time SHALL NOT be
+  marked. A quiet agent SHALL stay seated with its room's working light on, stop
+  its working animation and show a static mark; at the room and desk levels the
+  mark SHALL carry how long the agent has been quiet, and a step shown at its
+  seat SHALL keep its running time. Its card SHALL say how long it has been
+  quiet and when it last moved. The Town board SHALL count quiet agents under
+  its working count, and that count SHALL open the first one with Next stepping
+  through those still quiet. Marking SHALL NOT change agent facts, counts,
+  placement or attention, and SHALL NOT nudge, interrupt or restart the agent or
+  add a runtime call.
+
+#### Scenario: A quiet agent moves again
+
+- **WHEN** a working agent last active 23 minutes ago under a ten-minute
+  threshold reports a new activity time
+- **THEN** its mark, card line and board count clear, and Next skips it

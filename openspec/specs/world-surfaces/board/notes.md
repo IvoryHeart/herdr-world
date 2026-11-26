@@ -16,6 +16,8 @@
 - `web/src/world/BoardView.tsx`
 - `web/src/world/board/BoardSketch.tsx`
 - `web/src/world/board/boardModel.ts`
+- `web/src/world/board/boardPlacement.ts`
+- `web/src/world/useHostGroups.ts`
 - `server/src/world/board-groups.ts`
 - `server/src/storage/board-port.ts`
 - `server/src/cli/world.ts`
@@ -24,6 +26,7 @@
 
 - `web/src/world/BoardView.test.ts`
 - `web/src/world/board/boardModel.test.ts`
+- `web/src/world/board/boardZones.test.ts`
 - `web/src/world/board/boardSketchGeometry.test.ts`
 - `server/src/service/board-storage.test.ts`
 
@@ -43,6 +46,14 @@
   pans the board, as in Town) and settle within a second; workspaces fold into a count and open
   into free space; Tidy (with Undo) rearranges a workspace or the board and
   carries strung notes along. Zoomed out, workspaces show a square per pane.
+  - **Zones follow Group runtimes** (Settings → This World). With **One per
+    machine**, this computer's Herdr TUI and herdr-core share one zone that
+    names the machine once, with a row per runtime (colour, counts, its own
+    **+** or recovery banner); dragging the zone label moves both runtimes.
+    Each runtime keeps its own cards, saved positions and operations
+    (`groupBoardZones` / `zoneHostKeys` in `boardModel.ts`), so switching the
+    setting moves no card; a runtime that joins later is placed under its
+    machine's cards (`boardPlacement.ts`).
   - **Town's facts on Board.** Board reads the same read models as Town, so
     each number matches Town's for the same thing. The chip at the top left
     counts **Busy**, **Waiting** (including open questions), **Done** (finished
@@ -70,9 +81,12 @@
     and the new agent's card appears on Board), the crown opens the **Town
     master**'s Chat (found as the town center finds it) and **⋯** lists
     **New agent**, **Town master**, **Needs you**, **Summary** (which takes
-    you to Town with the Town summary open), **Profiles** and **New
-    workspace** (disabled with the reason when no host is ready) in a plain
-    menu. Arrow keys, Home and End move through the menu; Escape, a press
+    you to Town with the Town summary open), **Profiles**, **Past sessions**
+    (Town's Apartments, with how many finished agents), **Memory** (Town's
+    Library, on the selected agent or workspace) and **New workspace**
+    (disabled with the reason when no host is ready) in a plain menu. Names
+    follow the view: Town's building names stay in Town, and the dialogs
+    keep their own titles. Arrow keys, Home and End move through the menu; Escape, a press
     outside or **Back** on a phone closes it. Board's controls leave the hub
     and bin room on their row, folding into Board's **⋯** menu as needed.
     The bin itself works as before.

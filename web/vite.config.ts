@@ -2,6 +2,7 @@ import { fileURLToPath } from "node:url";
 import { defineConfig, type Plugin } from "vite";
 import react from "@vitejs/plugin-react";
 import { currentBuildVersion } from "../scripts/build-version";
+import { precompressAssetsPlugin } from "../scripts/precompress-assets";
 import packageJson from "./package.json";
 
 const appVersion = currentBuildVersion(
@@ -38,7 +39,8 @@ export default defineConfig(({ mode }) => {
   const devtools =
     mode === "development" || process.env.HERDR_WORLD_BUILD_DEVTOOLS === "1";
   return {
-    plugins: [react(), onlyBundledDiffThemes()],
+    // Hashed /assets/* ship with brotli and gzip variants (#1245).
+    plugins: [react(), onlyBundledDiffThemes(), precompressAssetsPlugin()],
     define: {
       __HERDR_WORLD_VERSION__: JSON.stringify(appVersion),
       // World's development tools (event traces, renderer counters) exist only
@@ -120,6 +122,12 @@ export default defineConfig(({ mode }) => {
                 name: "ui-runtime",
                 test: /(?:node_modules[\\/](?:lucide-react|react|react-dom|scheduler|@radix-ui|@floating-ui)[\\/]|src[\\/](?:utils\.ts|components[\\/]ui[\\/]popover\.tsx)$)/,
                 tags: ["$initial"],
+              },
+              {
+                // The Library, its Town sign and Chat's Made summary read memory and
+                // the artefact shelf together; keep both clients in one lazy asset.
+                name: "memoryClient",
+                test: /src[\\/]world[\\/]memory[\\/](?:memoryClient|artefactShelfClient)\.ts$/,
               },
               {
                 // Feature-only icons and name dictionaries share one lazy asset.

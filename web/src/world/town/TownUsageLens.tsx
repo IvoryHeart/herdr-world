@@ -6,6 +6,7 @@ import {
   useState,
 } from "react";
 import { UsageLens, type UsageTab } from "../usage/UsageLens";
+import { PlaceWindow } from "../PlaceWindow";
 import {
   provideUsageOpener,
   type OpenUsage,
@@ -19,10 +20,6 @@ import type { WorldObject } from "../worldObject";
  */
 export const TownOpenUsageContext = createContext<OpenUsage | null>(null);
 export const useOpenTownUsage = () => useContext(TownOpenUsageContext);
-
-/** The observatory's signs, which the lens keeps as anchors. */
-const anchor = () =>
-  document.querySelector(".town-observatory-sign, .town-observatory-fold");
 
 /**
  * Town's Usage screens: the observatory's opener and, while open, the lens.
@@ -45,15 +42,24 @@ export function useTownUsage(world?: WorldObject) {
     [],
   );
   useEffect(() => provideUsageOpener(open), [open]);
+  // Town's one window (#1170): the observatory and Apartments open it.
   const lens = shown ? (
-    <UsageLens
-      key={shown.seq}
-      initialTab={shown.tab}
-      initialFilter={shown.filter}
-      anchor={anchor}
-      world={world}
+    <PlaceWindow
+      name="usage"
+      label="Usage"
+      closeLabel="Close Usage"
+      bodyClassName="place-window-lens"
       onClose={() => setShown(null)}
-    />
+    >
+      <UsageLens
+        key={shown.seq}
+        initialTab={shown.tab}
+        initialFilter={shown.filter}
+        framed
+        world={world}
+        onClose={() => setShown(null)}
+      />
+    </PlaceWindow>
   ) : null;
   return { open, lens };
 }

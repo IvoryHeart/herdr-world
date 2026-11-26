@@ -13,6 +13,7 @@
 - `server/src/usage/activity.ts`
 - `shared/usageHarnesses.ts`
 - `server/src/service/usage-analytics.ts`
+- `server/src/features/usage/`
 - `server/src/usage/analytics.test.ts`
 - `server/src/usage/activity.test.ts`
 - `server/src/rpc/usage.test.ts`

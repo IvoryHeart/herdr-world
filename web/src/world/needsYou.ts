@@ -113,6 +113,13 @@ export type NeedsYouState = {
   open: boolean;
   request: { itemKey?: string; sequence: number };
   openOutbox: (() => void) | null;
+  /**
+   * Open as Town's post office window (PlaceWindow, #1170) rather than the
+   * tab; closing it returns to the tab as it was (`tabOpen`). Never
+   * remembered.
+   */
+  window?: boolean;
+  tabOpen?: boolean;
 };
 
 const OPEN_KEY = "needsYou.open.v1";
@@ -144,7 +151,9 @@ export const subscribeNeedsYou = (listener: () => void) => {
 function update(patch: Partial<NeedsYouState>) {
   const previous = needsYouState();
   state = { ...previous, ...patch };
-  if (state.open !== previous.open)
+  // Only the tab's own open or closed is remembered, never the window's.
+  const tabWas = previous.window ? (previous.tabOpen ?? false) : previous.open;
+  if (!state.window && state.open !== tabWas)
     try {
       worldLocalStorage.setItem(OPEN_KEY, state.open ? "1" : "0");
     } catch {
@@ -153,15 +162,33 @@ function update(patch: Partial<NeedsYouState>) {
   listeners.forEach((listener) => listener());
 }
 
-/** Openers (the counter, reception, Desk, Board) show the tab at an item. */
-export function openNeedsYou(itemKey?: string) {
-  update({
-    open: true,
-    request: { itemKey, sequence: needsYouState().request.sequence + 1 },
-  });
+/**
+ * Openers (the counter, reception, Desk, Board) show the tab at an item;
+ * Town's post office (`window`) opens the list in Town's one window.
+ */
+export function openNeedsYou(
+  itemKey?: string,
+  options: { window?: boolean } = {},
+) {
+  const previous = needsYouState();
+  const request = { itemKey, sequence: previous.request.sequence + 1 };
+  if (options.window)
+    update({
+      open: true,
+      window: true,
+      tabOpen: previous.window ? previous.tabOpen : previous.open,
+      request,
+    });
+  else update({ open: true, window: false, request });
 }
 
-export const closeNeedsYou = () => update({ open: false });
+/** Closes the tab, or the post office's window back to the tab as it was. */
+export const closeNeedsYou = () => {
+  const previous = needsYouState();
+  if (previous.window)
+    update({ open: previous.tabOpen ?? false, window: false, tabOpen: false });
+  else update({ open: false });
+};
 
 export function toggleNeedsYou() {
   if (needsYouState().open) closeNeedsYou();

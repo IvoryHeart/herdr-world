@@ -16,7 +16,6 @@ import {
   townObservatory,
   townObservatoryCellText,
   townObservatoryFrom,
-  townObservatoryFoldAt,
   townObservatoryLit,
   townObservatoryLot,
   townObservatoryReserve,
@@ -25,7 +24,9 @@ import {
 } from "./townObservatoryModel";
 import { townPostLotBeside, townPostReserve } from "./townPostLot";
 import { townLibraryLot, townLibraryReserve } from "./townLibraryLot";
-import { townWarehouseFoldAt } from "./townWarehouseModel";
+import { townHarbourLot } from "./townHarbour";
+import { townHarbourReserve } from "./townHarbourLot";
+import { townPlaceBoxes } from "./townPlaces";
 
 const NOW = Date.UTC(2026, 10, 18, 12);
 const HOUR = 3_600_000;
@@ -165,19 +166,26 @@ const towns: [string, TownInput, TownShape][] = [
     town({ a: [2], b: [1], c: [1], d: [1], e: [1] }),
     TOWN_SHAPES.wide,
   ],
+  // A phone and a portrait monitor stand it in the same civic row (#1351).
+  ["phone, one building", town({ a: [1] }), TOWN_SHAPES.phone],
+  [
+    "phone, three buildings",
+    town({ a: [2], b: [1], c: [4] }),
+    TOWN_SHAPES.phone,
+  ],
+  ["portrait, two buildings", town({ a: [6], b: [1] }), TOWN_SHAPES.portrait],
 ];
 
 test.each(towns)(
   "the observatory stands right of the library on the first street (%s), on clear land",
   (_, input, shape) => {
     const { layout } = layoutTown(input, shape);
-    const lot = townObservatoryLot(layout)!;
-    expect(lot).not.toBeNull();
+    const lot = townObservatoryLot(layout);
     const area = townObservatoryReserve(lot);
     const { center } = layout;
     const firstStreet = Math.min(...layout.roads);
     // Right of the library's lot, a short lawn between, inside the town.
-    const library = townLibraryReserve(townLibraryLot(layout)!);
+    const library = townLibraryReserve(townLibraryLot(layout));
     expect(area.x0).toBeGreaterThanOrEqual(library.x1);
     expect(lot.x).toBeGreaterThan(center.x + center.w);
     expect(lot.x - library.x1).toBeLessThanOrEqual(2);
@@ -212,22 +220,27 @@ test.each(towns)(
   },
 );
 
-test("a narrow town folds the observatory to a sign on the center", () => {
-  const { layout } = layoutTown(town({ a: [1] }), TOWN_SHAPES.phone);
-  expect(layout.formFactor).toBe("narrow");
-  // Main's warehouse sign also folds onto the right wing: keep both usable.
-  expect(
-    townWarehouseFoldAt(layout.center).y -
-      townObservatoryFoldAt(layout.center).y,
-  ).toBeGreaterThanOrEqual(36);
-  expect(townObservatoryLot(layout)).toBeNull();
+test("a narrow town stands the observatory as a building, clear of the harbour", () => {
+  for (const input of [town({ a: [1] }), town({ a: [2], b: [1], c: [1] })]) {
+    const { layout } = layoutTown(input, TOWN_SHAPES.phone);
+    expect(layout.formFactor).toBe("narrow");
+    const lot = townObservatoryLot(layout);
+    const area = townObservatoryReserve(lot);
+    // The harbour moves right with the wider town: its shore stays clear.
+    const harbour = townHarbourReserve(townHarbourLot(layout));
+    expect(area.x1 <= harbour.x0 || area.y1 <= harbour.y0).toBe(true);
+    // Its dome is a target, as on a wide town (#1351).
+    expect(townPlaceBoxes(layout).some(([key]) => key === "observatory")).toBe(
+      true,
+    );
+  }
 });
 
 test("making room for the observatory moves nothing as the town grows", () => {
   const one = layoutTown(town({ a: [1] }), TOWN_SHAPES.wide).layout;
   const two = layoutTown(town({ a: [1], b: [1] }), TOWN_SHAPES.wide).layout;
   expect(two.buildings[0]!.x).toBe(one.buildings[0]!.x);
-  expect(townObservatoryLot(two)!.x).toBeGreaterThanOrEqual(
-    townObservatoryLot(one)!.x,
+  expect(townObservatoryLot(two).x).toBeGreaterThanOrEqual(
+    townObservatoryLot(one).x,
   );
 });

@@ -9,8 +9,36 @@ name: World latency trend
 on:
     push:
         branches: [main]
+        paths:
+            - web/src/**
+            - web/package.json
+            - shared/**
+            - package.json
+            - bun.lock
+            - tools/chrome/**
+            - scripts/run-world-tests.ts
+            - scripts/world-browser-suites.ts
+            - scripts/check-lock.ts
+            - scripts/latency-trend.ts
+            - scripts/wait-for-quiet.ts
+            - scripts/test-chrome.ts
+            - .github/workflows/world-latency-trend.yml
     pull_request:
         types: [labeled, synchronize]
+        paths:
+            - web/src/**
+            - web/package.json
+            - shared/**
+            - package.json
+            - bun.lock
+            - tools/chrome/**
+            - scripts/run-world-tests.ts
+            - scripts/world-browser-suites.ts
+            - scripts/check-lock.ts
+            - scripts/latency-trend.ts
+            - scripts/wait-for-quiet.ts
+            - scripts/test-chrome.ts
+            - .github/workflows/world-latency-trend.yml
     schedule:
         - cron: "53 3 * * *"
     workflow_dispatch:
@@ -26,7 +54,7 @@ concurrency:
 jobs:
     measure:
         name: Measure ${{ matrix.suites }}
-        if: github.event_name != 'pull_request' || contains(github.event.pull_request.labels.*.name, 'latency-trend')
+        if: github.event_name != 'pull_request' || (contains(github.event.pull_request.labels.*.name, 'latency-trend') && (github.event.action != 'labeled' || github.event.label.name == 'latency-trend'))
         runs-on: ubuntu-latest
         timeout-minutes: 20
         strategy:
