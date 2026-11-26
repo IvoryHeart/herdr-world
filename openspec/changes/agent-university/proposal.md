@@ -38,8 +38,8 @@ comes fresh out of the University to work.
   options (design § 3). Supported means a per-launch option attaches exactly
   the set (or preloads it), checked in isolation before it ships; anything
   else is shown as planned or not built with its reason, never half-attached.
-  In this change: Claude Code and Codex attach skills and MCP servers; Kimi
-  Code, Pi and omp attach skills; the rest are planned or not built. No
+  In this change: Claude Code and Codex attach skills and MCP servers; Pi
+  and omp attach skills; the rest are planned or not built. No
   college browses a registry (no marketplace).
 - **A profile is a course of study:** its college (harness), role, brief, model,
   effort, permission, look, and the skills and MCP servers from that college.
@@ -47,8 +47,8 @@ comes fresh out of the University to work.
   destination host has every attached skill and MCP server, then attaches them
   with the harness's own launch options (Claude Code: the subagent definition's
   `skills`, and `--mcp-config` with `--strict-mcp-config`; Codex: per-launch
-  `-c` overrides of `mcp_servers.<name>.enabled` and `skills.config`; Kimi
-  Code `--skills-dir`; Pi `--no-skills --skill`; omp `--skills`). No skill is
+  `-c` overrides of `mcp_servers.<name>.enabled` and `skills.config`; Pi
+  `--no-skills --skill`; omp `--skills`). No skill is
   named in a prompt in place of attaching it. The user's harness configuration
   is never edited. A host that lacks one refuses the hire and says what is
   missing and where World looked.

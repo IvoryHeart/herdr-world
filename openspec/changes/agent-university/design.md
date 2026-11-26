@@ -152,9 +152,11 @@ editor's fields plus two new sections, with **Back** at the top on phones.
   harness's own configuration has it enabled. Read-only.
 - **What World can attach:** the college's skills, MCP and registry states
   from the table in § 3, each with its reason and source, for example Kimi
-  Code: "Skills: supported (only these). MCP servers: not built — Kimi Code
-  has no per-launch MCP option; World would have to replace its home folder,
-  which also replaces its login."
+  Code: "Skills: planned — `--skills-dir` replaces only the user and project
+  skill folders; skills from `extra_skill_dirs`, built-in skills and plugin
+  skills still load, and no launch option turns them off. MCP servers: not
+  built — Kimi Code has no per-launch MCP option; World would have to replace
+  its home folder, which also replaces its login."
 - **Models, efforts, permission modes:** the choices `HARNESS_CHOICES` offers,
   moved per college. A college without a launch mapping for them says so.
 - **Profiles in this college**, with **New profile** preset to it.
@@ -252,7 +254,7 @@ integration, is always kept in an exact set and listed as World's own.
 | --- | --- | --- | --- |
 | `claude` | **Supported**, loaded at start: the inline subagent definition's `skills` [C1] | **Supported**, only these: `--mcp-config <file> --strict-mcp-config` [C2] | Plugin marketplaces (`claude plugin`) [C3] |
 | `codex` | **Supported**, only these: `-c skills.config=[{name=…,enabled=false},…]` for every other catalogued skill [X1] | **Supported**, only these: `-c mcp_servers.<name>.enabled=true/false` [X2] | Plugin marketplaces (`codex plugin marketplace`) [X3] |
-| `kimi` | **Supported**, only these: `--skills-dir <per-launch folder>` replaces the user and project folders [K1] | **Not built:** no per-launch option; only `KIMI_CODE_HOME` (a whole new home and login) [K2] | Plugin marketplace (`/plugins`) [K3] |
+| `kimi` | **Planned:** `--skills-dir` replaces only the user and project folders; `extra_skill_dirs`, built-in and plugin skills still load, and no per-launch option turns them off [K1] [K4] | **Not built:** no per-launch option; only `KIMI_CODE_HOME` (a whole new home and login) [K2] | Plugin marketplace (`/plugins`) [K3] |
 | `pi` | **Supported**, only these: `--no-skills --skill <path>…` [P1] | **Planned:** none in Pi 0.87; Pi 1.x has built-in MCP, attachable per launch only through an extension World would ship (`-e`, `registerMcpServer`) [P2] | Packages gallery (`pi install npm:…`, pi.dev/packages) [P3] |
 | `omp` | **Supported**, only these: `--skills <name,…>` [O1] | **Planned:** a `--config` overlay with `enabledServers` may give an exact set, but omp imports servers from other harnesses and the combination is undocumented [O2] | Plugin marketplaces and skills.omp.sh (`omp plugin`, `omp skill search`) [O3] |
 | `grok` | **Planned:** per-launch `--plugin-dir` only adds; `[skills] disabled` has no per-launch override [G1] | **Not built:** no per-launch option; only `GROK_HOME` (new home and login) [G2] | Plugin marketplace (`grok plugin marketplace`) [G1] |
@@ -274,9 +276,9 @@ integration, is always kept in an exact set and listed as World's own.
 "No World launch mapping yet" means World has no model, effort and
 permission mapping for that harness in `launchPlan()`; each such college is
 its own follow-up after this change, verified with its binary like the
-supported rows. Kimi, Pi and omp gain a launch mapping in step 2 for skills
+supported rows. Pi and omp gain a launch mapping in step 2 for skills
 only, because they are among the eight harnesses World reads conversations
-from and each needs one documented flag.
+from and each needs one documented flag that gives an exact set.
 
 Sources, read on 2026-11-26 (documentation pages, or the harness's
 `--help` on a development host; Codex also from its 0.172.0 source tag):
@@ -290,6 +292,7 @@ Sources, read on 2026-11-26 (documentation pages, or the harness's
 - K1 https://moonshotai.github.io/kimi-code/en/customization/skills.html, https://moonshotai.github.io/kimi-code/en/reference/kimi-command.html (`--skills-dir`)
 - K2 https://moonshotai.github.io/kimi-code/en/customization/mcp.html, https://moonshotai.github.io/kimi-code/en/configuration/overrides.html
 - K3 https://moonshotai.github.io/kimi-code/en/customization/plugins.html
+- K4 https://moonshotai.github.io/kimi-code/en/configuration/env-vars.html (`KIMI_CODE_BUILTIN_PRODUCT_SKILLS` turns off only the built-in skills that document Kimi Code), https://moonshotai.github.io/kimi-code/en/configuration/overrides.html (no configuration override option); plugins are turned off only with `/plugins disable` [K3]
 - P1 `pi --help` 0.87.1 (`--skill`, `--no-skills`); Pi's bundled `docs/skills.md`
 - P2 https://github.com/earendil-works/pi `packages/coding-agent/docs/mcp.md` and `cli.md` (Pi 1.x)
 - P3 `pi install --help`; https://pi.dev/packages
@@ -348,7 +351,7 @@ folders are named once. Discovery runs only for supported capabilities.
 | --- | --- | --- |
 | Claude Code | `<room folder>/.claude/skills`, `$CLAUDE_CONFIG_DIR` or `~/.claude/skills`, installed plugins' skills (as `plugin:skill`) | Claude's own files: user and local scopes in `~/.claude.json` (`mcpServers`, `projects[<room folder>].mcpServers`) and the project's `<room folder>/.mcp.json`; plugin servers listed as not attachable yet. Never `claude mcp list`: it health-checks servers by starting them. |
 | Codex | `.agents/skills` from the room folder up to the repository root, `<repository>/.codex/skills`, `~/.agents/skills`, `$CODEX_HOME/skills` (bundled `.system` skills listed as built in) [X1] | `codex mcp list --json` [X2]. It starts no stdio server; for remote servers it may make a request to work out sign-in status, so World runs it with the same bound. |
-| Kimi Code | `.kimi-code/skills` and `.agents/skills` at the repository root, `$KIMI_CODE_HOME/skills` (default `~/.kimi-code/skills`), `~/.agents/skills` [K1] | none (not built) |
+| Kimi Code | none (planned) | none (not built) |
 | Pi | `.pi/skills` and `.agents/skills` up to the repository root, `$PI_CODING_AGENT_DIR/skills` (default `~/.pi/agent/skills`), `~/.agents/skills` [P1] | none (planned) |
 | omp | `omp skill list --json` [O3], which covers its own and imported folders | none (planned) |
 
@@ -423,17 +426,19 @@ built from the folder table and the item's name (for example
   lines, removed with its terminal like the Claude file. A `-p` file is a user
   layer, so it carries the same `skills.config` entries.
 
-**Kimi Code**
-
-- **Skills: only these.** World builds a per-launch folder on the host,
-  `~/.cache/herdr-world/launch/skills-<random>/`, holding one symbolic link per
-  attached skill folder plus World's own skill, and starts
-  `kimi --skills-dir <folder>`, which replaces the user and project skill
-  folders for that launch [K1]. Kimi's built-in skills and `extra_skill_dirs`
-  from its configuration still load; the diploma lists them as "also on this
-  host". The folder is removed with its terminal.
-- **Verify (gate):** `--skills-dir` replaces rather than adds on the Kimi Code
-  release found, and links are followed.
+**Kimi Code** attaches nothing in this change; its skills are planned.
+`kimi --skills-dir <folder>` replaces only the user and project skill folders
+[K1]. Three sources stay outside it, and no launch option turns them off: the
+folders in `extra_skill_dirs` in Kimi's configuration, Kimi's built-in skills
+(`KIMI_CODE_BUILTIN_PRODUCT_SKILLS` turns off only the ones that document Kimi
+Code [K4]), and installed plugins' skills (turned off only with
+`/plugins disable` [K3]). A profile attaching only `review-pr` would still give
+the agent a `release` skill from an extra folder, so the attached set is not
+exact. Nor is it "loaded at start": no launch option preloads a skill.
+Replacing `KIMI_CODE_HOME` would clear the extra folders but also replaces
+Kimi's login, which the table rules out. The row becomes supported when Kimi
+Code offers a per-launch way to turn off those sources; it then gets the same
+isolated check of the complete effective set as the other rows.
 
 **Pi**
 
@@ -567,8 +572,8 @@ replaced on each read and dropped with the connection.
    World-owned. It belongs with the agent records the one-object design already
    plans (#1315) rather than a new table; if it needs its own table, that needs
    approval in a mandate. The pane token `world_profile` stays the link.
-2. **Per-launch files on the host** (§ 3): the Claude MCP file and the Kimi
-   skills folder of links in `~/.cache/herdr-world/launch/` (beside the
+2. **Per-launch files on the host** (§ 3): the Claude MCP file in
+   `~/.cache/herdr-world/launch/` (beside the
    limits tap's `~/.cache/herdr-world/` files) and, only if needed, the Codex
    `-p` layer file. World-generated, owner-only, one per live terminal,
    deleted with it. They need a catalog entry as host files World writes.
@@ -638,12 +643,11 @@ profile, and every change goes through World to its store.
 
 ## Risks and trade-offs
 
-- **Skills are not exclusive on Claude Code** (nor fully on Kimi Code, whose
-  built-in skills stay) without dropping user settings. We accept "loaded at
+- **Skills are not exclusive on Claude Code** without dropping user settings. We accept "loaded at
   start" plus an honest "also on this host" list rather than isolating the
   harness's configuration folder, which would lose its login.
 - **Most colleges attach nothing in this change.** Of 20 harnesses, Claude
-  Code and Codex get skills and MCP servers, Kimi Code, Pi and omp get skills,
+  Code and Codex get skills and MCP servers, Pi and omp get skills,
   and the rest are planned or not built with their reasons. That is the
   honest state of the harnesses' own launch options on 2026-11-26; each
   planned row is its own follow-up.
@@ -665,7 +669,7 @@ profile, and every change goes through World to its store.
   refuse with the named folders; retire, copy and change-college rules in
   `parseProfile` and the store; operator-only admission for profile writes.
 - Isolated harness checks (scratch `CLAUDE_CONFIG_DIR`, `CODEX_HOME`,
-  `KIMI_CODE_HOME`, `PI_CODING_AGENT_DIR` and omp home, named Herdr session,
+  `PI_CODING_AGENT_DIR` and omp home, named Herdr session,
   throwaway MCP stdio server and skills): every **Verify (gate)** item in § 3.
   These are support gates, not follow-ups: a row ships as supported only when
   its check passes, and otherwise ships as planned with the failure as its

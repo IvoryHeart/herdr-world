@@ -93,6 +93,14 @@ not built, each with its reason and the harness documentation it rests on.
   Antigravity reads MCP servers only from its global or workspace
   configuration file, and its profiles offer no MCP servers
 
+#### Scenario: A skills option that leaves other sources on
+
+- **WHEN** the user opens the Kimi Code college
+- **THEN** its skills are marked planned with the reason that `--skills-dir`
+  replaces only the user and project skill folders while skills from
+  `extra_skill_dirs`, built-in skills and plugin skills still load, and its
+  profiles offer no skills
+
 #### Scenario: A profile holds a skill its college cannot attach
 
 - **WHEN** the user hires a Muse profile that still lists the skill `pdf`
@@ -120,9 +128,7 @@ harness configuration.
   `--strict-mcp-config`; for Codex it SHALL enable and require the attached
   MCP servers, disable every other catalogued server, and disable every
   catalogued skill that is neither attached nor World's own, all with
-  per-launch configuration overrides; for Kimi Code it SHALL pass a
-  per-launch skills folder holding only the attached skills and World's own;
-  for Pi it SHALL pass `--no-skills` and each attached skill's path; for omp it
+  per-launch configuration overrides; for Pi it SHALL pass `--no-skills` and each attached skill's path; for omp it
   SHALL pass the attached skills' exact names with `--skills`; World SHALL NOT
   name a skill or MCP server in a first prompt or in developer instructions in
   place of attaching it; any per-launch file World writes SHALL be on the
