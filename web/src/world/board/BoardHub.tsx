@@ -1,9 +1,13 @@
 import { libraryAvailable } from "../memory/memoryTargets";
+import { useMemoryStore } from "../memory/memoryClient";
 /**
  * Board's hub beside the bin: the town center's actions (useTownCenter.ts)
  * as compact buttons. **+** launches an agent, the crown opens the Town
  * master's chat and ⋯ lists every action in a plain menu. Escape, a press
  * outside or Back on a phone closes the menu.
+ *
+ * Names follow the view: Town's metaphors stay in Town, so the hub says
+ * Past sessions for Apartments and Memory for the Library (BOARD_HUB_NAMES).
  */
 
 import { DoorOpen, MoreHorizontal, Plus } from "lucide-react";
@@ -59,8 +63,31 @@ export function boardLaunchSpace(
 }
 
 /**
- * The Library on the selected card: an agent's memory, a workspace's, else
- * everything on the first host.
+ * Board's plain names for town center actions that Town names after its
+ * buildings. The surfaces they open keep their own titles.
+ */
+const BOARD_HUB_NAMES: Readonly<Record<string, string>> = {
+  apartments: "Past sessions",
+  library: "Memory",
+};
+
+/** `action` under its Board name, when Board names it differently. */
+const boardNamed = (action: TownCenterAction): TownCenterAction => ({
+  ...action,
+  label: BOARD_HUB_NAMES[action.id] ?? action.label,
+});
+
+/** Past sessions: finished agents (Town's Apartments), with their count. */
+const boardPastSessionsAction = (residents?: number) => ({
+  ...boardNamed(apartmentsAction()),
+  detail: residents
+    ? `${residents} finished agent${residents === 1 ? "" : "s"}`
+    : undefined,
+});
+
+/**
+ * Memory on the selected card (Town's Library): an agent's memory, a
+ * workspace's, else everything on the first host.
  */
 export function boardLibraryAction(
   world: Pick<WorldObject, "nodeById" | "leaves">,
@@ -73,18 +100,20 @@ export function boardLibraryAction(
         ? { connectionId: node.connectionId, agentId: node.nativeId }
         : { connectionId: node.connectionId, workspaceId: node.nativeId };
     return libraryAvailable(world, request)
-      ? libraryAction(
-          request,
-          `for ${node.kind === "agent" ? agentName(node) : node.label}`,
+      ? boardNamed(
+          libraryAction(
+            request,
+            `for ${node.kind === "agent" ? agentName(node) : node.label}`,
+          ),
         )
       : null;
   }
-  return libraryAvailable(world) ? libraryAction() : null;
+  return libraryAvailable(world) ? boardNamed(libraryAction()) : null;
 }
 
 /**
  * The hub's actions, in the town center's order: New agent, Town master,
- * Needs you, Summary, Profiles, Apartments, Library and New workspace
+ * Needs you, Summary, Profiles, Past sessions, Memory and New workspace
  * (Board's word for a room).
  * Summary is Town's one summary: Board takes you to Town with it open.
  */
@@ -107,7 +136,7 @@ export function boardHubActions({
   onOpenSummary(): void;
   onNewWorkspace(): void;
   toast(kind: "ok" | "error", text: string): void;
-  /** Apartments' residents (the same store as Town's). */
+  /** Past sessions' count: Apartments' residents (the same store as Town's). */
   residents?: number;
 }): TownCenterAction[] {
   const space = boardLaunchSpace(world, selectedId);
@@ -155,7 +184,7 @@ export function boardHubActions({
     needsYouAction(),
     summaryAction(onOpenSummary, "in Town"),
     profilesAction(),
-    apartmentsAction(residents),
+    boardPastSessionsAction(residents),
     ...(library ? [library] : []),
     {
       id: "workspace",
@@ -194,6 +223,8 @@ export function BoardHub({
   // The Town Master's greeting opens at the hub on wide screens.
   const greetingAnchor = useGreetingAnchor();
   const residents = useApartments().residents.length;
+  // Memory appears as a host's Library becomes available (#1342).
+  useMemoryStore();
   const actions = boardHubActions({
     residents,
     world,
@@ -281,12 +312,7 @@ export function BoardHubDock({
   const Launch = quick("launch");
   const Master = quick("master");
   return (
-    <div
-      ref={anchorRef}
-      className="board-hub"
-      role="group"
-      aria-label="Town center"
-    >
+    <div ref={anchorRef} className="board-hub" role="group" aria-label="Hub">
       {button(Launch, <Plus size={18} aria-hidden="true" />)}
       {button(Master, <Master.icon size={16} aria-hidden="true" />)}
       <button
@@ -294,8 +320,8 @@ export function BoardHubDock({
         type="button"
         className="board-hub-button"
         data-action="more"
-        aria-label="Town center actions"
-        title="Town center actions"
+        aria-label="Hub actions"
+        title="Hub actions"
         aria-haspopup="menu"
         aria-expanded={open}
         onClick={() => setOpen((value) => !value)}
@@ -307,7 +333,7 @@ export function BoardHubDock({
           ref={menu}
           className="board-hub-menu"
           role="menu"
-          aria-label="Town center"
+          aria-label="Hub"
           onKeyDown={keyDown}
         >
           {actions.map((action) => (

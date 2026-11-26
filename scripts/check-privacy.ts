@@ -2,6 +2,7 @@ import { execFileSync } from "node:child_process";
 import { readFileSync } from "node:fs";
 import {
   publishedAttributionFile,
+  reviewedAttributionEmails,
   reservedEmailDomain,
   syntheticCredential,
   syntheticHomeUsers,
@@ -16,8 +17,17 @@ type Rule =
   | "email"
   | "login-token"
   | "world-password"
-  | "session-secret";
-export type PrivacyFinding = { file: string; line: number; rule: Rule };
+  | "session-secret"
+  | "claude-session-link"
+  | "claude-session-trailer"
+  | "claude-code-footer"
+  | "claude-coauthor";
+export type PrivacyFinding = {
+  file: string;
+  line: number;
+  rule: Rule;
+  commit?: string;
+};
 
 function emailMatches(line: string) {
   return [
@@ -38,6 +48,14 @@ export function privacyRules(
   syntheticWorldPasswordBinding?: string,
 ): Rule[] {
   const rules = new Set<Rule>();
+  if (/\bclaude\.ai\/code\/session_[a-z0-9][a-z0-9_-]*/i.test(line))
+    rules.add("claude-session-link");
+  if (/^[ \t]*Claude-Session[ \t]*:/i.test(line))
+    rules.add("claude-session-trailer");
+  if (/\bGenerated[ \t]+with[ \t]+\[?Claude[ \t]+Code\b/i.test(line))
+    rules.add("claude-code-footer");
+  if (/^[ \t]*Co-Authored-By:[ \t]*Claude\b/i.test(line))
+    rules.add("claude-coauthor");
   for (const match of line.matchAll(
     /(?<![\d.])(?:\d{1,3}\.){3}\d{1,3}(?![\d.])/g,
   )) {
@@ -105,6 +123,40 @@ export function privacyRules(
   return [...rules];
 }
 
+/** Metadata has no file-scoped attribution or synthetic binding exceptions. */
+export function scanPrivacyText(
+  text: string,
+  source: string,
+): PrivacyFinding[] {
+  return text.split(/\r?\n/).flatMap((line, index) => {
+    // GitHub publishes these identities in bot signoffs and human coauthors.
+    // Permit only the email value in metadata; all other rules still apply.
+    const publicEmails = new Set(
+      emailMatches(line)
+        .filter(
+          (match) =>
+            match[0].toLowerCase() === ["support", "github.com"].join("@") ||
+            match[1].toLowerCase() === "users.noreply.github.com",
+        )
+        .map((match) => match[0].toLowerCase()),
+    );
+    return privacyRules(line, publicEmails).map((rule) => ({
+      file: source,
+      line: index + 1,
+      rule,
+    }));
+  });
+}
+
+export function formatPrivacyFinding(finding: PrivacyFinding): string {
+  // Escape control characters and suppress sensitive filenames as well.
+  const file = privacyRules(finding.file).length
+    ? "[redacted-path]"
+    : finding.file;
+  const commit = finding.commit ? `commit ${finding.commit} ` : "";
+  return `${commit}${JSON.stringify(file)}:${finding.line}: privacy/${finding.rule}`;
+}
+
 function git(cwd: string, args: string[]): string {
   // Capture stderr: Git errors may contain private paths or file contents.
   return execFileSync(
@@ -164,7 +216,7 @@ function addedLines(diff: string): Map<number, string> {
   return lines;
 }
 
-/** Scan additions absent from every parent of each introduced commit.
+/** Scan full messages and additions absent from every parent of each introduced commit.
  * A net tree diff would miss a leak deleted later in the very same push. */
 export function scanPrivacyRange(
   cwd: string,
@@ -194,8 +246,16 @@ export function scanPrivacyRange(
     main === after
       ? (before.find((revision) => revision !== after) ?? null)
       : main;
-  const publishedEmails = publishedAttribution(cwd, attributionBase);
+  const publishedEmails = new Set([
+    ...publishedAttribution(cwd, attributionBase),
+    ...reviewedAttributionEmails,
+  ]);
   for (const commit of commits) {
+    for (const finding of scanPrivacyText(
+      git(cwd, ["show", "--no-patch", "--format=%B", commit]),
+      "commit message",
+    ))
+      findings.push({ ...finding, commit });
     const parents = git(cwd, ["rev-list", "--parents", "-n", "1", commit])
       .trim()
       .split(" ")
@@ -237,7 +297,7 @@ export function scanPrivacyRange(
           file === publishedAttributionFile ? publishedEmails : undefined,
           syntheticWorldPasswordBindings.get(file),
         ))
-          findings.push({ file, line, rule });
+          findings.push({ file, line, rule, commit });
     }
   }
   return findings;
@@ -264,32 +324,70 @@ function pushBaseline(cwd: string, before: string, after: string): string[] {
   return main ? [main] : [];
 }
 type PrivacyRange = [string | string[] | null, string];
-function ranges(cwd: string, args: string[]): PrivacyRange[] {
-  if (!args.length) return [[mainBaseline(cwd), "HEAD"]];
-  if (args[0] === "--range" && args.length === 3) return [[args[1], args[2]]];
+type PrivacyRequest = { ranges: PrivacyRange[]; findings?: PrivacyFinding[] };
+/** Pre-push scans the intended description (`HERDR_WORLD_PR_BODY`) or the
+ * existing PR's, plus the existing title. With no PR or no `gh` access there is
+ * nothing remote to scan; Privacy CI rescans metadata on every PR event. */
+function prePushMetadata(cwd: string): PrivacyFinding[] {
+  let pull: { title?: string; body?: string } = {};
+  try {
+    pull = JSON.parse(
+      execFileSync("gh", ["pr", "view", "--json", "title,body"], {
+        cwd,
+        encoding: "utf8",
+        timeout: 15_000,
+        stdio: ["ignore", "pipe", "ignore"],
+      }),
+    );
+  } catch {}
+  const file = process.env.HERDR_WORLD_PR_BODY;
+  return [
+    ...scanPrivacyText(pull.title ?? "", "PR title"),
+    ...scanPrivacyText(
+      file ? readFileSync(file, "utf8") : (pull.body ?? ""),
+      "PR body",
+    ),
+  ];
+}
+function request(cwd: string, args: string[]): PrivacyRequest {
+  if (!args.length) return { ranges: [[mainBaseline(cwd), "HEAD"]] };
+  if (args[0] === "--range" && args.length === 3)
+    return { ranges: [[args[1], args[2]]] };
   if (args[0] === "--event" && args.length === 2) {
     const event = JSON.parse(readFileSync(args[1], "utf8"));
     if (event.pull_request)
-      return [
-        [
-          exactSha(event.pull_request.base?.sha),
-          exactSha(event.pull_request.head?.sha),
+      return {
+        ranges: [
+          [
+            exactSha(event.pull_request.base?.sha),
+            exactSha(event.pull_request.head?.sha),
+          ],
         ],
-      ];
+        findings: [
+          ...scanPrivacyText(event.pull_request.title ?? "", "PR title"),
+          ...scanPrivacyText(event.pull_request.body ?? "", "PR body"),
+        ],
+      };
     const after = exactSha(event.after);
     const before = exactSha(event.before);
-    return after === zero ? [] : [[pushBaseline(cwd, before, after), after]];
+    return {
+      ranges: after === zero ? [] : [[pushBaseline(cwd, before, after), after]],
+    };
   }
   if (args[0] === "--pre-push" && args.length === 2) {
     const rows = readFileSync(args[1], "utf8").trim();
-    if (!rows) return [[mainBaseline(cwd), "HEAD"]];
-    return rows.split("\n").flatMap((row): PrivacyRange[] => {
-      const fields = row.trim().split(/\s+/);
-      if (fields.length !== 4) throw new Error("Invalid push input");
-      const after = exactSha(fields[1]);
-      const before = exactSha(fields[3]);
-      return after === zero ? [] : [[pushBaseline(cwd, before, after), after]];
-    });
+    const ranges: PrivacyRange[] = !rows
+      ? [[mainBaseline(cwd), "HEAD"]]
+      : rows.split("\n").flatMap((row): PrivacyRange[] => {
+          const fields = row.trim().split(/\s+/);
+          if (fields.length !== 4) throw new Error("Invalid push input");
+          const after = exactSha(fields[1]);
+          const before = exactSha(fields[3]);
+          return after === zero
+            ? []
+            : [[pushBaseline(cwd, before, after), after]];
+        });
+    return { ranges, findings: prePushMetadata(cwd) };
   }
   throw new Error("Invalid arguments");
 }
@@ -297,19 +395,13 @@ function ranges(cwd: string, args: string[]): PrivacyRange[] {
 if (import.meta.main) {
   try {
     const cwd = process.cwd();
-    let failed = false;
-    for (const [base, head] of ranges(cwd, process.argv.slice(2)))
-      for (const finding of scanPrivacyRange(cwd, base, head)) {
-        failed = true;
-        // Escape control characters and suppress sensitive filenames as well.
-        const file = privacyRules(finding.file).length
-          ? "[redacted-path]"
-          : finding.file;
-        console.error(
-          `${JSON.stringify(file)}:${finding.line}: privacy/${finding.rule}`,
-        );
-      }
-    if (failed) {
+    const input = request(cwd, process.argv.slice(2));
+    const findings = input.findings ?? [];
+    for (const [base, head] of input.ranges)
+      findings.push(...scanPrivacyRange(cwd, base, head));
+    for (const finding of findings)
+      console.error(formatPrivacyFinding(finding));
+    if (findings.length) {
       console.error(
         "Privacy check failed. Replace private values with reviewed synthetic data before pushing.",
       );
@@ -317,7 +409,7 @@ if (import.meta.main) {
     } else console.info("Privacy check passed.");
   } catch {
     console.error(
-      "Privacy check could not scan all requested commits. Ensure complete Git history is available; refusing to pass.",
+      "Privacy check could not scan all requested commits or metadata. Ensure complete Git history and readable inputs are available; refusing to pass.",
     );
     process.exitCode = 1;
   }

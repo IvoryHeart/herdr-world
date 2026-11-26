@@ -23,6 +23,21 @@ export function resolvePublicFilePath(
   return candidate;
 }
 
+/**
+ * The pathname of the file a request resolves to inside `publicDir`, with
+ * `.` and `..` segments (including percent-encoded ones) folded away, or
+ * null when it escapes the directory. Callers classify this canonical path,
+ * so `/assets/..%2Findex.html` is treated as `/index.html`, not as an asset.
+ */
+export function canonicalStaticPathname(
+  publicDir: string,
+  pathname: string,
+): string | null {
+  const filePath = resolvePublicFilePath(publicDir, pathname);
+  if (!filePath) return null;
+  return `/${relative(resolve(publicDir), filePath).split(sep).join("/")}`;
+}
+
 export function shouldServeSpaEntry(
   method: string,
   accept: string | null,

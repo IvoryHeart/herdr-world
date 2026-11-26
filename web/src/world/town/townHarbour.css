@@ -4,7 +4,6 @@
    Popovers portal out of Town, so they use literal colours. */
 
 .town-world .town-harbour,
-.town-world .town-harbour-fold,
 .town-harbour-more {
   --harbour-pass: #5fbf5a;
   --harbour-fail: #d4252b;
@@ -165,25 +164,13 @@
   transform: scale(max(1, var(--iz, 1)));
   transform-origin: 50% 50%;
 }
-[data-tone="pass"]:is(
-  .town-harbour-lamp,
-  .town-harbour-fold-lanes i,
-  .town-harbour-more i
-) {
+[data-tone="pass"]:is(.town-harbour-lamp, .town-harbour-more i) {
   --harbour-tone: var(--harbour-pass, #5fbf5a);
 }
-[data-tone="fail"]:is(
-  .town-harbour-lamp,
-  .town-harbour-fold-lanes i,
-  .town-harbour-more i
-) {
+[data-tone="fail"]:is(.town-harbour-lamp, .town-harbour-more i) {
   --harbour-tone: var(--harbour-fail, #d4252b);
 }
-[data-tone="pending"]:is(
-  .town-harbour-lamp,
-  .town-harbour-fold-lanes i,
-  .town-harbour-more i
-) {
+[data-tone="pending"]:is(.town-harbour-lamp, .town-harbour-more i) {
   --harbour-tone: var(--harbour-pending, #ffd166);
 }
 .town-world .town-harbour-lamp[data-tone="unknown"] {
@@ -332,37 +319,6 @@
   }
 }
 
-/* Folded: a wooden plate on the town center's left wing, a dot per project
-   in its colour, lit in main's tone. */
-.town-world .town-harbour-fold {
-  position: absolute;
-  display: inline-flex;
-  align-items: center;
-  gap: 4px;
-  min-height: 24px;
-  padding: 2px 6px;
-  color: #ffe9c2;
-  background: #6e4a2e;
-  border: 2px solid #3b2414;
-  border-radius: 4px;
-  transform: translate(-50%, -50%) scale(clamp(0.55, var(--iz), 1.6));
-  font:
-    700 10px "Silkscreen",
-    "Pixelify Sans",
-    ui-monospace,
-    monospace;
-  white-space: nowrap;
-  cursor: pointer;
-  pointer-events: auto;
-}
-.town-world .town-harbour-fold[data-quiet] {
-  color: #d8c8a8;
-}
-.town-harbour-fold-lanes {
-  display: inline-flex;
-  gap: 2px;
-}
-.town-harbour-fold-lanes i,
 .town-harbour-more i {
   display: inline-block;
   flex: none;
@@ -373,7 +329,7 @@
   box-shadow: inset 0 -3px 0 var(--harbour-tone, #9aa3ad);
 }
 
-/* A small ship: the fold's and the card's mark. */
+/* A small ship: the card's mark. */
 .town-harbour-icon {
   position: relative;
   flex: none;

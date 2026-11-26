@@ -100,6 +100,8 @@ export type RpcServices = {
   ): boolean;
   snapshotAdmission: WorldSnapshotAdmission;
   townMoveQueues: Map<string, ReturnType<typeof createMoveQueue>>;
+  /** One runtime move per agent until it settles (world/move-settle.ts). */
+  moveSettle?: import("../world/move-settle").MoveSettle;
   /** Server-wide interface preferences (bridge.ui_settings.*). */
   uiSettings: ReturnType<
     typeof import("../bridge/settings-rpc").createUiSettingsRpcHandler
@@ -107,17 +109,15 @@ export type RpcServices = {
   worldWatchlist: WorldWatchlistRegistry;
   /** The agent bin; absent without World storage's effect outbox. */
   bin?: import("../service/bin-service").BinService;
-  /** Finished agents' records; absent in tests without World storage. */
-  apartments?: import("../service/apartments-service").ApartmentsService;
+  /** Resident lookup for same-host resume; constructed by the Apartments feature. */
+  apartments?: import("../features/apartments/service").ApartmentsService;
   worldDesk: DeskService["registry"];
   publishDeskChanged: DeskService["publish"];
   worldCli: ReturnType<typeof createWorldCliService>;
   worldSnapshots: ObservedSnapshots | null;
   boardElements?: import("../world/board-element-service").BoardElementService;
-  worldUsage?: import("../usage/service").WorldUsageService;
   /** Installed web IDEs and their World-owned servers (world.ide.*). */
   ide?: import("../ide/service").IdeService;
-  worldUsageAnalytics?: import("../usage/analytics").WorldUsageAnalyticsService;
   /** The owner's focus session (world.focus.*). */
   focus?: import("../world/focus").FocusService;
 };

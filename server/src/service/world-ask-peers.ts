@@ -21,7 +21,8 @@ export function createWorldAskPeers(deps: {
   titleSuffix(): Promise<string | undefined>;
   profiles(): Map<string, ManagedConnectionProfile>;
   coreIds(): string[];
-  defaultId(): string;
+  /** The Herdr connection that alerts for a herdr-core or unplaced asker. */
+  alertConnectionId(): string | null;
   /** This World's own questions. */
   ledger(): Pick<LedgerStore, "ask" | "openAsks">;
 }) {
@@ -47,7 +48,7 @@ export function createWorldAskPeers(deps: {
     /**
      * The runtimes a new question belongs to, captured once when it is
      * recorded: it shows wherever its alert does, the asker's runtime and the
-     * default Herdr connection that alerts for a herdr-core or unplaced asker.
+     * Herdr connection that alerts for a herdr-core or unplaced asker.
      * Editing a saved connection later does not move the question.
      */
     askRuntimes: (asker: CliActor) => {
@@ -57,8 +58,10 @@ export function createWorldAskPeers(deps: {
         ...new Set(
           [
             ...(connection ? [connection] : []),
-            ...(!connection || core ? [deps.defaultId()] : []),
-          ].flatMap(key),
+            ...(!connection || core ? [deps.alertConnectionId()] : []),
+          ]
+            .filter((id): id is string => !!id)
+            .flatMap(key),
         ),
       ];
     },

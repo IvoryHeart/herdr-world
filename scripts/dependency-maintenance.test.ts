@@ -1,6 +1,6 @@
 import { expect, test } from "bun:test";
 import { execFileSync } from "node:child_process";
-import { mkdtemp, mkdir, rm, writeFile } from "node:fs/promises";
+import { mkdtemp, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import {
@@ -54,7 +54,7 @@ test("automation is restricted to same-repository Dependabot data updates", () =
   ])
     expect(acceptsDependencyPR(pr, ["bun.lock", path])).toBe(false);
 });
-test("a shipped transitive change gets a fragment, dev-only updates get a specific reason", () => {
+test("shipped transitive changes are distinguished from development updates", () => {
   const base: AppLock = {
     workspaces: { web: { dependencies: { app: "1" } }, server: {} },
     packages: {
@@ -68,14 +68,8 @@ test("a shipped transitive change gets a fragment, dev-only updates get a specif
   expect(shippedGraphChanged(base, head)).toBe(false);
   head.packages.leaf![0] = "leaf@1.0.1";
   expect(shippedGraphChanged(base, head)).toBe(true);
-  expect(maintenanceBody(pr.body, true, 42)).toContain(
-    "Changelog: changes/dependencies-42.md",
-  );
-  expect(maintenanceBody(pr.body, false, 42)).toContain(
-    "Changelog: none — dependency maintenance changes only development tooling or Actions",
-  );
-  const first = maintenanceBody(pr.body, false, 42);
-  expect(maintenanceBody(first, false, 42)).toBe(first);
+  const first = maintenanceBody(pr.body);
+  expect(maintenanceBody(first)).toBe(first);
 });
 
 test("generated descriptions pass PR policy for shipped and dev updates with a platform-optional lock", async () => {
@@ -101,17 +95,10 @@ test("generated descriptions pass PR policy for shipped and dev updates with a p
         `${shipped ? "app" : "tool"}@1.0.1`;
       expect(shippedGraphChanged(lock, head)).toBe(shipped);
       await writeFile(join(root, "bun.lock"), JSON.stringify(head));
-      if (shipped) {
-        await mkdir(join(root, "changes"));
-        await writeFile(
-          join(root, "changes/dependencies-42.md"),
-          "### Fixed\n\n- Update application dependencies.\n",
-        );
-      }
       git("add", ".");
       git("commit", "--quiet", "-m", "dependency fixture");
-      const first = maintenanceBody(pr.body, shipped, 42);
-      const body = maintenanceBody(first, shipped, 42);
+      const first = maintenanceBody(pr.body);
+      const body = maintenanceBody(first);
       expect(body).toBe(first);
       expect(checkPrBodyText(body, root, base)).toEqual([]);
     }
@@ -138,9 +125,9 @@ test("publishing advances only the expected bot head, emits only docs and explic
   };
   const plan = {
     head: pr.head.sha,
-    body: maintenanceBody(pr.body, true, 42),
+    body: maintenanceBody(pr.body),
     files: {
-      "changes/dependencies-42.md": "### Fixed\n\n- Update dependencies.\n",
+      "DEPENDENCY_NOTICES.md": "Synthetic dependency notices.\n",
     },
   };
   await publishMaintenance(pr, plan, request);
@@ -175,7 +162,7 @@ test("publishing advances only the expected bot head, emits only docs and explic
   ).rejects.toThrow("identity/revision changed");
 });
 
-test("a changed runtime resolution needs a fragment even when all versions already ship elsewhere", () => {
+test("a changed runtime resolution is detected even when all versions already ship elsewhere", () => {
   const base: AppLock = {
     workspaces: {
       web: { dependencies: { app: "1" } },

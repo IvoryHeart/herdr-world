@@ -4,11 +4,10 @@ from pathlib import Path
 import sys
 from assets import executable, published, tools
 from contract import PAIRS, Walk, digest, print_failure, validate_receipt
-from journeys import Fixture, check_signed_out, default_connection, room, launch, input_reaches, listing, chat_reply, upgrade
+from journeys import Fixture, check_signed_out, default_connection, room, launch, input_reaches, listing, upgrade
 from listing_batch import listing_batch
 from processes import Telemetry, run
 from service import services, service_guard
-from validate import receipt_digest
 
 
 def negative_control(binary, fixture):
@@ -36,7 +35,7 @@ def main(config):
     archive = Path(config['archive'])
     candidate = executable(archive, root / 'herdr-world')
     assert run([candidate, '--version']).stdout.strip() == 'herdr-world ' + config['version'], 'release binary version mismatch'
-    walk = Walk('signed-in' if config['signed_home'] else 'ci', config['commit'], config['version'],
+    walk = Walk('ci', config['commit'], config['version'],
                 archive, candidate, config['baseline'])
     report_path = Path(config['report'])
     report_path.parent.mkdir(parents=True, exist_ok=True)
@@ -85,14 +84,6 @@ def main(config):
             with walk.journey('Previous release upgrade'), Fixture(root / 'upgrade', tool_dir, telemetry) as fixture:
                 upgrade(walk, candidate, baseline, fixture)
             services(walk, candidate, baseline, root, config['disposable'])
-            if config['signed_home']:
-                with Fixture(root / 'signed', tool_dir, telemetry, signed_home=Path(config['signed_home'])) as fixture, fixture.world(candidate) as world:
-                    connections = {'herdr': world.ready('herdr'), 'herdr-core': fixture.connect_core(world)}
-                    rooms = {runtime: room(world, connection, runtime) for runtime, connection in connections.items()}
-                    for runtime, kind in PAIRS:
-                        with walk.journey(f'Prompt and Chat reply: {runtime}/{kind}'):
-                            agent = launch(world, fixture, connections[runtime], runtime, kind, rooms[runtime])
-                            chat_reply(world, fixture, agent)
             listing_batch(config, candidate, tool_dir, telemetry,
                           {key: walk.report[key] for key in
                            ('commit', 'platform', 'archive_sha256', 'binary_sha256')})
@@ -102,8 +93,7 @@ def main(config):
         walk.write(report_path)
     validate_receipt(walk.report, config['commit'])
     print('PASS release walk: every required journey completed', flush=True)
-    if config['signed_home']:
-        print('Release walk signed-in receipt: ' + receipt_digest(walk.report), flush=True)
+
 
 
 if __name__ == '__main__':

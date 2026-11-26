@@ -39,7 +39,13 @@ class World:
         threading.Thread(target=read, daemon=True).start()
         try:
             _, self.base = self.logs.wait(lambda _: True, timeout=60, reason='release binary never listened')
-            assert self.base, 'release binary exited before listening'
+            if not self.base:
+                # Exit status only: the binary's output may hold credentials.
+                try:
+                    status = self.process.wait(timeout=10)
+                except subprocess.TimeoutExpired:
+                    status = 'still running'
+                raise AssertionError(f'release binary exited before listening (status {status})')
             assert self.request('/').status == 401, 'World allowed access without sign-in'
             if self.previous_cookie:
                 assert self.request('/', cookie=self.previous_cookie).status == 200, 'upgrade lost the signed-in session'

@@ -2,6 +2,7 @@
 import type { ViewTrace } from "../devtools/flag";
 import { worldRendererCountersEnabled } from "../devtools/renderer";
 import type { TownLevel } from "./townCamera";
+import type { TownPlaceKey } from "./townPlaces";
 
 /** Why Town drew a frame and what it asked for next (development trace). */
 export type TownFrameTrace = {
@@ -102,6 +103,10 @@ export type TownRendererDiagnostics = {
     deskColumns: number;
     /** Room and building placement (townGeometryKey), to see reflows. */
     geometry: string;
+    /** Each place's building in world pixels (townPlaces.ts), to press it. */
+    places: Partial<
+      Record<TownPlaceKey, { x0: number; y0: number; x1: number; y1: number }>
+    >;
   };
   /** Drag outcomes as drawn: lifts, landings (each with its dust), returns. */
   drags: { lifts: number; landings: number; returns: number; dust: number };

@@ -30,6 +30,7 @@ import {
   launchdServiceLabel,
   worldServiceDefinitions,
 } from "./service-discovery";
+import { stableServiceExecutable } from "./service-executable";
 import { describeListenerStartError } from "../connections/startup";
 import {
   assertValidAuthPassword,
@@ -162,7 +163,7 @@ function ensureStandaloneBinary(runtime: ServiceRuntime): string {
       "service install requires the standalone herdr-world binary",
     );
   }
-  return resolve(runtime.execPath);
+  return stableServiceExecutable(runtime.execPath);
 }
 
 const WINDOWS_TASK_NOT_FOUND_EXIT_CODE = 3;

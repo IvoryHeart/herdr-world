@@ -20,7 +20,6 @@ import {
 import {
   TOWN_WAREHOUSE_SLOTS,
   TOWN_WAREHOUSE_YARD_ROWS,
-  townWarehouseFoldAt,
   townWarehouseLot,
   townWarehouse,
   townWarehouseSignText,
@@ -311,27 +310,27 @@ test.each([
   ["three single-desk rooms, small phone", town({ a: [1, 1, 1] }), 360, 640],
   ["a tall building", town({ a: [6, 4, 3, 2] }), 390, 844],
 ] as const)(
-  "the folded sign stands inside a phone's home view (%s)",
+  "a phone reaches the whole warehouse by panning at home zoom, tappable (%s)",
   (_, input, width, height) => {
     const { layout } = layoutTown(input, TOWN_SHAPES.phone);
     const viewport = townViewport(width, height, { left: 0, right: 0 });
     const camera = new TownCamera();
     camera.viewport = viewport;
     new TownSceneCamera(new Map(), () => {}).attach(camera, layout, viewport);
-    const at = townWarehouseFoldAt(layout.center);
-    const sign = camera.toScreen(at.x, at.y);
-    // The sign keeps its screen size near home zoom (--iz): about 100 by
-    // 30 pixels around its point, all of it inside the chrome's insets.
+    const home = camera.z;
+    // The building on its shore, not a sign on the town center (#1351).
+    const lot = townWarehouseLot(layout);
+    const bottom = (lot.yardY + TOWN_WAREHOUSE_YARD_ROWS) * T;
+    camera.jumpTo((lot.x + lot.w / 2) * T, (lot.y * T + bottom) / 2, home);
+    const topLeft = camera.toScreen(lot.x * T, lot.y * T);
+    const bottomRight = camera.toScreen((lot.x + lot.w) * T, bottom);
     const { inset } = viewport;
-    expect(sign.x - 50).toBeGreaterThanOrEqual(inset.left);
-    expect(sign.x + 50).toBeLessThanOrEqual(width - inset.right);
-    expect(sign.y - 15).toBeGreaterThanOrEqual(inset.top);
-    expect(sign.y + 15).toBeLessThanOrEqual(height - inset.bottom);
-    // On the center's front, clear of its plaque and doors in the middle.
-    const center = layout.center;
-    expect(at.x).toBeLessThan((center.x + center.w) * T);
-    expect(at.x - 50).toBeGreaterThan((center.x + center.w / 2) * T + 24);
-    expect(at.y).toBeLessThan((center.y + center.h) * T);
+    expect(topLeft.x).toBeGreaterThanOrEqual(inset.left);
+    expect(topLeft.y).toBeGreaterThanOrEqual(inset.top);
+    expect(bottomRight.x).toBeLessThanOrEqual(width - inset.right);
+    expect(bottomRight.y).toBeLessThanOrEqual(height - inset.bottom);
+    expect(bottomRight.x - topLeft.x).toBeGreaterThanOrEqual(44);
+    expect(bottomRight.y - topLeft.y).toBeGreaterThanOrEqual(44);
   },
 );
 

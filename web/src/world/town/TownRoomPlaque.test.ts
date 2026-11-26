@@ -13,6 +13,7 @@ import { buildWorldObject, type WorldAgentStatus } from "../worldObject";
 import type { TownRoomActions } from "./TownCanvas";
 import { townModelFromProjection } from "./townModel";
 import { TownRoomPlaque } from "./TownRoomPlaque";
+import { TownRuntimeGlyph } from "./TownRuntimeIcon";
 
 function roomWith(
   statuses: readonly WorldAgentStatus[],
@@ -221,17 +222,21 @@ test("a folded plaque totals hidden agents as well as its 24 visible desks", asy
   }
 });
 
-test("a room's plaque and card name its runtime when its building has two", async () => {
+test("a room's plaque shows its runtime as an icon that names it, beside a name read first (#1255)", async () => {
   const office = roomWith(["working"]);
   const counts = townModelFromProjection(office).roomCounts.get(
     office.rooms[0]!.key,
   )!;
   const browser = new Window();
   try {
-    for (const tag of [undefined, "herdr-core"]) {
+    for (const [tag, kind] of [
+      [undefined, undefined],
+      ["herdr-core", "herdr-core"],
+      ["Herdr TUI", "herdr"],
+    ] as const) {
       browser.document.body.innerHTML = renderToStaticMarkup(
         createElement(TownRoomPlaque, {
-          room: { ...office.rooms[0]!, runtimeTag: tag },
+          room: { ...office.rooms[0]!, runtimeTag: tag, runtimeKind: kind },
           label: "Studio",
           width: 176,
           counts,
@@ -240,9 +245,25 @@ test("a room's plaque and card name its runtime when its building has two", asyn
         }),
       );
       const plaque = browser.document.querySelector(".town-room-plaque")!;
+      const heading = plaque.querySelector(".town-room-plaque-heading")!;
+      const icon = heading.querySelector(".town-runtime-icon");
+      // One-runtime buildings show no mark; otherwise an icon, no text tag.
+      expect(icon?.getAttribute("data-runtime") ?? null).toBe(kind ?? null);
+      expect(icon?.getAttribute("aria-label") ?? null).toBe(
+        tag ? `Runtime: ${tag}` : null,
+      );
       expect(
-        plaque.querySelector(".town-room-plaque-runtime")?.textContent ?? null,
+        icon?.querySelector(".town-runtime-tip")?.textContent ?? null,
       ).toBe(tag ?? null);
+      expect(heading.querySelector(".town-room-plaque-name")!.textContent).toBe(
+        "Studio",
+      );
+      // The heading's visible words are the name and counts, never the tag.
+      const words = [...heading.children]
+        .filter((child) => !child.classList.contains("town-runtime-icon"))
+        .map((child) => child.textContent)
+        .join(" ");
+      expect(words).not.toContain(tag ?? "Herdr");
       expect(
         plaque.querySelector(".town-room-plaque-runtime-line")?.textContent ??
           null,
@@ -250,10 +271,26 @@ test("a room's plaque and card name its runtime when its building has two", asyn
       expect(plaque.getAttribute("aria-label")!.split(":")[0]).toBe(
         tag ? `Studio (${tag})` : "Studio",
       );
+      // Its card is closed until the title is clicked.
+      expect(plaque.classList.contains("is-open")).toBe(false);
+      expect(plaque.getAttribute("aria-expanded")).toBe("false");
     }
   } finally {
     await browser.happyDOM.close();
   }
+});
+
+test("the two runtime icons differ in shape, not only colour", () => {
+  const shapes = (kind: "herdr" | "herdr-core") =>
+    [
+      ...renderToStaticMarkup(
+        createElement(TownRuntimeGlyph, { kind }),
+      ).matchAll(/<(rect|polygon)\b/gu),
+    ]
+      .map((match) => match[1])
+      .join(",");
+  expect(shapes("herdr")).not.toContain("polygon");
+  expect(shapes("herdr-core")).toContain("polygon");
 });
 
 test("a name World derived for an unnamed space reads lighter and says where it came from (#1103)", async () => {

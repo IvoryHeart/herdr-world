@@ -1,6 +1,7 @@
 import { expect, test } from "bun:test";
 import { bridge, type BridgeControlMsg } from "../api";
 import {
+  askDeliveryMessage,
   askHomeHref,
   askerName,
   WorldAsksStore,
@@ -110,6 +111,25 @@ test("an asker is named by Herdr, else as identified, else by its claimed pane",
       actor: { label: "terminal with no pane", verified: false },
     }),
   ).toBe("terminal with no pane");
+});
+
+test("a refused owner alert says the owner was not alerted (#1156)", () => {
+  const base = ask("q-1");
+  type State = NonNullable<
+    NonNullable<WorldAsk["delivery"]>["notification"]
+  >["state"];
+  const notified = (state: State, reason?: string): WorldAsk => ({
+    ...base,
+    delivery: { notification: { state, ...(reason ? { reason } : {}) } },
+  });
+  expect(askDeliveryMessage(base)).toBeNull();
+  expect(askDeliveryMessage(notified("delivered"))).toBeNull();
+  expect(
+    askDeliveryMessage(
+      notified("refused", "Current effect authorization is refused"),
+    ),
+  ).toBe("World did not alert you about this question.");
+  expect(askDeliveryMessage(notified("uncertain"))).toContain("uncertain");
 });
 
 test("new asks announce once, withdrawn asks disappear, and old socket replies cannot resurrect them", async () => {

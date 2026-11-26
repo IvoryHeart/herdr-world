@@ -1,7 +1,8 @@
 // Worktree entry points in the World navigator, on repository workspaces:
 // desktop (right-click) and phone (long-press), and a stale host whose tree
-// shows them but stays inert. The page renders the real navigator from a
-// parsed World observation, as the service sends it.
+// shows them but stays inert. A live herdr-core host's agents are chosen by
+// a click, without Herdr TUI menus (#1390). The page renders the real
+// navigator from a parsed World observation, as the service sends it.
 import { createRoot } from "react-dom/client";
 import { initializeLayoutPreferences } from "../layoutPreferences";
 import { parseWorldSnapshotResult } from "./runtimeStore";
@@ -81,6 +82,32 @@ const host = (
   },
 });
 
+// A live herdr-core host on this machine: one room, one agent.
+const core = {
+  ...host("core", "Core", false, [workspace("core-room", 1, false)]),
+  runtime: "herdr-core",
+};
+core.snapshot.tabs = [
+  {
+    tab_id: "core-tab",
+    workspace_id: "core-room",
+    number: 1,
+    label: "",
+    focused: false,
+  },
+] as never[];
+core.snapshot.panes = [
+  {
+    pane_id: "t1",
+    terminal_id: "core-term",
+    workspace_id: "core-room",
+    tab_id: "core-tab",
+    focused: false,
+    agent: "claude",
+    agent_status: "idle",
+  },
+] as never[];
+
 const observation = parseWorldSnapshotResult({
   revision: 1,
   observed_at: Date.now(),
@@ -94,9 +121,11 @@ const observation = parseWorldSnapshotResult({
     host("beta", "Beta", true, [
       workspace("beta-login", 1, true, worktree("/srv/trees/beta", true)),
     ]),
+    core,
   ],
 });
-check(observation?.connections.length === 2, "the observation did not parse");
+check(observation?.connections.length === 3, "the observation did not parse");
+const selected: string[] = [];
 
 initializeLayoutPreferences();
 const mount = document.createElement("main");
@@ -104,7 +133,9 @@ document.body.append(mount);
 createRoot(mount).render(
   <WorldNavigator
     world={buildWorldObject(observation?.connections ?? [], null)}
-    onSelect={() => {}}
+    onSelect={(node, view) => {
+      selected.push(`${node.kind} ${node.nativeId} ${view ?? ""}`.trim());
+    }}
   />,
 );
 
@@ -217,6 +248,29 @@ async function run() {
   check(
     !!staleButton && document.activeElement !== staleButton,
     "the stale host's worktree button took focus",
+  );
+
+  // A live herdr-core host is never `actionable`, yet its agents choose
+  // what Spaces shows: its tree is live, a click selects the agent, and it
+  // offers no Herdr TUI menu or workspace creation.
+  const coreTree = tree("core");
+  check(coreTree && !coreTree.inert, "the herdr-core host's tree is inert");
+  const coreAgent = coreTree?.querySelector<HTMLElement>('[data-pane-id="t1"]');
+  check(coreAgent, "the herdr-core agent is not listed");
+  coreAgent?.click();
+  await settle();
+  check(
+    selected.includes("agent t1"),
+    `clicking the herdr-core agent selected ${JSON.stringify(selected)}`,
+  );
+  const coreMenu = await menuFor(coreAgent ?? undefined);
+  check(
+    coreMenu.length === 0,
+    `the herdr-core agent offers ${coreMenu.join(", ")}`,
+  );
+  check(
+    !coreTree?.querySelector('[title="New workspace"]'),
+    "the herdr-core host offers New workspace",
   );
 
   await fetch("/result", {

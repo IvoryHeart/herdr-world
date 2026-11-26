@@ -593,11 +593,11 @@ describe("simultaneous qualified runtime admission", () => {
 
   test("a herdr-core connection gets only the methods core answers; Herdr-only calls never leave the page", async () => {
     // Recorded on a core preview: the page sent these to `local-core` and
-    // the service refused each one (agent_quest.list every few seconds).
+    // the service refused each one.
     const { bridge, socket } = setup();
     bridge.setCoreRuntimeGenerations([{ id: "core", generation: 2 }]);
     const core = bridge.connection("core", 2);
-    for (const method of ["agent_quest.list", "pane.read", "terminal.input"]) {
+    for (const method of ["pane.read", "terminal.input"]) {
       const refused = await core.call(method, {}).catch((error) => error);
       expect(refused).toBeInstanceOf(Error);
       expect(refused.message).toBe(
@@ -605,8 +605,12 @@ describe("simultaneous qualified runtime admission", () => {
       );
     }
     expect(socket.sent).toHaveLength(0);
-    // Files, Git, worktrees and Chat go to core; Herdr hosts are unchanged.
+    // Files, Git, worktrees, Chat and the desk read (quests and artefacts)
+    // go to core; Herdr hosts are unchanged.
     void core.call("file.list", { path: "." }).catch(() => undefined);
+    void core
+      .call("agent_quest.list", { pane_ids: ["t1"] })
+      .catch(() => undefined);
     void core.call("file.reveal", { path: "." }).catch(() => undefined);
     void core
       .call("agent_conversation.latest", { pane_id: "t1" })
@@ -617,6 +621,7 @@ describe("simultaneous qualified runtime admission", () => {
       .catch(() => undefined);
     expect(socket.sent.map((request) => request.method)).toEqual([
       "file.list",
+      "agent_quest.list",
       "file.reveal",
       "agent_conversation.latest",
       "agent_quest.list",
@@ -2484,5 +2489,40 @@ describe("bridge connection lifecycle", () => {
     } as MessageEvent);
     await Bun.sleep(5);
     expect(bridge.status).toBe("connected");
+  });
+
+  // A slow link (a remote browser during an agent move): the ping's reply
+  // waits behind frames still arriving. Closing then lost the move's reply.
+  test.each([
+    ["keeps a slow socket that still delivers", true, "connected"],
+    ["closes a socket silent for the whole ping wait", false, "disconnected"],
+  ] as const)("heartbeat %s", async (_name, delivers, status) => {
+    class SlowWebSocket extends HangingWebSocket {
+      static instance: SlowWebSocket;
+      constructor() {
+        super();
+        SlowWebSocket.instance = this;
+        queueMicrotask(() => {
+          this.readyState = SlowWebSocket.OPEN;
+          this.onopen?.();
+        });
+      }
+      send() {}
+    }
+    installBrowserGlobals(SlowWebSocket as unknown as typeof WebSocket);
+    const bridge = new Bridge(50, 1000, undefined, 20);
+    testBridges.push(bridge);
+    bridge.connect();
+    await Bun.sleep(1);
+    sendHello(SlowWebSocket.instance);
+    await Bun.sleep(2);
+    bridge.probeConnectionNow();
+    await Bun.sleep(5);
+    if (delivers)
+      SlowWebSocket.instance.onmessage?.({
+        data: JSON.stringify({ event: "synthetic-frame" }),
+      } as MessageEvent);
+    await Bun.sleep(40);
+    expect(bridge.status).toBe(status);
   });
 });

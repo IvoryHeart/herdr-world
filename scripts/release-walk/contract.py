@@ -21,8 +21,6 @@ def journeys(mode):
     result += [f'Prompt reaches input: {runtime}/{kind}' for runtime, kind in PAIRS]
     result += ['Every runtime is listed', 'Previous release upgrade',
                'Service install and uninstall', 'Previous release service uninstall']
-    if mode == 'signed-in':
-        result += [f'Prompt and Chat reply: {runtime}/{kind}' for runtime, kind in PAIRS]
     return result
 
 
@@ -37,7 +35,7 @@ def validate_receipt(report, sha=None):
                'status', 'negative_control'}
     assert set(report).issubset(allowed), 'Receipt contains unexpected fields; do not upload private data'
     assert report['schema'] == 1, 'Unrecognized release-walk receipt'
-    assert report['mode'] in ('ci', 'signed-in'), 'Unknown walk mode'
+    assert report['mode'] == 'ci', 'Unknown walk mode'
     assert re.fullmatch(r'[a-f0-9]{40}', report['commit']), 'Missing exact commit'
     if sha:
         assert report['commit'] == sha, 'Walk ran a different release commit'
@@ -56,26 +54,6 @@ def validate_receipt(report, sha=None):
         assert control['tag'] == 'v0.3.5' and control['status'] == 'expected-failure', 'Invalid historical launch proof'
         assert control['journey'] == 'New agent starts: TUI quick Claude' and control['reason'] == 'agent never started', 'Historical failure was not the launch regression'
         assert re.fullmatch(r'[a-f0-9]{64}', control['binary_sha256']), 'Missing historical binary digest'
-
-
-def validate_publication(reports, signed, sha, version):
-    expected = {'linux-x64', 'linux-arm64', 'darwin-x64', 'darwin-arm64'}
-    assert len(reports) == len(expected), 'Require all four native walk receipts'
-    assert {report['platform'] for report in reports} == expected, 'Missing Linux or macOS architecture'
-    for report in [*reports, signed]:
-        validate_receipt(report, sha)
-        assert report['version'] == version, 'Walk ran a different release version'
-    assert all(report['mode'] == 'ci' for report in reports), 'Native receipts must be CI walks'
-    assert signed['mode'] == 'signed-in', 'Require the signed-in local walk'
-    match = next((report for report in reports if report['platform'] == signed['platform']), None)
-    assert match, 'Signed-in walk platform was not tested in CI'
-    for key in ('binary_sha256', 'archive_sha256', 'baseline'):
-        assert match[key] == signed[key], 'Signed-in walk did not use the same release package/baseline'
-    control = next(report for report in reports if report['platform'] == 'linux-x64')['negative_control']
-    assert control['tag'] == 'v0.3.5' and control['status'] == 'expected-failure', 'Missing v0.3.5 launch proof'
-    assert control['journey'] == 'New agent starts: TUI quick Claude', 'Wrong negative-control journey'
-    assert control['reason'] == 'agent never started', 'Historical failure was not the launch regression'
-    assert re.fullmatch(r'[a-f0-9]{64}', control['binary_sha256']), 'Missing v0.3.5 binary digest'
 
 
 def print_failure(name, error):

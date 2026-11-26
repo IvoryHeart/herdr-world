@@ -1,6 +1,7 @@
 import type { TownLevel } from "./townCamera";
 import type { TownHit } from "./townHitTest";
 import type { TownModel } from "./townModel";
+import { canMoveDeskToRoom, needsAgentHandoff } from "./townMoveEligibility";
 import { TOWN_TILE, type TownLayout } from "./townLayout";
 import {
   townRoomPlacement,
@@ -35,19 +36,25 @@ export type TownDropTarget = {
   label: string;
   /** bin: over the bin or a bus stop, where a drop puts it in the bin. */
   action?: "move" | "reorder" | "group" | "ungroup" | "bin";
+  /** Over a bus stop (its key): put in the bin, it waits there. */
+  stop?: string | null;
 };
+
+/** A carry over the bin, or over the bus stop `stop` (its key). */
+export type TownBinAim = { stop: string | null };
 
 /**
  * A room picked up by its name, its edge or its Move handle: it moves
- * anywhere in its own building. A stale room, one Spaces cannot open, or one
- * alone in its building stays where it is.
+ * anywhere in its own building. A stale or immovable room, or one alone in
+ * its building, stays where it is. Core rooms need no Spaces permission.
  */
 export function townRoomDrag(
   roomKey: string,
   model: TownModel,
+  canMove: (key: string) => boolean = () => true,
 ): TownDrag | null {
   const room = model.rooms.get(roomKey);
-  if (!room || !room.canOpenInSpaces || room.stale) return null;
+  if (!room || room.stale || !canMove(roomKey)) return null;
   if (
     ![...model.rooms.values()].some(
       (other) =>
@@ -173,8 +180,9 @@ export function townMagnetDesk(
  * still on it for TOWN_MAGNET_MS (`magnet`), it snaps to that desk and groups
  * with it, so moving, reordering and grouping stay separate gestures. A
  * pinned desk moves as a pinned browser tab does: only onto another pinned
- * seat of its room (or into a team there); unpinned desks cannot take a
- * pinned seat. A carried room is aimed by townRoomDropTarget.
+ * seat of its room (or into a team there), or to another room, where it
+ * stays pinned; unpinned desks cannot take a pinned seat. A carried room is
+ * aimed by townRoomDropTarget.
  */
 export function townDropTarget(
   drag: TownDrag,
@@ -231,15 +239,32 @@ export function townDropTarget(
       if (room?.key === drag.from && hit?.kind === "room")
         if (groupedDesks.has(drag.key))
           return { key: room.key, label: "Leave the team", action: "ungroup" };
+      // To another room a pinned desk goes, pinned there: the move carries
+      // its pin (town-move.ts, agent-move.ts; a core pin is the terminal's).
+      const desk = model.desks.get(drag.key);
+      if (
+        room &&
+        desk &&
+        room.key !== drag.from &&
+        canMoveDeskToRoom(desk, room)
+      )
+        return {
+          key: room.key,
+          label: `${drag.label} to ${room.displayLabel}`,
+          action: "move",
+        };
       return { key: null, label: TOWN_PINNED_HINT };
     }
     if (!room) return { key: null, label: `${drag.label}: drop on a room` };
-    if (room.hostKey !== drag.hostKey)
+    // Another runtime's room takes a desk with one terminal (world.agent.move).
+    const desk = model.desks.get(drag.key);
+    if (!desk || !canMoveDeskToRoom(desk, room))
       return {
         key: null,
-        label: sameBuilding(room, model.desks.get(drag.key))
-          ? "Desks move only within one runtime"
-          : "Desks move only within one host",
+        label:
+          desk && needsAgentHandoff(desk, room)
+            ? "Only a desk with one terminal moves to another runtime"
+            : `${drag.label}: ${room.displayLabel} can't take it now`,
       };
     if (room.key === drag.from) {
       const onto = slotDesk(hit, model);
@@ -320,6 +345,7 @@ export function townRoomDropTarget(
   y: number,
   px: number,
   py: number,
+  canMove: (key: string) => boolean = (key) => !model.rooms.get(key)?.stale,
 ): { target: TownDropTarget; placement: TownRoomPlacement | null } {
   const name = model.rooms.get(drag.key)?.displayLabel ?? "room";
   const over = layout.buildings.find(
@@ -336,7 +362,12 @@ export function townRoomDropTarget(
     };
   const spot = townRoomSpotAt(layout, drag.key, x / TOWN_TILE, y / TOWN_TILE);
   const placement = spot
-    ? townRoomPlacement(layout, drag.hostKey, new Map([[drag.key, spot]]))
+    ? townRoomPlacement(
+        layout,
+        drag.hostKey,
+        new Map([[drag.key, spot]]),
+        canMove,
+      )
     : null;
   if (!placement?.changed)
     return {

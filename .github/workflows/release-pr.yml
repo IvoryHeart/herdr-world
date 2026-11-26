@@ -1,0 +1,46 @@
+name: Release PR
+
+on:
+  workflow_dispatch:
+    inputs:
+      release_as:
+        description: Optional version override, for example 0.3.8-rc.1
+        type: string
+  schedule:
+    - cron: "27 6 * * 1"
+
+permissions:
+  contents: write
+  actions: write
+  issues: write
+  pull-requests: write
+
+concurrency:
+  group: release-pr
+  cancel-in-progress: false
+
+jobs:
+  prepare:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: googleapis/release-please-action@5c625bfb5d1ff62eadeeb3772007f7f66fdcf071 # v4
+        id: release
+        with:
+          target-branch: main
+          skip-github-release: true
+          config-file: release-please-config.json
+          manifest-file: .release-please-manifest.json
+          release-as: ${{ inputs.release_as }}
+      # GITHUB_TOKEN-created PR events do not trigger CI. The action's PR output
+      # gives us its ref: dispatch automatically, without another token/input.
+      - name: Dispatch checks for the release-please PR
+        if: steps.release.outputs.prs_created == 'true'
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+          RELEASE_PRS: ${{ steps.release.outputs.prs }}
+        run: |
+          branch="$(jq -r '.[0].headBranchName' <<< "$RELEASE_PRS")"
+          test -n "$branch" && test "$branch" != null
+          gh workflow run ci.yml --ref "$branch"
+          gh workflow run privacy.yml --ref "$branch"

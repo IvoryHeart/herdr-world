@@ -15,6 +15,7 @@ import {
 import { createSessionProjectionCache } from "./session-projection-cache";
 import { createAgentSessionResolverContext } from "./session-resolver";
 import type { HerdrCall } from "./session-types";
+import { taskSummarySessionFingerprint } from "../herdr/task-summary";
 
 // One synthetic conversation per harness World reads, each in the harness's
 // own transcript format: a question, one tool call and result, an answer.
@@ -501,8 +502,145 @@ describe("quests", () => {
           set_by: "call_q1",
         }),
         usage_stop: null,
+        artefacts: [],
       },
     ]);
+  });
+
+  test("an artefact is named on its connection and keeps the room it was made in", async () => {
+    const dir = await mkdtemp(join(root, "quest-"));
+    const path = join(dir, "session.jsonl");
+    await writeFile(
+      path,
+      `${JSON.stringify({
+        type: "assistant",
+        uuid: "w1",
+        cwd: "/work/demo",
+        timestamp: "2026-10-22T10:00:01Z",
+        message: {
+          role: "assistant",
+          content: [
+            {
+              type: "tool_use",
+              id: "call_w1",
+              name: "Write",
+              input: { file_path: "report.md", content: "# Report" },
+            },
+          ],
+        },
+      })}\n`,
+    );
+    const agent = pane("claude", {
+      source: "herdr:claude",
+      agent: "claude",
+      kind: "path",
+      value: path,
+    });
+    const on = (connectionId: string) =>
+      createHerdrConversationSource({
+        herdrCall: herdr(agent),
+        files: localAgentSessionFiles,
+        context: createAgentSessionResolverContext(),
+        cache: createSessionProjectionCache(
+          localAgentSessionFiles,
+          undefined,
+          connectionId,
+        ),
+      });
+    const hostA = on("host-a");
+    const [first] = (await hostA.quests())[0]!.artefacts!;
+    expect(first).toMatchObject({
+      title: "report.md",
+      where: { type: "file", path: "/work/demo/report.md" },
+      made_by: {
+        connection_id: "host-a",
+        pane_id: "w1:p1",
+        agent: "claude",
+        workspace_id: "w1",
+      },
+    });
+    // The agent moves to another room: where it was made stays.
+    agent.workspace_id = "w2";
+    const [later] = (await hostA.quests())[0]!.artefacts!;
+    expect(later!.made_by.workspace_id).toBe("w1");
+    // The same path on another host is another artefact.
+    const [other] = (await on("host-b").quests())[0]!.artefacts!;
+    expect(other!.id).not.toBe(first!.id);
+    expect(other!.made_by).toMatchObject({
+      connection_id: "host-b",
+      workspace_id: "w2",
+    });
+  });
+
+  test("another agent recreating the same path is credited in its own room, with its own session", async () => {
+    const dir = await mkdtemp(join(root, "quest-"));
+    const write = async (name: string) => {
+      const path = join(dir, name);
+      await writeFile(
+        path,
+        `${JSON.stringify({
+          type: "assistant",
+          uuid: name,
+          cwd: "/work/demo",
+          timestamp: "2026-10-22T10:00:01Z",
+          message: {
+            role: "assistant",
+            content: [
+              {
+                type: "tool_use",
+                id: `call_${name}`,
+                name: "Write",
+                input: { file_path: "/work/demo/report.md", content: "# R" },
+              },
+            ],
+          },
+        })}\n`,
+      );
+      return {
+        source: "herdr:claude",
+        agent: "claude",
+        kind: "path",
+        value: path,
+      };
+    };
+    const cache = createSessionProjectionCache(
+      localAgentSessionFiles,
+      undefined,
+      "host-a",
+    );
+    const read = async (agent: Record<string, unknown>) =>
+      (
+        await createHerdrConversationSource({
+          herdrCall: herdr(agent),
+          files: localAgentSessionFiles,
+          context: createAgentSessionResolverContext(),
+          cache,
+        }).quests()
+      )[0]!.artefacts![0]!;
+    const sessionA = await write("a.jsonl");
+    const first = await read(pane("claude", sessionA));
+    // The file is deleted, then another agent in another room recreates it.
+    const sessionB = await write("b.jsonl");
+    const second = await read({
+      ...pane("claude", sessionB),
+      pane_id: "w2:p1",
+      workspace_id: "w2",
+      tab_id: "w2:t1",
+    });
+    expect(second.id).toBe(first.id);
+    expect(first.made_by).toMatchObject({
+      pane_id: "w1:p1",
+      workspace_id: "w1",
+    });
+    expect(second.made_by).toMatchObject({
+      pane_id: "w2:p1",
+      workspace_id: "w2",
+    });
+    // Each maker carries its own reported session, as World's leaf does.
+    expect(first.made_by.session).toBe(taskSummarySessionFingerprint(sessionA));
+    expect(second.made_by.session).toBe(
+      taskSummarySessionFingerprint(sessionB),
+    );
   });
 
   test.each(["conversation", "quests"] as const)(

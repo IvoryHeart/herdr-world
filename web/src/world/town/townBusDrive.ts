@@ -7,6 +7,7 @@
  * schedule (shared/bin.ts); TownBusLayer draws what this says.
  */
 
+import { BIN_BUS_DWELL_MS } from "../../../../shared/bin";
 import { TOWN_TILE as T, type TownLayout, type TownPoint } from "./townLayout";
 
 /** A street is five tiles: pavement, three lanes, pavement. */
@@ -331,8 +332,12 @@ export function townBusPathAt(path: TownBusPath, s: number) {
   return { x: 0, y: 0, dx: 1, dy: 0, turning: false };
 }
 
-/** The bus's slowest cruise, in world pixels a second (agents walk ~76). */
-const CRUISE_MIN = 70;
+/**
+ * The bus's slowest cruise, in world pixels a second (agents walk ~76; the
+ * service's timetable speed is about 80): with time to spare it drives
+ * slower rather than standing.
+ */
+const CRUISE_MIN = 40;
 const CRUISE_MAX = 4_000;
 /** Seconds the bus takes to reach its cruise from a stand, or to stop. */
 const EASE_S = 2.5;
@@ -384,7 +389,7 @@ function driveProfile(path: TownBusPath, v: number) {
 }
 
 /** About how long the bus waits at each stop where someone boards. */
-export const TOWN_BUS_DWELL_MS = 10_000;
+export const TOWN_BUS_DWELL_MS = BIN_BUS_DWELL_MS;
 /** Its doors take this long to open, and to close. */
 export const TOWN_BUS_DOOR_S = 0.8;
 /** It turns round where it stands, when it must go back the way it came. */
@@ -479,7 +484,8 @@ function legFacing(points: readonly TownPoint[], end: boolean) {
 }
 
 /**
- * Fit the trip, which the service times (`tripMs`): parked at `terminus`,
+ * Fit the trip, which the service times from the bus's speed and its route
+ * (`tripMs`, binBusTripMs): parked at `terminus`,
  * the bus pulls away, drives the nearest way past each stop in `halting`
  * (stops by key, with the point it halts at), stands there about 10 s with
  * its doors open, and comes back; there its `riders` step off and walk the
@@ -755,6 +761,44 @@ export function townBusPose(
     };
   }
   return townBusParked(terminus);
+}
+
+/**
+ * How much of its drive the bus has still to go, `elapsedMs` into its
+ * trip, from 1 before it pulls away to 0 once it is back: what is left of
+ * the leg it is on and every leg after it, over the whole drive. Town shows
+ * this share of World's route (its metres), so every layout reads the same
+ * distance left.
+ */
+export function townBusLeft(
+  timeline: TownBusTimeline,
+  elapsedMs: number,
+): number {
+  const time = elapsedMs / 1000;
+  let left = 0;
+  let total = 0;
+  for (const piece of timeline.pieces) {
+    if (piece.kind !== "drive") continue;
+    total += piece.path.length;
+    if (time <= piece.t0) {
+      left += piece.path.length;
+      continue;
+    }
+    if (time >= piece.t1) continue;
+    const local = time - piece.t0;
+    const { s, t } = piece;
+    let low = 0;
+    let high = t.length - 1;
+    while (high - low > 1) {
+      const mid = (low + high) >> 1;
+      if (t[mid]! <= local) low = mid;
+      else high = mid;
+    }
+    const span = t[high]! - t[low]!;
+    const k = span > 0 ? Math.min(1, Math.max(0, (local - t[low]!) / span)) : 1;
+    left += piece.path.length - (s[low]! + (s[high]! - s[low]!) * k);
+  }
+  return total > 0 ? Math.min(1, Math.max(0, left / total)) : 0;
 }
 
 /**

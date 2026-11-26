@@ -64,7 +64,7 @@ test("development bridge and Vite proxies stay off the production port", async (
 test("CI and release jobs install once from the workspace root", () => {
   for (const file of [
     "ci.yml",
-    "prepare-release.yml",
+    "release-pr.yml",
     "release.yml",
     "world-browser.yml",
     "behavioral-verification.yml",
@@ -90,6 +90,7 @@ test("CI and release jobs install once from the workspace root", () => {
           "./.github/workflows/behavioral-verification.yml",
           "./.github/workflows/installer-upgrade.yml",
           "./.github/workflows/release-walk.yml",
+          "./.github/workflows/release-candidate.yml",
         ]).toContain(job.uses);
         expect(job.steps).toBeUndefined();
         continue;
@@ -111,6 +112,7 @@ test("CI and release jobs install once from the workspace root", () => {
       }
       // Native Windows installer/compatibility tests use only Bun and Node builtins.
       const noBunInstall =
+        file === "release-pr.yml" ||
         (file === "dependency-security.yml" && name === "queue") ||
         (["installer-upgrade.yml", "release-walk.yml"].includes(file) &&
           name === "baseline") ||
@@ -128,9 +130,12 @@ test("CI and release jobs install once from the workspace root", () => {
         (file === "release.yml" &&
           [
             "publish",
+            "acquire",
+            "validate",
             "archives",
             "verify",
             "publication-status",
+            "release-label",
             "npm-publish",
             "homebrew-pr",
             "homebrew-smoke",

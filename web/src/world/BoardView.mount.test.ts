@@ -162,7 +162,13 @@ if (!order) {
     bridge.onControl = () => () => {};
     bridge.onStatus = () => () => {};
 
-    const tasks = new Map<number, { callback(): void; delay: number }>();
+    // The shared frame scheduler yields one 0ms task before each animation
+    // frame; that task is part of delivering a frame, not one of the Board's
+    // own tasks, so it is told apart by where it was scheduled.
+    const tasks = new Map<
+      number,
+      { callback(): void; delay: number; frame: boolean }
+    >();
     const frames = new Map<number, FrameRequestCallback>();
     let sequence = 0;
     // React keeps its real scheduler; only the Board's native tasks and
@@ -174,7 +180,8 @@ if (!order) {
           writable: true,
           value: (callback: () => void, delay = 0) => {
             const id = ++sequence;
-            tasks.set(id, { callback, delay });
+            const frame = !!new Error().stack?.includes("worldFrameScheduler");
+            tasks.set(id, { callback, delay, frame });
             return id;
           },
         },
@@ -199,16 +206,18 @@ if (!order) {
         },
       });
     }
-    const deliverTasks = (delay: number) => {
+    const deliverTasks = (delay: number | "frame") => {
       for (const [id, task] of [...tasks])
-        if (task.delay === delay) {
+        if (
+          delay === "frame" ? task.frame : !task.frame && task.delay === delay
+        ) {
           tasks.delete(id);
           task.callback();
         }
     };
     let frameTime = 0;
     const deliverFrame = () => {
-      deliverTasks(16);
+      deliverTasks("frame");
       frameTime += 16;
       for (const [id, frame] of [...frames]) {
         frames.delete(id);
@@ -278,8 +287,7 @@ if (!order) {
         expect(gateRendered).toBe(true);
         expect(host.querySelector(".board-zone-label")).toBeNull();
         expect(
-          frames.size > 0 ||
-            [...tasks.values()].some((task) => task.delay === 16),
+          frames.size > 0 || [...tasks.values()].some((task) => task.frame),
         ).toBe(true);
         const heldCommits = commits;
         await act(async () => deliverFrame());
@@ -298,11 +306,11 @@ if (!order) {
             deliverFrame();
           } else render();
         });
-      expect([...tasks.values()].some((task) => task.delay === 0)).toBe(true);
+      expect(
+        [...tasks.values()].some((task) => !task.frame && task.delay === 0),
+      ).toBe(true);
       if (order === "placement-first" || order === "frame-first")
-        expect([...tasks.values()].some((task) => task.delay === 16)).toBe(
-          true,
-        );
+        expect([...tasks.values()].some((task) => task.frame)).toBe(true);
       expect(
         host.querySelector(".board")?.classList.contains("board-far"),
       ).toBe(true);

@@ -47,7 +47,7 @@ export const TOWN_HELP: readonly HelpEntry[] = [
     place: "town",
     where: "Town, top left corner",
     control: "town.board-chip",
-    since: "0.3.6",
+    since: "0.3.7",
     picture: { scene: "town" },
   },
   {
@@ -63,8 +63,25 @@ export const TOWN_HELP: readonly HelpEntry[] = [
     place: "town",
     where: "Town, beside the town board at the top left",
     control: "town.master",
-    since: "0.3.6",
+    since: "0.3.7",
     picture: { scene: "town", sizes: ["desktop"] },
+  },
+  {
+    id: "town.center",
+    title: "The town center's ring",
+    summary:
+      "Tap the town center to open a ring of actions around its doors: start an agent, talk to the Town master, focus, and more. Buildings opens a second ring around itself with every place in Town.",
+    steps: [
+      "Tap the town center, or Tab to its plaque and press Enter.",
+      "Choose an action, or Buildings to see Town's places.",
+      "In Buildings, choose a place to open it, as tapping its building does.",
+      "Press Back at the centre or Escape to go back; Escape again closes the ring.",
+    ],
+    place: "town",
+    where: "Town, the domed building at the top of the town",
+    control: "town.center",
+    since: "0.3.7",
+    picture: { scene: "town", press: ['[data-help-opens~="town.center"]'] },
   },
   {
     id: "town.focus",
@@ -81,7 +98,7 @@ export const TOWN_HELP: readonly HelpEntry[] = [
     where:
       "Town, the town board at the top left; also the town center ring and Menu",
     control: "town.focus",
-    since: "0.3.6",
+    since: "0.3.7",
     picture: { scene: "town", press: ['[data-help-opens~="town.focus"]'] },
   },
   {
@@ -97,9 +114,9 @@ export const TOWN_HELP: readonly HelpEntry[] = [
     ],
     place: "town",
     where:
-      "Town, the building beside the town center; also Apartments in the town center ring and Board's hub",
+      "Town, the building beside the town center; also Apartments in the town center ring, and Past sessions in Board's hub",
     control: "town.apartments",
-    since: "0.3.6",
+    since: "0.3.7",
     // On a phone the building is below the first view: ALL brings it in.
     picture: { scene: "town", press: [".town-zoom-all"] },
   },
@@ -117,7 +134,26 @@ export const TOWN_HELP: readonly HelpEntry[] = [
     place: "town",
     where: "Town board, under Busy, while an agent is quiet",
     control: "town.quiet",
-    since: "0.3.6",
+    since: "0.3.7",
     picture: { scene: "town", press: ['[data-help="town.board-chip"]'] },
+  },
+  {
+    id: "town.runtimes",
+    title: "Which runtime a room runs on",
+    summary:
+      "When one building holds rooms of both runtimes, a small icon before each room's name tells them apart: a terminal window for the Herdr TUI, a diamond for herdr-core.",
+    steps: [
+      "Zoom into a building until the rooms' name plates show.",
+      "Point at the icon before a room's name, or tap it on a phone, to read its runtime.",
+      "Buildings with one runtime show no icon.",
+    ],
+    place: "town",
+    where: "Town, before a room's name on its plate and its card",
+    control: "town.runtime",
+    since: "0.3.7",
+    picture: {
+      scene: "town",
+      press: ['.town-room-card[aria-label*="(herdr-core"]'],
+    },
   },
 ];

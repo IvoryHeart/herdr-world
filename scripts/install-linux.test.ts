@@ -1,5 +1,11 @@
 import { expect, test } from "bun:test";
-import { mkdtempSync, existsSync, rmSync } from "node:fs";
+import {
+  mkdtempSync,
+  existsSync,
+  rmSync,
+  writeFileSync,
+  readFileSync,
+} from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { spawnSync } from "node:child_process";
@@ -12,6 +18,71 @@ import {
 import { latestStableRelease } from "./installer-upgrade";
 
 const python = Bun.which("python3") ?? Bun.which("python");
+
+for (const mode of ["success", "transient", "permanent", "install-failure"]) {
+  test.skipIf(process.platform === "win32")(
+    `image package setup handles ${mode} fetches without hiding failures`,
+    () => {
+      const root = mkdtempSync(join(tmpdir(), "install-apt-"));
+      try {
+        // The cached base owns package setup; never run its user/system changes.
+        writeFileSync(
+          join(root, "apt-get"),
+          `#!/bin/sh
+printf '%s\\n' "$*" >> "$APT_FIXTURE/calls"
+case " $* " in
+  *' update '*)
+    case "$APT_MODE" in
+      permanent) exit 100 ;;
+      transient)
+        if [ ! -f "$APT_FIXTURE/failed" ]; then
+          : > "$APT_FIXTURE/failed"
+          echo '520 from fixture package mirror' >&2
+          exit 100
+        fi ;;
+    esac ;;
+  *' install '*) [ "$APT_MODE" != install-failure ] || exit 100 ;;
+esac
+`,
+          { mode: 0o755 },
+        );
+        const result = spawnSync("/bin/sh", ["scripts/install-linux/apt.sh"], {
+          encoding: "utf8",
+          env: {
+            ...process.env,
+            PATH: `${root}:${process.env.PATH}`,
+            APT_FIXTURE: root,
+            APT_MODE: mode,
+          },
+        });
+        expect(result.error).toBeUndefined();
+        expect(result.status).toBe(
+          mode === "permanent" || mode === "install-failure" ? 100 : 0,
+        );
+        const calls = readFileSync(join(root, "calls"), "utf8")
+          .trim()
+          .split("\n");
+        const updates = calls.filter((line) => line.includes("update"));
+        const installs = calls.filter((line) => line.includes("install"));
+        expect(updates).toHaveLength(
+          mode === "transient" || mode === "permanent" ? 2 : 1,
+        );
+        expect(installs).toHaveLength(mode === "permanent" ? 0 : 1);
+        for (const update of updates)
+          expect(update).toContain("APT::Update::Error-Mode=any");
+        for (const call of calls) {
+          expect(call).toContain("Acquire::Retries=1");
+          expect(call).not.toMatch(
+            /AllowInsecure|AllowUnauthenticated|allow-unauthenticated/,
+          );
+        }
+      } finally {
+        rmSync(root, { recursive: true, force: true });
+      }
+    },
+  );
+}
+
 test.skipIf(!python)(
   "installer assertions preserve runtime identity and tolerate setup completion ordering",
   () => {
@@ -202,36 +273,31 @@ test("without a frozen baseline, container installs resolve the latest stable re
   expect(calls).toBe(1);
 });
 
-test("systemd acceptance blocks the existing native gate and release publication", async () => {
-  const native = Bun.YAML.parse(
-    await Bun.file(".github/workflows/installer-upgrade.yml").text(),
-  ) as any;
-  const release = Bun.YAML.parse(
-    await Bun.file(".github/workflows/release.yml").text(),
-  ) as any;
-  const ci = Bun.YAML.parse(
-    await Bun.file(".github/workflows/ci.yml").text(),
-  ) as any;
-  for (const job of [native.jobs.upgrade, release.jobs.package]) {
-    const step = job.steps.find((item: any) =>
-      item.run?.includes("test:install-linux"),
-    );
-    expect(step).toBeDefined();
-    expect(step.if).toBe("matrix.platform == 'linux-x64'");
-    expect(step.run).toContain("--reuse --version");
-    expect(step.run).toContain("--require-docker");
-    expect(step["continue-on-error"]).toBeUndefined();
-  }
-  expect(ci.jobs["installer-upgrade"].if).toContain(
-    "outputs.packaging == 'true'",
-  );
-  expect(ci.jobs.delivery.name).toBe("Delivery checks");
-  expect(ci.jobs.delivery.needs).toContain("installer-upgrade");
-  for (const publisher of ["publish", "npm-publish", "homebrew-pr"]) {
-    expect(release.jobs[publisher].needs).toContain("package");
-  }
-  const releaseInstall = release.jobs.package.steps.find((item: any) =>
+test("native acceptance is isolated from Linux PRs; releases check running channel upgrades", async () => {
+  const workflow = async (name: string): Promise<any> =>
+    Bun.YAML.parse(await Bun.file(`.github/workflows/${name}.yml`).text());
+  const native = await workflow("installer-upgrade");
+  const release = await workflow("release");
+  const candidate = await workflow("release-candidate");
+  const ci = await workflow("ci");
+  const step = native.jobs.upgrade.steps.find((item: any) =>
     item.run?.includes("test:install-linux"),
   );
-  expect(releaseInstall.env.GH_TOKEN).toBe("${{ github.token }}");
+  expect(step.if).toBe("matrix.platform == 'linux-x64'");
+  expect(step.run).toContain("--reuse --version");
+  expect(step.run).toContain("--require-docker");
+  expect(step["continue-on-error"]).toBeUndefined();
+  expect(ci.jobs["installer-upgrade"]).toBeUndefined();
+  expect(ci.jobs.delivery.needs).not.toContain("installer-upgrade");
+  expect(ci.jobs["release-candidate"]).toBeUndefined();
+  expect(release.jobs.candidate.uses).toBe(
+    "./.github/workflows/release-candidate.yml",
+  );
+  expect(
+    candidate.jobs["homebrew-smoke"].steps.some((item: any) =>
+      item.run?.includes("release-channel-upgrade.py"),
+    ),
+  ).toBe(true);
+  expect(JSON.stringify(candidate)).not.toContain("test:install-linux");
+  expect(release.jobs.publish.needs).toContain("candidate");
 });

@@ -1,3 +1,4 @@
+import { stableBefore } from "./release-baseline";
 import assert from "node:assert/strict";
 import { createHash } from "node:crypto";
 import {
@@ -175,7 +176,10 @@ export const upgradeCookieStatus = (tag: string) =>
   tag === "v0.2.3" ? 401 : 200;
 
 /** Shared stable baseline policy for native upgrades and container installs. */
-export async function latestStableRelease(download: typeof fetch = fetch) {
+export async function latestStableRelease(
+  download: typeof fetch = fetch,
+  beforeVersion?: string,
+) {
   const api = async (path: string) => {
     const response = await download(
       `https://api.github.com/repos/${repository}/${path}`,
@@ -189,7 +193,24 @@ export async function latestStableRelease(download: typeof fetch = fetch) {
     assert(response.ok, `GitHub baseline lookup failed: ${response.status}`);
     return response.json() as Promise<any>;
   };
-  const release = await api("releases/latest");
+  let release = await api("releases/latest");
+  if (beforeVersion && !stableBefore(release.tag_name, beforeVersion)) {
+    const releases = await api("releases?per_page=100");
+    release = releases
+      .filter(
+        (item: { draft: boolean; prerelease: boolean; tag_name: string }) =>
+          !item.draft &&
+          !item.prerelease &&
+          stableBefore(item.tag_name, beforeVersion),
+      )
+      .sort((a: { tag_name: string }, b: { tag_name: string }) =>
+        stableBefore(a.tag_name, b.tag_name.replace(/^v/, "")) ? 1 : -1,
+      )[0];
+    assert(
+      release,
+      "No previous published stable release in the bounded release history",
+    );
+  }
   assert(
     !release.draft && !release.prerelease,
     "Baseline must be published and stable",
@@ -202,7 +223,10 @@ export async function latestStableRelease(download: typeof fetch = fetch) {
 }
 
 export async function plan() {
-  const { tag, api } = await latestStableRelease();
+  const { tag, api } = await latestStableRelease(
+    fetch,
+    process.env.RELEASE_BASELINE_BEFORE,
+  );
   const build = await contentKey(
     resolve(import.meta.dir, ".."),
     "installer",
@@ -286,14 +310,15 @@ export async function command(
   }
 }
 
-async function exerciseRuntime(
+export async function exerciseRuntime(
   binary: string,
   cwd: string,
   env: NodeJS.ProcessEnv,
   previousCookie?: string,
   cookieStatus = 200,
+  args: string[] = [],
 ) {
-  const child = Bun.spawn([binary], {
+  const child = Bun.spawn([binary, ...args], {
     cwd,
     env,
     stdout: "pipe",
@@ -367,7 +392,14 @@ async function exerciseRuntime(
     return cookie;
   } finally {
     clearTimeout(timeout);
-    child.kill();
+    if (process.platform === "win32" && args.length) {
+      // The npm launcher owns a native child; Windows termination does not
+      // deliver POSIX signals to Node's forwarding handlers.
+      await Bun.spawn(["taskkill.exe", "/PID", String(child.pid), "/T", "/F"], {
+        stdout: "ignore",
+        stderr: "ignore",
+      }).exited;
+    } else child.kill();
     const deadline = setTimeout(() => child.kill(9), 10_000);
     await child.exited;
     clearTimeout(deadline);
@@ -399,13 +431,17 @@ export async function verify() {
   const baseline = resolve(process.env.INSTALLER_BASELINE_DIR!);
   const tag = process.env.INSTALLER_BASELINE_TAG!;
   const version = process.env.HERDR_WORLD_BUILD_VERSION!;
-  assert.equal(
-    version,
-    candidateVersion(
-      tag,
-      contentBuildNumber(process.env.INSTALLER_BUILD_HASH!),
-    ),
-  );
+  if (process.env.INSTALLER_RELEASE_CANDIDATE !== "1") {
+    assert.equal(
+      version,
+      candidateVersion(
+        tag,
+        contentBuildNumber(process.env.INSTALLER_BUILD_HASH!),
+      ),
+    );
+  } else if (process.env.INSTALLER_NIGHTLY !== "true") {
+    assert.equal(version, manifestAt(source).version);
+  }
   assert.equal(manifestAt(baseline).version, tag.slice(1));
   const platform = `${process.platform === "win32" ? "windows" : process.platform === "darwin" ? "darwin" : "linux"}-${process.arch}`;
   const archiveName = `herdr-world-v${version}-${platform}.tar.xz`;

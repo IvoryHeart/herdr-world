@@ -1,0 +1,94 @@
+import { describe, expect, test } from "bun:test";
+import type { WorldRuntimeConnection } from "./runtimeStore";
+import { buildWorldObject, worldObjectForConnection } from "./worldObject";
+import { worldSearchMatches } from "./worldSearch";
+
+function connection(
+  connectionId: string,
+  label: string,
+  taskSummary: string,
+): WorldRuntimeConnection {
+  return {
+    connectionId,
+    label,
+    source: "saved-profile",
+    isDefault: connectionId === "alpha",
+    state: "ready",
+    generation: 1,
+    snapshotGeneration: 1,
+    stale: false,
+    actionable: true,
+    snapshot: {
+      workspaces: [
+        {
+          workspace_id: "studio",
+          number: 1,
+          label: `${label} Studio`,
+          focused: true,
+          pane_count: 1,
+          tab_count: 1,
+          agent_status: "working",
+        },
+      ],
+      tabs: [],
+      panes: [
+        {
+          pane_id: "agent",
+          terminal_id: "terminal",
+          workspace_id: "studio",
+          tab_id: "tab",
+          focused: true,
+          agent: "codex",
+          agent_status: "working",
+          task_summary: taskSummary,
+          revision: 1,
+        },
+      ],
+      agents: [],
+    },
+  };
+}
+
+describe("shared World search", () => {
+  test("aggregate search uses complete qualified observations before renderer bounds", () => {
+    const source = connection(
+      "beta",
+      "Synthetic Beta",
+      "Needle late in observation",
+    );
+    const template = source.snapshot!.panes[0]!;
+    source.snapshot!.panes = Array.from({ length: 40 }, (_, index) => ({
+      ...template,
+      pane_id: `pane-${index}`,
+      terminal_id: `terminal-${index}`,
+      focused: false,
+      task_summary:
+        index === 39 ? "Needle late in observation" : "Ordinary work",
+    }));
+    const world = buildWorldObject(
+      [connection("alpha", "Synthetic Alpha", "Other work"), source],
+      "alpha",
+    );
+    const results = worldSearchMatches(world, "needle late");
+    expect(results).toHaveLength(1);
+    expect(results[0]).toMatchObject({
+      connectionId: "beta",
+      nativeId: "pane-39",
+    });
+    expect(world.coverage.leaves).toBe(41);
+  });
+  test("searches only the selected-host projection", () => {
+    const aggregate = buildWorldObject(
+      [
+        connection("alpha", "Linux", "Repair billing"),
+        connection("beta", "MacBook", "Publish release"),
+      ],
+      "alpha",
+    );
+    const visible = worldObjectForConnection(aggregate, "alpha");
+
+    expect(worldSearchMatches(visible, "billing")).toHaveLength(1);
+    expect(worldSearchMatches(visible, "release")).toEqual([]);
+    expect(worldSearchMatches(visible, "linux").length).toBeGreaterThan(0);
+  });
+});

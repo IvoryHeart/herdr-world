@@ -95,13 +95,17 @@ export function askerName(ask: WorldAsk) {
 }
 
 /** An answered, dismissed or withdrawn question is closed. */
-/** Why an owner alert may not have reached the owner; the question is saved. */
+/**
+ * Why an owner alert may not have reached the owner; the question is saved.
+ * Needs you and Town show it under the question (#1156: a refused alert
+ * says plainly that the owner was not alerted).
+ */
 export function askDeliveryMessage(ask: WorldAsk) {
   const notification = ask.delivery?.notification;
   return notification?.state === "uncertain"
     ? "Owner alert delivery is uncertain. World will retry; your question is saved."
     : notification?.state === "refused"
-      ? "Owner alert was not shown. Your question is saved."
+      ? "World did not alert you about this question."
       : notification?.state === "pending" && notification.reason
         ? "Owner alert is waiting to retry. Your question is saved."
         : null;

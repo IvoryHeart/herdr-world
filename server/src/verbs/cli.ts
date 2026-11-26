@@ -27,6 +27,7 @@ const outputs = {
     object({ hosts: Type.Array(object()), connections: Type.Array(object()) }),
   ]),
   history: Type.Array(object()),
+  "ask ls": Type.Array(object()),
   "result ls": Type.Array(object()),
   "group list": Type.Array(object()),
   result: object({ id: text, task: text, summary: text, status: text }),
@@ -76,6 +77,7 @@ export const cliVerbs = [
     { field: "herdr", flag: "--herdr" },
   ]),
   cli("ask", { question: text }, "reconcilable"),
+  cli("ask ls", {}, "read", [], true),
   cli("ask get", { id: text }, "read"),
   cli("ask acknowledge", {
     id: text,

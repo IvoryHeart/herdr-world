@@ -8,7 +8,6 @@ import {
   townObservatory,
   townObservatoryCellSpoken,
   townObservatoryCellText,
-  townObservatoryFoldAt,
   townObservatoryLit,
   townObservatoryLot,
   townObservatorySpoken,
@@ -16,14 +15,15 @@ import {
   type TownObservatory as Observatory,
   type TownObservatoryCell,
 } from "./townObservatoryModel";
+import { townCivicSigns } from "./townCivicSigns";
 import { useOpenTownUsage } from "./TownUsageLens";
+import { useTownPlace } from "./useTownPlace";
 import "./townObservatory.css";
 
 /**
  * The observatory's DOM layer (#1029): its sign with each harness's 5 h and
- * week used and when each resets, a lit window per agent at work, and on a
- * narrow town a folded sign on the center's right wing. Either sign opens the
- * Usage screens.
+ * week used and when each resets, and a lit window per agent at work, on
+ * a narrow (phone) town too (#1351). The sign opens the Usage screens.
  */
 export const TownObservatory = memo(function TownObservatory({
   layout,
@@ -40,28 +40,18 @@ export const TownObservatory = memo(function TownObservatory({
   const observatory = townObservatory(state, working, Date.now());
   const open = useOpenTownUsage();
   const lot = townObservatoryLot(layout);
+  const at = townCivicSigns(layout, T).observatory;
   const name = `Observatory: ${townObservatorySpoken(observatory)}${open ? ". Open Usage" : ""}`;
   const press = (event: React.MouseEvent) => {
     event.stopPropagation();
     open?.("budget");
   };
-  if (!lot) {
-    const at = townObservatoryFoldAt(layout.center);
-    return (
-      <button
-        type="button"
-        className="town-observatory-fold"
-        style={{ left: at.x, top: at.y }}
-        aria-label={name}
-        title="Observatory: Usage"
-        onPointerDown={(event) => event.stopPropagation()}
-        onClick={press}
-      >
-        <Scope />
-        <FoldText observatory={observatory} />
-      </button>
-    );
-  }
+  // The building opens what the sign does (#1170); the town center's Buildings ring opens it too (#1261).
+  const openBudget = useMemo(
+    () => (open ? () => open("budget") : null),
+    [open],
+  );
+  useTownPlace("observatory", openBudget);
   const atWork = observatory.status === "loading" ? [] : observatory.atWork;
   const { lit, more } = townObservatoryLit(atWork);
   return (
@@ -69,8 +59,9 @@ export const TownObservatory = memo(function TownObservatory({
       <button
         type="button"
         className="town-observatory-sign"
+        data-town-place="observatory"
         data-quiet={observatory.status !== "ready" || undefined}
-        style={{ left: (lot.x + lot.w / 2) * T, top: lot.y * T + 2 }}
+        style={{ left: at.x, top: at.y }}
         aria-label={name}
         onPointerDown={(event) => event.stopPropagation()}
         onClick={press}
@@ -168,38 +159,4 @@ function Cell({ cell }: { cell: TownObservatoryCell }) {
       {townObservatoryCellText(cell)}
     </span>
   );
-}
-
-/** The folded sign: each harness's fuller window, or what stands in. */
-function FoldText({ observatory }: { observatory: Observatory }) {
-  if (observatory.status !== "ready")
-    return (
-      <span>{observatory.status === "loading" ? "…" : "unavailable"}</span>
-    );
-  if (!observatory.dials.length) return <span>no reading</span>;
-  return (
-    <span className="town-observatory-fold-dials">
-      {observatory.dials.map((dial) => {
-        const used = dial.cells.filter((c) => c.kind === "used");
-        const reached = dial.cells.some((c) => c.kind === "reached");
-        const top = used.length
-          ? Math.max(...used.map((c) => (c.kind === "used" ? c.used : 0)))
-          : null;
-        return (
-          <span
-            key={dial.harness}
-            data-reached={reached || undefined}
-            data-stale={dial.stale || undefined}
-          >
-            {dial.name} {reached ? "limit" : top === null ? "?" : `${top}%`}
-          </span>
-        );
-      })}
-    </span>
-  );
-}
-
-/** The telescope painted on the dome, as the folded sign's mark. */
-function Scope() {
-  return <span className="town-observatory-scope" aria-hidden="true" />;
 }

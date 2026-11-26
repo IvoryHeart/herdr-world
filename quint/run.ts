@@ -3,6 +3,7 @@ import { composedCases, replayTracesPerSeed } from "./composed-cases";
 import { runRegistryVerification } from "./connection-registry-verification";
 import { runCoreVerification } from "./herdr-core-verification";
 import { runSeenVerification } from "./herdr-core-seen";
+import { runMoveVerification } from "./agent-move-verification";
 import { runIdeLifecycleVerification } from "./ide-lifecycle-verification";
 import { replayEffectRecovery } from "./effect-recovery";
 import { verificationModels } from "./models";
@@ -685,6 +686,7 @@ export async function runReviewedQuintModels(
         "connection-registry": runRegistryVerification,
         "herdr-core-seen": runSeenVerification,
         "ide-lifecycle": runIdeLifecycleVerification,
+        "agent-move": runMoveVerification,
       } as const;
       if (item.name in composed) {
         const { name } = item;

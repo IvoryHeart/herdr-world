@@ -58,12 +58,16 @@ import { withIntegrations } from "../integrations/http";
 import { herdrEventName } from "../utils/herdr-events";
 import { serverLogger } from "../utils/logger";
 import { afterHerdrClose } from "../world/board-closing";
-import { createApartmentsService } from "./apartments-service";
+import { apartmentsKey } from "../features/apartments/register";
+import { createApartmentsService } from "../features/apartments/service";
+import { createArtefactShelf } from "../world/artefact-shelf";
 import { createBinService } from "./bin-service";
 import { inFlightWork } from "./in-flight";
 import type { createMoveQueue } from "../world/desk-move";
+import { createMoveSettle } from "../world/move-settle";
 import { reconcileReadyInterest } from "../world/interest-prune";
 import { serializeWorldInvalidation } from "../world/invalidation";
+import { usageKey } from "../features/usage/register";
 import { composeWorldUsage, type ComposedWorldUsage } from "./usage-analytics";
 import { createUsageTelemetry } from "./usage-telemetry";
 import { createRevisionPublisher } from "../world/revision-publisher";
@@ -71,6 +75,7 @@ import { startSettingsFocus } from "../world/focus";
 import { profileRuntimeConfig } from "./profile-runtime-config";
 import { WorldSnapshotService } from "../world/snapshot";
 import { createWorldCliService } from "../world/world-cli-service";
+import { ownerAlertConnection } from "../world/owner-alert-connection";
 import { createWorldAskPeers } from "./world-ask-peers";
 import { createAssistantLoader } from "./assistant-loader";
 import { memoryKey } from "../features/memory/register";
@@ -133,6 +138,7 @@ async function compose(
   const snapshotAdmission = new WorldSnapshotAdmission();
   /** Town moves run one at a time per connection (see world/desk-move). */
   const townMoveQueues = new Map<string, ReturnType<typeof createMoveQueue>>();
+  const moveSettle = createMoveSettle();
   let publishFocusChanged: (revision: number) => void = () => {};
   const focus = await startSettingsFocus({
     clock,
@@ -244,11 +250,18 @@ async function compose(
     publish: publishBoardChanged,
     sources: () => ({ connectionManager, coreControl: coreRpc }),
   });
+  // herdr-core has no toasts: alert through a Herdr connection (#1156).
+  const ownerAlert = () =>
+    ownerAlertConnection(
+      connectionManager.list(),
+      connectionManager.defaultId(),
+      connectionProfiles.profilesById(),
+    );
   const askPeers = createWorldAskPeers({
     titleSuffix: async () => (await settings.read()).title_suffix,
     profiles: () => connectionProfiles.profilesById(),
     coreIds: () => connectionProfiles.coreList().map((entry) => entry.id),
-    defaultId: () => connectionManager.defaultId(),
+    alertConnectionId: () => ownerAlert(),
     ledger: () => storage.ledger(),
   });
   const worldCli = createWorldCliService({
@@ -256,6 +269,7 @@ async function compose(
     peers: askPeers.peers,
     homeName: askPeers.homeName,
     askRuntimes: askPeers.askRuntimes,
+    ownerAlertConnection: ownerAlert,
     memory: () => features!.get(memoryKey),
     core: () => coreCallers,
     board,
@@ -277,10 +291,17 @@ async function compose(
     publishBoard: publishBoardChanged,
     broadcast: (line) => broadcast(line, "world-ledger"),
   });
+  // The bin is made below; a core runtime seen before then holds nothing.
+  const binCore: {
+    generation?(connectionId: string, generation: number): void;
+  } = {};
   const { core, rpc: coreRpc } = composeCore({
     logger: logger.child("connections"),
     changed: publishConnectionsChanged,
-    observed: publishWorldInvalidation,
+    observed: (connectionId, generation) => {
+      binCore.generation?.(connectionId, generation);
+      publishWorldInvalidation(connectionId, generation);
+    },
     profiles: () => connectionProfiles,
     topology: storage.coreTopology,
     // Its pages are always this service's sockets.
@@ -302,21 +323,13 @@ async function compose(
     connections: () => connectionManager,
     publish: revisionPublisher("world_bin_changed", "world-bin"),
     log: (message) => logger.warn(message),
-    retiring: (entries) => apartments.apartments.retire(entries),
+    info: (message) => logger.info(message),
+    retiring: (entries) =>
+      features!.get(apartmentsKey).apartments.retire(entries),
   });
+  binCore.generation = (connectionId, generation) =>
+    bin.registry.retireConnectionGeneration(connectionId, generation);
   void bin.start();
-  /** Apartments: the records finished agents leave (shared/apartments.ts). */
-  const apartments = createApartmentsService({
-    port: storage.apartments,
-    now: () => clock.now(),
-    tui: () => connectionManager,
-    core: () => coreRpc,
-    sources: () => worldSources.current(),
-    board,
-    profiles: () => storage.profiles(),
-    publish: revisionPublisher("world_apartments_changed", "world-apartments"),
-    log: (message) => logger.warn(message),
-  });
   const {
     observe: observeHost,
     retire: retireTerminalMarks,
@@ -359,7 +372,7 @@ async function compose(
   const connectionManager = new ConnectionManager<LegacyConnectionRuntime>(
     connectionBootstrap.defaultConnectionId,
     (status) => {
-      worldUsage?.connectionStatus(status);
+      features?.connectionStatus(status);
       focusedAcquisition.reconcile();
       deskWatches.reconcile();
       publishConnectionsChanged();
@@ -370,8 +383,6 @@ async function compose(
         !["error", "disconnected"].includes(status.state),
       );
       bin.connectionStatus(status);
-      apartments.apartments.connectionStatus(status);
-      features?.connectionStatus(status);
       publishWorldInvalidation(status.id, status.generation);
       const fields = {
         connection: status.id,
@@ -478,12 +489,21 @@ async function compose(
       publishWorldInvalidation(connectionId, generation, "late"),
     undefined,
     () => terminalMarks.worldWatchlist.list(),
-    apartments.fresh((id, generation, panes, at, agents) => {
-      if (connectionManager.has(id))
-        observeHost(id, generation, panes, at, agents);
-      worldUsage?.activity.observeFresh(id, generation, panes, at, agents);
-    }),
-    apartments.complete(ownedBy(connectionManager, observeTerminalSettings)),
+    (...args) =>
+      features!
+        .get(apartmentsKey)
+        .fresh((id, generation, panes, at, agents) => {
+          if (connectionManager.has(id))
+            observeHost(id, generation, panes, at, agents);
+          worldUsage?.activity.observeFresh(id, generation, panes, at, agents);
+        })(...args),
+    (...args) => {
+      // Both runtimes: a held agent that ended by itself leaves the bin.
+      bin.registry.observeComplete(...args);
+      features!
+        .get(apartmentsKey)
+        .complete(ownedBy(connectionManager, observeTerminalSettings))(...args);
+    },
     serviceIncarnation,
   );
 
@@ -724,22 +744,6 @@ async function compose(
     scheduler,
   });
 
-  worldUsage = composeWorldUsage({
-    connectionManager,
-    core,
-    coreRpc,
-    connectionProfiles,
-    observedConnections,
-    worldSnapshots,
-    worldSources,
-    settings,
-    officeObservability,
-    clock,
-    scheduler,
-    serviceIncarnation,
-    config,
-    dataRoot: paths.root,
-  });
   const ide = (worldIde = createWorldIde({
     root: paths.root,
     sshHost: config.sshHost,
@@ -776,6 +780,7 @@ async function compose(
     safeSend,
     snapshotAdmission,
     townMoveQueues,
+    moveSettle,
     uiSettings: createUiSettingsRpcHandler({
       readSettings: () => settings.read(),
       updateSettings: (update, shouldCommit) =>
@@ -784,17 +789,25 @@ async function compose(
     ...terminalMarks,
     bin,
     focus,
-    apartments,
     worldCli,
     worldSnapshots,
-    worldUsage,
     ide,
     boardElements,
-    worldUsageAnalytics: worldUsage.analytics,
   };
   features = composeFeatures(
-    featureKernel(deps, storage, rpcServices, () => worldSources),
+    featureKernel(
+      deps,
+      storage,
+      rpcServices,
+      () => worldSources,
+      { observedConnections, worldSnapshots, officeObservability },
+      composeWorldUsage,
+      createApartmentsService,
+      createArtefactShelf,
+    ),
   );
+  worldUsage = features.get(usageKey);
+  rpcServices.apartments = features.get(apartmentsKey);
   rpcServices.featureRpc = features.rpc;
   const handleRpc = createRpcDispatcher(rpcServices, legacyRoutingLogger);
 
@@ -938,11 +951,10 @@ async function compose(
   async function stopService() {
     // Refuse requests (503), reconnects, pushes, Ranger starts and new answer waits.
     stopping = true;
-    if (features!.hasStop("quiesce")) await features!.stop("quiesce");
     worldSources.weather.close();
     shipyard.stop();
     askPeers.stop();
-    const usageStopped = worldUsage!.close();
+    const featuresStopped = features!.stop("quiesce");
     focusedAcquisition.stop();
     deskWatches.stop();
     connectionProfiles.stopSupervision();
@@ -960,7 +972,7 @@ async function compose(
       if (features!.hasStop("drain")) await features!.stop("drain");
       await connectionManager.stopAll();
       await core.stop();
-      await usageStopped;
+      await featuresStopped;
       await startTask?.catch(() => {});
       await assistant.dispose();
       await drained();
@@ -968,9 +980,8 @@ async function compose(
       try {
         // Finished agents seen so far are written before storage closes;
         // a history census still reading stops.
-        await apartments.stop();
+        await features!.stop("close");
         await closeTerminalMarks();
-        if (features!.hasStop("close")) await features!.stop("close");
         storageOpen = false;
         await storage.close();
       } finally {

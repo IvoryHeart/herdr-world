@@ -26,13 +26,19 @@
   image-rendering: pixelated;
 }
 
-.town-world .town-library-sign:hover,
-.town-world .town-library-fold:hover {
+/* A phone hangs it by its top-left corner over the roof, below the
+   observatory's sign and right of the town center's plaque
+   (townCivicSigns.ts), so it covers neither at a phone's zoom (#1351). */
+.town-world .town-library-sign[data-hangs] {
+  transform: scale(clamp(0.5, var(--iz), 2.4));
+  transform-origin: 0 0;
+}
+
+.town-world .town-library-sign:hover {
   filter: brightness(1.06);
 }
 
-.town-world .town-library-sign:focus-visible,
-.town-world .town-library-fold:focus-visible {
+.town-world .town-library-sign:focus-visible {
   outline: 2px solid #ffd166;
   outline-offset: 2px;
 }
@@ -50,45 +56,4 @@
 .town-world .town-library-sign[data-quiet] .town-library-sign-counts {
   font-weight: 400;
   color: #6e5a3a;
-}
-
-.town-world .town-library-fold {
-  position: absolute;
-  display: inline-flex;
-  align-items: center;
-  gap: 4px;
-  min-height: 24px;
-  padding: 2px 6px;
-  color: #2f2416;
-  background: #e6cf9f;
-  border: 2px solid #2f6b5c;
-  border-radius: 4px;
-  transform: translate(-50%, -50%) scale(clamp(0.55, var(--iz), 1.6));
-  font:
-    700 10px "Silkscreen",
-    "Pixelify Sans",
-    ui-monospace,
-    monospace;
-  white-space: nowrap;
-  cursor: pointer;
-  pointer-events: auto;
-}
-
-/* An open book, small: two pages on a coloured binding. */
-.town-library-book {
-  position: relative;
-  flex: none;
-  display: inline-block;
-  width: 16px;
-  height: 11px;
-  margin: 1px 1px 2px;
-  background: linear-gradient(
-    90deg,
-    #fbf3df 0 7px,
-    #2f6b5c 7px 9px,
-    #fbf3df 9px
-  );
-  border: 1px solid #1c1722;
-  border-bottom: 3px solid #c8553d;
-  border-radius: 2px 2px 1px 1px;
 }

@@ -133,6 +133,48 @@
   font-size: 11px;
 }
 
+.command-item-trailing {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  color: var(--muted);
+}
+
+.command-item:has(.command-item-trailing, .command-item-secondary) {
+  grid-template-columns: 24px minmax(0, 1fr);
+  grid-auto-columns: auto;
+  grid-auto-flow: column;
+}
+
+.command-item-secondary {
+  padding: 3px 7px;
+  border: 1px solid var(--border);
+  border-radius: 5px;
+  background: transparent;
+  color: var(--muted);
+  font-size: 11px;
+  white-space: nowrap;
+  cursor: pointer;
+}
+
+.command-item-secondary:hover,
+.command-item[aria-selected="true"] .command-item-secondary {
+  color: var(--text);
+}
+
+.world-find-icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 6px;
+  box-shadow: 0 0 0 2px var(--world-find-color, transparent);
+}
+
+.world-find-runtime {
+  display: inline-flex;
+  align-items: center;
+}
+
 .command-shortcut {
   color: var(--muted);
   font:

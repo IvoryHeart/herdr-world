@@ -110,7 +110,7 @@ if (process.env.BOARD_HUB_DOM !== "1") {
     const hub = mount();
     await hub.render();
     const group = hub.$('[role="group"]')!;
-    expect(group.getAttribute("aria-label")).toBe("Town center");
+    expect(group.getAttribute("aria-label")).toBe("Hub");
     const plus = hub.$('[data-action="launch"]')!;
     expect(plus.getAttribute("aria-label")).toBe("New agent, in api");
     expect(plus.hasAttribute("data-primary")).toBe(true);
@@ -127,6 +127,7 @@ if (process.env.BOARD_HUB_DOM !== "1") {
     const hub = mount();
     await hub.render();
     expect(hub.more().getAttribute("aria-haspopup")).toBe("menu");
+    expect(hub.more().getAttribute("aria-label")).toBe("Hub actions");
     await hub.click(hub.more());
     expect(hub.more().getAttribute("aria-expanded")).toBe("true");
     expect(hub.items().map((item) => item.dataset.action)).toEqual([

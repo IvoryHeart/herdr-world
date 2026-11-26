@@ -369,9 +369,11 @@ server-rendered output rather than reconstructing a PTY in the bridge.
 
 Spaces keeps one focused qualified workspace; visual Inspectors retain independent
 operational contexts across ready connections. The bridge-global
-`world.snapshot` path reads bounded topology from every ready runtime. The browser
-qualifies that data by connection and generation into one WorldObject used by Town,
-Board, Desk and the common navigator. Aggregate observation is never mutation authority: opening a terminal,
+`world.snapshot` path reads bounded topology from every ready runtime. Today the browser
+qualifies that data by connection and generation into a WorldObject that Town, Board,
+Desk and the common navigator start from, and several views still derive or write facts
+on their own; [World as one object](#world-as-one-object) gives the target and the
+migration. Aggregate observation is never mutation authority: opening a terminal,
 Files, Changes, or Agent History revalidates the captured owning runtime without
 changing another context. The browser sends bounded deduplicated open-context host
 hints (or visible hosts when no contexts are open) in the global snapshot request.
@@ -551,6 +553,36 @@ service validates one credential-free Prometheus base URL, issues only fixed bou
 the browser. Provider responses cannot add topology or target actions. No provider, a
 timeout or a malformed response produces unavailable/degraded board health without
 affecting WorldObject refreshes, terminal routing or Inspector work.
+
+## World as one object
+
+World is one object. It is derived from the sources of record and given to the views
+to display; every change goes back through World to its source of record:
+sources of record → observation → World object → views → World command → source of
+record. The [design](../openspec/changes/world-one-object/design.md#the-rule-in-one-picture)
+draws it.
+
+- **Derived on the service.** The service derives the object once, so the CLI,
+  Ranger, notifications and every browser see the same facts. Each browser keeps one
+  replica shared by its views and adopts only newer revisions. Views keep only
+  presentation (camera, selection, open windows, drafts).
+- **Writes are commands.** A view sends a command by entity ID. World checks and
+  records it, then commits it to its own store or sends it to the runtime on the
+  entity's own connection and generation.
+- **Observation decides.** A runtime acknowledgement does not change World's value;
+  the next read that started after it does. A read that began before a write is
+  discarded, so an old value cannot return. The asking browser shows the requested
+  value as pending until its replica has the World revision that carries the outcome;
+  a refusal shows World's value again at once.
+- **Offline hosts** stay visible, stale and non-actionable. Runtime commands to them
+  are refused, never queued; World-owned facts about them can still change.
+- **History.** Every command is a history entry; undo is a new command, refused if
+  the fact changed since.
+
+Today the browser builds the object and several views still derive or write facts on
+their own. The design, the list of sources, the audit of current breaks and the
+step-by-step migration are in the
+[`world-one-object` change](../openspec/changes/world-one-object/design.md).
 
 ## Agent activity
 

@@ -934,6 +934,8 @@ limiting, multi-user roles, or a sandbox.
 
 ## Native HTTPS
 
+The **Code** view requires trusted HTTPS or loopback (`http://localhost:<port>`) to open Visual Studio Code.
+
 Supply a PEM certificate chain (leaf first) and a matching unencrypted private
 key, through flags or the environment settings above:
 
@@ -960,6 +962,13 @@ Protect certificate keys, keep them out of Git, and use absolute paths readable
 by the service user. Issuance and renewal are external; restart World after
 replacing the files. An HTTPS reverse proxy is another option; preserve its
 public Host and configure `--public-origin` when proxying to loopback.
+
+### Known issues
+
+- [Code view needs a secure address (#1271)](https://github.com/IvoryHeart/herdr-world/issues/1271):
+  plain `http://<lan-ip>:<port>` shows **Visual Studio Code needs a secure address**.
+  Use localhost on the computer running World, or follow the
+  [Tailscale Serve steps](./TUTORIAL.md#tailscale) for HTTPS on other devices.
 
 ## Web Push notifications
 
@@ -1066,7 +1075,9 @@ The in-app checker follows newer release candidates on the same version line and
 then the stable release; stable builds follow GitHub Latest. Automatic installation
 is available only for supervised standalone binaries. Homebrew, npm, and Herdr
 plugin installations must be upgraded through their installation channel.
-Pre-merge previews have no update channel.
+`brew upgrade` restarts a running World service on the new version by itself,
+including a service an older release registered with its versioned keg path; a
+World started in a terminal is left running. Pre-merge previews have no update channel.
 
 ## Private remote access
 

@@ -136,9 +136,8 @@ export function townBoardObstacles(
   for (const lot of [
     townPostReserve(townPostLotBeside(center)),
     townWarehouseReserve(townHarbourLot(layout).warehouse),
-    ...(layout.formFactor !== "narrow"
-      ? [townLibraryReserve(townLibraryLotBeside(center))]
-      : []),
+    townLibraryReserve(townLibraryLotBeside(center)),
+    townObservatoryReserve(townObservatoryLotBeside(center)),
   ])
     boxes.push({
       x0: lot.x0 * T,
@@ -146,17 +145,6 @@ export function townBoardObstacles(
       y0: lot.y0 * T,
       y1: lot.y1 * T,
     });
-  if (layout.formFactor !== "narrow") {
-    const observatory = townObservatoryReserve(
-      townObservatoryLotBeside(center),
-    );
-    boxes.push({
-      x0: observatory.x0 * T,
-      x1: observatory.x1 * T,
-      y0: observatory.y0 * T,
-      y1: observatory.y1 * T,
-    });
-  }
   if (city) {
     const scale = townCityBoardScale(z);
     const mid = (center.x + center.w / 2) * T;

@@ -69,6 +69,41 @@ writing the user's IDE settings, so an explicit setting of the user's own wins.
 - **WHEN** the selected checkout is unavailable or the captured generation/session retires
 - **THEN** World revokes actionable project attachment and labels retained context stale without guessing a directory or redirecting to another host
 
+### Requirement: Workbench kept loaded across views
+
+A workbench shown once SHALL stay loaded, at its size, while another project,
+view or Spaces is in front, while World detaches from and reattaches to its
+server, and while World asks for a connection after the last one was removed;
+its editors, unsaved edits, terminals, webviews and scroll SHALL stay as they
+were. Only a page reload, a Stop that ended the server, or its server ending or
+failing SHALL load it again, and Code SHALL then say it loaded again. A Stop
+that fails leaves the server running and its workbench loaded.
+
+#### Scenario: Switch to Town and back
+
+- **WHEN** the owner edits a file without saving, opens a webview, switches to Town and back to Code
+- **THEN** the same workbench is in front with the edit and the webview unchanged, and nothing loaded again
+
+#### Scenario: Reconnect while the workbench is open
+
+- **WHEN** World detaches from a running server and reattaches to it
+- **THEN** the workbench stays loaded behind the detached screen and is in front again once ready, without loading again
+
+#### Scenario: Last connection removed
+
+- **WHEN** the owner removes the last connection while a workbench is loaded
+- **THEN** World asks for a connection, the workbench stays loaded hidden behind it, and it is unchanged when a connection is back
+
+#### Scenario: Stop fails
+
+- **WHEN** the owner confirms Stop and World cannot stop the server
+- **THEN** the server stays listed and its workbench stays loaded
+
+#### Scenario: Page reloaded
+
+- **WHEN** the page reloads while a server runs
+- **THEN** the workbench loads again and Code says the page reloaded, so it loaded again
+
 ### Requirement: Embedding feasibility and full authority admission
 
 An embedded provider SHALL remain unavailable until its distribution terms,

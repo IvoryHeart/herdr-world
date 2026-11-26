@@ -1,9 +1,8 @@
 /* The observatory (TownObservatory.tsx), in Town's pixel skin: a night-blue
-   sign with a brass edge over the dome, a lit window per agent at work, and
-   on a narrow town a folded sign on the center's right wing. */
+   sign with a brass edge over the dome and a lit window per agent at work,
+   on a narrow (phone) town too. */
 
 .town-world .town-observatory-sign,
-.town-world .town-observatory-fold,
 .town-world .town-observatory-lights {
   --obs-claude: #ffd27a;
   --obs-codex: #9fe3ff;
@@ -39,8 +38,7 @@
   pointer-events: auto;
   image-rendering: pixelated;
 }
-.town-world .town-observatory-sign:focus-visible,
-.town-world .town-observatory-fold:focus-visible {
+.town-world .town-observatory-sign:focus-visible {
   outline: 2px solid #ffd166;
   outline-offset: 2px;
 }
@@ -187,63 +185,6 @@
   55% {
     opacity: 0.7;
   }
-}
-
-/* The folded sign on a narrow town's center. */
-.town-world .town-observatory-fold {
-  position: absolute;
-  display: inline-flex;
-  align-items: center;
-  gap: 5px;
-  min-height: 24px;
-  padding: 2px 6px;
-  color: var(--obs-ink);
-  background: #1d2440;
-  border: 2px solid #8a6420;
-  border-radius: 4px;
-  transform: translate(-50%, -50%) scale(clamp(0.55, var(--iz), 1.6));
-  font:
-    700 10px "Silkscreen",
-    "Pixelify Sans",
-    ui-monospace,
-    monospace;
-  white-space: nowrap;
-  cursor: pointer;
-  pointer-events: auto;
-}
-.town-observatory-fold-dials {
-  display: inline-flex;
-  gap: 6px;
-}
-.town-observatory-fold-dials [data-reached] {
-  color: var(--obs-warn);
-}
-.town-observatory-fold-dials [data-stale] {
-  opacity: 0.6;
-}
-.town-observatory-scope {
-  position: relative;
-  flex: none;
-  display: inline-block;
-  width: 16px;
-  height: 12px;
-  background: radial-gradient(
-    circle at 50% 100%,
-    #8cc7b8 0 7px,
-    transparent 7.5px
-  );
-  image-rendering: pixelated;
-}
-.town-observatory-scope::after {
-  content: "";
-  position: absolute;
-  left: 7px;
-  top: 0;
-  width: 10px;
-  height: 3px;
-  background: #d6a640;
-  transform: rotate(-35deg);
-  transform-origin: left center;
 }
 
 @media (prefers-reduced-motion: reduce) {
