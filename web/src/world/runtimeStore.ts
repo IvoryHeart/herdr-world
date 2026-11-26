@@ -899,16 +899,28 @@ export class WorldRuntimeStore {
     this.published = parsed.connections;
     this.adoptedRevision = parsed.revision;
     const connections = this.presented(parsed.connections, parsed.commands);
-    // Nothing shown changed: views are not asked to render again.
+    // Nothing shown changed: views are not asked to render again, but the
+    // replica still records the revision it now holds.
     if (
       this.state.status === "ready" &&
       this.state.serviceIncarnation === parsed.serviceIncarnation &&
       this.state.uiSettings?.revision === parsed.uiSettings?.revision &&
       connections.length === this.state.connections.length &&
       connections.every((c, i) => c === this.state.connections[i]) &&
+      JSON.stringify(parsed.hosts) === JSON.stringify(this.state.hosts) &&
       JSON.stringify(parsed.commands) === JSON.stringify(this.state.commands)
-    )
+    ) {
+      if (
+        this.state.revision !== parsed.revision ||
+        this.state.observedAt !== parsed.observedAt
+      )
+        this.state = {
+          ...this.state,
+          revision: parsed.revision,
+          observedAt: parsed.observedAt,
+        };
       return;
+    }
     this.set({ ...parsed, connections, status: "ready", error: null });
   }
 

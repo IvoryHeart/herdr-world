@@ -7,6 +7,10 @@ import {
   type WorldCommands as WorldCommandsType,
 } from "../server/src/world/commands";
 import { WorldSnapshotService } from "../server/src/world/snapshot";
+import type {
+  LedgerDocument,
+  LedgerStore,
+} from "../server/src/world/world-ledger";
 import { WorldRuntimeStore } from "../web/src/world/runtimeStore";
 import { inProgress, type WorldCommand } from "../web/src/world/worldReplica";
 
@@ -73,11 +77,39 @@ const status: ConnectionStatus = {
   generation: 1,
 };
 
+/** World's durable ledger (in memory here): it outlives a restart. */
+function ledgerStore(): LedgerStore & { document: LedgerDocument } {
+  let next = 0;
+  const store = {
+    document: {
+      version: 1,
+      revision: 0,
+      changes: [],
+      asks: [],
+      results: [],
+    } as LedgerDocument,
+    nextId: (kind: string) => `${kind}-${++next}`,
+    get: () => store.document,
+    ask: () => undefined,
+    change: (id: string) => store.document.changes.find((c) => c.id === id),
+    openAsks: () => ({ revision: store.document.revision, asks: [] }),
+    update(change: (document: LedgerDocument) => void) {
+      const document = structuredClone(store.document);
+      change(document);
+      document.revision += 1;
+      store.document = document;
+      return document.revision;
+    },
+  };
+  return store;
+}
+
 /** One World service incarnation over the source. */
 function service(
   impl: Implementation,
   src: ReturnType<typeof source>,
   incarnation: string,
+  ledger: LedgerStore,
 ) {
   const snapshots = new impl.WorldSnapshotService(
     {
@@ -114,11 +146,7 @@ function service(
     } as never,
     core: () => undefined,
     snapshots: snapshots as never,
-    ledger: () =>
-      ({
-        nextId: async () => "c-1",
-        update: async () => undefined,
-      }) as never,
+    ledger: () => ledger,
     invalidate: (id) => snapshots.invalidate(id),
     publish: () => undefined,
     log: () => undefined,
@@ -208,7 +236,8 @@ const settle = async () => {
 
 function scene(impl: Implementation) {
   const src = source();
-  let world = service(impl, src, "synthetic-incarnation-1");
+  const ledger = ledgerStore();
+  let world = service(impl, src, "synthetic-incarnation-1", ledger);
   const one = browser(impl, () => world);
   const two = browser(impl, () => world);
   return {
@@ -216,8 +245,9 @@ function scene(impl: Implementation) {
     one,
     two,
     world: () => world,
+    ledger,
     restart() {
-      world = service(impl, src, "synthetic-incarnation-2");
+      world = service(impl, src, "synthetic-incarnation-2", ledger);
     },
     /** World's own value for the room (newest admitted read). */
     worldValue: () =>
@@ -410,21 +440,37 @@ export async function replayWritePath(
     s.src.state.hold = true;
     await rename(s.one, s.world(), "Two");
     await settle();
-    // World restarts before it reads the outcome: the command is gone.
-    for (const read of s.src.state.reads.splice(0)) read.release();
+    // The accepted command was recorded before World sent it.
+    const recorded = () =>
+      s.ledger.document.changes.map((change) => change.world_command?.state);
+    check(recorded().join() === "accepted", "accepted command not recorded");
+    // World restarts before it reads the outcome: the command is lost, and
+    // so are the old World's reads in flight (the model's reads' = Set()).
+    s.src.state.reads.splice(0);
     s.src.state.hold = false;
     s.restart();
     await s.world().snapshots.snapshot();
     await s.catchUp();
-    // The browser drops its pending value and says the outcome is unknown.
+    // The browser drops its pending value and says the outcome is unknown:
+    // the new World's recovered record tells it so (uncertain).
     check(
-      s.one.outcomes.length === 1 && s.one.outcomes[0] === null,
+      s.one.outcomes.length === 1 &&
+        s.one.outcomes[0]?.state === "uncertain" &&
+        s.one.outcomes[0].detail ===
+          "World restarted before it saw the result.",
       "restart not reported",
     );
+    // The new World settles the recorded command as uncertain (the model's
+    // lost command) and records that outcome in the same ledger record.
     check(
-      s.world().commands.published().length === 0,
-      "command survived restart",
+      s
+        .world()
+        .commands.published()
+        .map((command) => command.state)
+        .join() === "uncertain",
+      "lost command not settled as uncertain",
     );
+    check(recorded().join() === "uncertain", "restart outcome not recorded");
     // The new World read the source again: the change that landed shows.
     check(s.worldValue() === "Two", "source not read again");
     check(s.one.shows() === "Two" && s.two.shows() === "Two", "converged");

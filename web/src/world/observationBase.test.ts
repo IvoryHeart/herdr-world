@@ -256,3 +256,21 @@ test("new incarnation drops old runtime-health generations before admitting gene
     f.store.stop();
   }
 });
+
+test("a newer reply that changes only the host catalogue is adopted with its revision", async () => {
+  const { store, raw } = observationFixture();
+  const hosts = (name: string) => [
+    { host_id: "alpha", label: name, connection_ids: ["alpha"] },
+  ];
+  (raw as { hosts?: unknown }).hosts = hosts("Before");
+  await store.refresh();
+  const held = store.get();
+  expect(held.hosts).toMatchObject(hosts("Before"));
+  (raw as { hosts?: unknown }).hosts = hosts("After");
+  raw.revision = 2;
+  await store.refresh();
+  // The connection rows are unchanged and retained; the hosts are not.
+  expect(store.get().connections[0]).toBe(held.connections[0]);
+  expect(store.get().hosts).toMatchObject(hosts("After"));
+  expect(store.get().revision).toBe(2);
+});

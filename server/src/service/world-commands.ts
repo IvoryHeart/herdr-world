@@ -4,19 +4,21 @@ import { CoreOperationRefused, renameCoreRoom } from "../herdr-core/operations";
 import type { CoreRpcServices } from "../rpc/core";
 import type { ObservedSnapshots } from "../rpc/context";
 import {
+  commandSettled,
   WorldCommandRefused,
   WorldCommands,
   type PublishedCommand,
   type WorldCommandInput,
 } from "../world/commands";
-import type { LedgerStore } from "../world/world-ledger";
+import type { LedgerChange, LedgerStore } from "../world/world-ledger";
 
 const RECONNECTED = "The host reconnected; look again and retry.";
 
 /**
  * World commands composed over the service: the entity's own connection and
  * generation for sending, the snapshot service's epoch fence for settling,
- * and the World ledger for history.
+ * and the World ledger's change history as the durable record of each
+ * accepted command and its outcome (no new table or file).
  */
 export function composeWorldCommands(deps: {
   now(): number;
@@ -30,6 +32,7 @@ export function composeWorldCommands(deps: {
   publish(): void;
   log(message: string): void;
 }) {
+  let records: Promise<void> = Promise.resolve();
   const herdr = (id: string) => deps.connectionManager.has(id);
   const core = (id: string) => deps.core()?.manager.has(id) === true;
   const commands = new WorldCommands({
@@ -75,9 +78,15 @@ export function composeWorldCommands(deps: {
     },
     publish: deps.publish,
     record(command: PublishedCommand) {
-      void recordRoomRename(deps.ledger(), command).catch((error) =>
-        deps.log(`World command history not recorded: ${error}`),
+      // One record per command, written in order: acceptance, then outcome.
+      const write = records.then(() =>
+        recordRoomRename(deps.ledger(), command),
       );
+      records = write.catch(() => undefined);
+      return write.catch((error) => {
+        deps.log(`World command history not recorded: ${error}`);
+        throw error;
+      });
     },
     after(ms, run) {
       const timer = setTimeout(run, ms);
@@ -85,23 +94,70 @@ export function composeWorldCommands(deps: {
     },
   });
   deps.snapshots.onAdmittedRead((read) => commands.admittedRead(read));
+  try {
+    // Commands accepted before a restart that never settled.
+    commands.recover(
+      deps
+        .ledger()
+        .get()
+        .changes.flatMap((change) =>
+          change.world_command && !commandSettled(change.world_command)
+            ? [change.world_command]
+            : [],
+        ),
+    );
+  } catch (error) {
+    deps.log(`World commands not recovered: ${error}`);
+  }
   return commands;
 }
 
-/** One settled rename in the ledger's existing change history. */
+const recordOf = (changes: readonly LedgerChange[], commandId: string) =>
+  changes.findLast((change) => change.world_command?.id === commandId);
+
+function summary(command: PublishedCommand) {
+  const { expected, value, observed, detail } = command;
+  const reason = detail ? `: ${detail}` : "";
+  switch (command.state) {
+    case "accepted":
+    case "sent":
+      return `Renaming room “${expected}” to “${value}”`;
+    case "observed":
+    case "stored":
+      return observed === value
+        ? `Renamed room “${expected}” to “${value}”`
+        : `Room rename to “${value}” did not hold${reason}`;
+    case "refused":
+      return `Room rename to “${value}” refused${reason}`;
+    case "failed":
+      return `Room rename to “${value}” failed${reason}`;
+    case "uncertain":
+      return `Room rename to “${value}” uncertain${reason}`;
+  }
+}
+
+/**
+ * The command's record in the ledger's existing change history, created at
+ * acceptance and replaced in place as its state changes.
+ */
 async function recordRoomRename(
   ledger: LedgerStore,
   command: PublishedCommand,
 ) {
-  const id = await ledger.nextId("c");
+  const existing = recordOf(ledger.get().changes, command.id);
+  const id = existing?.id ?? (await ledger.nextId("c"));
   await ledger.update((document) => {
-    document.changes.push({
+    const record: LedgerChange = {
       id,
-      at: command.at,
+      at: existing?.at ?? command.at,
       actor: { label: "World", verified: false },
       command: "room rename",
-      summary: `Renamed room “${command.expected}” to “${command.value}”`,
+      summary: summary(command),
       undo: null,
-    });
+      world_command: command,
+    };
+    const index = document.changes.findIndex((change) => change.id === id);
+    if (index >= 0) document.changes[index] = record;
+    else document.changes.push(record);
   });
 }

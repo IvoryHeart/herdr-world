@@ -7,8 +7,11 @@
  * The outcome is published with the revision that carries its value, so a
  * browser holding the pending value never shows the old one again.
  *
- * Commands in progress and recently settled ones live in memory only; the
- * settled change joins the World ledger's existing history.
+ * Commands in progress and recently settled ones are published from memory.
+ * Each accepted command is recorded in the World ledger's existing change
+ * history before it is sent, and the same record is updated with its final
+ * outcome, whatever it is. After a restart, a recorded command that never
+ * settled is settled as uncertain (recover()).
  */
 
 import type { AdmittedRead } from "./snapshot";
@@ -67,8 +70,12 @@ export type WorldCommandPorts = {
   acknowledged(connectionId: string, generation: number): number;
   /** Publish a command change under a new revision to every browser. */
   publish(): void;
-  /** Record a settled change in World's history. */
-  record(command: PublishedCommand): void;
+  /**
+   * Record the command, with its identity and current state, in World's
+   * history: once when accepted (awaited before sending) and again, in
+   * place, when it settles.
+   */
+  record(command: PublishedCommand): Promise<void>;
   after(ms: number, run: () => void): () => void;
 };
 
@@ -99,6 +106,10 @@ const SETTLED = new Set<WorldCommandState>([
   "failed",
   "uncertain",
 ]);
+
+/** True once a command has its final outcome. */
+export const commandSettled = (command: Pick<PublishedCommand, "state">) =>
+  SETTLED.has(command.state);
 
 const text = (value: unknown, max: number) =>
   typeof value === "string" && value.length > 0 && value.length <= max
@@ -210,6 +221,14 @@ export class WorldCommands {
     this.entries.set(entry.id, entry);
     this.bound();
     try {
+      await this.ports.record(this.view(entry));
+    } catch {
+      this.entries.delete(entry.id);
+      throw new WorldCommandRefused(
+        "World could not record the change, so it did not send it; try again.",
+      );
+    }
+    try {
       await this.ports.send(input);
     } catch (error) {
       if (error instanceof WorldCommandRefused) {
@@ -293,11 +312,30 @@ export class WorldCommands {
     if (outcome.detail) entry.detail = outcome.detail;
     entry.cancel?.();
     entry.cancel = undefined;
-    if (
-      (state === "observed" || state === "stored") &&
-      outcome.observed === entry.value
-    )
-      this.ports.record(this.view(entry));
+    // Every outcome of an accepted command is recorded, not only success.
+    const settled = this.view(entry);
+    try {
+      void this.ports.record(settled).catch(() => undefined);
+    } catch {
+      // The port reports its own failures.
+    }
+  }
+
+  /**
+   * After a restart: commands recorded as accepted that never settled are
+   * settled as uncertain (the change may or may not have landed), recorded
+   * and published for a while like any other outcome.
+   */
+  recover(recorded: readonly PublishedCommand[]) {
+    for (const command of recorded) {
+      if (commandSettled(command) || this.entries.has(command.id)) continue;
+      const entry: Entry = { ...command, runtime: "herdr" };
+      this.entries.set(entry.id, entry);
+      this.settle(entry, "uncertain", {
+        detail: "World restarted before it saw the result.",
+      });
+    }
+    this.prune();
   }
 
   private view(entry: Entry): PublishedCommand {

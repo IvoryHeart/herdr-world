@@ -203,9 +203,11 @@ module world_write_path {
     wv' = wv, ws' = ws, wrev' = wrev, stale' = stale, pub' = pub, restarts' = restarts,
     keepViews, keepCmds, ghost("goOnline") }
 
-  // World restarts: its reads, source events and commands in flight are gone.
-  // Each browser sees the new service and drops its pending values (the
-  // outcome is unknown; the person is told to look again). World must read the
+  // World restarts: its reads and source events in flight are gone, and its
+  // commands in flight are lost: World recorded each when it accepted it, and
+  // the new World settles that record as uncertain. Each browser sees the new
+  // service and drops its pending values (the outcome is unknown; the person
+  // is told to look again). World must read the
   // source again before anything is settled. Revisions stay ordered across the
   // restart (the replica orders by service incarnation, then revision).
   action restart = all { restarts < MAXRESTART,

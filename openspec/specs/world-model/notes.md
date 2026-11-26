@@ -17,8 +17,9 @@ until it is archived. Navigation and usage guidance; contracts live in OpenSpec.
   publication revision for topology, hosts, settings and commands)
 - `server/src/world/commands.ts` (World commands: compare-and-set, own connection and
   generation, settle only on a read that started after the acknowledgement)
-- `server/src/service/world-commands.ts` (room rename on Herdr and core; history in
-  the ledger)
+- `server/src/service/world-commands.ts` (room rename on Herdr and core; each accepted
+  command and its outcome recorded in
+  the ledger history, unsettled ones settled as uncertain after a restart)
 - `server/src/rpc/world.ts` (`world.snapshot`, `world.command`, World verbs)
 - `server/src/verbs/registry.ts`
 - `server/src/verbs/rpc.ts` (verb tiers; runtime-tier writes are the ones to retire)

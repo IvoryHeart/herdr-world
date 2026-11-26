@@ -18,7 +18,12 @@ invalidates and starts a read; only a read that started after the
 acknowledgement settles the command → the settled outcome is published under a
 new revision, even when the final value equals the old one → the browser
 adopts only newer revisions and drops the held value once it has adopted the
-outcome's revision.
+outcome's revision. World records each accepted command in the World ledger's
+existing change history before sending it and updates that record in place
+with whatever outcome it reaches; after a restart, a recorded command that
+never settled is settled as uncertain. A reply that waited on a slow host
+carries every other host's newest read together with the revision and
+published values it reports.
 
 ## Model and replay
 
@@ -34,7 +39,8 @@ safety invariant, checked after every step:
 - applying a read never flashes a view back to an older value;
 - a command is sent only while online and only over the current value
   (compare-and-set);
-- a restart drops every pending value, so views show what World publishes;
+- a restart drops every pending value, so views show what World publishes,
+  and a command in flight is settled as uncertain from its ledger record;
 - once everything has settled, World and every view show the source value.
 
 Nine named runs pass: a late read is discarded, a source change after the

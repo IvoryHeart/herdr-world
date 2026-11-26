@@ -3,7 +3,7 @@
   "area": "World publication and commands (room rename write path)",
   "owner": "server/src/world/snapshot.ts",
   "requirement": "openspec/changes/world-one-object/specs/world-model/spec.md",
-  "properties": "One revision orders every published value, including a settled command whose final value is unchanged; a per-host epoch fence discards reads that started before a newer one was admitted; a command names the entity, field and expected value, refuses when the current value differs, and is sent only on the entity's own connection and generation; it settles only with a read that started after the acknowledgement; a browser adopts only newer revisions and holds the pending value for every view until the outcome is published; a restart drops pending commands as lost and republishes from the source",
+  "properties": "One revision orders every published value, including a settled command whose final value is unchanged; a per-host epoch fence discards reads that started before a newer one was admitted; a command names the entity, field and expected value, refuses when the current value differs, and is sent only on the entity's own connection and generation; it settles only with a read that started after the acknowledgement; a browser adopts only newer revisions and holds the pending value for every view until the outcome is published; every accepted command and its outcome are recorded in the World ledger; a restart settles a recorded command in flight as uncertain and republishes from the source",
   "existingTests": [
     "quint/world-write-path.test.ts",
     "server/src/world/commands.test.ts",

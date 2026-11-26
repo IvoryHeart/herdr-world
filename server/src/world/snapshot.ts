@@ -70,6 +70,9 @@ type CachedSnapshot = {
   dirty: boolean;
   /** Every room the admitted read returned, before any view bound. */
   rooms: readonly Record<string, unknown>[];
+  /** The admitted read this entry holds, and its raw result. */
+  readNumber: number;
+  raw: RawHostSnapshot;
 };
 
 /**
@@ -318,6 +321,11 @@ export class WorldSnapshotService<Runtime extends RuntimeWithOperations> {
   private readonly lastApplied = new Map<string, number>();
   private admittedReadHook?: (read: AdmittedRead) => boolean;
   private publishedValues?: () => Promise<WorldPublished> | WorldPublished;
+  /** The admitted read each built connection shows (none: no snapshot). */
+  private readonly sourceReads = new WeakMap<
+    WorldConnectionSnapshot,
+    number | undefined
+  >();
 
   constructor(
     private readonly registry: Registry<Runtime>,
@@ -487,15 +495,27 @@ export class WorldSnapshotService<Runtime extends RuntimeWithOperations> {
     ]);
     accepting = false;
     if (deadline) clearTimeout(deadline);
-    const connections = statuses.map((status) => {
+    const gathered = statuses.map((status) => {
       const connection = completed.get(status.id);
       if (connection) return connection;
       const hostWork = work.get(status.id);
       if (hostWork) hostWork.late = true;
       return this.fallback(status, "observation deadline exceeded");
     });
-    const revision = this.revision;
-    const published = this.publishedValues ? await this.publishedValues() : {};
+    // One coherent publication: the revision is taken first, World's own
+    // values are read after it, and every host is then brought up to the
+    // newest admitted read, all with no await in between. Each value is
+    // therefore at least as new as the revision it is published under, so a
+    // value a browser already adopted is never published again as older data
+    // under a newer revision.
+    let revision = this.revision;
+    let published: WorldPublished = {};
+    for (let attempt = 0; this.publishedValues; attempt++) {
+      revision = this.revision;
+      published = await this.publishedValues();
+      if (this.revision === revision || attempt >= 3) break;
+    }
+    const connections = this.newest(gathered, priorities);
     return {
       ...published,
       revision,
@@ -535,19 +555,99 @@ export class WorldSnapshotService<Runtime extends RuntimeWithOperations> {
     } catch {
       return null;
     }
-    return {
-      connection_id: status.id,
-      label: status.label,
-      source: status.source,
-      ...runtimeOf(status),
-      is_default: status.is_default,
-      state: status.state,
-      generation: status.generation,
-      snapshot_generation: status.generation,
-      stale: false,
-      actionable: true,
-      snapshot: cached.snapshot,
-    };
+    return this.sourced(
+      {
+        connection_id: status.id,
+        label: status.label,
+        source: status.source,
+        ...runtimeOf(status),
+        is_default: status.is_default,
+        state: status.state,
+        generation: status.generation,
+        snapshot_generation: status.generation,
+        stale: false,
+        actionable: true,
+        snapshot: cached.snapshot,
+      },
+      cached.readNumber,
+    );
+  }
+
+  private sourced(connection: WorldConnectionSnapshot, read?: number) {
+    this.sourceReads.set(connection, read);
+    return connection;
+  }
+
+  /**
+   * Bring each gathered connection up to its host's newest admitted read and
+   * current registry state, so a reply never combines a host's older read
+   * with a revision (or a settled command) that a newer read produced.
+   */
+  private newest(
+    gathered: readonly WorldConnectionSnapshot[],
+    priorities: readonly WorldSnapshotPriority[],
+  ): WorldConnectionSnapshot[] {
+    const statuses = new Map(
+      this.registry.list().map((status) => [status.id, status]),
+    );
+    return gathered.flatMap((connection) => {
+      const status = statuses.get(connection.connection_id);
+      if (!status) return [];
+      const cached = this.cache.get(status.id);
+      const sameRead = this.sourceReads.get(connection) === cached?.readNumber;
+      const sameStatus =
+        status.generation === connection.generation &&
+        status.state === connection.state &&
+        status.label === connection.label;
+      if (sameRead && sameStatus) return [connection];
+      if (!connection.actionable)
+        return [
+          this.fallback(
+            status,
+            typeof connection.snapshot_error === "string"
+              ? connection.snapshot_error
+              : undefined,
+          ),
+        ];
+      let lease: RuntimeLease<Runtime> | null;
+      try {
+        lease = this.registry.readyRuntimeLease(status.id);
+      } catch {
+        lease = null;
+      }
+      if (
+        status.state !== "ready" ||
+        !cached ||
+        cached.generation !== status.generation ||
+        !lease ||
+        lease.generation !== status.generation ||
+        !lease.isCurrent()
+      )
+        return [this.fallback(status, "connection changed during snapshot")];
+      return [
+        this.sourced(
+          {
+            connection_id: status.id,
+            label: status.label,
+            source: status.source,
+            ...runtimeOf(status),
+            is_default: status.is_default,
+            state: status.state,
+            generation: status.generation,
+            snapshot_generation: status.generation,
+            stale: false,
+            actionable: true,
+            snapshot: this.projectSnapshot(
+              status,
+              cached.raw,
+              priorities,
+              this.watchlist(),
+            ),
+          },
+          cached.readNumber,
+        ),
+      ];
+    });
   }
 
   private workFor(
@@ -690,6 +790,8 @@ export class WorldSnapshotService<Runtime extends RuntimeWithOperations> {
             (this.activityVersions.get(work.status.id) ?? 0) !==
             work.activityVersion,
           rooms,
+          readNumber: work.readNumber,
+          raw,
         });
         observation.complete(
           this.onCompleteObservation,
@@ -802,24 +904,27 @@ export class WorldSnapshotService<Runtime extends RuntimeWithOperations> {
     ) {
       return this.fallback(status, "observation changed during snapshot");
     }
-    return {
-      connection_id: status.id,
-      label: status.label,
-      source: status.source,
-      ...runtimeOf(status),
-      is_default: status.is_default,
-      state: status.state,
-      generation: work.lease.generation,
-      snapshot_generation: work.lease.generation,
-      stale: false,
-      actionable: true,
-      snapshot: this.projectSnapshot(
-        status,
-        outcome.raw,
-        priorities,
-        this.watchlist(),
-      ),
-    };
+    return this.sourced(
+      {
+        connection_id: status.id,
+        label: status.label,
+        source: status.source,
+        ...runtimeOf(status),
+        is_default: status.is_default,
+        state: status.state,
+        generation: work.lease.generation,
+        snapshot_generation: work.lease.generation,
+        stale: false,
+        actionable: true,
+        snapshot: this.projectSnapshot(
+          status,
+          outcome.raw,
+          priorities,
+          this.watchlist(),
+        ),
+      },
+      work.readNumber,
+    );
   }
 
   private fallback(
@@ -827,21 +932,24 @@ export class WorldSnapshotService<Runtime extends RuntimeWithOperations> {
     snapshotError?: string,
   ): WorldConnectionSnapshot {
     const cached = this.cache.get(status.id);
-    return {
-      connection_id: status.id,
-      label: status.label,
-      source: status.source,
-      ...runtimeOf(status),
-      is_default: status.is_default,
-      state: status.state,
-      generation: status.generation,
-      snapshot_generation: cached?.generation ?? null,
-      stale: Boolean(cached),
-      actionable: false,
-      ...(status.error ? { error: status.error } : {}),
-      ...(snapshotError ? { snapshot_error: snapshotError } : {}),
-      snapshot: cached?.snapshot ?? null,
-    };
+    return this.sourced(
+      {
+        connection_id: status.id,
+        label: status.label,
+        source: status.source,
+        ...runtimeOf(status),
+        is_default: status.is_default,
+        state: status.state,
+        generation: status.generation,
+        snapshot_generation: cached?.generation ?? null,
+        stale: Boolean(cached),
+        actionable: false,
+        ...(status.error ? { error: status.error } : {}),
+        ...(snapshotError ? { snapshot_error: snapshotError } : {}),
+        snapshot: cached?.snapshot ?? null,
+      },
+      cached?.readNumber,
+    );
   }
 
   private projectSnapshot(

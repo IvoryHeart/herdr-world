@@ -31,11 +31,15 @@ let uiSettingsEpoch = 0;
 
 /** The settings revision last adopted (the service's commit order). */
 let adoptedRevision = -1;
+/** The newest publication adopted; replayed for a key once its write ends. */
+let latest: { ui: Record<string, unknown>; revision: number } | undefined;
+/** Per key, the value last handed to its view (no-change suppression). */
 const adoptedValues = new Map<string, string>();
 /**
  * This browser's own writes per key: while one is in flight, or until a
  * publication carries its commit, an older published value is not adopted,
- * so the change never flashes back.
+ * so the change never flashes back. A newer value skipped meanwhile is not
+ * lost: the newest publication is applied when the write ends.
  */
 const writes = new Map<string, { pending: number; after: number }>();
 
@@ -49,22 +53,29 @@ const ADOPTERS: ReadonlyArray<
   [RUNTIME_GROUPING_SETTING_KEY, adoptRuntimeGrouping],
 ];
 
+/** Hand one key's published value to its view, unless its own write holds it. */
+function adoptKey(
+  key: string,
+  adopt: (value: unknown, revision: number) => void,
+  settings: { ui: Record<string, unknown>; revision: number },
+) {
+  const write = writes.get(key);
+  if (write && (write.pending > 0 || settings.revision < write.after)) return;
+  const value = settings.ui[key] ?? null;
+  const text = JSON.stringify(value);
+  if (adoptedValues.get(key) === text) return;
+  adoptedValues.set(key, text);
+  adopt(value, settings.revision);
+}
+
 /** Adopt published preferences no older than the last adopted ones. */
 function adoptPublishedUiSettings(
   settings: { ui: Record<string, unknown>; revision: number } | undefined,
 ) {
   if (!settings || settings.revision < adoptedRevision) return;
   adoptedRevision = settings.revision;
-  for (const [key, adopt] of ADOPTERS) {
-    const write = writes.get(key);
-    if (write && (write.pending > 0 || settings.revision < write.after))
-      continue;
-    const value = settings.ui[key] ?? null;
-    const text = JSON.stringify(value);
-    if (adoptedValues.get(key) === text) continue;
-    adoptedValues.set(key, text);
-    adopt(value, settings.revision);
-  }
+  latest = settings;
+  for (const [key, adopt] of ADOPTERS) adoptKey(key, adopt, settings);
 }
 
 /** Follow World's publication (the shared replica) for preferences. */
@@ -86,6 +97,9 @@ async function update(
   const write = writes.get(key) ?? { pending: 0, after: 0 };
   writes.set(key, write);
   write.pending += 1;
+  // The view now shows this browser's value, not the one last adopted, so a
+  // later publication of that earlier value must be applied again.
+  adoptedValues.delete(key);
   try {
     const answer = await bridge.call("bridge.ui_settings.update", {
       key,
@@ -97,6 +111,12 @@ async function update(
     return answer;
   } finally {
     write.pending -= 1;
+    // A publication skipped while the write was pending may be newer than
+    // its commit: apply the newest confirmed value now (adoptKey still
+    // refuses one older than the commit, which a later publication brings).
+    const adopter = ADOPTERS.find(([known]) => known === key);
+    if (write.pending === 0 && latest && adopter)
+      adoptKey(key, adopter[1], latest);
   }
 }
 
@@ -154,6 +174,7 @@ export function installUiSettings(): void {
       uiSettingsHydrated = false;
       // A restarted service counts revisions afresh.
       adoptedRevision = -1;
+      latest = undefined;
       adoptedValues.clear();
       writes.clear();
       disconnectShortcutPreferences();

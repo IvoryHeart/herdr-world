@@ -22,6 +22,7 @@ function harness() {
   const recorded: PublishedCommand[] = [];
   const timers: { at: number; run: () => void; cancelled: boolean }[] = [];
   let publishes = 0;
+  let recordFails = false;
   let send: (command: WorldCommandInput) => Promise<void> = async (command) => {
     sent.push(command);
   };
@@ -34,7 +35,10 @@ function harness() {
     send: (command) => send(command),
     acknowledged: () => ++epoch,
     publish: () => void (publishes += 1),
-    record: (command) => void recorded.push(command),
+    record: async (command) => {
+      if (recordFails) throw new Error("synthetic storage failure");
+      recorded.push(command);
+    },
     after(ms, run) {
       const timer = { at: now + ms, run, cancelled: false };
       timers.push(timer);
@@ -76,6 +80,7 @@ function harness() {
     epoch: () => epoch,
     publishes: () => publishes,
     setSend: (next: typeof send) => void (send = next),
+    failRecords: () => void (recordFails = true),
     advance(ms: number) {
       now += ms;
       for (const timer of timers)
@@ -103,7 +108,11 @@ describe("World commands", () => {
       state: "observed",
       observed: "New",
     });
-    expect(h.recorded.map((c) => c.value)).toEqual(["New"]);
+    // Recorded when accepted (before sending), then with its outcome.
+    expect(h.recorded.map((c) => [c.id, c.state, c.observed])).toEqual([
+      ["one", "accepted", undefined],
+      ["one", "observed", "New"],
+    ]);
   });
 
   test("a World-owned store settles as stored", async () => {
@@ -127,7 +136,61 @@ describe("World commands", () => {
       observed: "Old",
       detail: "The room shows another name.",
     });
-    expect(h.recorded).toEqual([]);
+    // That outcome is recorded too, not only a successful one.
+    expect(h.recorded.at(-1)).toMatchObject({
+      id: "same",
+      expected: "Old",
+      value: "New",
+      state: "observed",
+      observed: "Old",
+    });
+  });
+
+  test("every outcome of an accepted command is recorded; none is sent unrecorded", async () => {
+    const h = harness();
+    h.setSend(async () => {
+      throw new WorldCommandRefused("synthetic runtime refusal");
+    });
+    await h.commands.submit(h.input({ id: "refused" }));
+    h.setSend(async () => undefined);
+    await h.commands.submit(h.input({ id: "silent" }));
+    h.advance(WORLD_COMMAND_LIMITS.settleMs);
+    expect(h.recorded.map((c) => [c.id, c.state])).toEqual([
+      ["refused", "accepted"],
+      ["refused", "refused"],
+      ["silent", "accepted"],
+      ["silent", "uncertain"],
+    ]);
+    // A command World cannot record is refused before it is sent.
+    h.failRecords();
+    let sent = 0;
+    h.setSend(async () => void (sent += 1));
+    await expect(
+      h.commands.submit(h.input({ id: "unrecorded" })),
+    ).rejects.toThrow(WorldCommandRefused);
+    expect(sent).toBe(0);
+    expect(h.commands.published().map((c) => c.id)).not.toContain("unrecorded");
+  });
+
+  test("after a restart, a recorded command that never settled is settled as uncertain", async () => {
+    const before = harness();
+    await before.commands.submit(before.input({ id: "lost" }));
+    const accepted = before.recorded[0]!;
+    const after = harness();
+    after.commands.recover([
+      accepted,
+      { ...accepted, id: "done", state: "observed", observed: "New" },
+    ]);
+    expect(after.commands.published()).toEqual([
+      expect.objectContaining({
+        id: "lost",
+        state: "uncertain",
+        detail: "World restarted before it saw the result.",
+      }),
+    ]);
+    expect(after.recorded.map((c) => [c.id, c.state])).toEqual([
+      ["lost", "uncertain"],
+    ]);
   });
 
   test("compare-and-set refuses a stale expected value, against the newest in flight", async () => {

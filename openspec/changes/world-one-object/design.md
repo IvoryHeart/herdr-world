@@ -263,7 +263,8 @@ going offline and back. It checks:
   value.
 
 It also checks that a command is sent only over the value it names
-(compare-and-set) and that a World restart drops pending values. Nine scenarios
+(compare-and-set) and that a World restart drops pending values and settles a
+command it recorded as accepted, but never saw settle, as uncertain. Nine scenarios
 pass, including the outcome delivered when the final value is unchanged, pending
 values shared by two screens of one browser and recovery after a restart. Model
 controls (no fence, no compare-and-set) and production mutants are rejected by

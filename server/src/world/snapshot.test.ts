@@ -1403,6 +1403,55 @@ describe("WorldSnapshotService", () => {
     expect((await service.snapshot()).revision).toBe(settled.revision + 1);
   });
 
+  test("a reply waiting on a slow host publishes the other host's newest read with the revision and values it produced", async () => {
+    const release = deferred<void>();
+    const labels: Record<string, string> = { a: "Old", b: "B" };
+    let holdB = false;
+    const service = new WorldSnapshotService<Runtime>({
+      list: () => [status("a"), status("b")],
+      readyRuntimeLease: (id) => ({
+        connectionId: id,
+        generation: 1,
+        runtime: {
+          ...herdrRuntimeFixture({
+            async call(method) {
+              if (id === "b" && holdB) await release.promise;
+              return runtime(labels[id]!).herdr.call(method);
+            },
+          }),
+        },
+        isCurrent: () => true,
+      }),
+    });
+    let settled = false;
+    const admitted = deferred<void>();
+    service.onAdmittedRead((read) => {
+      if (read.connectionId !== "a" || read.rooms[0]?.label !== "New workspace")
+        return false;
+      settled = true;
+      admitted.resolve();
+      return true;
+    });
+    service.publishWith(() => ({ commands: settled ? ["settled"] : [] }));
+    await service.snapshot();
+    // The first reply takes host a from its fresh cache, then waits on b.
+    holdB = true;
+    service.invalidate("b");
+    const first = service.snapshot();
+    // Meanwhile a changes and another reply's read of a settles a command.
+    labels.a = "New";
+    service.invalidate("a");
+    const second = service.snapshot({ priority_connection_ids: ["a"] });
+    await admitted.promise;
+    release.resolve();
+    for (const reply of [await first, await second]) {
+      const a = reply.connections.find((c) => c.connection_id === "a");
+      expect(reply).toMatchObject({ commands: ["settled"] });
+      expect(a?.snapshot?.workspaces[0]?.label).toBe("New workspace");
+    }
+    expect((await first).revision).toBeLessThanOrEqual((await second).revision);
+  });
+
   test("a replaced generation cannot publish its late result over the new host", async () => {
     const release = deferred<void>();
     const oldBase = runtime("Old");
