@@ -1,0 +1,389 @@
+/**
+ * How World groups the runtimes it holds (openspec world-one-object, step 2):
+ * the "Group runtimes" setting (`ui.runtimeGrouping`, #1307) applied to the
+ * connection catalogue. One group per machine (this computer or one SSH
+ * destination, the service's host catalogue, connections/hosts.ts `hostId`)
+ * holding every runtime World holds there, or one group per runtime.
+ *
+ * The service derives it once (service/world-commands.ts) and publishes it in
+ * `world.snapshot` as `host_grouping`, under the same revision as the setting
+ * it was derived from. Nothing is stored: it is a pure function of the
+ * setting, the catalogue and which connections World observes as stale.
+ * Town's buildings, the Hosts control, Desk, the navigator, Board and
+ * `herdr-world ls` all read the published value; none groups on its own.
+ *
+ * Two Herdr TUI connections on one endpoint (a startup default and a saved
+ * profile of the same socket) report the same workspaces. The publication
+ * names, per such endpoint, its anchor (from profiles alone, so what is kept
+ * under it survives a takeover) and the view Town shows: the anchor, or a
+ * live view while the anchor is stale. Presentation only: actions stay
+ * qualified by their own connection ID and generation.
+ */
+
+export type RuntimeGrouping = "machine" | "runtime";
+export type GroupingRuntime = "herdr" | "herdr-core";
+
+/** The setting's key in the service's settings.json `ui`. */
+export const RUNTIME_GROUPING_SETTING_KEY = "runtimeGrouping";
+export const RUNTIME_GROUPING_DEFAULT: RuntimeGrouping = "machine";
+
+export function parseRuntimeGrouping(value: unknown): RuntimeGrouping | null {
+  return value === "machine" || value === "runtime" ? value : null;
+}
+
+/** The fields of a `connections.list` entry grouping reads. */
+export type GroupingProfile = {
+  id: string;
+  label: string;
+  type?: string;
+  ssh_destination?: string;
+  control_socket_path?: string;
+  client_socket_path?: string;
+  remote_control_socket_path?: string;
+  remote_client_socket_path?: string;
+  core_state_dir?: string;
+  core_session?: string;
+  read_only?: boolean;
+  /** The service's startup default: World lists it first. */
+  is_default?: boolean;
+};
+
+/** @internal One runtime connection as grouping sees it. */
+export type GroupingHost = {
+  id: string;
+  label: string;
+  runtime: GroupingRuntime;
+  /** `local`, `ssh:<destination>`, or a machine of its own. */
+  machine: string;
+  /** Equal for connections of one runtime endpoint. */
+  endpoint: string;
+  writable: boolean;
+  isDefault?: boolean;
+};
+
+/** The machine a connection's runtime runs on. */
+function hostMachine(
+  profile: Pick<GroupingProfile, "id" | "type" | "ssh_destination">,
+) {
+  if (profile.type === "local") return "local";
+  if (profile.type === "ssh" && profile.ssh_destination)
+    return `ssh:${profile.ssh_destination}`;
+  // An older catalogue without profile fields: a machine of its own.
+  return `connection:${profile.id}`;
+}
+
+/**
+ * A Herdr TUI endpoint: the same place and socket path strings, as the
+ * service compares saved endpoints (connections/profiles.ts). Paths are not
+ * resolved: a second spelling of a socket stays a second endpoint.
+ */
+function tuiEndpoint(profile: GroupingProfile): string {
+  if (
+    profile.type === "local" &&
+    profile.control_socket_path &&
+    profile.client_socket_path
+  )
+    return JSON.stringify([
+      "local",
+      profile.control_socket_path,
+      profile.client_socket_path,
+    ]);
+  if (
+    profile.type === "ssh" &&
+    profile.ssh_destination &&
+    profile.remote_control_socket_path &&
+    profile.remote_client_socket_path
+  )
+    return JSON.stringify([
+      "ssh",
+      profile.ssh_destination,
+      profile.remote_control_socket_path,
+      profile.remote_client_socket_path,
+    ]);
+  return JSON.stringify(["connection", profile.id]);
+}
+
+/**
+ * One core per (where, state directory, session). An empty state directory
+ * is core's own default there, so two such profiles name the same core.
+ */
+function coreEndpoint(profile: GroupingProfile): string {
+  return JSON.stringify([
+    "herdr-core",
+    profile.type,
+    profile.ssh_destination ?? "",
+    profile.core_state_dir,
+    profile.core_session,
+  ]);
+}
+
+/**
+ * Herdr (TUI) connections first, in catalogue order, then herdr-core ones. A
+ * core ID the TUI catalogue also lists is the TUI's.
+ * @internal
+ */
+export function groupingHosts(
+  connections: readonly GroupingProfile[],
+  coreConnections: readonly GroupingProfile[] = [],
+): GroupingHost[] {
+  const tuiIds = new Set(connections.map(({ id }) => id));
+  return [
+    ...connections.map((profile) => ({
+      id: profile.id,
+      label: profile.label,
+      runtime: "herdr" as const,
+      machine: hostMachine(profile),
+      endpoint: tuiEndpoint(profile),
+      writable: profile.read_only !== true,
+      isDefault: profile.is_default === true,
+    })),
+    ...coreConnections
+      .filter(({ id }) => !tuiIds.has(id))
+      .map((profile) => ({
+        id: profile.id,
+        label: profile.label,
+        runtime: "herdr-core" as const,
+        machine: hostMachine(profile),
+        endpoint: coreEndpoint(profile),
+        writable: profile.read_only !== true,
+      })),
+  ];
+}
+
+/** The group a runtime stands in: its machine, or itself. */
+function runtimeGroupKey(
+  host: Pick<GroupingHost, "id" | "machine">,
+  grouping: RuntimeGrouping,
+) {
+  return grouping === "machine" ? host.machine : `runtime:${host.id}`;
+}
+
+type HostGroupMember = {
+  connection_id: string;
+  runtime: GroupingRuntime;
+  label: string;
+};
+
+/** Runtimes every view shows together. */
+type HostGroup = {
+  key: string;
+  /** Its first runtime's name, as Town names the machine's building. */
+  label: string;
+  /** Its runtimes, in World's order (`compareWorldOrder`). */
+  members: HostGroupMember[];
+};
+
+/** Views of one endpoint, when there are two or more. */
+type HostEndpoint = {
+  /** In catalogue order. */
+  views: string[];
+  /** The first writable view, else the first: profiles alone decide it. */
+  anchor: string;
+  /** The view shown: the anchor, or a live view while the anchor is stale. */
+  shown: string;
+};
+
+export type HostGrouping = {
+  grouping: RuntimeGrouping;
+  /** In the order of their first runtimes (`compareWorldOrder`). */
+  groups: HostGroup[];
+  endpoints: HostEndpoint[];
+};
+
+/**
+ * World's order of its runtimes, the order every view lists them in: the
+ * startup default first, then by name, then by connection ID.
+ */
+export function compareWorldOrder(
+  left: { id: string; label: string; isDefault?: boolean },
+  right: { id: string; label: string; isDefault?: boolean },
+) {
+  return (
+    Number(right.isDefault === true) - Number(left.isDefault === true) ||
+    left.label.localeCompare(right.label) ||
+    left.id.localeCompare(right.id)
+  );
+}
+
+const worldOrder = (hosts: readonly GroupingHost[]) =>
+  [...hosts].sort(compareWorldOrder);
+
+/** The catalogue's groups in World's order: their first runtimes'. */
+function hostGroups(
+  hosts: readonly GroupingHost[],
+  grouping: RuntimeGrouping,
+): HostGroup[] {
+  const byKey = new Map<string, HostGroup>();
+  for (const host of worldOrder(hosts)) {
+    const key = runtimeGroupKey(host, grouping);
+    const group = byKey.get(key) ?? { key, label: host.label, members: [] };
+    group.members.push({
+      connection_id: host.id,
+      runtime: host.runtime,
+      label: host.label,
+    });
+    byKey.set(key, group);
+  }
+  return [...byKey.values()];
+}
+
+/** @internal Each endpoint of two or more views: its anchor and the view shown. */
+export function hostEndpoints(
+  hosts: readonly GroupingHost[],
+  stale: (connectionId: string) => boolean,
+): HostEndpoint[] {
+  const byEndpoint = new Map<string, GroupingHost[]>();
+  for (const host of hosts)
+    byEndpoint.set(host.endpoint, [
+      ...(byEndpoint.get(host.endpoint) ?? []),
+      host,
+    ]);
+  const endpoints: HostEndpoint[] = [];
+  for (const views of byEndpoint.values()) {
+    if (views.length < 2) continue;
+    const anchor = views.find((view) => view.writable) ?? views[0]!;
+    const live = views.filter((view) => !stale(view.id));
+    const shown = !stale(anchor.id)
+      ? anchor
+      : (live.find((view) => view.writable) ?? live[0] ?? anchor);
+    endpoints.push({
+      views: views.map(({ id }) => id),
+      anchor: anchor.id,
+      shown: shown.id,
+    });
+  }
+  return endpoints;
+}
+
+/** @internal World's grouping of its runtimes: the one derivation every view reads. */
+export function deriveHostGrouping(
+  hosts: readonly GroupingHost[],
+  setting: unknown,
+  stale: (connectionId: string) => boolean,
+): HostGrouping {
+  const grouping = parseRuntimeGrouping(setting) ?? RUNTIME_GROUPING_DEFAULT;
+  return {
+    grouping,
+    groups: hostGroups(hosts, grouping),
+    endpoints: hostEndpoints(hosts, stale),
+  };
+}
+
+/**
+ * The grouping one `world.snapshot` reply carries: derived from the
+ * connection catalogue, the setting it publishes and its connections'
+ * staleness (a connection the reply does not hold counts as stale).
+ */
+export function publishedHostGrouping(
+  catalogue: {
+    connections: readonly GroupingProfile[];
+    core: readonly GroupingProfile[];
+  },
+  setting: unknown,
+  connections: readonly { connection_id: string; stale: boolean }[],
+): HostGrouping {
+  const stale = new Map(
+    connections.map((each) => [each.connection_id, each.stale]),
+  );
+  return deriveHostGrouping(
+    groupingHosts(catalogue.connections, catalogue.core),
+    setting,
+    (id) => stale.get(id) ?? true,
+  );
+}
+
+const anchorsCache = new WeakMap<
+  Pick<HostGrouping, "endpoints">,
+  ReadonlyMap<string, string>
+>();
+const NO_ANCHORS: ReadonlyMap<string, string> = new Map();
+
+/**
+ * A connection's endpoint anchor, for views that are not their endpoint's
+ * anchor: what is kept per endpoint (desk pins) is kept under it, and two
+ * connections with one anchor are one runtime.
+ */
+export function endpointAnchors(
+  grouping: Pick<HostGrouping, "endpoints"> | undefined,
+): ReadonlyMap<string, string> {
+  if (!grouping) return NO_ANCHORS;
+  const known = anchorsCache.get(grouping);
+  if (known) return known;
+  const anchors = new Map<string, string>();
+  for (const endpoint of grouping.endpoints)
+    for (const view of endpoint.views)
+      if (view !== endpoint.anchor) anchors.set(view, endpoint.anchor);
+  anchorsCache.set(grouping, anchors);
+  return anchors;
+}
+
+const LIMITS = { groups: 512, members: 64, text: 1024 };
+
+const text = (value: unknown) =>
+  typeof value === "string" && value.length > 0 && value.length <= LIMITS.text
+    ? value
+    : null;
+const record = (value: unknown) =>
+  value && typeof value === "object" && !Array.isArray(value)
+    ? (value as Record<string, unknown>)
+    : null;
+
+/** A published `host_grouping`, bounded; null when malformed. */
+export function parseHostGrouping(value: unknown): HostGrouping | null {
+  const item = record(value);
+  const grouping = parseRuntimeGrouping(item?.grouping);
+  if (
+    !item ||
+    !grouping ||
+    !Array.isArray(item.groups) ||
+    !Array.isArray(item.endpoints)
+  )
+    return null;
+  const groups = item.groups.slice(0, LIMITS.groups).flatMap((entry) => {
+    const group = record(entry);
+    const key = text(group?.key);
+    const label = typeof group?.label === "string" ? group.label : null;
+    if (!group || !key || label === null || !Array.isArray(group.members))
+      return [];
+    const members = group.members
+      .slice(0, LIMITS.members)
+      .flatMap((each): HostGroupMember[] => {
+        const member = record(each);
+        const id = text(member?.connection_id);
+        return member &&
+          id &&
+          (member.runtime === "herdr" || member.runtime === "herdr-core") &&
+          typeof member.label === "string"
+          ? [
+              {
+                connection_id: id,
+                runtime: member.runtime,
+                label: member.label,
+              },
+            ]
+          : [];
+      });
+    return members.length ? [{ key, label, members }] : [];
+  });
+  const endpoints = item.endpoints
+    .slice(0, LIMITS.groups)
+    .flatMap((entry): HostEndpoint[] => {
+      const endpoint = record(entry);
+      const anchor = text(endpoint?.anchor);
+      const shown = text(endpoint?.shown);
+      const views = Array.isArray(endpoint?.views)
+        ? endpoint.views.slice(0, LIMITS.members).flatMap((view) => {
+            const id = text(view);
+            return id ? [id] : [];
+          })
+        : [];
+      return anchor &&
+        shown &&
+        views.length > 1 &&
+        views.includes(anchor) &&
+        views.includes(shown)
+        ? [{ views, anchor, shown }]
+        : [];
+    });
+  return { grouping, groups, endpoints };
+}

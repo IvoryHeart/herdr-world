@@ -28,6 +28,14 @@ pins) SHALL run once, on the service.
 - **WHEN** the CLI lists an agent that Town also shows
 - **THEN** both show the same name, colour, group, status and pin from one revision
 
+#### Scenario: Runtimes regroup
+- **WHEN** the "Group runtimes" setting changes, or a host joins, drops or reconnects
+- **THEN** one revision carries the setting with the groups, their members, order and
+  labels, and the view of each shared endpoint that Town shows
+- **AND** Town, Desk, Board, Spaces, the hosts control and `herdr-world ls` show those
+  groups
+- **AND** only the explicit setting change leaves a history entry
+
 ### Requirement: Views display World
 
 A view SHALL NOT keep its own copy of World state, SHALL NOT derive a World fact in its

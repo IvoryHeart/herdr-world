@@ -2,7 +2,12 @@ import { expect, test } from "bun:test";
 import { fixtureHost, fixtureWorld, type FixtureSpace } from "./boardFixture";
 import { groupBoardZones, projectBoard, zoneHostKeys } from "./boardModel";
 import { emptyLayout, placeNew, positions } from "./boardPlacement";
-import { hostGroupOf, type WorldHost } from "../../worldHosts";
+import {
+  deriveHostGrouping,
+  type GroupingHost,
+  type RuntimeGrouping,
+} from "../../../../shared/hostGrouping";
+import { hostGroupOf as publishedGroupOf } from "../../worldHosts";
 
 const spaces = (count: number): FixtureSpace[] =>
   Array.from({ length: count }, (_, s) => ({
@@ -12,17 +17,22 @@ const spaces = (count: number): FixtureSpace[] =>
 
 const catalogue = (
   id: string,
-  runtime: WorldHost["runtime"],
+  runtime: GroupingHost["runtime"],
   machine: string,
-): WorldHost => ({
+): GroupingHost => ({
   id,
   label: id,
   runtime,
-  state: "ready",
-  generation: 1,
   endpoint: `${runtime}:${id}`,
   machine,
+  writable: true,
+  // This computer's TUI is the startup default: World lists it first.
+  isDefault: id === "tui",
 });
+
+/** Board's groups as World publishes them for this catalogue and setting. */
+const hostGroupOf = (hosts: GroupingHost[], grouping: RuntimeGrouping) =>
+  publishedGroupOf(deriveHostGrouping(hosts, grouping, () => false));
 
 // Herdr TUI and herdr-core on this computer, and one SSH machine between them.
 const hosts = [
@@ -72,7 +82,7 @@ test("one per runtime: every runtime is its own zone, as before", () => {
     hostGroupOf(hosts, "runtime"),
   );
   expect(model.zones.map((zone) => zone.hosts.map((host) => host.key))).toEqual(
-    [["tui"], ["remote"], ["core"]],
+    [["tui"], ["core"], ["remote"]],
   );
   expect(zoneHostKeys(model, "core")).toEqual(["core"]);
 });

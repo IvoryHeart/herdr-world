@@ -493,7 +493,6 @@ async function compose(
     },
     serviceIncarnation,
   );
-  // Settings and commands: published with topology, under its revision.
   const publication = composeWorldPublication({
     settings,
     broadcast,
@@ -504,6 +503,7 @@ async function compose(
     ledger: () => storage.ledger(),
     invalidate: (id, generation) => publishWorldInvalidation(id, generation),
     log: (message) => logger.warn(message),
+    profiles: () => connectionProfiles,
   });
 
   const assistantContext = createRuntimeAssistantContext({

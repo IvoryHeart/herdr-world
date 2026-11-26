@@ -13,18 +13,36 @@ import {
   type WorldCommandInput,
 } from "../world/commands";
 import type { LedgerChange, LedgerStore } from "../world/world-ledger";
+import {
+  createSettingCommands,
+  settingCommandSummary,
+  type SettingCommandRecord,
+} from "../world/setting-commands";
+import {
+  publishedHostGrouping,
+  RUNTIME_GROUPING_SETTING_KEY,
+  type GroupingProfile,
+} from "../../../shared/hostGrouping";
 
 const RECONNECTED = "The host reconnected; look again and retry.";
 
 /**
  * One publication for World's own values: settings and commands are read
  * after each topology revision is taken and published under it, and a change
- * to either advances that revision with one notice to every browser.
+ * to either advances that revision with one notice to every browser. The
+ * runtime grouping is derived in the same reply from the setting it carries,
+ * the connection catalogue and the connections' staleness; it is never
+ * stored, and regrouping because the topology changed records nothing.
  */
 export function composeWorldPublication(
   deps: Omit<Parameters<typeof composeWorldCommands>[0], "publish"> & {
     settings: Pick<GuiSettingsStore, "read" | "update">;
     broadcast(line: string, context: string): void;
+    /** The connection catalogue: Herdr profiles, then herdr-core ones. */
+    profiles?(): {
+      list(): readonly GroupingProfile[];
+      coreList(): readonly GroupingProfile[];
+    };
   },
 ) {
   const uiSettings = createUiSettingsRpcHandler({
@@ -45,11 +63,57 @@ export function composeWorldPublication(
     publish: publishWorld,
   });
   // Settings and commands are published with topology, under its revision.
-  deps.snapshots.publishWith(async () => ({
-    ui_settings: await uiSettings("bridge.ui_settings.get", {}),
-    commands: worldCommands.published(),
-  }));
-  return { uiSettings, publishWorld, worldCommands };
+  const profiles = deps.profiles;
+  deps.snapshots.publishWith({
+    values: async () => ({
+      ui_settings: await uiSettings("bridge.ui_settings.get", {}),
+      commands: worldCommands.published(),
+    }),
+    derive: profiles
+      ? (published, connections) => ({
+          host_grouping: publishedHostGrouping(
+            { connections: profiles().list(), core: profiles().coreList() },
+            (published.ui_settings as { ui?: Record<string, unknown> })?.ui?.[
+              RUNTIME_GROUPING_SETTING_KEY
+            ],
+            connections,
+          ),
+        })
+      : undefined,
+  });
+  const settingCommands = createSettingCommands({
+    now: deps.now,
+    async write(key, value) {
+      const result = (await uiSettings("bridge.ui_settings.update", {
+        key,
+        value,
+      })) as { before: unknown; value: unknown };
+      return { before: result.before, value: result.value };
+    },
+    publish: publishWorld,
+    record: (record) => recordSettingCommand(deps.ledger(), record),
+    log: deps.log,
+  });
+  return { uiSettings, publishWorld, worldCommands, settingCommands };
+}
+
+/** One settled record in the ledger's change history per setting command. */
+async function recordSettingCommand(
+  ledger: LedgerStore,
+  record: SettingCommandRecord,
+) {
+  const id = await ledger.nextId("c");
+  await ledger.update((document) => {
+    document.changes.push({
+      id,
+      at: record.at,
+      actor: { label: "World", verified: false },
+      command: "setting change",
+      summary: settingCommandSummary(record),
+      undo: null,
+      world_command: record,
+    });
+  });
 }
 
 /**
@@ -139,8 +203,9 @@ export function composeWorldCommands(deps: {
         .ledger()
         .get()
         .changes.flatMap((change) =>
-          change.world_command && !commandSettled(change.world_command)
-            ? [change.world_command]
+          change.world_command?.entity.kind === "room" &&
+          !commandSettled(change.world_command)
+            ? [change.world_command as PublishedCommand]
             : [],
         ),
     );

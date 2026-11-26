@@ -38,6 +38,7 @@ import {
   updateShortcut,
 } from "../shortcutPreferences";
 import { __storeTesting, store } from "../store";
+import { publishedHostGrouping } from "../../../shared/hostGrouping";
 import { TASK_NOTIFICATION_ACTIVATE_EVENT } from "../taskNotifications";
 import { worldLocalStorage } from "../browserStorage";
 import {
@@ -478,7 +479,21 @@ let client: ConnectionClient = {
           generation: secondHostGeneration,
           snapshot_generation: secondHostGeneration,
         });
-      return observation;
+      // The service publishes the grouping of the hosts it holds.
+      return {
+        ...observation,
+        host_grouping: publishedHostGrouping(
+          {
+            connections: observation.connections.map((each) => ({
+              id: each.connection_id,
+              label: each.label,
+            })),
+            core: [],
+          },
+          "machine",
+          observation.connections,
+        ),
+      };
     }
     if (method === "pane.get") {
       const paneId = String(params.pane_id ?? "");

@@ -8,7 +8,9 @@ import {
   PopoverTrigger,
 } from "../components/ui/popover";
 import type { HostsFilter } from "./hostsFilter";
-import { hostCount, worldMachines, type WorldHost } from "../worldHosts";
+import { hostGroupCount, hostGroupRows, type WorldHost } from "../worldHosts";
+import type { HostGrouping } from "../../../shared/hostGrouping";
+import { useHostGrouping } from "./useHostGroups";
 import { useViewControlRequest } from "../settings/viewControls";
 
 export type HostsControlProps = {
@@ -18,22 +20,27 @@ export type HostsControlProps = {
   onChange(ids: HostsFilter): void;
 };
 
-/** How many machines an explicit Hosts selection shows. */
+/** How many hosts (World's published groups) an explicit selection shows. */
 export function selectedHostCount(
   connections: readonly WorldHost[],
   ids: readonly string[],
+  grouping: HostGrouping | undefined,
 ) {
-  return hostCount(connections.filter(({ id }) => ids.includes(id)));
+  return hostGroupCount(
+    connections.filter(({ id }) => ids.includes(id)).map(({ id }) => id),
+    grouping,
+  );
 }
 
-/** "All hosts", "No hosts", or how many hosts (machines) the filter shows. */
+/** "All hosts", "No hosts", or how many hosts (groups) the filter shows. */
 export function hostsSelectionLabel(
   connections: readonly WorldHost[],
   ids: HostsFilter,
+  grouping: HostGrouping | undefined,
 ) {
   if (ids === null) return "All hosts";
   if (!ids.length) return "No hosts";
-  return `${selectedHostCount(connections, ids)} hosts`;
+  return `${selectedHostCount(connections, ids, grouping)} hosts`;
 }
 
 /**
@@ -58,9 +65,9 @@ export function useConnectionManager() {
 /**
  * The Hosts filter itself, shared by the top bar's Hosts menu and the phone's
  * corner view menu so both show and change the one filter of this browser.
- * One row per machine (#1227), as Town has one building per machine: a row
- * shows or hides every runtime World holds there, and its status sums theirs
- * up. Each runtime's own detail stays in Manage connections.
+ * One row per group World publishes (#1227, #1397), as Town has one building
+ * per group: a row shows or hides every runtime of the group, and its status
+ * sums theirs up. Each runtime's own detail stays in Manage connections.
  */
 export function HostsFilterOptions({
   connections,
@@ -68,13 +75,14 @@ export function HostsFilterOptions({
   onChange,
   onManage,
 }: Omit<HostsControlProps, "explanation"> & { onManage(): void }) {
+  const grouping = useHostGrouping();
   return (
     <>
       <button type="button" onClick={() => onChange(null)}>
         All hosts
       </button>
-      {worldMachines(connections).map((machine) => (
-        <label key={machine.machine}>
+      {hostGroupRows(connections, grouping).map((machine) => (
+        <label key={machine.key}>
           <input
             type="checkbox"
             aria-label={machine.label}
@@ -103,7 +111,7 @@ export function HostsFilterOptions({
 }
 
 /**
- * The overview's Hosts menu: every machine of `worldHosts`, with its Herdr
+ * The overview's Hosts menu: every group World publishes, with its Herdr
  * (TUI) and herdr-core runtimes, to show or hide in World's views.
  */
 export function HostsControl({
@@ -115,7 +123,11 @@ export function HostsControl({
   const [open, setOpen] = useState(false);
   const manager = useConnectionManager();
   const openingManager = useRef(false);
-  const count = hostCount(connections);
+  const grouping = useHostGrouping();
+  const count = hostGroupCount(
+    connections.map(({ id }) => id),
+    grouping,
+  );
   return (
     <div className="world-hosts-control connection-switcher">
       <Popover open={open} onOpenChange={setOpen}>
@@ -132,7 +144,7 @@ export function HostsControl({
               <span className="world-hosts-count">{count}</span>
             </span>
             <span className="connection-switcher-label">
-              {hostsSelectionLabel(connections, ids)}
+              {hostsSelectionLabel(connections, ids, grouping)}
             </span>
             <ChevronDown className="world-hosts-chevron" size={14} />
           </button>

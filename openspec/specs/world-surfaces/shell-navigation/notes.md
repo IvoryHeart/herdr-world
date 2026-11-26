@@ -98,14 +98,15 @@
   **Herdr TUI** row and a **herdr-core** row (each with its own tree, colour
   and actions), one Town building, one Desk host and one Board zone; **One per runtime** shows
   each runtime apart. A machine on its own runtime keeps a plain host row.
-  The value lives in the service's settings (`ui.runtimeGrouping`), with a
-  browser copy (`runtimeGrouping.v1`) for the first paint; one browser's
-  earlier Town buildings choice moves there once, as an `only_if_absent`
-  update the service applies inside its settings writer. Answers and pushes
-  carry the service's commit `revision`; a browser keeps the newest one it
-  has seen, so a late push never undoes a later save. Groups come from one
-  derivation (`worldHostGroups` / `hostGroupOf` / `groupByRuntime` in
-  `web/src/worldHosts.ts`); the Hosts filter always lists machines.
+  The value lives in the service's settings (`ui.runtimeGrouping`); the
+  browser keeps no copy. One browser's earlier Town buildings choice moves
+  there once, as an `only_if_absent` update the service applies inside its
+  settings writer. Changing it is a World command (`world.command`, entity
+  `setting`) that leaves one history entry; a plain settings write of it is
+  refused. The service works out groups, members, order and labels
+  (`shared/hostGrouping.ts`) and publishes them with the setting in one
+  World revision; views read them through `hostGroupOf` / `groupByRuntime`
+  in `web/src/worldHosts.ts`. The Hosts filter always lists machines.
 - Workspace rows show numbered tab chips with each tab's agent status, folding
   extra tabs into **+N**, and keep the server badge in the right column. In
   Spaces a chip focuses its tab; in World's navigator it selects the workspace

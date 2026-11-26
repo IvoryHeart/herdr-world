@@ -61,6 +61,9 @@ if (process.env.WORLD_HOSTS_FILTER_TEST !== "1") {
   const { store, __storeTesting, useStoreSelector } = await import("../store");
   const { bridge } = await import("../api");
   const { worldHosts } = await import("../worldHosts");
+  const { publishHostGroupingOf } = await import(
+    "./testing/publishedHostGrouping"
+  );
   const previous = store.get();
   const previousCall = bridge.call;
   const connections = ["alpha", "beta", "offline"].map((id) => ({
@@ -98,12 +101,16 @@ if (process.env.WORLD_HOSTS_FILTER_TEST !== "1") {
     await act(() => root.render(createElement(Harness)));
   }
   const saved = () => worldLocalStorage.getItem("worldHostsFilter.v1");
+  // World publishes the grouping of the store's catalogue.
+  let unpublish = () => {};
   beforeEach(() => {
+    unpublish = publishHostGroupingOf(() => store.get());
     dom.document.body.innerHTML = "<div id='root'></div>";
     root = createRoot(document.getElementById("root")!);
   });
   afterEach(async () => {
     await act(() => root.unmount());
+    unpublish();
     bridge.call = previousCall;
     __storeTesting.replaceState(previous);
     worldLocalStorage.clear();
