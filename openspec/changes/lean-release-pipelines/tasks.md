@@ -15,4 +15,7 @@
 - [x] Update current release/contributor docs and consumer mappings.
 - [x] Add focused recovery/service/policy regressions and map native platform evidence.
 - [x] Prepare ready PR handoff against crew/1373.
+- [x] Repair exact dispatch overrides in manifest mode, regress workflow/config wiring and RC-to-final tag validation (#1404).
+- [x] Apply the owner's patch-by-default strategy, scope the tap token to the release environment, and regress workflow/config wiring (#1404 review).
+- [x] Run fresh merge-group Linux validation under Delivery checks, audit side workflows, regress trigger/check identity and no-reuse selection, and document the queue flow (#1404 owner feedback).
 - [ ] Owner acceptance: independent review, hosted RC rehearsal and week-long measurements.

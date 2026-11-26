@@ -33,11 +33,13 @@
 - `server/src/testing/`
 - `web/src/features/`
 - `web/src/testing/`
-- `release-please-config.json`
+- `release-please-config.json` (patch increments by default; explicit dispatch overrides select minor/major releases)
 - `.release-please-manifest.json`
 - `version.txt`
 - `scripts/release-plan.ts`
-- `scripts/release-validation.test.ts`
+- `scripts/release-pr.test.ts` (actual workflow shell/config and ephemeral CLI version override; automatic same-repository CI dispatch)
+- `scripts/release-validation.test.ts` (publisher ordering and tag-only Homebrew release environment; npm keeps OIDC)
+- `scripts/ci-merge-queue.test.ts` (merge-group trigger, Linux graph and queue checkout, exact Delivery checks name, full validation without PR reuse, and side-workflow event audit)
 - `scripts/release-publication.test.ts`
 - `scripts/release-seal.ts` (seal record of every contract job's result; Release reuses retained bytes only from an all-green record of the same run)
 - `herdr-plugin.toml`
@@ -81,6 +83,11 @@
   belongs to `build:site`; internal notes parsing also serves source-ownership checks.
 
 ## Usage reference
+
+- **Merge queue.** After owner approval, a PR joins main's queue and CI validates
+  its combined commit with current main under **Delivery checks**, without PR
+  result reuse. GitHub merges after checks and review requirements pass. Only CI
+  subscribes directly to merge groups; see [CI ownership](../../../docs/ci-pipelines.md).
 
 ## World update notifications
 
