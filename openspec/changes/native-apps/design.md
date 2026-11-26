@@ -497,9 +497,28 @@ Herdr and every `HERDR_*` variable cleared (desktop runners are disposable):
 8. One World per machine: a second app start finds the running World and starts
    nothing; with a standalone World installed first from the same archive, the app
    connects to it and leaves its service definition and data folder untouched.
-9. Update: where an updater key exists (section 10), the previous release's app is
-   installed first and updated to this one through the updater; World's service
-   restarts on the new executable and the scratch agent's terminal is still there.
+9. Update, on every desktop package (both `.dmg`, the `-setup.exe`, the AppImage and
+   the `.deb`), whether or not the owner's updater key exists: each job also builds
+   the same commit at a lower test version `<v>-smoke`, with a throwaway updater
+   key's public half (section 10), and installs that first with its World started
+   and a scratch agent. The update then installs this job's package: through the
+   updater for `.dmg`, `-setup.exe` and AppImage, from a test `app-update.json`
+   naming the updater file built with the package (`.app.tar.gz`, `-setup.exe`,
+   `.AppImage`) and a test signature beside it (bytes unchanged; the test signature
+   and the `-smoke` build are never uploaded); through `apt install ./<package>.deb`
+   and an app start for the `.deb`. Two cases, each from a fresh install:
+   - World running: the app's log shows stop, replace, finish and start in that
+     order (the `.deb`: replace, finish with its restart); World answers on its
+     port with the new version, a new process ID in `instance.lock` and the
+     definition naming the new executable (AppImage: the new `world/<version>/`
+     copy, the old folder gone); the scratch agent's terminal is still there.
+   - World stopped from the tray first: after the update and after a second app
+     start World is still stopped, the definition names the new executable, and
+     the marker is gone.
+   The app's unit tests (task 3.7) cover the same sequence on a fake service
+   manager for every platform, plus a failed stop (nothing replaced), a crash
+   between each pair of steps (resumes at Finish), a failed replacement (old
+   version started again) and a refused or silent start (message shown).
 10. Quit leaves the service running; `herdr-world service uninstall` through the
     tray removes it; the uninstaller removes the app and keeps World's data folder.
 
@@ -544,9 +563,9 @@ Herdr and every `HERDR_*` variable cleared (desktop runners are disposable):
 
 - Test builds: the Android job makes a throwaway keystore in the runner's temp folder
   and deletes it in an `always()` step; the APK is named `-test`. macOS builds are
-  ad-hoc signed (`-`), Windows builds unsigned. An update smoke on a PR uses a
-  throwaway updater key pair made in the run (its public key built into that run's
-  test app only) and deleted in an `always()` step.
+  ad-hoc signed (`-`), Windows builds unsigned. The update smoke (section 9, step
+  9) uses, in every run, a throwaway updater key pair made in the run (its public key
+  built into that run's `-smoke` test app only) and deleted in an `always()` step.
 - Updater key: Tauri's updater checks a signature made with a key pair whose public
   half is built into the app. That key is a release key and belongs to the owner, like
   the Android key: the crew never creates, commits or uploads it. Until its secret
@@ -583,7 +602,8 @@ lists, with owner `native-apps`:
 | Android notification channel `world-<id>` | Per-World notification settings | app ID | source | deleted by Forget |
 | Launch at login entry (Launch Agent, registry value, autostart file) | Start hidden at login | one per install | source | removed when turned off |
 | `worlds.json#lastEventId` per World | Where the stream resumes (boot ID and sequence, no content) | app ID | derived | overwritten; removed with the World |
-| `worlds.json#local` | Which installation runs the World on this computer (`app`, or the path and kind of another installation) | one per install | derived | rewritten at each start by detection (section 12) |
+| `worlds.json#local` | Which installation runs the World on this computer (`app`, or the path and kind of another installation) and the World version the app last ran | one per install | derived | rewritten at each start by detection (section 12) |
+| `worlds.json#update` | An app update in progress: target version and whether World was running and must be started again (12.5) | one per install | derived | removed when the update's start step ends or fails |
 | AppImage only: extracted World executable `world/<version>/herdr-world` in the app data folder | The executable World's service runs, at a stable path | version | cache | the previous version is deleted after an update succeeds |
 | `herdr-world` command link (`~/.local/bin` on macOS and Linux, user `PATH` entry on Windows) | Lets agents and the user run `herdr-world ask` | one per install | source | created only when no `herdr-world` exists; removed when the app's World is removed |
 
@@ -686,16 +706,60 @@ when a runtime is older than it supports, and the user upgrades it.
   against the public key built into the app (`.dmg` builds: the `.app.tar.gz`;
   Windows: the NSIS `-setup.exe`; AppImage: the image). Nothing downloaded is run
   before that check.
-- Before installing, when this app's executable runs World, the app ends World's
-  service with `service stop` (12.3; on Windows the NSIS pre-install hook also ends
-  the task, because a running `.exe` cannot be replaced).
-  After the update it runs the new bundled executable's `update --finish-install`
-  with `HERDR_WORLD_SKIP_HERDR=1`, which restarts the service on the new executable
-  and leaves runtimes alone. The AppImage extracts the new version first, re-runs
-  `service install`, then deletes the old folder.
+- Around the install the app runs one sequence: stop → replace → finish → start.
+  It cannot rely on `update --finish-install` to bring World back: that command's
+  restart (`restartServiceUsing`, `server/src/cli/update-finish.ts`) succeeds
+  without starting an installed service that is not running, and World is stopped
+  at that point. So the app starts World itself, explicitly:
+  1. *Record.* The bundled executable's `service status --json` (new) reports
+     `installed`, `active` and `ownedByApp`: the definition runs an executable
+     inside this app (the same definition check `restartServiceUsing` makes,
+     against the app's executable path, or on AppImage any `world/<version>/`
+     copy in the app's data folder). The app writes `worlds.json#update` =
+     `{to, restart}` before anything stops; `restart` is true only when the
+     service is installed, active and owned by the app. A service the user
+     stopped, or one another installation owns (12.2), gives `restart: false`.
+  2. *Stop.* When `restart` is true, the app runs `service stop`. `start` and
+     `stop` are ownership-checked like `restartServiceUsing`: they act only when
+     the definition runs the executable invoking them (AppImage: any copy in the
+     app's `world/` folder), and otherwise exit non-zero and change nothing. If
+     the stop fails, the update is abandoned before anything is replaced, the
+     marker is removed and World keeps running.
+  3. *Replace.* The updater installs the verified package and restarts the app.
+     On Windows the NSIS pre-install hook also runs the installed executable's
+     `service stop`, which is a no-op after step 2 and ends the task when someone
+     runs the installer by hand over a running World (a running `.exe` cannot be
+     replaced). The hook never starts World.
+  4. *Finish.* At the first start after the update the app finds the marker. When
+     the app's World is installed (running or stopped) it runs the new bundled
+     executable's `update --finish-install` with `HERDR_WORLD_SKIP_HERDR=1`
+     (integration sync; runtimes left alone; its restart step finds World stopped
+     and does nothing). The AppImage first extracts the new version, checks its
+     SHA-256 and repoints the definition with `service install --no-start` (new:
+     writes and enables the definition without starting it, and keeps the
+     environment file), so a stopped World is not started by the repoint.
+  5. *Start.* Only when `restart` is true, the app runs the new executable's
+     `service start`, then waits up to 30 s for World to answer on the port in
+     its `instance.lock`. Success removes the marker (and, on AppImage, the old
+     version's folder). If the start is refused or World does not answer, the app
+     shows "World did not start after the update" with Start World and the
+     service log, and removes the marker.
+  When `restart` is false, nothing is started and the user's stopped World stays
+  stopped. The marker makes the sequence survive the app's own restart and a
+  crash or power loss between steps: the next start resumes at Finish. If the
+  replacement failed (the app starts on its old version with a marker naming a
+  newer one), the app runs its own executable's `service start` when `restart` is
+  true, removes the marker and reports that the update did not install.
 - The `.deb` has no in-app updater (Tauri's updater does not install `.deb`): the app
   says a new version exists and links the release page. An apt repository can come
-  with the store work.
+  with the store work. The user installs the new `.deb` with apt; Linux replaces the
+  executable's file while the old process keeps running, so no stop is needed, and
+  the `.deb`'s `prerm` runs `service uninstall` only on removal (`remove`), never on
+  `upgrade`. The app records in `worlds.json#local` the World version it last ran;
+  at its next start (launch at login or by hand), a bundled version that differs
+  runs the same Finish step, and `update --finish-install`'s own restart then moves
+  a running World onto the new file and leaves a stopped one stopped. Until the
+  app next starts, World keeps running the old version.
 - `herdr-world update` and World's web update refuse an app-managed executable already:
   the `VERSION` file beside it marks it as package-managed
   (`updateInstallationBlockReason`). The build changes that message to "Update through

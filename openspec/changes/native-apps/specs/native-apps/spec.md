@@ -303,7 +303,9 @@ reversible. World's login, origin and listener policy SHALL be unchanged.
 A desktop app that runs World SHALL update the app and its World as one package, and
 SHALL install an update only after verifying its signature against a public key built
 into the app; the update SHALL be one the release sealed. After the update, World's
-service SHALL run the new executable, and the update SHALL NOT change a Herdr runtime.
+service SHALL run the new executable: when it was running, the app SHALL start it
+again explicitly, only when its service definition belongs to the app; when the user
+had stopped it, it SHALL stay stopped. The update SHALL NOT change a Herdr runtime.
 `herdr-world update` and World's web update SHALL refuse to replace an app-managed
 executable and point to the app. Packages whose format the updater cannot install
 SHALL say a new version exists and link the release.
@@ -312,3 +314,9 @@ SHALL say a new version exists and link the release.
 
 - **WHEN** the user installs an app update while an agent runs
 - **THEN** World restarts on the new version and the agent's terminal is still there
+
+#### Scenario: Update while World is stopped
+
+- **WHEN** the user stopped World and then installs an app update
+- **THEN** World is still stopped after the update and its service runs the new
+  version when the user starts it

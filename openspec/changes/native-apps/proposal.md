@@ -100,10 +100,10 @@ organisation; this change builds direct downloads only.
 - Server: one new GET route beside `/api/notifications/push` and a notification
   fan-out in front of Web Push, using the same login cookie and admission. No
   change to World's login, origin, cookie or CSP model.
-- CLI: `herdr-world service install --host <address>`, `service start` and
-  `service stop`; `herdr-world update` names the app for an app-managed
-  executable.
-- Storage catalog: the app's own stores (World list with last event IDs and the
+- CLI: `herdr-world service install --host <address>` and `--no-start`,
+  `service status --json`, ownership-checked `service start` and `service stop`;
+  `herdr-world update` names the app for an app-managed executable.
+- Storage catalog: the app's own stores (World list with last event IDs, the update marker and the
   local installation, per-World web view stores, Android notification channels,
   launch-at-login entry, AppImage's extracted World executable, the `herdr-world`
   command link) and the stream's in-memory replay ring. World's own data folder and
