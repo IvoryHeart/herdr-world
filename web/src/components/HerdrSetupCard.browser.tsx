@@ -556,7 +556,7 @@ async function coreFirst() {
   await waitFor(
     () =>
       document.body.textContent?.includes(
-        "Install herdr-core 0.1.21 on this computer?",
+        "Install herdr-core 0.1.22 on this computer?",
       ) === true,
     "the herdr-core confirmation",
   );
@@ -668,7 +668,7 @@ async function manageConnections() {
   check(offer, "card: a core that is not running offers the install");
   click(offer!);
   await waitFor(
-    () => text().includes("Install herdr-core 0.1.21 on dev.example.com?"),
+    () => text().includes("Install herdr-core 0.1.22 on dev.example.com?"),
     "the SSH confirmation",
   );
   check(
@@ -714,7 +714,7 @@ async function manageConnections() {
   )!;
   click(local.querySelector("button")!);
   await waitFor(
-    () => text().includes("Install herdr-core 0.1.21 on this computer?"),
+    () => text().includes("Install herdr-core 0.1.22 on this computer?"),
     "the local confirmation",
   );
   click(button("Cancel"));
