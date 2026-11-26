@@ -43,7 +43,8 @@ type Run = {
 };
 
 /**
- * The ci.yml job and steps that check the description before choosing the scope.
+ * Scope identity and legacy description-step identity used when reading older runs.
+ * Current CI checks descriptions in a separate leaf and chooses scope independently.
  * @internal
  */
 export const SCOPE_JOB = "Validation scope";
@@ -59,7 +60,7 @@ export const SCOPE_STEP = "Determine validation scope";
 export const HOLD_STEP = "Hold the head's red result";
 
 /**
- * The run failed only because `check:pr-body` rejected the description: the
+ * A legacy run failed only because `check:pr-body` rejected the description: the
  * scope job failed at the description step and never chose a scope, so every
  * code job was skipped and only the report jobs failed after it.
  */

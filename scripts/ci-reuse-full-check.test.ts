@@ -370,6 +370,14 @@ test("only a description failure that chose no scope is passed over", async () =
   expect(await barrier([scopeJob("success", "failure")])).toBe(false);
   // The scope was chosen despite a failed description step.
   expect(await barrier([scopeJob("failure", "success")])).toBe(false);
+  // New CI chooses scope independently: a failed description leaf cannot
+  // conceal a code failure in the same run.
+  expect(
+    await barrier([
+      scopeJob("success", "success", "success"),
+      { ...scopeJob("failure", "skipped"), name: "PR description" },
+    ]),
+  ).toBe(false);
   // Unfinished or cancelled runs, and ambiguous or stale scope jobs.
   expect(await barrier([scopeJob("failure", "skipped")], null)).toBe(false);
   expect(await barrier([scopeJob("failure", "skipped")], "cancelled")).toBe(

@@ -43,6 +43,18 @@ changes select full Linux validation. Packaging scope remains descriptive; every
 PR check runs on Linux. Native storage/plugin/launchd checks and running upgrades
 belong to the nightly or release candidate, never a PR matrix.
 
+Scope checks out the complete Git history with `filter: blob:none`. The PR
+description policy runs as its own leaf after scope, alongside static checks,
+units, dependency security, World and web browser shards, and model shards.
+**Delivery checks** depends directly on those leaves and requires each selected
+lane to succeed; unselected lanes must be skipped. There are no intervening
+repository, web-browser or behavioral aggregate runners in the PR graph.
+Delivery downloads the model manifests and resource receipts, applies the same
+complete source/tool/model/resource checks, and retains the canonical evidence
+artifact. This aggregation needs Bun and Git, without Node, Java, dependency
+installation or checker setup. A direct manual **Behavioral verification** run
+still aggregates its own shards and retains the same canonical artifact.
+
 Main reports passing full or scoped PR evidence only when immutable checkout
 proof establishes an identical tree. A newer red/cancelled verdict is never
 skipped; absent proof or API errors keep a red metadata result without starting

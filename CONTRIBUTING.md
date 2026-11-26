@@ -53,11 +53,12 @@ update changes tool semantics or models, take ownership of its failing gate;
 automation does not weaken verification or approve/merge a PR.
 
 Behavioral verification CI uses Node 24.19.0 and Eclipse Temurin JDK
-21.0.13+9 (Linux x64). The shards and aggregate install that exact Java build
+21.0.13+9 (Linux x64). The model shards install that exact Java build
 through a commit-pinned `actions/setup-java`, reusing its runner tool cache when
 available. They do not select the runner image's preinstalled Java. Use the same
-build locally to reproduce CI tool identities; aggregation rejects differing
-tool identities, including Java patch versions.
+build locally to reproduce CI tool identities. Delivery checks aggregates the
+retained manifests without installing Node, Java or the checker; it still rejects
+differing tool identities, including Java patch versions.
 
 ## Validation
 
