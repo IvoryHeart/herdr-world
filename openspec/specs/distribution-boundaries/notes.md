@@ -40,6 +40,8 @@
 - `scripts/release-pr.test.ts` (actual workflow shell/config and ephemeral CLI version override; automatic same-repository CI dispatch)
 - `scripts/release-validation.test.ts` (publisher ordering and tag-only Homebrew release environment; npm keeps OIDC)
 - `scripts/ci-merge-queue.test.ts` (merge-group trigger, Linux graph and queue checkout, exact Delivery checks name, full validation without PR reuse, and side-workflow event audit)
+- `scripts/dependabot-event.ts` (GitHub event sender and PR author identity gate)
+- `scripts/dependabot-policy.test.ts` (bot impact-line exemption, exact metadata identities, retained privacy and test scope)
 - `scripts/release-publication.test.ts`
 - `scripts/release-seal.ts` (seal record of every contract job's result; Release reuses retained bytes only from an all-green record of the same run)
 - `herdr-plugin.toml`
@@ -81,6 +83,10 @@
 - Agent discovery starts with native OpenSpec capability and active-change lists,
   then capability specs, notes and their Code paths. Public feature rendering
   belongs to `build:site`; internal notes parsing also serves source-ownership checks.
+- Verified Dependabot PR events waive only description impact lines; both sender
+  and author must be `dependabot[bot]` with type `Bot`. The usual test selection
+  remains authoritative. Exact bot metadata identities and unchanged license
+  attribution rules are documented in [contributor guidance](../../../CONTRIBUTING.md#privacy-before-publication).
 
 ## Usage reference
 

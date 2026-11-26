@@ -129,6 +129,10 @@ pushed ref for privacy. Description, changelog, source coverage, size, dead-code
 unit and behavioral policies run in CI. Before handoff, validate the exact PR body
 with `bun run check:pr-body <file> <base-ref>`. Non-documentation PRs retain the two
 impact lines and independent review; neither policy runs inside pre-push.
+The event-based description check waives only those two lines when GitHub's
+event sender and PR author both have login `dependabot[bot]` and type `Bot`.
+Title/body claims grant no exception. Source coverage, spec-edit policy, privacy,
+file-based test selection and independent review still apply.
 
 ### Privacy before publication
 
@@ -159,6 +163,12 @@ on the exact `users.noreply.github.com` domain, so bot signoffs and human coauth
 pass. This exception permits only those email values; all other privacy rules
 still apply, including Claude coauthor detection. Added file content retains its
 existing email policy.
+For verified Dependabot events, metadata permits only the exact `support` mailbox
+at `github.com` and `49699333+dependabot[bot]` at `users.noreply.github.com`.
+These are the standard signoff and coauthor identities, listed in
+`scripts/privacy-allowlist.ts`; other mailboxes and lookalike domains fail.
+This does not exempt generated dependency licenses: new copyright addresses
+still require their own attribution review.
 A missing or rewritten previous push head falls back to `origin/main`
 (or all history if main is unavailable); an unavailable requested head fails.
 Branch pushes exclude published main history. Merge commits scan lines absent

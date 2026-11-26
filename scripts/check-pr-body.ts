@@ -11,6 +11,10 @@ import { readCapabilityNotes } from "./openspec-notes";
 import { coverageDirectory } from "./coverage";
 import { ordinaryDocumentation } from "./validation-scope";
 import { formatPrivacyFinding, scanPrivacyText } from "./check-privacy";
+import {
+  isDependabotPullRequest,
+  type PullRequestEvent,
+} from "./dependabot-event";
 
 function descriptionLines(body: string): string[] {
   let fence: string | undefined;
@@ -123,6 +127,7 @@ export function checkPrBodyText(
   cwd = process.cwd(),
   baseRef = "origin/main",
   headRef = "HEAD",
+  dependabot = false,
 ): string[] {
   const git = (...args: string[]) =>
     execFileSync("git", args, { cwd, encoding: "utf8" }).trim();
@@ -137,15 +142,17 @@ export function checkPrBodyText(
     readCapabilityNotes(cwd),
   );
   return [
-    ...scanPrivacyText(body, "PR body").map(formatPrivacyFinding),
+    ...scanPrivacyText(body, "PR body", dependabot).map(formatPrivacyFinding),
     ...assessSpecEdits(paths),
-    ...assessContractImpacts(
-      paths,
-      body,
-      existsSync(join(cwd, coverageDirectory))
-        ? readCoverageScope(cwd).owns
-        : undefined,
-    ),
+    ...(dependabot
+      ? []
+      : assessContractImpacts(
+          paths,
+          body,
+          existsSync(join(cwd, coverageDirectory))
+            ? readCoverageScope(cwd).owns
+            : undefined,
+        )),
     ...(!knowledge.ok
       ? [
           `Source files without a capability notes.md Code path: ${knowledge.uncovered.join(", ")}`,
@@ -156,23 +163,25 @@ export function checkPrBodyText(
 
 /** CI checks the immutable PR head, even when its checkout is a merge commit. */
 export function checkPrBodyEvent(file: string, cwd = process.cwd()): string[] {
-  const event = JSON.parse(readFileSync(file, "utf8")) as {
-    pull_request?: {
-      base?: { sha?: string };
-      head?: { sha?: string };
-      body?: string | null;
-      title?: string;
-    };
-  };
+  const event = JSON.parse(readFileSync(file, "utf8")) as PullRequestEvent;
   const pull = event.pull_request;
+  const dependabot = isDependabotPullRequest(event);
   if (
     !/^[0-9a-f]{40}$/.test(pull?.base?.sha ?? "") ||
     !/^[0-9a-f]{40}$/.test(pull?.head?.sha ?? "")
   )
     throw new Error("Missing or invalid pull-request base or head");
   return [
-    ...scanPrivacyText(pull?.title ?? "", "PR title").map(formatPrivacyFinding),
-    ...checkPrBodyText(pull?.body ?? "", cwd, pull?.base?.sha, pull?.head?.sha),
+    ...scanPrivacyText(pull?.title ?? "", "PR title", dependabot).map(
+      formatPrivacyFinding,
+    ),
+    ...checkPrBodyText(
+      pull?.body ?? "",
+      cwd,
+      pull?.base?.sha,
+      pull?.head?.sha,
+      dependabot,
+    ),
   ];
 }
 
