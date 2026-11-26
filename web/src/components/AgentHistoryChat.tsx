@@ -510,16 +510,7 @@ function decorationFor(
     : undefined;
 }
 
-// Collapsed by default; the block keeps its open state across polling
-// refreshes because its key follows the first entry's id.
-function ToolBlock({
-  entries,
-  decorate,
-  decorationTokens,
-  loader,
-  onToggle,
-  onOpen,
-}: {
+type ToolBlockProps = {
   entries: HistoryEntry[];
   decorate?: HistoryDecorator;
   decorationTokens?: ReadonlyMap<string, unknown>;
@@ -527,7 +518,44 @@ function ToolBlock({
   // Called before the reader opens or closes part of the block.
   onToggle: () => void;
   onOpen: (entry: HistoryEntry) => void;
-}) {
+};
+
+/**
+ * A live update rebuilds the item list and Chat's token map, but leaves the
+ * entries and tokens it did not change as they were. A block redraws only when
+ * one of its own entries or their tokens changed, so a long conversation's
+ * update costs the blocks it touched, not every block in the window.
+ */
+function sameToolBlock(a: ToolBlockProps, b: ToolBlockProps) {
+  if (
+    a.decorate !== b.decorate ||
+    a.loader !== b.loader ||
+    a.onToggle !== b.onToggle ||
+    a.onOpen !== b.onOpen ||
+    a.entries.length !== b.entries.length
+  )
+    return false;
+  for (let index = 0; index < b.entries.length; index += 1) {
+    const entry = b.entries[index]!;
+    if (a.entries[index] !== entry) return false;
+    if (a.decorationTokens === b.decorationTokens) continue;
+    const key = historyDecorationKey(entry);
+    if (a.decorationTokens?.get(key) !== b.decorationTokens?.get(key))
+      return false;
+  }
+  return true;
+}
+
+// Collapsed by default; the block keeps its open state across polling
+// refreshes because its key follows the first entry's id.
+const ToolBlock = memo(function ToolBlock({
+  entries,
+  decorate,
+  decorationTokens,
+  loader,
+  onToggle,
+  onOpen,
+}: ToolBlockProps) {
   const [open, setOpen] = useState(false);
   const [expandedStep, setExpandedStep] = useState<string | null>(null);
   const toggleStep = useCallback(
@@ -640,7 +668,7 @@ function ToolBlock({
       ) : null}
     </div>
   );
-}
+}, sameToolBlock);
 
 // The drawer owns the scroll and content refs so its minimap can track and
 // jump to bubbles through their data-sequence, as it does for timeline cards.
