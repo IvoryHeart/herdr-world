@@ -1,0 +1,52 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1000" height="760" viewBox="0 0 1000 760">
+<rect x="0" y="0" width="1000" height="760" fill="#11121a" />
+<rect x="60" y="30" width="880" height="700" rx="12" fill="#202331" stroke="#2f3549" />
+<rect x="92" y="50" width="32" height="4" fill="#1c1722" />
+<rect x="88" y="54" width="40" height="28" fill="#1c1722" />
+<rect x="88" y="82" width="40" height="24" fill="#1c1722" />
+<rect x="92" y="106" width="32" height="8" fill="#1c1722" />
+<rect x="96" y="58" width="24" height="20" fill="#e3ad80" />
+<rect x="92" y="54" width="32" height="8" fill="#ece4da" />
+<rect x="100" y="66" width="4" height="4" fill="#1c1722" />
+<rect x="112" y="66" width="4" height="4" fill="#1c1722" />
+<rect x="96" y="66" width="24" height="4" fill="#1c1722" />
+<rect x="92" y="82" width="32" height="16" fill="#f1efe6" />
+<rect x="92" y="98" width="32" height="8" fill="#30404a" />
+<rect x="96" y="106" width="8" height="4" fill="#30404a" />
+<rect x="112" y="106" width="8" height="4" fill="#30404a" />
+<text x="152" y="76" font-family="Inter, 'Segoe UI', system-ui, sans-serif" font-size="18" fill="#ffffff" font-weight="600">reviewer-2</text>
+<text x="152" y="98" font-family="Inter, 'Segoe UI', system-ui, sans-serif" font-size="12" fill="#737aa2" font-weight="400">Codex · in api on build-box.example.net · working</text>
+<g transform="translate(902,50) scale(0.75)" fill="none" stroke="#737aa2" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M18 6 6 18"/><path d="m6 6 12 12"/></g>
+<rect x="60" y="126" width="880" height="1" fill="#2f3549" />
+<text x="84" y="157" font-family="Inter, 'Segoe UI', system-ui, sans-serif" font-size="13" fill="#737aa2" font-weight="400">Overview</text>
+<rect x="214" y="138" width="115" height="28" rx="14" fill="rgba(122,162,247,0.18)" stroke="#7aa2f7" />
+<text x="224" y="157" font-family="Inter, 'Segoe UI', system-ui, sans-serif" font-size="13" fill="#7aa2f7" font-weight="600">Given at hire</text>
+<text x="364" y="157" font-family="Inter, 'Segoe UI', system-ui, sans-serif" font-size="13" fill="#737aa2" font-weight="400">Activity</text>
+<rect x="84" y="186" width="832" height="520" rx="6" fill="#f4ead2" stroke="#b48a52" stroke-width="3"/>
+<rect x="94" y="196" width="812" height="500" rx="4" fill="none" stroke="#d9b27a" stroke-width="1.5"/>
+<g transform="translate(480,208) scale(1.6666666666666667)" fill="none" stroke="#4f5a80" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21.42 10.922a1 1 0 0 0-.019-1.838L12.83 5.18a2 2 0 0 0-1.66 0L2.6 9.08a1 1 0 0 0 0 1.832l8.57 3.908a2 2 0 0 0 1.66 0z"/><path d="M22 10v6"/><path d="M6 12.5V16a6 3 0 0 0 12 0v-3.5"/></g>
+<text x="500" y="278" font-family="Inter, 'Segoe UI', system-ui, sans-serif" font-size="22" fill="#2b2440" font-weight="700" text-anchor="middle">Given at hire</text>
+<text x="500" y="302" font-family="Inter, 'Segoe UI', system-ui, sans-serif" font-size="13" fill="#5a5070" font-weight="400" text-anchor="middle">Reviewer · version 3 · profile rv-7f3a · 26 Nov, 09:14</text>
+<text x="124" y="346" font-family="Inter, 'Segoe UI', system-ui, sans-serif" font-size="13" fill="#6e6584" font-weight="400">Harness</text>
+<text x="284" y="346" font-family="Inter, 'Segoe UI', system-ui, sans-serif" font-size="13" fill="#2b2440" font-weight="400">Codex · model default · effort high</text>
+<text x="124" y="372" font-family="Inter, 'Segoe UI', system-ui, sans-serif" font-size="13" fill="#6e6584" font-weight="400">Permission</text>
+<text x="284" y="372" font-family="Inter, 'Segoe UI', system-ui, sans-serif" font-size="13" fill="#2b2440" font-weight="400">on request · workspace write</text>
+<text x="124" y="398" font-family="Inter, 'Segoe UI', system-ui, sans-serif" font-size="13" fill="#6e6584" font-weight="400">Host and room</text>
+<text x="284" y="398" font-family="Inter, 'Segoe UI', system-ui, sans-serif" font-size="13" fill="#2b2440" font-weight="400">build-box.example.net · api</text>
+<rect x="124" y="422" width="752" height="1" fill="#d9b27a" />
+<text x="124" y="450" font-family="Inter, 'Segoe UI', system-ui, sans-serif" font-size="14" fill="#2b2440" font-weight="700">Attached</text>
+<text x="124" y="478" font-family="ui-monospace, 'SFMono-Regular', Menlo, monospace" font-size="13" fill="#2b2440" font-weight="400">MCP server github</text>
+<text x="364" y="478" font-family="Inter, 'Segoe UI', system-ui, sans-serif" font-size="12" fill="#6e6584" font-weight="400">user · stdio</text>
+<text x="876" y="478" font-family="Inter, 'Segoe UI', system-ui, sans-serif" font-size="12" fill="#3f6fb4" font-weight="600" text-anchor="end">only these</text>
+<text x="124" y="504" font-family="ui-monospace, 'SFMono-Regular', Menlo, monospace" font-size="13" fill="#2b2440" font-weight="400">skill code-review</text>
+<text x="364" y="504" font-family="Inter, 'Segoe UI', system-ui, sans-serif" font-size="12" fill="#6e6584" font-weight="400">user · ~/.agents/skills</text>
+<text x="876" y="504" font-family="Inter, 'Segoe UI', system-ui, sans-serif" font-size="12" fill="#3f6fb4" font-weight="600" text-anchor="end">available and named</text>
+<text x="124" y="530" font-family="ui-monospace, 'SFMono-Regular', Menlo, monospace" font-size="13" fill="#2b2440" font-weight="400">skill release-notes</text>
+<text x="364" y="530" font-family="Inter, 'Segoe UI', system-ui, sans-serif" font-size="12" fill="#6e6584" font-weight="400">repository · .agents/skills</text>
+<text x="876" y="530" font-family="Inter, 'Segoe UI', system-ui, sans-serif" font-size="12" fill="#3f6fb4" font-weight="600" text-anchor="end">available and named</text>
+<text x="124" y="582" font-family="Inter, 'Segoe UI', system-ui, sans-serif" font-size="14" fill="#2b2440" font-weight="700">Also on this host</text>
+<text x="124" y="608" font-family="Inter, 'Segoe UI', system-ui, sans-serif" font-size="13" fill="#6e6584" font-weight="400">skill pdf (user) · no other MCP servers (only github was given)</text>
+<rect x="124" y="630" width="752" height="1" fill="#d9b27a" />
+<text x="124" y="658" font-family="Inter, 'Segoe UI', system-ui, sans-serif" font-size="13" fill="#2b2440" font-weight="400">Reviewer is now version 4. What changed: effort high → medium.</text>
+<text x="124" y="678" font-family="Inter, 'Segoe UI', system-ui, sans-serif" font-size="12" fill="#6e6584" font-weight="400">This agent keeps what it was hired with.</text>
+</svg>

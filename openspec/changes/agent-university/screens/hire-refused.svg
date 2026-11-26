@@ -1,0 +1,38 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1000" height="560" viewBox="0 0 1000 560">
+<rect x="0" y="0" width="1000" height="560" fill="#11121a" />
+<rect x="60" y="30" width="880" height="500" rx="12" fill="#202331" stroke="#2f3549" />
+<g transform="translate(80,48) scale(0.8333333333333334)" fill="none" stroke="#7aa2f7" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><line x1="19" x2="19" y1="8" y2="14"/><line x1="22" x2="16" y1="11" y2="11"/></g>
+<text x="110" y="64" font-family="Inter, 'Segoe UI', system-ui, sans-serif" font-size="17" fill="#ffffff" font-weight="600">New agent</text>
+<g transform="translate(902,50) scale(0.75)" fill="none" stroke="#737aa2" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M18 6 6 18"/><path d="m6 6 12 12"/></g>
+<rect x="60" y="86" width="880" height="1" fill="#2f3549" />
+<text x="84" y="120" font-family="Inter, 'Segoe UI', system-ui, sans-serif" font-size="12" fill="#737aa2" font-weight="400">Profile</text>
+<rect x="84" y="128" width="400" height="32" rx="6" fill="#1a1b26" stroke="#2f3549" />
+<text x="96" y="149" font-family="Inter, 'Segoe UI', system-ui, sans-serif" font-size="13" fill="#d5dcff" font-weight="400">Reviewer  ·  Codex college</text>
+<g transform="translate(458,136) scale(0.6666666666666666)" fill="none" stroke="#737aa2" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m6 9 6 6 6-6"/></g>
+<text x="516" y="120" font-family="Inter, 'Segoe UI', system-ui, sans-serif" font-size="12" fill="#737aa2" font-weight="400">Room</text>
+<rect x="516" y="128" width="400" height="32" rx="6" fill="#1a1b26" stroke="#2f3549" />
+<text x="528" y="149" font-family="Inter, 'Segoe UI', system-ui, sans-serif" font-size="13" fill="#d5dcff" font-weight="400">api  ·  build-box.example.net</text>
+<g transform="translate(890,136) scale(0.6666666666666666)" fill="none" stroke="#737aa2" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m6 9 6 6 6-6"/></g>
+<rect x="84" y="190" width="832" height="220" rx="10" fill="rgba(247,118,142,0.08)" stroke="rgba(247,118,142,0.5)" />
+<g transform="translate(104,210) scale(0.8333333333333334)" fill="none" stroke="#f7768e" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><line x1="12" x2="12" y1="8" y2="12"/><line x1="12" x2="12.01" y1="16" y2="16"/></g>
+<text x="136" y="226" font-family="Inter, 'Segoe UI', system-ui, sans-serif" font-size="15" fill="#ffffff" font-weight="600">Can't hire Reviewer in api on build-box.</text>
+<text x="136" y="258" font-family="Inter, 'Segoe UI', system-ui, sans-serif" font-size="13" fill="#d5dcff" font-weight="400">Codex there has no skill code-review. World looked in:</text>
+<g transform="translate(152,272) scale(0.5833333333333334)" fill="none" stroke="#737aa2" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 20a2 2 0 0 0 2-2V8a2 2 0 0 0-2-2h-7.9a2 2 0 0 1-1.69-.9L9.6 3.9A2 2 0 0 0 7.93 3H4a2 2 0 0 0-2 2v13a2 2 0 0 0 2 2Z"/></g>
+<text x="174" y="284" font-family="ui-monospace, 'SFMono-Regular', Menlo, monospace" font-size="12" fill="#737aa2" font-weight="400">the room's .agents/skills</text>
+<g transform="translate(152,294) scale(0.5833333333333334)" fill="none" stroke="#737aa2" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 20a2 2 0 0 0 2-2V8a2 2 0 0 0-2-2h-7.9a2 2 0 0 1-1.69-.9L9.6 3.9A2 2 0 0 0 7.93 3H4a2 2 0 0 0-2 2v13a2 2 0 0 0 2 2Z"/></g>
+<text x="174" y="306" font-family="ui-monospace, 'SFMono-Regular', Menlo, monospace" font-size="12" fill="#737aa2" font-weight="400">~/.agents/skills</text>
+<g transform="translate(152,316) scale(0.5833333333333334)" fill="none" stroke="#737aa2" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 20a2 2 0 0 0 2-2V8a2 2 0 0 0-2-2h-7.9a2 2 0 0 1-1.69-.9L9.6 3.9A2 2 0 0 0 7.93 3H4a2 2 0 0 0-2 2v13a2 2 0 0 0 2 2Z"/></g>
+<text x="174" y="328" font-family="ui-monospace, 'SFMono-Regular', Menlo, monospace" font-size="12" fill="#737aa2" font-weight="400">~/.codex/skills</text>
+<text x="136" y="360" font-family="Inter, 'Segoe UI', system-ui, sans-serif" font-size="13" fill="#d5dcff" font-weight="400">Codex there has no MCP server github.</text>
+<text x="136" y="386" font-family="Inter, 'Segoe UI', system-ui, sans-serif" font-size="13" fill="#d5dcff" font-weight="600">Nothing was started.</text>
+<rect x="84" y="434" width="128" height="30" rx="6" fill="rgba(255,255,255,0.05)" stroke="#2f3549" />
+<g transform="translate(95,442.5) scale(0.5416666666666666)" fill="none" stroke="#d5dcff" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21.174 6.812a1 1 0 0 0-3.986-3.987L3.842 16.174a2 2 0 0 0-.5.83l-1.321 4.352a.5.5 0 0 0 .623.622l4.353-1.32a2 2 0 0 0 .83-.497z"/><path d="m15 5 4 4"/></g>
+<text x="114" y="453.68" font-family="Inter, 'Segoe UI', system-ui, sans-serif" font-size="13" fill="#d5dcff" font-weight="500">Edit profile</text>
+<rect x="222" y="434" width="172" height="30" rx="6" fill="rgba(255,255,255,0.05)" stroke="#2f3549" />
+<g transform="translate(233,442.5) scale(0.5416666666666666)" fill="none" stroke="#d5dcff" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21.42 10.922a1 1 0 0 0-.019-1.838L12.83 5.18a2 2 0 0 0-1.66 0L2.6 9.08a1 1 0 0 0 0 1.832l8.57 3.908a2 2 0 0 0 1.66 0z"/><path d="M22 10v6"/><path d="M6 12.5V16a6 3 0 0 0 12 0v-3.5"/></g>
+<text x="252" y="453.68" font-family="Inter, 'Segoe UI', system-ui, sans-serif" font-size="13" fill="#d5dcff" font-weight="500">Open Codex college</text>
+<rect x="404" y="434" width="179" height="30" rx="6" fill="rgba(255,255,255,0.05)" stroke="#2f3549" />
+<g transform="translate(415,442.5) scale(0.5416666666666666)" fill="none" stroke="#d5dcff" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 20a2 2 0 0 0 2-2V8a2 2 0 0 0-2-2h-7.9a2 2 0 0 1-1.69-.9L9.6 3.9A2 2 0 0 0 7.93 3H4a2 2 0 0 0-2 2v13a2 2 0 0 0 2 2Z"/></g>
+<text x="434" y="453.68" font-family="Inter, 'Segoe UI', system-ui, sans-serif" font-size="13" fill="#d5dcff" font-weight="500">Choose another room</text>
+<text x="84" y="500" font-family="Inter, 'Segoe UI', system-ui, sans-serif" font-size="12" fill="#737aa2" font-weight="400">No &quot;hire anyway&quot;: a hire gets everything its profile attaches, or nothing.</text>
+</svg>

@@ -1,0 +1,222 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1200" height="860" viewBox="0 0 1200 860">
+<rect x="0" y="0" width="1200" height="860" fill="#11121a" />
+<rect x="40" y="30" width="1120" height="800" rx="12" fill="#202331" stroke="#2f3549" />
+<g transform="translate(60,48) scale(0.8333333333333334)" fill="none" stroke="#7aa2f7" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21.42 10.922a1 1 0 0 0-.019-1.838L12.83 5.18a2 2 0 0 0-1.66 0L2.6 9.08a1 1 0 0 0 0 1.832l8.57 3.908a2 2 0 0 0 1.66 0z"/><path d="M22 10v6"/><path d="M6 12.5V16a6 3 0 0 0 12 0v-3.5"/></g>
+<text x="90" y="64" font-family="Inter, 'Segoe UI', system-ui, sans-serif" font-size="17" fill="#ffffff" font-weight="600">University</text>
+<g transform="translate(1122,50) scale(0.75)" fill="none" stroke="#737aa2" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M18 6 6 18"/><path d="m6 6 12 12"/></g>
+<rect x="213" y="44" width="82" height="28" rx="14" fill="rgba(122,162,247,0.18)" stroke="#7aa2f7" />
+<text x="225" y="63" font-family="Inter, 'Segoe UI', system-ui, sans-serif" font-size="13" fill="#7aa2f7" font-weight="600">Profiles</text>
+<text x="311" y="63" font-family="Inter, 'Segoe UI', system-ui, sans-serif" font-size="13" fill="#737aa2" font-weight="400">Colleges</text>
+<rect x="40" y="86" width="1120" height="1" fill="#2f3549" />
+<rect x="970" y="43" width="121" height="30" rx="6" fill="#7aa2f7" stroke="#7aa2f7" />
+<g transform="translate(981,51.5) scale(0.5416666666666666)" fill="none" stroke="#10131f" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12h14"/><path d="M12 5v14"/></g>
+<text x="1000" y="62.68" font-family="Inter, 'Segoe UI', system-ui, sans-serif" font-size="13" fill="#10131f" font-weight="600">New profile</text>
+<rect x="64" y="112" width="14" height="18" fill="#d9775a" stroke="#1c1722" stroke-width="2"/>
+<text x="88" y="126" font-family="Inter, 'Segoe UI', system-ui, sans-serif" font-size="14" fill="#ffffff" font-weight="600">Claude Code college</text>
+<text x="249" y="126" font-family="Inter, 'Segoe UI', system-ui, sans-serif" font-size="12" fill="#737aa2" font-weight="400">logged in on this computer and build-box.example.net</text>
+<rect x="64" y="142" width="528" height="168" rx="10" fill="#262a3b" stroke="#2f3549" />
+<rect x="86" y="158" width="24" height="3" fill="#1c1722" />
+<rect x="83" y="161" width="30" height="21" fill="#1c1722" />
+<rect x="83" y="182" width="30" height="18" fill="#1c1722" />
+<rect x="86" y="200" width="24" height="6" fill="#1c1722" />
+<rect x="89" y="164" width="18" height="15" fill="#c68a5c" />
+<rect x="86" y="161" width="24" height="6" fill="#2b2026" />
+<rect x="104" y="167" width="9" height="3" fill="#2b2026" />
+<rect x="92" y="170" width="3" height="3" fill="#1c1722" />
+<rect x="101" y="170" width="3" height="3" fill="#1c1722" />
+<rect x="86" y="182" width="24" height="12" fill="#e0b33c" />
+<rect x="86" y="194" width="24" height="6" fill="#2e3447" />
+<rect x="89" y="200" width="6" height="3" fill="#2e3447" />
+<rect x="101" y="200" width="6" height="3" fill="#2e3447" />
+<rect x="86" y="167" width="3" height="6" fill="#1c1722" />
+<rect x="107" y="167" width="3" height="6" fill="#1c1722" />
+<text x="128" y="174" font-family="Inter, 'Segoe UI', system-ui, sans-serif" font-size="15" fill="#ffffff" font-weight="600">Builder</text>
+<text x="128" y="194" font-family="Inter, 'Segoe UI', system-ui, sans-serif" font-size="12" fill="#737aa2" font-weight="400">Implements a mandate and opens a PR</text>
+<rect x="128" y="204" width="102" height="21" rx="10.5" fill="rgba(255,255,255,0.06)"/>
+<text x="136" y="217" font-family="Inter, 'Segoe UI', system-ui, sans-serif" font-size="11" fill="#d5dcff" font-weight="400">model: default</text>
+<rect x="236" y="204" width="90" height="21" rx="10.5" fill="rgba(255,255,255,0.06)"/>
+<text x="244" y="217" font-family="Inter, 'Segoe UI', system-ui, sans-serif" font-size="11" fill="#d5dcff" font-weight="400">effort: high</text>
+<rect x="332" y="204" width="90" height="21" rx="10.5" fill="rgba(255,255,255,0.06)"/>
+<text x="340" y="217" font-family="Inter, 'Segoe UI', system-ui, sans-serif" font-size="11" fill="#d5dcff" font-weight="400">accept edits</text>
+<rect x="128" y="232" width="80" height="21" rx="10.5" fill="rgba(122,162,247,0.18)"/>
+<g transform="translate(136,237) scale(0.4583333333333333)" fill="none" stroke="#7aa2f7" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M15.39 4.39a1 1 0 0 0 1.68-.474 2.5 2.5 0 1 1 3.014 3.015 1 1 0 0 0-.474 1.68l1.683 1.682a2.414 2.414 0 0 1 0 3.414L19.61 15.39a1 1 0 0 1-1.68-.474 2.5 2.5 0 1 0-3.014 3.015 1 1 0 0 1 .474 1.68l-1.683 1.682a2.414 2.414 0 0 1-3.414 0L8.61 19.61a1 1 0 0 0-1.68.474 2.5 2.5 0 1 1-3.014-3.015 1 1 0 0 0 .474-1.68l-1.683-1.682a2.414 2.414 0 0 1 0-3.414L4.39 8.61a1 1 0 0 1 1.68.474 2.5 2.5 0 1 0 3.014-3.015 1 1 0 0 1-.474-1.68l1.683-1.682a2.414 2.414 0 0 1 3.414 0z"/></g>
+<text x="151" y="245" font-family="Inter, 'Segoe UI', system-ui, sans-serif" font-size="11" fill="#7aa2f7" font-weight="400">2 skills</text>
+<rect x="214" y="232" width="105" height="21" rx="10.5" fill="rgba(122,162,247,0.18)"/>
+<g transform="translate(222,237) scale(0.4583333333333333)" fill="none" stroke="#7aa2f7" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 22v-5"/><path d="M15 8V2"/><path d="M17 8a1 1 0 0 1 1 1v4a4 4 0 0 1-4 4h-4a4 4 0 0 1-4-4V9a1 1 0 0 1 1-1z"/><path d="M9 8V2"/></g>
+<text x="237" y="245" font-family="Inter, 'Segoe UI', system-ui, sans-serif" font-size="11" fill="#7aa2f7" font-weight="400">1 MCP server</text>
+<rect x="80" y="266" width="67" height="28" rx="6" fill="#7aa2f7" stroke="#7aa2f7" />
+<g transform="translate(91,274) scale(0.5)" fill="none" stroke="#10131f" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><line x1="19" x2="19" y1="8" y2="14"/><line x1="22" x2="16" y1="11" y2="11"/></g>
+<text x="109" y="284.32" font-family="Inter, 'Segoe UI', system-ui, sans-serif" font-size="12" fill="#10131f" font-weight="600">Hire</text>
+<rect x="155" y="266" width="67" height="28" rx="6" fill="rgba(255,255,255,0.05)" stroke="#2f3549" />
+<g transform="translate(166,274) scale(0.5)" fill="none" stroke="#d5dcff" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21.174 6.812a1 1 0 0 0-3.986-3.987L3.842 16.174a2 2 0 0 0-.5.83l-1.321 4.352a.5.5 0 0 0 .623.622l4.353-1.32a2 2 0 0 0 .83-.497z"/><path d="m15 5 4 4"/></g>
+<text x="184" y="284.32" font-family="Inter, 'Segoe UI', system-ui, sans-serif" font-size="12" fill="#d5dcff" font-weight="500">Edit</text>
+<rect x="230" y="266" width="67" height="28" rx="6" fill="rgba(255,255,255,0.05)" stroke="#2f3549" />
+<g transform="translate(241,274) scale(0.5)" fill="none" stroke="#d5dcff" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect width="14" height="14" x="8" y="8" rx="2" ry="2"/><path d="M4 16c-1.1 0-2-.9-2-2V4c0-1.1.9-2 2-2h10c1.1 0 2 .9 2 2"/></g>
+<text x="259" y="284.32" font-family="Inter, 'Segoe UI', system-ui, sans-serif" font-size="12" fill="#d5dcff" font-weight="500">Copy</text>
+<rect x="305" y="266" width="80" height="28" rx="6" fill="rgba(255,255,255,0.05)" stroke="#2f3549" />
+<g transform="translate(316,274) scale(0.5)" fill="none" stroke="#d5dcff" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect width="20" height="5" x="2" y="3" rx="1"/><path d="M4 8v11a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8"/><path d="M10 12h4"/></g>
+<text x="334" y="284.32" font-family="Inter, 'Segoe UI', system-ui, sans-serif" font-size="12" fill="#d5dcff" font-weight="500">Retire</text>
+<text x="576" y="174" font-family="Inter, 'Segoe UI', system-ui, sans-serif" font-size="12" fill="#9ece6a" font-weight="400" text-anchor="end">Working now: builder-1 in api</text>
+<rect x="608" y="142" width="528" height="168" rx="10" fill="#262a3b" stroke="#2f3549" />
+<rect x="630" y="158" width="24" height="3" fill="#1c1722" />
+<rect x="627" y="161" width="30" height="21" fill="#1c1722" />
+<rect x="627" y="182" width="30" height="18" fill="#1c1722" />
+<rect x="630" y="200" width="24" height="6" fill="#1c1722" />
+<rect x="633" y="164" width="18" height="15" fill="#f2c9a0" />
+<rect x="636" y="158" width="12" height="3" fill="#d070b0" />
+<rect x="630" y="161" width="24" height="6" fill="#d070b0" />
+<rect x="636" y="170" width="3" height="3" fill="#1c1722" />
+<rect x="645" y="170" width="3" height="3" fill="#1c1722" />
+<rect x="630" y="182" width="24" height="12" fill="#3fa7a3" />
+<rect x="630" y="194" width="24" height="6" fill="#3b3247" />
+<rect x="633" y="200" width="6" height="3" fill="#3b3247" />
+<rect x="645" y="200" width="6" height="3" fill="#3b3247" />
+<text x="672" y="174" font-family="Inter, 'Segoe UI', system-ui, sans-serif" font-size="15" fill="#ffffff" font-weight="600">Designer</text>
+<text x="672" y="194" font-family="Inter, 'Segoe UI', system-ui, sans-serif" font-size="12" fill="#737aa2" font-weight="400">Sketches screens and art before building</text>
+<rect x="672" y="204" width="102" height="21" rx="10.5" fill="rgba(255,255,255,0.06)"/>
+<text x="680" y="217" font-family="Inter, 'Segoe UI', system-ui, sans-serif" font-size="11" fill="#d5dcff" font-weight="400">model: default</text>
+<rect x="780" y="204" width="102" height="21" rx="10.5" fill="rgba(255,255,255,0.06)"/>
+<text x="788" y="217" font-family="Inter, 'Segoe UI', system-ui, sans-serif" font-size="11" fill="#d5dcff" font-weight="400">effort: medium</text>
+<rect x="888" y="204" width="34" height="21" rx="10.5" fill="rgba(255,255,255,0.06)"/>
+<text x="896" y="217" font-family="Inter, 'Segoe UI', system-ui, sans-serif" font-size="11" fill="#d5dcff" font-weight="400">ask</text>
+<rect x="672" y="232" width="74" height="21" rx="10.5" fill="rgba(122,162,247,0.18)"/>
+<g transform="translate(680,237) scale(0.4583333333333333)" fill="none" stroke="#7aa2f7" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M15.39 4.39a1 1 0 0 0 1.68-.474 2.5 2.5 0 1 1 3.014 3.015 1 1 0 0 0-.474 1.68l1.683 1.682a2.414 2.414 0 0 1 0 3.414L19.61 15.39a1 1 0 0 1-1.68-.474 2.5 2.5 0 1 0-3.014 3.015 1 1 0 0 1 .474 1.68l-1.683 1.682a2.414 2.414 0 0 1-3.414 0L8.61 19.61a1 1 0 0 0-1.68.474 2.5 2.5 0 1 1-3.014-3.015 1 1 0 0 0 .474-1.68l-1.683-1.682a2.414 2.414 0 0 1 0-3.414L4.39 8.61a1 1 0 0 1 1.68.474 2.5 2.5 0 1 0 3.014-3.015 1 1 0 0 1-.474-1.68l1.683-1.682a2.414 2.414 0 0 1 3.414 0z"/></g>
+<text x="695" y="245" font-family="Inter, 'Segoe UI', system-ui, sans-serif" font-size="11" fill="#7aa2f7" font-weight="400">1 skill</text>
+<rect x="752" y="232" width="111" height="21" rx="10.5" fill="rgba(122,162,247,0.18)"/>
+<g transform="translate(760,237) scale(0.4583333333333333)" fill="none" stroke="#7aa2f7" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 22v-5"/><path d="M15 8V2"/><path d="M17 8a1 1 0 0 1 1 1v4a4 4 0 0 1-4 4h-4a4 4 0 0 1-4-4V9a1 1 0 0 1 1-1z"/><path d="M9 8V2"/></g>
+<text x="775" y="245" font-family="Inter, 'Segoe UI', system-ui, sans-serif" font-size="11" fill="#7aa2f7" font-weight="400">0 MCP servers</text>
+<rect x="624" y="266" width="67" height="28" rx="6" fill="#7aa2f7" stroke="#7aa2f7" />
+<g transform="translate(635,274) scale(0.5)" fill="none" stroke="#10131f" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><line x1="19" x2="19" y1="8" y2="14"/><line x1="22" x2="16" y1="11" y2="11"/></g>
+<text x="653" y="284.32" font-family="Inter, 'Segoe UI', system-ui, sans-serif" font-size="12" fill="#10131f" font-weight="600">Hire</text>
+<rect x="699" y="266" width="67" height="28" rx="6" fill="rgba(255,255,255,0.05)" stroke="#2f3549" />
+<g transform="translate(710,274) scale(0.5)" fill="none" stroke="#d5dcff" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21.174 6.812a1 1 0 0 0-3.986-3.987L3.842 16.174a2 2 0 0 0-.5.83l-1.321 4.352a.5.5 0 0 0 .623.622l4.353-1.32a2 2 0 0 0 .83-.497z"/><path d="m15 5 4 4"/></g>
+<text x="728" y="284.32" font-family="Inter, 'Segoe UI', system-ui, sans-serif" font-size="12" fill="#d5dcff" font-weight="500">Edit</text>
+<rect x="774" y="266" width="67" height="28" rx="6" fill="rgba(255,255,255,0.05)" stroke="#2f3549" />
+<g transform="translate(785,274) scale(0.5)" fill="none" stroke="#d5dcff" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect width="14" height="14" x="8" y="8" rx="2" ry="2"/><path d="M4 16c-1.1 0-2-.9-2-2V4c0-1.1.9-2 2-2h10c1.1 0 2 .9 2 2"/></g>
+<text x="803" y="284.32" font-family="Inter, 'Segoe UI', system-ui, sans-serif" font-size="12" fill="#d5dcff" font-weight="500">Copy</text>
+<rect x="849" y="266" width="80" height="28" rx="6" fill="rgba(255,255,255,0.05)" stroke="#2f3549" />
+<g transform="translate(860,274) scale(0.5)" fill="none" stroke="#d5dcff" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect width="20" height="5" x="2" y="3" rx="1"/><path d="M4 8v11a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8"/><path d="M10 12h4"/></g>
+<text x="878" y="284.32" font-family="Inter, 'Segoe UI', system-ui, sans-serif" font-size="12" fill="#d5dcff" font-weight="500">Retire</text>
+<rect x="64" y="342" width="14" height="18" fill="#3f6fb4" stroke="#1c1722" stroke-width="2"/>
+<text x="88" y="356" font-family="Inter, 'Segoe UI', system-ui, sans-serif" font-size="14" fill="#ffffff" font-weight="600">Codex college</text>
+<text x="202" y="356" font-family="Inter, 'Segoe UI', system-ui, sans-serif" font-size="12" fill="#737aa2" font-weight="400">logged in on this computer · Log in on build-box.example.net</text>
+<rect x="64" y="372" width="528" height="168" rx="10" fill="#262a3b" stroke="#2f3549" />
+<rect x="86" y="388" width="24" height="3" fill="#1c1722" />
+<rect x="83" y="391" width="30" height="21" fill="#1c1722" />
+<rect x="83" y="412" width="30" height="18" fill="#1c1722" />
+<rect x="86" y="430" width="24" height="6" fill="#1c1722" />
+<rect x="89" y="394" width="18" height="15" fill="#e3ad80" />
+<rect x="86" y="391" width="24" height="6" fill="#ece4da" />
+<rect x="92" y="400" width="3" height="3" fill="#1c1722" />
+<rect x="101" y="400" width="3" height="3" fill="#1c1722" />
+<rect x="89" y="400" width="18" height="3" fill="#1c1722" />
+<rect x="86" y="412" width="24" height="12" fill="#f1efe6" />
+<rect x="86" y="424" width="24" height="6" fill="#30404a" />
+<rect x="89" y="430" width="6" height="3" fill="#30404a" />
+<rect x="101" y="430" width="6" height="3" fill="#30404a" />
+<text x="128" y="404" font-family="Inter, 'Segoe UI', system-ui, sans-serif" font-size="15" fill="#ffffff" font-weight="600">Reviewer</text>
+<text x="128" y="424" font-family="Inter, 'Segoe UI', system-ui, sans-serif" font-size="12" fill="#737aa2" font-weight="400">Reviews a PR for correctness and security</text>
+<rect x="128" y="434" width="102" height="21" rx="10.5" fill="rgba(255,255,255,0.06)"/>
+<text x="136" y="447" font-family="Inter, 'Segoe UI', system-ui, sans-serif" font-size="11" fill="#d5dcff" font-weight="400">model: default</text>
+<rect x="236" y="434" width="90" height="21" rx="10.5" fill="rgba(255,255,255,0.06)"/>
+<text x="244" y="447" font-family="Inter, 'Segoe UI', system-ui, sans-serif" font-size="11" fill="#d5dcff" font-weight="400">effort: high</text>
+<rect x="332" y="434" width="78" height="21" rx="10.5" fill="rgba(255,255,255,0.06)"/>
+<text x="340" y="447" font-family="Inter, 'Segoe UI', system-ui, sans-serif" font-size="11" fill="#d5dcff" font-weight="400">on request</text>
+<rect x="128" y="462" width="80" height="21" rx="10.5" fill="rgba(122,162,247,0.18)"/>
+<g transform="translate(136,467) scale(0.4583333333333333)" fill="none" stroke="#7aa2f7" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M15.39 4.39a1 1 0 0 0 1.68-.474 2.5 2.5 0 1 1 3.014 3.015 1 1 0 0 0-.474 1.68l1.683 1.682a2.414 2.414 0 0 1 0 3.414L19.61 15.39a1 1 0 0 1-1.68-.474 2.5 2.5 0 1 0-3.014 3.015 1 1 0 0 1 .474 1.68l-1.683 1.682a2.414 2.414 0 0 1-3.414 0L8.61 19.61a1 1 0 0 0-1.68.474 2.5 2.5 0 1 1-3.014-3.015 1 1 0 0 0 .474-1.68l-1.683-1.682a2.414 2.414 0 0 1 0-3.414L4.39 8.61a1 1 0 0 1 1.68.474 2.5 2.5 0 1 0 3.014-3.015 1 1 0 0 1-.474-1.68l1.683-1.682a2.414 2.414 0 0 1 3.414 0z"/></g>
+<text x="151" y="475" font-family="Inter, 'Segoe UI', system-ui, sans-serif" font-size="11" fill="#7aa2f7" font-weight="400">2 skills</text>
+<rect x="214" y="462" width="105" height="21" rx="10.5" fill="rgba(122,162,247,0.18)"/>
+<g transform="translate(222,467) scale(0.4583333333333333)" fill="none" stroke="#7aa2f7" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 22v-5"/><path d="M15 8V2"/><path d="M17 8a1 1 0 0 1 1 1v4a4 4 0 0 1-4 4h-4a4 4 0 0 1-4-4V9a1 1 0 0 1 1-1z"/><path d="M9 8V2"/></g>
+<text x="237" y="475" font-family="Inter, 'Segoe UI', system-ui, sans-serif" font-size="11" fill="#7aa2f7" font-weight="400">1 MCP server</text>
+<rect x="325" y="462" width="154" height="21" rx="10.5" fill="rgba(224,175,104,0.16)"/>
+<g transform="translate(333,467) scale(0.4583333333333333)" fill="none" stroke="#e0af68" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m21.73 18-8-14a2 2 0 0 0-3.48 0l-8 14A2 2 0 0 0 4 21h16a2 2 0 0 0 1.73-3"/><path d="M12 9v4"/><path d="M12 17h.01"/></g>
+<text x="348" y="475" font-family="Inter, 'Segoe UI', system-ui, sans-serif" font-size="11" fill="#e0af68" font-weight="400">Missing on build-box</text>
+<rect x="80" y="496" width="67" height="28" rx="6" fill="#7aa2f7" stroke="#7aa2f7" />
+<g transform="translate(91,504) scale(0.5)" fill="none" stroke="#10131f" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><line x1="19" x2="19" y1="8" y2="14"/><line x1="22" x2="16" y1="11" y2="11"/></g>
+<text x="109" y="514.32" font-family="Inter, 'Segoe UI', system-ui, sans-serif" font-size="12" fill="#10131f" font-weight="600">Hire</text>
+<rect x="155" y="496" width="67" height="28" rx="6" fill="rgba(255,255,255,0.05)" stroke="#2f3549" />
+<g transform="translate(166,504) scale(0.5)" fill="none" stroke="#d5dcff" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21.174 6.812a1 1 0 0 0-3.986-3.987L3.842 16.174a2 2 0 0 0-.5.83l-1.321 4.352a.5.5 0 0 0 .623.622l4.353-1.32a2 2 0 0 0 .83-.497z"/><path d="m15 5 4 4"/></g>
+<text x="184" y="514.32" font-family="Inter, 'Segoe UI', system-ui, sans-serif" font-size="12" fill="#d5dcff" font-weight="500">Edit</text>
+<rect x="230" y="496" width="67" height="28" rx="6" fill="rgba(255,255,255,0.05)" stroke="#2f3549" />
+<g transform="translate(241,504) scale(0.5)" fill="none" stroke="#d5dcff" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect width="14" height="14" x="8" y="8" rx="2" ry="2"/><path d="M4 16c-1.1 0-2-.9-2-2V4c0-1.1.9-2 2-2h10c1.1 0 2 .9 2 2"/></g>
+<text x="259" y="514.32" font-family="Inter, 'Segoe UI', system-ui, sans-serif" font-size="12" fill="#d5dcff" font-weight="500">Copy</text>
+<rect x="305" y="496" width="80" height="28" rx="6" fill="rgba(255,255,255,0.05)" stroke="#2f3549" />
+<g transform="translate(316,504) scale(0.5)" fill="none" stroke="#d5dcff" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect width="20" height="5" x="2" y="3" rx="1"/><path d="M4 8v11a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8"/><path d="M10 12h4"/></g>
+<text x="334" y="514.32" font-family="Inter, 'Segoe UI', system-ui, sans-serif" font-size="12" fill="#d5dcff" font-weight="500">Retire</text>
+<text x="576" y="404" font-family="Inter, 'Segoe UI', system-ui, sans-serif" font-size="12" fill="#9ece6a" font-weight="400" text-anchor="end">Working now: reviewer-2 in api</text>
+<rect x="608" y="372" width="528" height="168" rx="10" fill="#262a3b" stroke="#2f3549" />
+<rect x="630" y="388" width="24" height="3" fill="#1c1722" />
+<rect x="627" y="391" width="30" height="21" fill="#1c1722" />
+<rect x="627" y="412" width="30" height="18" fill="#1c1722" />
+<rect x="630" y="430" width="24" height="6" fill="#1c1722" />
+<rect x="633" y="394" width="18" height="15" fill="#f7d9bb" />
+<rect x="630" y="391" width="24" height="6" fill="#3d4f8f" />
+<rect x="630" y="397" width="3" height="15" fill="#3d4f8f" />
+<rect x="651" y="397" width="3" height="15" fill="#3d4f8f" />
+<rect x="636" y="400" width="3" height="3" fill="#1c1722" />
+<rect x="645" y="400" width="3" height="3" fill="#1c1722" />
+<rect x="630" y="412" width="24" height="12" fill="#9b6ad6" />
+<rect x="630" y="424" width="24" height="6" fill="#4a3b2f" />
+<rect x="633" y="430" width="6" height="3" fill="#4a3b2f" />
+<rect x="645" y="430" width="6" height="3" fill="#4a3b2f" />
+<text x="672" y="404" font-family="Inter, 'Segoe UI', system-ui, sans-serif" font-size="15" fill="#ffffff" font-weight="600">Researcher</text>
+<text x="672" y="424" font-family="Inter, 'Segoe UI', system-ui, sans-serif" font-size="12" fill="#737aa2" font-weight="400">Reads code and upstream issues, writes notes</text>
+<rect x="672" y="434" width="102" height="21" rx="10.5" fill="rgba(255,255,255,0.06)"/>
+<text x="680" y="447" font-family="Inter, 'Segoe UI', system-ui, sans-serif" font-size="11" fill="#d5dcff" font-weight="400">model: default</text>
+<rect x="780" y="434" width="102" height="21" rx="10.5" fill="rgba(255,255,255,0.06)"/>
+<text x="788" y="447" font-family="Inter, 'Segoe UI', system-ui, sans-serif" font-size="11" fill="#d5dcff" font-weight="400">effort: medium</text>
+<rect x="888" y="434" width="78" height="21" rx="10.5" fill="rgba(255,255,255,0.06)"/>
+<text x="896" y="447" font-family="Inter, 'Segoe UI', system-ui, sans-serif" font-size="11" fill="#d5dcff" font-weight="400">on request</text>
+<rect x="672" y="462" width="74" height="21" rx="10.5" fill="rgba(122,162,247,0.18)"/>
+<g transform="translate(680,467) scale(0.4583333333333333)" fill="none" stroke="#7aa2f7" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M15.39 4.39a1 1 0 0 0 1.68-.474 2.5 2.5 0 1 1 3.014 3.015 1 1 0 0 0-.474 1.68l1.683 1.682a2.414 2.414 0 0 1 0 3.414L19.61 15.39a1 1 0 0 1-1.68-.474 2.5 2.5 0 1 0-3.014 3.015 1 1 0 0 1 .474 1.68l-1.683 1.682a2.414 2.414 0 0 1-3.414 0L8.61 19.61a1 1 0 0 0-1.68.474 2.5 2.5 0 1 1-3.014-3.015 1 1 0 0 0 .474-1.68l-1.683-1.682a2.414 2.414 0 0 1 0-3.414L4.39 8.61a1 1 0 0 1 1.68.474 2.5 2.5 0 1 0 3.014-3.015 1 1 0 0 1-.474-1.68l1.683-1.682a2.414 2.414 0 0 1 3.414 0z"/></g>
+<text x="695" y="475" font-family="Inter, 'Segoe UI', system-ui, sans-serif" font-size="11" fill="#7aa2f7" font-weight="400">1 skill</text>
+<rect x="752" y="462" width="111" height="21" rx="10.5" fill="rgba(122,162,247,0.18)"/>
+<g transform="translate(760,467) scale(0.4583333333333333)" fill="none" stroke="#7aa2f7" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 22v-5"/><path d="M15 8V2"/><path d="M17 8a1 1 0 0 1 1 1v4a4 4 0 0 1-4 4h-4a4 4 0 0 1-4-4V9a1 1 0 0 1 1-1z"/><path d="M9 8V2"/></g>
+<text x="775" y="475" font-family="Inter, 'Segoe UI', system-ui, sans-serif" font-size="11" fill="#7aa2f7" font-weight="400">2 MCP servers</text>
+<rect x="624" y="496" width="67" height="28" rx="6" fill="#7aa2f7" stroke="#7aa2f7" />
+<g transform="translate(635,504) scale(0.5)" fill="none" stroke="#10131f" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><line x1="19" x2="19" y1="8" y2="14"/><line x1="22" x2="16" y1="11" y2="11"/></g>
+<text x="653" y="514.32" font-family="Inter, 'Segoe UI', system-ui, sans-serif" font-size="12" fill="#10131f" font-weight="600">Hire</text>
+<rect x="699" y="496" width="67" height="28" rx="6" fill="rgba(255,255,255,0.05)" stroke="#2f3549" />
+<g transform="translate(710,504) scale(0.5)" fill="none" stroke="#d5dcff" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21.174 6.812a1 1 0 0 0-3.986-3.987L3.842 16.174a2 2 0 0 0-.5.83l-1.321 4.352a.5.5 0 0 0 .623.622l4.353-1.32a2 2 0 0 0 .83-.497z"/><path d="m15 5 4 4"/></g>
+<text x="728" y="514.32" font-family="Inter, 'Segoe UI', system-ui, sans-serif" font-size="12" fill="#d5dcff" font-weight="500">Edit</text>
+<rect x="774" y="496" width="67" height="28" rx="6" fill="rgba(255,255,255,0.05)" stroke="#2f3549" />
+<g transform="translate(785,504) scale(0.5)" fill="none" stroke="#d5dcff" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect width="14" height="14" x="8" y="8" rx="2" ry="2"/><path d="M4 16c-1.1 0-2-.9-2-2V4c0-1.1.9-2 2-2h10c1.1 0 2 .9 2 2"/></g>
+<text x="803" y="514.32" font-family="Inter, 'Segoe UI', system-ui, sans-serif" font-size="12" fill="#d5dcff" font-weight="500">Copy</text>
+<rect x="849" y="496" width="80" height="28" rx="6" fill="rgba(255,255,255,0.05)" stroke="#2f3549" />
+<g transform="translate(860,504) scale(0.5)" fill="none" stroke="#d5dcff" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect width="20" height="5" x="2" y="3" rx="1"/><path d="M4 8v11a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8"/><path d="M10 12h4"/></g>
+<text x="878" y="514.32" font-family="Inter, 'Segoe UI', system-ui, sans-serif" font-size="12" fill="#d5dcff" font-weight="500">Retire</text>
+<rect x="64" y="572" width="14" height="18" fill="#8a93b8" stroke="#1c1722" stroke-width="2"/>
+<text x="88" y="586" font-family="Inter, 'Segoe UI', system-ui, sans-serif" font-size="14" fill="#ffffff" font-weight="600">Pi college</text>
+<text x="178" y="586" font-family="Inter, 'Segoe UI', system-ui, sans-serif" font-size="12" fill="#737aa2" font-weight="400">Role only: World can't attach skills or MCP servers to this harness yet</text>
+<rect x="64" y="602" width="1072" height="56" rx="10" fill="#262a3b" stroke="#2f3549" />
+<text x="84" y="636" font-family="Inter, 'Segoe UI', system-ui, sans-serif" font-size="13" fill="#737aa2" font-weight="400">No profiles yet.</text>
+<rect x="200" y="616" width="134" height="28" rx="6" fill="rgba(255,255,255,0.05)" stroke="#2f3549" />
+<g transform="translate(211,624) scale(0.5)" fill="none" stroke="#d5dcff" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12h14"/><path d="M12 5v14"/></g>
+<text x="229" y="634.32" font-family="Inter, 'Segoe UI', system-ui, sans-serif" font-size="12" fill="#d5dcff" font-weight="500">New Pi profile</text>
+<rect x="64" y="690" width="1072" height="1" fill="#2f3549" />
+<g transform="translate(64,710) scale(0.6666666666666666)" fill="none" stroke="#737aa2" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m6 9 6 6 6-6"/></g>
+<g transform="translate(86,710) scale(0.6666666666666666)" fill="none" stroke="#737aa2" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect width="20" height="5" x="2" y="3" rx="1"/><path d="M4 8v11a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8"/><path d="M10 12h4"/></g>
+<text x="110" y="724" font-family="Inter, 'Segoe UI', system-ui, sans-serif" font-size="13" fill="#d5dcff" font-weight="600">Retired (1)</text>
+<rect x="64" y="742" width="1072" height="60" rx="10" fill="#1a1b26" stroke="#2f3549" />
+<rect x="85.2" y="750" width="20.8" height="2.6" fill="#1c1722" />
+<rect x="82.6" y="752.6" width="26" height="18.2" fill="#1c1722" />
+<rect x="82.6" y="770.8" width="26" height="15.600000000000001" fill="#1c1722" />
+<rect x="85.2" y="786.4" width="20.8" height="5.2" fill="#1c1722" />
+<rect x="87.8" y="755.2" width="15.600000000000001" height="13" fill="#8d5a3b" />
+<rect x="85.2" y="752.6" width="20.8" height="5.2" fill="#5a3825" />
+<rect x="90.4" y="760.4" width="2.6" height="2.6" fill="#1c1722" />
+<rect x="98.2" y="760.4" width="2.6" height="2.6" fill="#1c1722" />
+<rect x="85.2" y="770.8" width="20.8" height="10.4" fill="#2e3447" />
+<rect x="85.2" y="781.2" width="20.8" height="5.2" fill="#2e3447" />
+<rect x="87.8" y="786.4" width="5.2" height="2.6" fill="#2e3447" />
+<rect x="98.2" y="786.4" width="5.2" height="2.6" fill="#2e3447" />
+<rect x="98.2" y="773.4" width="2.6" height="2.6" fill="#e8c75a" />
+<text x="124" y="770" font-family="Inter, 'Segoe UI', system-ui, sans-serif" font-size="14" fill="#737aa2" font-weight="600">Old reviewer</text>
+<text x="124" y="788" font-family="Inter, 'Segoe UI', system-ui, sans-serif" font-size="12" fill="#737aa2" font-weight="400">Codex · version 6 · offered by no launcher</text>
+<rect x="900" y="756" width="87" height="28" rx="6" fill="rgba(255,255,255,0.05)" stroke="#2f3549" />
+<g transform="translate(911,764) scale(0.5)" fill="none" stroke="#d5dcff" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8"/><path d="M3 3v5h5"/></g>
+<text x="929" y="774.32" font-family="Inter, 'Segoe UI', system-ui, sans-serif" font-size="12" fill="#d5dcff" font-weight="500">Restore</text>
+<rect x="995" y="756" width="80" height="28" rx="6" fill="rgba(255,255,255,0.05)" stroke="rgba(247,118,142,0.5)" />
+<g transform="translate(1006,764) scale(0.5)" fill="none" stroke="#f7768e" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M10 11v6"/><path d="M14 11v6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6"/><path d="M3 6h18"/><path d="M8 6V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/></g>
+<text x="1024" y="774.32" font-family="Inter, 'Segoe UI', system-ui, sans-serif" font-size="12" fill="#f7768e" font-weight="500">Delete</text>
+</svg>
