@@ -51,8 +51,7 @@ model, effort and permission choices World offers for it.
   server's name, transport, scope and enabled state SHALL leave the host; the
   catalog SHALL NOT be stored; a failed read SHALL show the last result as stale
   and SHALL NOT be used to admit a hire; Windows hosts SHALL report not checked;
-  a harness without a launch mapping SHALL say that World cannot attach skills
-  or MCP servers to it
+  World SHALL read a catalog only for a capability its college supports
 
 #### Scenario: A skill only Codex can see
 
@@ -66,6 +65,39 @@ model, effort and permission choices World offers for it.
   its environment
 - **THEN** the college shows only the server's name, transport, scope and
   enabled state, and neither the service nor any browser receives the token
+
+### Requirement: College attachment states
+
+Every harness World supports SHALL have a college, and each college SHALL give
+its skills, its MCP servers and its registry one state: supported, planned or
+not built, each with its reason and the harness documentation it rests on.
+
+#### Scenario: College attachment states acceptance rules
+
+- **WHEN** World presents a college or a profile in it
+- **THEN** the colleges SHALL cover the harnesses World reads conversations
+  from and every harness in World's integration list, and a kind a host
+  reports without World integration SHALL be not built with that reason; a
+  capability SHALL be supported only when the harness has a per-launch option
+  that attaches the set without editing user or repository configuration or
+  replacing the harness's home folder, and only after an isolated check of
+  that option has passed; a capability whose check fails SHALL be planned
+  with the failure as its reason; the college and editor SHALL show a planned
+  or not built capability's reason and SHALL NOT offer it for attaching; no
+  registry SHALL be browsed or installed from
+
+#### Scenario: A harness with no per-launch MCP option
+
+- **WHEN** the user opens the Antigravity college
+- **THEN** its MCP servers are marked not built with the reason that
+  Antigravity reads MCP servers only from its global or workspace
+  configuration file, and its profiles offer no MCP servers
+
+#### Scenario: A profile holds a skill its college cannot attach
+
+- **WHEN** the user hires a Muse profile that still lists the skill `pdf`
+- **THEN** World starts nothing, says that World cannot attach skills to Muse
+  and why, and offers Edit profile
 
 ### Requirement: Skills and MCP servers attached at launch
 
@@ -81,12 +113,19 @@ harness configuration.
   connection and generation; if any attached item is missing or the host cannot
   be checked, it SHALL refuse before creating a tab, naming each missing item
   and the folders or configuration it looked in, and SHALL offer Edit profile,
-  the college and another room but no partial hire; for Claude Code it SHALL
-  pass the attached skills in the inline subagent definition and the attached
-  MCP servers with `--mcp-config` and `--strict-mcp-config`; for Codex it SHALL
-  enable the attached MCP servers and disable every other catalogued server
-  with per-launch configuration overrides, and name the attached skills in its
-  developer instructions; any per-launch file World writes SHALL be on the
+  the college and another room but no partial hire; it SHALL also refuse a
+  profile that holds a skill or MCP server its college does not support; for
+  Claude Code it SHALL pass the attached skills in the inline subagent
+  definition and the attached MCP servers with `--mcp-config` and
+  `--strict-mcp-config`; for Codex it SHALL enable and require the attached
+  MCP servers, disable every other catalogued server, and disable every
+  catalogued skill that is neither attached nor World's own, all with
+  per-launch configuration overrides; for Kimi Code it SHALL pass a
+  per-launch skills folder holding only the attached skills and World's own;
+  for Pi it SHALL pass `--no-skills` and each attached skill's path; for omp it
+  SHALL pass the attached skills' exact names with `--skills`; World SHALL NOT
+  name a skill or MCP server in a first prompt or in developer instructions in
+  place of attaching it; any per-launch file World writes SHALL be on the
   agent's host, owner-only, outside the harness's own configuration files
   except a World-named marked file, and removed when its terminal ends; MCP
   definitions SHALL NOT pass through the World service or a browser
@@ -97,6 +136,14 @@ harness configuration.
   into a room on a host whose Codex has no `github` server
 - **THEN** World starts nothing and says that Codex on that host has no MCP
   server `github`
+
+#### Scenario: Codex agent gets only its skills
+
+- **WHEN** the user hires a Codex profile attaching `code-review` on a host
+  whose Codex also sees the skills `pdf` and `release-notes`
+- **THEN** Codex starts with `pdf` and `release-notes` disabled for that
+  launch, `code-review` and World's own skill enabled, no skill named in its
+  developer instructions, and the user's Codex configuration unchanged
 
 #### Scenario: Claude agent gets only its MCP servers
 
@@ -116,7 +163,7 @@ given and show it for as long as the agent's terminal lives.
   Inspector, the University or `herdr-world profile show`
 - **THEN** World SHALL show the profile's ID, name and version; the harness
   options passed; each attached skill and MCP server with its origin and
-  whether it was the only set, loaded at start, or available and named; the
+  whether it was the only set or loaded at start; the
   other skills and MCP servers the harness could still find on that host; and
   the host, room and time; the record SHALL end with the terminal; a later edit,
   retire or delete of the profile SHALL NOT change it

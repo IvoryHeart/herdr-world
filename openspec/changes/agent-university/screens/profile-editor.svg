@@ -104,12 +104,12 @@
 <text x="516" y="660" font-family="Inter, 'Segoe UI', system-ui, sans-serif" font-size="12" fill="#737aa2" font-weight="400">MCP servers</text>
 <text x="650" y="660" font-family="Inter, 'Segoe UI', system-ui, sans-serif" font-size="12" fill="#d5dcff" font-weight="400">only these: github</text>
 <text x="516" y="682" font-family="Inter, 'Segoe UI', system-ui, sans-serif" font-size="12" fill="#737aa2" font-weight="400">Skills</text>
-<text x="650" y="682" font-family="Inter, 'Segoe UI', system-ui, sans-serif" font-size="12" fill="#d5dcff" font-weight="400">available and named: code-review, release-notes</text>
-<text x="516" y="704" font-family="Inter, 'Segoe UI', system-ui, sans-serif" font-size="12" fill="#737aa2" font-weight="400">Also on this host</text>
-<text x="650" y="704" font-family="Inter, 'Segoe UI', system-ui, sans-serif" font-size="12" fill="#d5dcff" font-weight="400">skills openspec-explore, pdf · MCP servers none</text>
+<text x="650" y="682" font-family="Inter, 'Segoe UI', system-ui, sans-serif" font-size="12" fill="#d5dcff" font-weight="400">only these: code-review, release-notes</text>
+<text x="516" y="704" font-family="Inter, 'Segoe UI', system-ui, sans-serif" font-size="12" fill="#737aa2" font-weight="400">Off for this launch</text>
+<text x="650" y="704" font-family="Inter, 'Segoe UI', system-ui, sans-serif" font-size="12" fill="#d5dcff" font-weight="400">skills openspec-explore, pdf · MCP servers linear, docs</text>
 <rect x="516" y="730" width="604" height="52" rx="6" fill="#1a1b26" stroke="#2f3549" />
 <text x="528" y="751" font-family="ui-monospace, 'SFMono-Regular', Menlo, monospace" font-size="11.5" fill="#d5dcff" font-weight="400">codex -a on-request -s workspace-write -c model_reasoning_effort=high</text>
-<text x="528" y="769" font-family="ui-monospace, 'SFMono-Regular', Menlo, monospace" font-size="11.5" fill="#d5dcff" font-weight="400">  -c mcp_servers.github.enabled=true -c developer_instructions=…</text>
+<text x="528" y="769" font-family="ui-monospace, 'SFMono-Regular', Menlo, monospace" font-size="11.5" fill="#d5dcff" font-weight="400">  -c mcp_servers.github.enabled=true -c skills.config='[…]' …</text>
 <rect x="64" y="816" width="146" height="30" rx="6" fill="#7aa2f7" stroke="#7aa2f7" />
 <text x="75" y="835.68" font-family="Inter, 'Segoe UI', system-ui, sans-serif" font-size="13" fill="#10131f" font-weight="600">Save as version 4</text>
 <rect x="226" y="816" width="66" height="30" rx="6" fill="rgba(255,255,255,0.05)" stroke="#2f3549" />

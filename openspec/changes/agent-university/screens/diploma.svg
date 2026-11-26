@@ -40,12 +40,12 @@
 <text x="876" y="478" font-family="Inter, 'Segoe UI', system-ui, sans-serif" font-size="12" fill="#3f6fb4" font-weight="600" text-anchor="end">only these</text>
 <text x="124" y="504" font-family="ui-monospace, 'SFMono-Regular', Menlo, monospace" font-size="13" fill="#2b2440" font-weight="400">skill code-review</text>
 <text x="364" y="504" font-family="Inter, 'Segoe UI', system-ui, sans-serif" font-size="12" fill="#6e6584" font-weight="400">user · ~/.agents/skills</text>
-<text x="876" y="504" font-family="Inter, 'Segoe UI', system-ui, sans-serif" font-size="12" fill="#3f6fb4" font-weight="600" text-anchor="end">available and named</text>
+<text x="876" y="504" font-family="Inter, 'Segoe UI', system-ui, sans-serif" font-size="12" fill="#3f6fb4" font-weight="600" text-anchor="end">only these</text>
 <text x="124" y="530" font-family="ui-monospace, 'SFMono-Regular', Menlo, monospace" font-size="13" fill="#2b2440" font-weight="400">skill release-notes</text>
 <text x="364" y="530" font-family="Inter, 'Segoe UI', system-ui, sans-serif" font-size="12" fill="#6e6584" font-weight="400">repository · .agents/skills</text>
-<text x="876" y="530" font-family="Inter, 'Segoe UI', system-ui, sans-serif" font-size="12" fill="#3f6fb4" font-weight="600" text-anchor="end">available and named</text>
-<text x="124" y="582" font-family="Inter, 'Segoe UI', system-ui, sans-serif" font-size="14" fill="#2b2440" font-weight="700">Also on this host</text>
-<text x="124" y="608" font-family="Inter, 'Segoe UI', system-ui, sans-serif" font-size="13" fill="#6e6584" font-weight="400">skill pdf (user) · no other MCP servers (only github was given)</text>
+<text x="876" y="530" font-family="Inter, 'Segoe UI', system-ui, sans-serif" font-size="12" fill="#3f6fb4" font-weight="600" text-anchor="end">only these</text>
+<text x="124" y="582" font-family="Inter, 'Segoe UI', system-ui, sans-serif" font-size="14" fill="#2b2440" font-weight="700">Off for this launch</text>
+<text x="124" y="608" font-family="Inter, 'Segoe UI', system-ui, sans-serif" font-size="13" fill="#6e6584" font-weight="400">skill pdf (user) disabled · no other MCP servers found (only github was given)</text>
 <rect x="124" y="630" width="752" height="1" fill="#d9b27a" />
 <text x="124" y="658" font-family="Inter, 'Segoe UI', system-ui, sans-serif" font-size="13" fill="#2b2440" font-weight="400">Reviewer is now version 4. What changed: effort high → medium.</text>
 <text x="124" y="678" font-family="Inter, 'Segoe UI', system-ui, sans-serif" font-size="12" fill="#6e6584" font-weight="400">This agent keeps what it was hired with.</text>

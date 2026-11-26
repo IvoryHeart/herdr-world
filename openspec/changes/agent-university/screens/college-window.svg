@@ -35,6 +35,7 @@
 <text x="76" y="391" font-family="Inter, 'Segoe UI', system-ui, sans-serif" font-size="13" fill="#d5dcff" font-weight="400">api  ·  this computer</text>
 <g transform="translate(558,378) scale(0.6666666666666666)" fill="none" stroke="#737aa2" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m6 9 6 6 6-6"/></g>
 <text x="64" y="442" font-family="Inter, 'Segoe UI', system-ui, sans-serif" font-size="14" fill="#ffffff" font-weight="600">Skills</text>
+<text x="116" y="442" font-family="Inter, 'Segoe UI', system-ui, sans-serif" font-size="12" fill="#737aa2" font-weight="400">supported · only these · disabled per launch with -c skills.config</text>
 <text x="64" y="470" font-family="ui-monospace, 'SFMono-Regular', Menlo, monospace" font-size="13" fill="#d5dcff" font-weight="400">code-review</text>
 <text x="264" y="470" font-family="Inter, 'Segoe UI', system-ui, sans-serif" font-size="12" fill="#737aa2" font-weight="400">user · ~/.agents/skills</text>
 <text x="64" y="494" font-family="ui-monospace, 'SFMono-Regular', Menlo, monospace" font-size="13" fill="#d5dcff" font-weight="400">pdf</text>
@@ -44,7 +45,7 @@
 <text x="64" y="542" font-family="ui-monospace, 'SFMono-Regular', Menlo, monospace" font-size="13" fill="#d5dcff" font-weight="400">openspec-explore</text>
 <text x="264" y="542" font-family="Inter, 'Segoe UI', system-ui, sans-serif" font-size="12" fill="#737aa2" font-weight="400">repository · .agents/skills</text>
 <text x="64" y="590" font-family="Inter, 'Segoe UI', system-ui, sans-serif" font-size="14" fill="#ffffff" font-weight="600">MCP servers</text>
-<text x="168" y="590" font-family="Inter, 'Segoe UI', system-ui, sans-serif" font-size="12" fill="#737aa2" font-weight="400">read from Codex's listing; World starts none</text>
+<text x="168" y="590" font-family="Inter, 'Segoe UI', system-ui, sans-serif" font-size="12" fill="#737aa2" font-weight="400">supported · only these · from Codex's listing, none started</text>
 <text x="64" y="618" font-family="ui-monospace, 'SFMono-Regular', Menlo, monospace" font-size="13" fill="#d5dcff" font-weight="400">github</text>
 <text x="264" y="618" font-family="Inter, 'Segoe UI', system-ui, sans-serif" font-size="12" fill="#737aa2" font-weight="400">stdio · user</text>
 <text x="424" y="618" font-family="Inter, 'Segoe UI', system-ui, sans-serif" font-size="12" fill="#9ece6a" font-weight="400">enabled</text>
@@ -105,7 +106,7 @@
 <text x="680" y="590" font-family="Inter, 'Segoe UI', system-ui, sans-serif" font-size="12" fill="#737aa2" font-weight="400">Reads code and upstream issues, writes notes</text>
 <rect x="620" y="690" width="516" height="80" rx="10" fill="#1a1b26" stroke="#2f3549" />
 <g transform="translate(636,706) scale(0.6666666666666666)" fill="none" stroke="#737aa2" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><path d="M9.09 9a3 3 0 0 1 5.83 1c0 2-3 3-3 3"/><path d="M12 17h.01"/></g>
-<text x="660" y="720" font-family="Inter, 'Segoe UI', system-ui, sans-serif" font-size="13" fill="#d5dcff" font-weight="600">Pi college, for comparison:</text>
-<text x="660" y="742" font-family="Inter, 'Segoe UI', system-ui, sans-serif" font-size="12" fill="#737aa2" font-weight="400">Role only: World can't attach skills or MCP servers</text>
-<text x="660" y="758" font-family="Inter, 'Segoe UI', system-ui, sans-serif" font-size="12" fill="#737aa2" font-weight="400">to this harness yet.</text>
+<text x="660" y="720" font-family="Inter, 'Segoe UI', system-ui, sans-serif" font-size="13" fill="#d5dcff" font-weight="600">Muse college, for comparison:</text>
+<text x="660" y="742" font-family="Inter, 'Segoe UI', system-ui, sans-serif" font-size="12" fill="#737aa2" font-weight="400">Skills, MCP servers: not built. Muse documents no per-launch</text>
+<text x="660" y="758" font-family="Inter, 'Segoe UI', system-ui, sans-serif" font-size="12" fill="#737aa2" font-weight="400">option for either (dev.meta.ai/docs/muse-code). Registry: none.</text>
 </svg>

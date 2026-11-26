@@ -598,7 +598,7 @@
 <g transform="translate(868,640) scale(0.6666666666666666)" fill="none" stroke="#7aa2f7" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M15 12h-5"/><path d="M15 8h-5"/><path d="M19 17V5a2 2 0 0 0-2-2H4"/><path d="M8 21h12a2 2 0 0 0 2-2v-1a1 1 0 0 0-1-1H11a1 1 0 0 0-1 1v1a2 2 0 1 1-4 0V5a2 2 0 1 0-4 0v2a1 1 0 0 0 1 1h3"/></g>
 <text x="892" y="653" font-family="Inter, 'Segoe UI', system-ui, sans-serif" font-size="14" fill="#ffffff" font-weight="600">What the agent gets</text>
 <text x="868" y="678" font-family="Inter, 'Segoe UI', system-ui, sans-serif" font-size="12" fill="#d5dcff" font-weight="400">only these MCP servers: github</text>
-<text x="868" y="698" font-family="Inter, 'Segoe UI', system-ui, sans-serif" font-size="12" fill="#d5dcff" font-weight="400">skills, available and named: 2</text>
+<text x="868" y="698" font-family="Inter, 'Segoe UI', system-ui, sans-serif" font-size="12" fill="#d5dcff" font-weight="400">only these skills: 2</text>
 <rect x="868" y="730" width="146" height="40" rx="6" fill="#7aa2f7" stroke="#7aa2f7" />
 <text x="879" y="754.68" font-family="Inter, 'Segoe UI', system-ui, sans-serif" font-size="13" fill="#10131f" font-weight="600">Save as version 4</text>
 </g>

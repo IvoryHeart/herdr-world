@@ -186,13 +186,13 @@
 <g transform="translate(860,504) scale(0.5)" fill="none" stroke="#d5dcff" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect width="20" height="5" x="2" y="3" rx="1"/><path d="M4 8v11a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8"/><path d="M10 12h4"/></g>
 <text x="878" y="514.32" font-family="Inter, 'Segoe UI', system-ui, sans-serif" font-size="12" fill="#d5dcff" font-weight="500">Retire</text>
 <rect x="64" y="572" width="14" height="18" fill="#8a93b8" stroke="#1c1722" stroke-width="2"/>
-<text x="88" y="586" font-family="Inter, 'Segoe UI', system-ui, sans-serif" font-size="14" fill="#ffffff" font-weight="600">Pi college</text>
-<text x="178" y="586" font-family="Inter, 'Segoe UI', system-ui, sans-serif" font-size="12" fill="#737aa2" font-weight="400">Role only: World can't attach skills or MCP servers to this harness yet</text>
+<text x="88" y="586" font-family="Inter, 'Segoe UI', system-ui, sans-serif" font-size="14" fill="#ffffff" font-weight="600">Muse college</text>
+<text x="200" y="586" font-family="Inter, 'Segoe UI', system-ui, sans-serif" font-size="12" fill="#737aa2" font-weight="400">Skills, MCP servers: not built — Muse has no per-launch option for either</text>
 <rect x="64" y="602" width="1072" height="56" rx="10" fill="#262a3b" stroke="#2f3549" />
 <text x="84" y="636" font-family="Inter, 'Segoe UI', system-ui, sans-serif" font-size="13" fill="#737aa2" font-weight="400">No profiles yet.</text>
-<rect x="200" y="616" width="134" height="28" rx="6" fill="rgba(255,255,255,0.05)" stroke="#2f3549" />
+<rect x="200" y="616" width="150" height="28" rx="6" fill="rgba(255,255,255,0.05)" stroke="#2f3549" />
 <g transform="translate(211,624) scale(0.5)" fill="none" stroke="#d5dcff" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12h14"/><path d="M12 5v14"/></g>
-<text x="229" y="634.32" font-family="Inter, 'Segoe UI', system-ui, sans-serif" font-size="12" fill="#d5dcff" font-weight="500">New Pi profile</text>
+<text x="229" y="634.32" font-family="Inter, 'Segoe UI', system-ui, sans-serif" font-size="12" fill="#d5dcff" font-weight="500">New Muse profile</text>
 <rect x="64" y="690" width="1072" height="1" fill="#2f3549" />
 <g transform="translate(64,710) scale(0.6666666666666666)" fill="none" stroke="#737aa2" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m6 9 6 6 6-6"/></g>
 <g transform="translate(86,710) scale(0.6666666666666666)" fill="none" stroke="#737aa2" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect width="20" height="5" x="2" y="3" rx="1"/><path d="M4 8v11a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8"/><path d="M10 12h4"/></g>

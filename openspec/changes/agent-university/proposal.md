@@ -26,19 +26,30 @@ comes fresh out of the University to work.
   copied, retired, restored and deleted. The town center keeps New agent and
   the Town master; its ring loses Profiles and its Buildings ring gains the
   University.
-- **One college per harness.** Each harness World starts (Claude Code, Codex,
-  and every other kind a host's Herdr or herdr-core reports) has a college, drawn
-  as a wing of the University. A college shows, per host: installed and logged
+- **One college per harness.** Every harness World supports today has a
+  college: the eight it reads conversations from (Claude Code, Codex, Kimi
+  Code, Grok, Pi, omp, Muse, Antigravity) and the others in its integration
+  list, drawn as wings of the University. A college shows, per host: installed and logged
   in, the skills and MCP servers that harness can see there, and its models,
   efforts and permission modes. A wing whose harness is missing or logged out
   looks it, in Town and in the window.
+- **Supported, planned or not built.** Each college's skills, MCP servers and
+  registry have one state, from a sourced table of each harness's own launch
+  options (design § 3). Supported means a per-launch option attaches exactly
+  the set (or preloads it), checked in isolation before it ships; anything
+  else is shown as planned or not built with its reason, never half-attached.
+  In this change: Claude Code and Codex attach skills and MCP servers; Kimi
+  Code, Pi and omp attach skills; the rest are planned or not built. No
+  college browses a registry (no marketplace).
 - **A profile is a course of study:** its college (harness), role, brief, model,
   effort, permission, look, and the skills and MCP servers from that college.
 - **Attached through the harness, not the prompt.** At hire, World checks the
   destination host has every attached skill and MCP server, then attaches them
   with the harness's own launch options (Claude Code: the subagent definition's
   `skills`, and `--mcp-config` with `--strict-mcp-config`; Codex: per-launch
-  `-c mcp_servers.<name>.enabled` overrides). The user's harness configuration
+  `-c` overrides of `mcp_servers.<name>.enabled` and `skills.config`; Kimi
+  Code `--skills-dir`; Pi `--no-skills --skill`; omp `--skills`). No skill is
+  named in a prompt in place of attaching it. The user's harness configuration
   is never edited. A host that lacks one refuses the hire and says what is
   missing and where World looked.
 - **One hiring path.** The University, the town center, Board, Actions, Spaces,

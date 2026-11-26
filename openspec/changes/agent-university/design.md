@@ -16,9 +16,10 @@ Gaps this design closes:
   folders in the repository (`.agents/skills`, `.claude/skills`) and in the
   user's `~/.agents`, `~/.claude` and `~/.codex` skill folders, merged. A Claude
   profile can attach a skill only Codex can see.
-- **Skills reach Codex as a sentence.** `launchPlan()` gives Claude Code the
-  subagent definition's `skills` field, but Codex only gets "Use these skills
-  when they apply" in its developer instructions.
+- **Skills reach most harnesses as a sentence.** `launchPlan()` gives Claude
+  Code the subagent definition's `skills` field, but Codex only gets "Use these
+  skills when they apply" in its developer instructions, and every other
+  harness gets it in the first prompt. Naming a skill is not attaching it.
 - **No MCP servers.** Profiles cannot attach any.
 - **No record of what an agent was given.** A terminal keeps only its profile ID
   and name (Herdr pane tokens `world_profile`, `world_profile_name`); a later
@@ -26,16 +27,12 @@ Gaps this design closes:
 - **No home.** Editing lives in a dialog from six places; the town center's ring
   is the closest thing to a home, and it is crowded.
 
-Facts checked on 2026-11-26 on a development host, by reading `--help` only
-(no session was started): Claude Code 2.1.332 has `--agents`, `--agent`,
-`--mcp-config <files or strings>`, `--strict-mcp-config` ("only use MCP
-servers from --mcp-config, ignoring all other MCP configurations"),
-`--plugin-dir`, `--settings`, `--setting-sources` and
-`--disable-slash-commands`. Codex 0.172 has `-c key=value` overrides of
-`config.toml`, `-p <profile>` (layers `$CODEX_HOME/<name>.config.toml`) and
-`codex mcp`. Items marked **verify** below must be confirmed in step 2 with an
-isolated harness (scratch configuration folder, named Herdr session) before the
-code relies on them.
+Facts were checked on 2026-11-26 from each harness's own documentation, its
+`--help` on a development host (Claude Code 2.1.332, Codex 0.172.0, Pi 0.87.1,
+Antigravity 1.5.3; no session was started) and, for Codex, its 0.172.0
+source. § 3 lists every source. Items marked **Verify (gate)** must pass an
+isolated check (scratch configuration folder, named Herdr session) in step 2
+before the code relies on them; a failure turns that capability to planned.
 
 ## Goals and non-goals
 
@@ -123,7 +120,8 @@ tabs:
   **Retired** shelf at the bottom (collapsed, with a count) lists retired
   profiles with **Restore** and **Delete**. Each card also shows **Working
   now** (agents running from it), each opening that agent's character sheet.
-- **Colleges:** one row per college with its state chip; a row opens the
+- **Colleges:** one row per college with its readiness chip and its skills
+  and MCP states (supported, planned or not built, § 3); a row opens the
   college page.
 
 The editor (Edit, New profile) replaces the window's body with the existing
@@ -152,10 +150,13 @@ editor's fields plus two new sections, with **Back** at the top on phones.
 - **Skills**, **MCP servers**: what the harness can see on the chosen host,
   with where each comes from and, for MCP servers, transport and whether the
   harness's own configuration has it enabled. Read-only.
+- **What World can attach:** the college's skills, MCP and registry states
+  from the table in § 3, each with its reason and source, for example Kimi
+  Code: "Skills: supported (only these). MCP servers: not built — Kimi Code
+  has no per-launch MCP option; World would have to replace its home folder,
+  which also replaces its login."
 - **Models, efforts, permission modes:** the choices `HARNESS_CHOICES` offers,
-  moved per college. A harness with no launch mapping (every kind but Claude
-  Code and Codex today) says "Role only: World can't attach skills or MCP
-  servers to this harness yet."
+  moved per college. A college without a launch mapping for them says so.
 - **Profiles in this college**, with **New profile** preset to it.
 
 ### Phone
@@ -191,6 +192,147 @@ stop or change a running agent; stopping is the user's own action.
 
 ## 3. Skills and MCP servers per harness
 
+### Which harnesses have a college
+
+Every harness World supports today has a college: the eight with conversation
+readers (`SESSION_AGENTS` in `server/src/agent/chat-harnesses.ts`: `claude`,
+`codex`, `kimi`, `grok`, `pi`, `omp`, `muse`, `agy`), and the other harnesses
+in World's integration list (`herdr-world integration status`: `copilot`,
+`cursor`, `devin`, `droid`, `hermes`, `kilo`, `letta`, `mastracode`,
+`opencode`, `qodercli`, `qwen`), plus `kiro`, which World probes for
+readiness. A kind that a host's Herdr or herdr-core reports but World does not
+integrate (for example `amp`, `cline`, `gemini`) gets a college marked **not
+built** with the reason "World has no integration for this harness yet";
+adding a harness is out of scope.
+
+### States
+
+Skills, MCP servers and the registry each have one of three states per
+college, defined once in shared data beside `HARNESS_SPECS` and shown on the
+college page with its reason:
+
+- **Supported:** the harness's own documentation or source gives a per-launch
+  option that attaches the profile's set, without editing the user's or the
+  repository's configuration and without replacing the harness's home folder
+  (which would also replace its login). Step 2 builds a supported row only
+  after task 2.1 has checked it with that harness in isolation. **The check is
+  a gate:** a row that fails it, or whose harness cannot be run in isolation,
+  becomes planned with the failure as its reason, and its college offers
+  nothing for that capability.
+- **Planned:** a documented mechanism exists, but it cannot attach an exact or
+  preloaded set, rests on undocumented behaviour, or World has no launch
+  mapping for that harness yet. The college shows it greyed with the reason.
+- **Not built:** the harness documents no per-launch mechanism; the only
+  routes edit configuration files or replace its home. The college shows the
+  reason.
+
+A profile in a college can attach only what that college supports. A planned
+or not built capability is never half-attached: World never writes a skill or
+server name into a first prompt or developer instructions as a substitute,
+and the editor hides that section and shows the reason. A profile that still
+holds skills or MCP servers its college cannot attach (an older profile, or
+one moved to another college) is refused at hire with that reason and
+**Edit profile**; nothing is dropped silently. Today's sentence "Use these
+skills when they apply" in `launchPlan()` is removed for every harness.
+
+**Registry:** no college browses or installs from a registry; a marketplace
+is out of scope (#1418). Every registry cell is therefore **not built**; the
+college shows the harness's own browse command as text, where it has one, so
+the user knows where to look.
+
+### The table
+
+Attach mechanisms are per launch. "Only these" means the agent can use
+exactly the attached set; "loaded at start" means the attached set is put in
+the agent's context and the harness can still find the user's other items,
+which the diploma lists. World's own `herdr-world` skill, installed by World's
+integration, is always kept in an exact set and listed as World's own.
+
+| Harness | Skills | MCP servers | Registry (harness's own) |
+| --- | --- | --- | --- |
+| `claude` | **Supported**, loaded at start: the inline subagent definition's `skills` [C1] | **Supported**, only these: `--mcp-config <file> --strict-mcp-config` [C2] | Plugin marketplaces (`claude plugin`) [C3] |
+| `codex` | **Supported**, only these: `-c skills.config=[{name=…,enabled=false},…]` for every other catalogued skill [X1] | **Supported**, only these: `-c mcp_servers.<name>.enabled=true/false` [X2] | Plugin marketplaces (`codex plugin marketplace`) [X3] |
+| `kimi` | **Supported**, only these: `--skills-dir <per-launch folder>` replaces the user and project folders [K1] | **Not built:** no per-launch option; only `KIMI_CODE_HOME` (a whole new home and login) [K2] | Plugin marketplace (`/plugins`) [K3] |
+| `pi` | **Supported**, only these: `--no-skills --skill <path>…` [P1] | **Planned:** none in Pi 0.87; Pi 1.x has built-in MCP, attachable per launch only through an extension World would ship (`-e`, `registerMcpServer`) [P2] | Packages gallery (`pi install npm:…`, pi.dev/packages) [P3] |
+| `omp` | **Supported**, only these: `--skills <name,…>` [O1] | **Planned:** a `--config` overlay with `enabledServers` may give an exact set, but omp imports servers from other harnesses and the combination is undocumented [O2] | Plugin marketplaces and skills.omp.sh (`omp plugin`, `omp skill search`) [O3] |
+| `grok` | **Planned:** per-launch `--plugin-dir` only adds; `[skills] disabled` has no per-launch override [G1] | **Not built:** no per-launch option; only `GROK_HOME` (new home and login) [G2] | Plugin marketplace (`grok plugin marketplace`) [G1] |
+| `muse` | **Not built:** no flag; `--agents` definitions have no skills field [M1] | **Not built:** `settings.json` only; `-c` is documented for one unrelated key [M2] | None documented [M1] |
+| `agy` | **Not built:** skills run only as `/<name>` in a session [A1] | **Not built:** global or workspace `mcp_config.json` only; `--settings` has no MCP keys [A2] | Plugin marketplace (`/plugin`, needs sign-in) [A3] |
+| `copilot` | **Planned:** `COPILOT_SKILLS_DIRS` adds, nothing restricts per launch [CP1] | **Planned:** `--disable-mcp-server <name>` for every other server and `--disable-builtin-mcps` give an exact set; no World launch mapping for Copilot yet [CP1] | Plugin marketplace (`copilot plugin marketplace`) [CP2] |
+| `cursor` | **Not built:** the CLI's skill loading is undocumented [CU1] | **Not built:** only stored approvals (`agent mcp enable/disable`) [CU2] | Cursor Marketplace, cursor.directory [CU1] |
+| `devin` | **Not built:** no per-launch option [D1] | **Not built:** `--config` is not documented to carry MCP servers [D2] | `devin plugins install` (no browsing) [D3] |
+| `droid` | **Planned:** `--settings` with `disabledSkills` is undocumented for that key [DR1] | **Planned:** `--remove-tools MCP:<server>` for every other server; no World launch mapping yet [DR2] | Built-in MCP registry in `/mcp`, `droid plugin marketplace` [DR2] |
+| `hermes` | **Planned:** `hermes chat -s <name>` preloads; no World launch mapping yet [H1] | **Not built:** only a separate profile (`-p`, its own home) or all off [H2] | Skills Hub (`hermes skills browse`), `hermes mcp catalog` [H1] |
+| `kilo` | **Not built:** no per-launch option [KI1] | **Not built:** no per-launch option [KI2] | Kilo Marketplace repository (no browsing UI) [KI2] |
+| `kiro` | **Planned:** a World-written agent's `resources` (`skill://…`) with `--agent`; no World launch mapping yet [KR1] | **Planned:** the same agent's `mcpServers` with `includeMcpJson` off [KR1] | kiro.dev registry [KR2] |
+| `letta` | **Planned:** `--skills <path> --skill-sources …` gives an exact set; no World launch mapping yet [L1] | **Not built:** Letta Code has no MCP client [L2] | `letta install` (no browsing) [L1] |
+| `mastracode` | **Not built:** no per-launch option [MA1] | **Not built:** only `MASTRACODE_DISABLE_MCP` (all off) [MA1] | None documented [MA1] |
+| `opencode` | **Planned:** per-agent `skill` permission rules through `OPENCODE_CONFIG_CONTENT`, documented only for OpenCode v1 [OC1] | **Planned:** the same overlay denying other servers' tools; v2 documentation is silent [OC2] | None documented [OC1] |
+| `qodercli` | **Planned:** `skillOverrides` through `--settings`; no World launch mapping yet [Q1] | **Planned:** `--mcp-config --strict-mcp-config` (Claude's shape); no World launch mapping yet [Q2] | Plugin marketplaces (`qoder plugins marketplace`) [Q3] |
+| `qwen` | **Not built:** skills settings have no per-launch option [QW1] | **Planned:** `--allowed-mcp-server-names` gives an exact set; no World launch mapping yet [QW2] | None documented [QW1] |
+
+"No World launch mapping yet" means World has no model, effort and
+permission mapping for that harness in `launchPlan()`; each such college is
+its own follow-up after this change, verified with its binary like the
+supported rows. Kimi, Pi and omp gain a launch mapping in step 2 for skills
+only, because they are among the eight harnesses World reads conversations
+from and each needs one documented flag.
+
+Sources, read on 2026-11-26 (documentation pages, or the harness's
+`--help` on a development host; Codex also from its 0.172.0 source tag):
+
+- C1 https://code.claude.com/docs/en/sub-agents (`skills`), https://code.claude.com/docs/en/skills (where skills live)
+- C2 https://code.claude.com/docs/en/mcp (scopes, `.mcp.json`), `claude --help` 2.1.332 (`--mcp-config`, `--strict-mcp-config`)
+- C3 https://code.claude.com/docs/en/plugin-marketplaces, `claude plugin --help`
+- X1 https://learn.chatgpt.com/docs/build-skills; `codex-rs/config/src/skills_config.rs` (`[[skills.config]]` `name` or `path` with `enabled`, read from user and `-c` layers only) and `codex-rs/ext/skills/src/host_roots.rs` (folders)
+- X2 https://learn.chatgpt.com/docs/extend/mcp?surface=cli; `codex-rs/config/src/mcp_types.rs` (`enabled`, `enabled_tools`); `codex-rs/cli/src/mcp_cmd.rs` (`mcp list --json` reads configuration and starts no stdio server)
+- X3 `codex plugin --help`, `codex plugin marketplace --help` (0.172.0)
+- K1 https://moonshotai.github.io/kimi-code/en/customization/skills.html, https://moonshotai.github.io/kimi-code/en/reference/kimi-command.html (`--skills-dir`)
+- K2 https://moonshotai.github.io/kimi-code/en/customization/mcp.html, https://moonshotai.github.io/kimi-code/en/configuration/overrides.html
+- K3 https://moonshotai.github.io/kimi-code/en/customization/plugins.html
+- P1 `pi --help` 0.87.1 (`--skill`, `--no-skills`); Pi's bundled `docs/skills.md`
+- P2 https://github.com/earendil-works/pi `packages/coding-agent/docs/mcp.md` and `cli.md` (Pi 1.x)
+- P3 `pi install --help`; https://pi.dev/packages
+- O1 https://github.com/can1357/oh-my-pi `docs/skills.md`, `docs/cli-reference.md`
+- O2 the same repository's `docs/mcp-config.md`, `docs/cli-reference.md`
+- O3 the same repository's `docs/marketplace.md`
+- G1 https://docs.x.ai/build/features/skills-plugins-marketplaces, https://docs.x.ai/build/cli/reference
+- G2 https://docs.x.ai/build/features/mcp-servers, https://docs.x.ai/build/settings/reference
+- M1 https://dev.meta.ai/docs/muse-code/extending, https://dev.meta.ai/docs/muse-code/agents
+- M2 https://dev.meta.ai/docs/muse-code/configuration
+- A1 https://antigravity.google/docs/skills, `agy --help` 1.5.3
+- A2 https://antigravity.google/docs/mcp?tab=cli, https://antigravity.google/docs/settings?tab=cli, `agy mcp --help`
+- A3 https://antigravity.google/docs/plugins?tab=cli
+- CP1 https://docs.github.com/en/copilot/reference/cli-command-reference
+- CP2 https://docs.github.com/en/copilot/reference/copilot-cli-reference/cli-plugin-reference
+- CU1 https://cursor.com/docs/context/skills, https://cursor.com/docs/cli/reference/parameters
+- CU2 https://cursor.com/docs/cli/mcp
+- D1 https://docs.devin.ai/cli/extensibility/skills/overview.md
+- D2 https://docs.devin.ai/cli/extensibility/mcp/overview.md, https://docs.devin.ai/cli/reference/commands.md
+- D3 https://docs.devin.ai/cli/extensibility/index.md
+- DR1 https://docs.factory.com/cli/configuration/skills, https://docs.factory.com/reference/cli-reference
+- DR2 https://docs.factory.com/cli/configuration/mcp
+- H1 https://hermes-agent.nousresearch.com/docs/user-guide/features/skills, https://hermes-agent.nousresearch.com/docs/reference/cli-commands
+- H2 https://hermes-agent.nousresearch.com/docs/user-guide/features/mcp
+- KI1 https://kilo.ai/docs/customize/skills
+- KI2 https://kilo.ai/docs/automate/mcp/using-in-kilo-code, https://kilo.ai/docs/code-with-ai/platforms/cli-reference
+- KR1 https://kiro.dev/docs/custom-agents/configuration-reference/, https://kiro.dev/docs/cli/reference/cli-commands
+- KR2 https://kiro.dev/docs/cli/mcp/registry/
+- L1 https://docs.letta.com/letta-code/skills, https://docs.letta.com/letta-code/cli-reference
+- L2 https://docs.letta.com/platform/hosted-mcp
+- MA1 https://code.mastra.ai/configuration
+- OC1 https://opencode.ai/docs/skills/, https://opencode.ai/v1/docs/config.md
+- OC2 https://opencode.ai/docs/mcp-servers/, https://opencode.ai/v1/docs/mcp-servers.md
+- Q1 https://docs.qoder.com/cli/Skills
+- Q2 https://docs.qoder.com/cli/mcp-servers, https://docs.qoder.com/cli/cli-reference
+- Q3 https://docs.qoder.com/cli/plugins
+- QW1 https://qwenlm.github.io/qwen-code-docs/en/users/features/skills/
+- QW2 https://qwenlm.github.io/qwen-code-docs/en/users/features/mcp/, https://qwenlm.github.io/qwen-code-docs/en/users/configuration/settings/
+
+Harnesses change quickly. The table is data in step 2, and a harness release
+that adds a per-launch mechanism moves its row to supported only through the
+same isolated check.
+
 ### Where World finds them on a host
 
 Discovery runs on the room's host, locally or over the connection's OpenSSH
@@ -200,73 +342,118 @@ falling back to another connection. A failed host shows its last result as
 stale and non-actionable; nothing is stored (§ 5). The folders and files are
 data per harness, beside `HARNESS_SPECS`, and reuse the harness folder table
 that World's integration uses (`docs/harness-integrations.md`), so a harness's
-folders are named once.
+folders are named once. Discovery runs only for supported capabilities.
 
-| | Claude Code | Codex (and Pi, Kimi, which share its skill folder) |
+| | Skills | MCP servers |
 | --- | --- | --- |
-| Skills | `<room folder>/.claude/skills`, `$CLAUDE_CONFIG_DIR` or `~/.claude/skills`, installed plugins' skills (as `plugin:skill`) | `<room folder>/.agents/skills` up to the repository root, `~/.agents/skills`, `$CODEX_HOME/skills` |
-| MCP servers | Read from Claude's own files on the host: user and local scopes in `~/.claude.json` (`mcpServers`, `projects[<room folder>].mcpServers`) and the project's `<room folder>/.mcp.json`; plugin servers listed as not attachable yet | `codex mcp list --json` (Codex's own read-only listing; **verify** it starts no server), which covers `$CODEX_HOME/config.toml` and trusted project configuration |
-| Never `claude mcp list` | It health-checks servers by starting them. | |
+| Claude Code | `<room folder>/.claude/skills`, `$CLAUDE_CONFIG_DIR` or `~/.claude/skills`, installed plugins' skills (as `plugin:skill`) | Claude's own files: user and local scopes in `~/.claude.json` (`mcpServers`, `projects[<room folder>].mcpServers`) and the project's `<room folder>/.mcp.json`; plugin servers listed as not attachable yet. Never `claude mcp list`: it health-checks servers by starting them. |
+| Codex | `.agents/skills` from the room folder up to the repository root, `<repository>/.codex/skills`, `~/.agents/skills`, `$CODEX_HOME/skills` (bundled `.system` skills listed as built in) [X1] | `codex mcp list --json` [X2]. It starts no stdio server; for remote servers it may make a request to work out sign-in status, so World runs it with the same bound. |
+| Kimi Code | `.kimi-code/skills` and `.agents/skills` at the repository root, `$KIMI_CODE_HOME/skills` (default `~/.kimi-code/skills`), `~/.agents/skills` [K1] | none (not built) |
+| Pi | `.pi/skills` and `.agents/skills` up to the repository root, `$PI_CODING_AGENT_DIR/skills` (default `~/.pi/agent/skills`), `~/.agents/skills` [P1] | none (planned) |
+| omp | `omp skill list --json` [O3], which covers its own and imported folders | none (planned) |
 
 Only these fields leave the host: a skill's folder name and where it came from
-(repository, user, plugin); an MCP server's name, transport (`stdio`, `http`,
-`sse`), scope (user, local, project, plugin) and whether it is enabled. Never
-a command line, argument, environment value, header, URL or a skill's
-contents. The reader runs on the host and prints only those fields, as the
-readiness probe does, so `~/.claude.json`'s other contents never leave it.
+(repository, user, plugin, built in); an MCP server's name, transport
+(`stdio`, `http`, `sse`), scope (user, local, project, plugin) and whether it
+is enabled. Never a command line, argument, environment value, header, URL or
+a skill's contents. The reader runs on the host and prints only those fields,
+as the readiness probe does, so `~/.claude.json`'s other contents never leave
+it.
 
 Windows hosts are not probed (as readiness): their colleges say "not checked".
 
 ### How a hire attaches them
 
 The launch plan gains the host's catalog. Everything is per launch; the user's
-global harness configuration is never edited.
+global harness configuration is never edited. Paths that World passes are
+built from the folder table and the item's name (for example
+`"$HOME"/.agents/skills/<name>`), so no host path passes through the service.
 
 **Claude Code**
 
 - **Skills: loaded at start.** The inline subagent definition's `skills` field
   (already passed with `--agents` and `--agent`) loads each attached skill into
-  the agent's context at start. Claude still finds the other skills in its own
-  folders; World cannot hide those without dropping the user's own settings
+  the agent's context at start [C1]. Claude still finds the other skills in its
+  own folders; World cannot hide those without dropping the user's own settings
   (`--setting-sources`) or every skill (`--disable-slash-commands`), so the
   diploma lists them as "also on this host".
 - **MCP servers: only these.** World writes a per-launch MCP file on the host
-  and starts Claude with `--mcp-config <file> --strict-mcp-config`, so the agent
-  has exactly the attached servers. The file is built on the host by a small
-  script (the same runtime and pattern as `claudeLaunchTapArgs` in
+  and starts Claude with `--mcp-config <file> --strict-mcp-config` [C2], so the
+  agent has exactly the attached servers. The file is built on the host by a
+  small script (the same runtime and pattern as `claudeLaunchTapArgs` in
   `server/src/usage/claude-launch-settings.ts`): it copies the attached servers'
   definitions from Claude's own files into
-  `~/.cache/herdr-world/claude-launch/mcp-<random>.json`, owner-only (0600),
-  and prints only the path. Definitions never pass through the World service or
-  a browser. World deletes the file when its terminal ends, and at service start
+  `~/.cache/herdr-world/launch/mcp-<random>.json`, owner-only (0600), and
+  prints only the path. Definitions never pass through the World service or a
+  browser. World deletes the file when its terminal ends, and at service start
   deletes its own files whose terminal no longer exists. A file is used because
   Herdr TUI types the argv into a shell, whose line limit inline JSON exceeds.
-- **Verify:** whether `--agent` honours a definition's `mcpServers` list of
-  already-configured server names together with `--strict-mcp-config`. If it
-  does, World passes names and no copy is made; the file is the fallback.
+- **Verify (gate):** both flags with a throwaway stdio server; and whether
+  `--agent` honours a definition's `mcpServers` list of already-configured
+  server names together with `--strict-mcp-config`. If it does, World passes
+  names and no copy is made; otherwise the file is used.
 
 **Codex**
 
 - **MCP servers: only these.** Per-launch overrides, no file:
   `-c mcp_servers.<name>.enabled=true` for each attached server and
   `-c mcp_servers.<name>.enabled=false` for every other server the catalog
-  found. Server names are limited to `[A-Za-z0-9][A-Za-z0-9_-]{0,63}` so they
-  are safe TOML keys; a server with another name is listed but cannot be
-  attached. **Verify** the `enabled` key on Codex 0.172.
-- **Skills: available and named.** Codex finds skills only in its own folders,
-  so World checks every attached skill is there, names them in
-  `developer_instructions` (as today) and, if Codex's `skills.config` entries
-  (`path`, `enabled = false`) can be set with `-c` (**verify**), disables the
-  others so the set is exact. Until then the diploma says "available and named"
-  and lists the others as "also on this host".
+  found [X2], plus `-c mcp_servers.<name>.required=true` for each attached
+  server so Codex stops rather than starts without it. Server names are limited to `[A-Za-z0-9][A-Za-z0-9_-]{0,63}` so
+  they are safe TOML keys; a server with another name is listed but cannot be
+  attached.
+- **Skills: only these.** Codex reads `[[skills.config]]` entries (a `name` or
+  `path` selector with `enabled`) from the user layer and from `-c` overrides,
+  the last match winning [X1]. World passes one
+  `-c 'skills.config=[{name="pdf",enabled=false},…]'` naming every catalogued
+  skill that is not attached and is not World's own, so Codex offers the agent
+  exactly the attached skills. Skill names in the list are limited like MCP
+  names. The skill is not mentioned in `developer_instructions`.
+- **Verify (gate):** `-c mcp_servers.<name>.enabled=false` hides that server
+  and `required=true` stops Codex when an attached server cannot start;
+  a `-c skills.config` array disables exactly the named skills on 0.172 and
+  does not discard a user's own `[[skills.config]]` entries in a way that
+  re-enables a skill the user disabled (if it does, World appends the user's
+  disabled entries, which the catalog already reports as disabled); and
+  `codex mcp list --json` starts no stdio server. If any part fails, that Codex
+  row becomes planned.
 - If the overrides make the command too long for a terminal line, World uses a
   per-launch `-p` layer file in Codex's folder instead, World-named
   (`herdr-world-launch-<random>.config.toml`) with the integration's marker
-  lines, removed with its terminal like the Claude file.
+  lines, removed with its terminal like the Claude file. A `-p` file is a user
+  layer, so it carries the same `skills.config` entries.
 
-**Other harnesses** have no launch mapping: their colleges offer no skills or
-MCP servers to attach, and the editor says why. Their role still goes in the
-first prompt, as today.
+**Kimi Code**
+
+- **Skills: only these.** World builds a per-launch folder on the host,
+  `~/.cache/herdr-world/launch/skills-<random>/`, holding one symbolic link per
+  attached skill folder plus World's own skill, and starts
+  `kimi --skills-dir <folder>`, which replaces the user and project skill
+  folders for that launch [K1]. Kimi's built-in skills and `extra_skill_dirs`
+  from its configuration still load; the diploma lists them as "also on this
+  host". The folder is removed with its terminal.
+- **Verify (gate):** `--skills-dir` replaces rather than adds on the Kimi Code
+  release found, and links are followed.
+
+**Pi**
+
+- **Skills: only these.** `pi --no-skills --skill <path>` for each attached
+  skill and World's own [P1]; paths built from the folder table.
+- **Verify (gate):** `--skill` paths load under `--no-skills` on 0.87.1 and
+  the current 1.x.
+
+**omp**
+
+- **Skills: only these.** `omp --skills <name>,…` with the attached skills and
+  World's own [O1]. Names are limited like MCP names so no name is read as a
+  glob.
+- **Verify (gate):** `--skills` with exact names excludes every other skill,
+  including skills omp imports from other harnesses.
+
+**Other colleges** attach nothing. Their profiles hold a role, brief, look and
+chime; the role reaches the agent in its first prompt as today, and the
+college page and editor say "Skills: planned — <reason>" or "not built —
+<reason>" from the table, never "role only" without a reason.
 
 **herdr-core hosts** use the same plan: the core launch path
 (`core-harness-start-ready`) receives the same argv and the same per-launch
@@ -276,8 +463,9 @@ files, written on the core's host.
 
 Right before starting, `launcher.start` reads the destination's catalog again
 (the editor's dots can be stale). If any attached skill or MCP server is
-missing on that host, or the host cannot be checked (Windows, probe failed,
-timeout), it refuses before creating a tab:
+missing on that host, the host cannot be checked (Windows, probe failed,
+timeout), or the profile holds an item its college cannot attach, it refuses
+before creating a tab:
 
 ![Hire refused: what is missing and where World looked](screens/hire-refused.svg)
 
@@ -287,10 +475,14 @@ timeout), it refuses before creating a tab:
 > [Edit profile] [Open Codex college] [Choose another room]
 
 There is no "hire anyway". A profile with nothing attached is unaffected and
-hires on Windows hosts as today. Between the check and the harness starting, a
-skill or server could still vanish; Claude then fails on the missing MCP
-definition and Codex on its configuration, and the launcher reports the exit
-as it already does ("the agent exited as it started").
+hires on Windows hosts as today. Between the check and the harness starting
+(well under a second), a skill or server could still vanish. Claude then
+fails on the missing definition (the per-launch file is a copy), and Codex
+fails because World also passes `-c mcp_servers.<name>.required=true` for each
+attached server, which makes Codex stop when a required server cannot start
+[X2]; the launcher reports the exit as it already does ("the agent exited as
+it started"). A skill removed in that window is the one case World cannot
+catch; the risk is listed below.
 
 ## 4. Hiring: one path, and the diploma
 
@@ -323,7 +515,7 @@ given:
 - profile ID, name and version;
 - harness, model, effort, permission and tools as passed;
 - each attached skill and MCP server, with where it came from and how firmly it
-  was attached (**only these**, **loaded at start**, **available and named**);
+  was attached (**only these** or **loaded at start**);
 - the other skills and MCP servers the harness could still find on that host
   ("also on this host");
 - the host, room and time.
@@ -375,11 +567,11 @@ replaced on each read and dropped with the connection.
    World-owned. It belongs with the agent records the one-object design already
    plans (#1315) rather than a new table; if it needs its own table, that needs
    approval in a mandate. The pane token `world_profile` stays the link.
-2. **Per-launch files on the host** (§ 3): the Claude MCP file in
-   `~/.cache/herdr-world/claude-launch/` (the folder the limits tap already
-   uses) and, only if needed, the Codex `-p` layer file. World-generated,
-   owner-only, one per live terminal, deleted with it. They need a catalog entry
-   as host files World writes.
+2. **Per-launch files on the host** (§ 3): the Claude MCP file and the Kimi
+   skills folder of links in `~/.cache/herdr-world/launch/` (beside the
+   limits tap's `~/.cache/herdr-world/` files) and, only if needed, the Codex
+   `-p` layer file. World-generated, owner-only, one per live terminal,
+   deleted with it. They need a catalog entry as host files World writes.
 
 ## 6. Security
 
@@ -446,9 +638,17 @@ profile, and every change goes through World to its store.
 
 ## Risks and trade-offs
 
-- **Skills are not exclusive on Claude Code** without dropping user settings.
-  We accept "loaded at start" plus an honest "also on this host" list rather
-  than isolating the harness's configuration folder, which would lose its login.
+- **Skills are not exclusive on Claude Code** (nor fully on Kimi Code, whose
+  built-in skills stay) without dropping user settings. We accept "loaded at
+  start" plus an honest "also on this host" list rather than isolating the
+  harness's configuration folder, which would lose its login.
+- **Most colleges attach nothing in this change.** Of 20 harnesses, Claude
+  Code and Codex get skills and MCP servers, Kimi Code, Pi and omp get skills,
+  and the rest are planned or not built with their reasons. That is the
+  honest state of the harnesses' own launch options on 2026-11-26; each
+  planned row is its own follow-up.
+- **A skill removed between the check and the start** is not caught; the
+  window is under a second and the next hire's check refuses.
 - **Copying MCP definitions** (Claude fallback) puts a second copy of any inline
   secret on the host for the terminal's life. It never leaves the host and is
   owner-only; the verify item may remove the copy entirely.
@@ -464,8 +664,12 @@ profile, and every change goes through World to its store.
   `launchPlan` with a catalog produces the exact argv per harness; missing items
   refuse with the named folders; retire, copy and change-college rules in
   `parseProfile` and the store; operator-only admission for profile writes.
-- Isolated harness checks (scratch `CLAUDE_CONFIG_DIR` and `CODEX_HOME`, named
-  Herdr session, throwaway MCP stdio server): every **verify** item above.
+- Isolated harness checks (scratch `CLAUDE_CONFIG_DIR`, `CODEX_HOME`,
+  `KIMI_CODE_HOME`, `PI_CODING_AGENT_DIR` and omp home, named Herdr session,
+  throwaway MCP stdio server and skills): every **Verify (gate)** item in § 3.
+  These are support gates, not follow-ups: a row ships as supported only when
+  its check passes, and otherwise ships as planned with the failure as its
+  reason.
 - Browser: University window, editor sections and phone sheet; Town lot keeps
   every existing building's position (golden lot tests); arrival starts at the
   gate.
