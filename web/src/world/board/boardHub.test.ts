@@ -43,7 +43,6 @@ function board(
   options: {
     selectedId?: string | null;
     holder?: { connection_id: string; terminal_id: string } | null;
-    name?: string;
     hostReady?: boolean;
     spaces?: ReturnType<typeof space>[];
     leaves?: ReturnType<typeof leaf>[];
@@ -72,8 +71,10 @@ function board(
   const actions = boardHubActions({
     world,
     selectedId: options.selectedId ?? null,
-    holder: options.holder ?? null,
-    name: options.name ?? "firstmate",
+    holder:
+      options.holder === undefined
+        ? { connection_id: "local", terminal_id: "t-a" }
+        : options.holder,
     openChat: (id) => calls.push(["chat", id]),
     onOpenSummary: () => calls.push(["summary"]),
     onNewWorkspace: () => calls.push(["workspace"]),
@@ -118,7 +119,7 @@ test("the hub offers the town center's actions, New agent first", () => {
     "workspace",
   ]);
   expect(action("launch").primary).toBe(true);
-  expect(action("master").detail).toBe("firstmate");
+  expect(action("master").detail).toBeUndefined();
   expect(action("workspace").disabled).toBe(false);
 });
 
@@ -156,7 +157,7 @@ test("only a workspace that can launch now is the launch target", () => {
   expect(boardLaunchSpace(closed, "api")).toBeNull();
 });
 
-test("Town master opens the role holder's chat, then the named agent's", async () => {
+test("Town master opens the role holder's chat, with no name fallback", async () => {
   const named = board();
   named.action("master").run();
   await settle();
@@ -171,11 +172,13 @@ test("Town master opens the role holder's chat, then the named agent's", async (
 });
 
 test("a missing or unopenable Town master says so; none set offers a choice", async () => {
-  const missing = board({ name: "nobody" });
+  const missing = board({
+    holder: { connection_id: "local", terminal_id: "t-absent" },
+  });
   missing.action("master").run();
   await settle();
   expect(missing.calls).toEqual([
-    ["toast", "error", "No Town master in Town named nobody"],
+    ["toast", "error", "The Town master isn't in Town now"],
   ]);
   const stale = board({
     leaves: [leaf("a", "api", "firstmate", { stale: true })],
@@ -185,7 +188,7 @@ test("a missing or unopenable Town master says so; none set offers a choice", as
   expect(stale.calls).toEqual([
     ["toast", "error", "firstmate can't be opened now"],
   ]);
-  expect(board({ name: "" }).action("master").detail).toBe("Choose one");
+  expect(board({ holder: null }).action("master").detail).toBe("Choose one");
 });
 
 test("New workspace opens workspace creation, or says why it cannot", () => {

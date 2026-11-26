@@ -28,8 +28,8 @@ const at = (
   x: number,
   y: number,
   mark: TownEdgeTarget["mark"] = "needs",
-  hostKey = "north",
-): TownEdgeTarget => ({ key, mark, hostKey, x, y });
+  buildingKey = "north",
+): TownEdgeTarget => ({ key, mark, buildingKey, x, y });
 
 test("there are no arrows at town and building zoom, where all shows", () => {
   const targets = [at("far", 4000, 0)];
@@ -93,7 +93,7 @@ test("arrows pointing the same way merge with a count, most urgent first", () =>
   expect(east.mark).toBe("needs");
   expect(east.counts).toEqual({ needs: 1, asks: 1, done: 1 });
   expect(east.keys).toEqual(["blocked", "ask", "done"]);
-  expect(east.hostKeys).toEqual(["c", "b", "a"]);
+  expect(east.buildingKeys).toEqual(["c", "b", "a"]);
   expect(arrows.find((arrow) => arrow.compass === "west")!.count).toBe(1);
 });
 
@@ -186,7 +186,7 @@ test("an arrow names what waits, where, and the way", () => {
     townEdgeArrowLabel(
       {
         counts: { needs: 1, asks: 2, done: 1 },
-        hostKeys: ["alpha", "beta"],
+        buildingKeys: ["alpha", "beta"],
         compass: "south-west",
       },
       (key) => key,

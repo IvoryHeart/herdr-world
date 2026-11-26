@@ -1,20 +1,20 @@
 /* In the window title the glyph takes its own column before the avatar,
-   and the name and location move one column right. */
-.workspace-inspector-agent-identity:has(> .inspector-pane-map-glyph) {
+   and the name and location move one column right. The glyph marks its
+   title with data-pane-map (InspectorPaneMap.tsx). */
+.workspace-inspector-agent-identity[data-pane-map] {
   grid-template-columns: 26px 30px minmax(0, 1fr);
 }
-.is-town-skin
-  .workspace-inspector-agent-identity:has(> .inspector-pane-map-glyph) {
+.is-town-skin .workspace-inspector-agent-identity[data-pane-map] {
   grid-template-columns: 26px 32px minmax(0, 1fr);
 }
 .workspace-inspector-agent-identity > .inspector-pane-map-glyph {
   grid-column: 1;
 }
-.workspace-inspector-agent-identity:has(> .inspector-pane-map-glyph)
+.workspace-inspector-agent-identity[data-pane-map]
   > .workspace-inspector-agent-avatar {
   grid-column: 2;
 }
-.workspace-inspector-agent-identity:has(> .inspector-pane-map-glyph)
+.workspace-inspector-agent-identity[data-pane-map]
   > :not(.inspector-pane-map-glyph, .workspace-inspector-agent-avatar) {
   grid-column: 3;
 }

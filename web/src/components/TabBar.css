@@ -291,8 +291,7 @@
 
   /* Give the terminal these rows while the phone keyboard is up for terminal
      input. See the pane switcher in the app shell layout. */
-  &.keyboard-open .app:has(.xterm-helper-textarea:focus) .tabbar,
-  &.keyboard-open .app:has(.terminal-composer-input:focus) .tabbar {
+  &.keyboard-open[data-terminal-input-focus] .app .tabbar {
     display: none;
   }
 }

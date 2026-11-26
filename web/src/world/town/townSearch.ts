@@ -21,6 +21,7 @@ import {
   townWarehouseLot,
   TOWN_WAREHOUSE_YARD_ROWS,
 } from "./townWarehouseModel";
+import { townBuildingOf } from "./townBuildings";
 
 /**
  * The warehouse's search key: Town's landmark, not a World node. It holds
@@ -102,13 +103,13 @@ export function townSearchLight(
   for (const key of keys) {
     if (model.hosts.has(key)) hosts.add(key);
     const room = model.rooms.get(key);
-    if (room) place(room.key, room.hostKey);
+    if (room) place(room.key, townBuildingOf(room));
     const desk = model.desks.get(key);
-    if (desk) place(desk.roomKey, desk.hostKey);
+    if (desk) place(desk.roomKey, townBuildingOf(desk));
     const agent = model.agents.get(key);
-    if (agent) place(agent.roomKey, agent.hostKey);
+    if (agent) place(agent.roomKey, townBuildingOf(agent));
     const device = model.devices.get(key);
-    if (device) place(device.roomKey, device.hostKey);
+    if (device) place(device.roomKey, townBuildingOf(device));
   }
   return { keys: new Set(keys), rooms, hosts, pulse };
 }

@@ -43,6 +43,12 @@
   text-transform: uppercase;
 }
 
+/* A name World derived for an unnamed space reads lighter than a given one. */
+.town-room-plaque-name.is-derived {
+  font-weight: 400;
+  opacity: 0.78;
+}
+
 /* The name is the room's handle: drag it (a touch hold) to move the room. */
 .town-room-plaque-name.is-movable,
 .town-room-plaque .town-plaque-action.town-plaque-move {
@@ -61,6 +67,23 @@
 
 .town-room-plaque-count {
   font-variant-numeric: tabular-nums;
+}
+
+/* In a building of more than one runtime: Herdr TUI or herdr-core. */
+.town-room-plaque-runtime {
+  flex: 0 0 auto;
+  padding: 0 5px;
+  font:
+    700 9px / 13px "Silkscreen",
+    ui-monospace,
+    monospace;
+  color: #3b2414;
+  background: #e9cfa0;
+  border-radius: 3px;
+}
+.town-room-plaque-runtime-line {
+  margin: 0 0 4px;
+  font-size: 11px;
 }
 .town-room-plaque-total,
 .town-room-plaque-count.is-inactive {

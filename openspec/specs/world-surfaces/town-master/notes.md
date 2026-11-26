@@ -11,6 +11,11 @@
 
 **Code:**
 
+- `web/src/world/town/legacyTownMaster.ts`
+- `web/src/world/town/useTownMaster.ts`
+- `web/src/world/town/useTownCenter.ts`
+- `web/src/world/board/BoardHub.tsx`
+- `web/src/world/officePreferences.ts`
 - `web/src/world/TownMasterGreetingHost.tsx`
 - `web/src/world/TownMasterCard.tsx`
 - `web/src/world/townMasterGreeting.ts`
@@ -18,6 +23,9 @@
 
 **Tests:**
 
+- `web/src/world/town/legacyTownMaster.test.ts`
+- `web/src/world/town/useTownMaster.test.ts`
+- `web/src/world/HostsFilter.cold.test.ts`
 - `web/src/world/townMasterGreeting.test.ts`
 - `web/src/world/TownMasterCard.test.ts`
 - `web/src/world/town/townMaster.test.ts`
@@ -45,9 +53,11 @@
   there, and rings the control for a moment. A Town control off camera (the
   Apartments sign below a phone's first view) is flown into view at the same
   zoom; Town itself never scrolls. A control inside a closed menu
-  rings the button that opens it. When the control is not on this screen
-  (Chat's controls without an open Chat, a phone-only control on a desktop),
-  help reopens on that tab and says where to find it.
+  rings the button that opens it. **Quiet agents** opens the Town board and
+  rings its line under **Busy**. When the control is not on this screen
+  (Chat's controls without an open Chat, a phone-only control on a desktop,
+  the quiet line while no agent is quiet), help reopens on that tab and says
+  where to find it.
 - **What's new from the Town Master**: after an update, the greeting lists up
   to four things new since the last version it showed in this browser, each
   with a picture and **Try**, and a link to all of them in help. A first
@@ -76,7 +86,7 @@
     Town's setup card (**Start Herdr** or **Set up herdr-core**) is up, and
     opens once the card is gone. **✕**, Escape, Back or a press outside closes it; tap
     the figure to open it again. Untick **Show this on start** at its foot,
-    or switch **Menu → Settings → Town master greeting**, to stop it on this browser.
+    or switch **Menu → Settings → Greeting on start**, to stop it on this browser.
     Your very first visit is greeted too, without a last time. The card also
     carries [What's new](notes.md#help-and-whats-new) after an update, or **Start
     here** on a first visit.

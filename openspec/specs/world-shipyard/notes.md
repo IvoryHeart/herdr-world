@@ -14,8 +14,12 @@
 - `web/src/world/town/TownWarehouse.tsx`
 - `web/src/world/shipyard/shipyardModel.test.ts`
 - `web/src/world/town/TownShipyard.dom.test.ts`
+- `web/src/world/town/townHarbour.test.ts`
+- `web/src/world/ShipyardLighthouse.browser.test.ts`
 - `web/src/world/town/TownWarehouse.dom.test.ts`
 - `server/src/shipyard/service.ts`
+- `server/src/shipyard/projects.ts`
+- `server/src/shipyard/projects.test.ts`
 - `server/src/shipyard/github.ts`
 - `server/src/shipyard/instances.ts`
 - `server/src/shipyard/github.test.ts`
@@ -53,13 +57,23 @@
   runs on off the map. The streets end at a stone promenade; one shipping lane
   per project crosses the water from it, each in its own colour (eight colours
   that repeat), named on a board with its flag at the pier's root. Projects are
-  the repositories the Shipyard suggests (up to eight) plus the one chosen in **Work →
-  Releases**, which comes first. On a lane, the hull on the slipway is the next
+  the ones open in World: each room or space (Herdr TUI or herdr-core, Unix or
+  Windows) with a folder; a Git checkout's github.com remote (`origin` first)
+  gives its lane, one per repository; the one chosen in **Work → Releases** comes first. A project
+  that closes leaves within about fifteen seconds and one that opens joins,
+  without a reload; each lane appears as soon as its own read lands. A project
+  gets a lane once World's read of its
+  GitHub releases lists at least one published release. A project not read
+  yet, with no release, or unreadable (GitHub off or signed out) has no lane or
+  pier and stays in **Work → Releases**, which says why. On a lane, the hull on the slipway is the next
   release, with the count of merged pull requests waiting for it (`200+` when
   shortened, `?` unknown); the latest three releases are ships moored along the
   pier, newest first, prereleases with orange hulls and a green pennant while a
-  World on this computer runs that version. The lighthouse at the pier's head
-  is main's checks (green passing, red failing, yellow running, grey unknown).
+  World on this computer runs that version. The lighthouse at the pier's head,
+  past the last berth and above every ship, is main's checks (green passing,
+  red failing, yellow running, grey unknown); its lamp keeps a visible size
+  however far out the view is zoomed. The sign and the lanes sit together,
+  vertically centred on the harbour's side of Town.
   The Shipyard sign counts projects and those with main failing or out of date.
   A board or hull opens that project in **Work → Releases**; a ship opens its
   release card with **All releases**. A new release sails in once, only in its
@@ -69,8 +83,9 @@
   in **Work → Releases**. Stale data fades a lane, greys its lamp and says
   **Out of date**; so does a failed read of that one project, keeping its
   last ships, and a failed read of World itself, and then every
-  running World reads as stopped reporting without **Open**. GitHub off or no
-  repository leaves an empty sea and says how to go on. A phone or portrait
+  running World reads as stopped reporting without **Open**. GitHub off, no
+  repository or no project with a release leaves an empty sea, without piers,
+  and the sign says how to go on. A phone or portrait
   Town has the same harbour right of its stacked buildings: drag or pinch to
   reach it, or tap the **Shipyard** signpost on the town center's left wing
   (a dot per project in its colour and lamp, and an arrow), which flies to
@@ -82,9 +97,14 @@
   and **Open** only for fresh loopback Worlds (usable on the service machine).
   Waiting changes list the merged pull requests the commit graph proves and
   the total commit count; World does not guess which commits were pushed
-  directly. The repository select, including **Another repository…**, is remembered per
-  browser. **Read GitHub again** forces one bounded refresh.
+  directly. The repository select lists the open projects;
+  under it, open folders without a GitHub remote (not a Git checkout yet, no
+  github.com remote, or unreadable) are named, and open folders past
+  World's bound (64) are counted. A repository typed in **Another repository…**
+  is one extra lane while it is chosen; the choice is remembered per browser. **Read GitHub again** forces one bounded refresh.
 - Testing only: `?shipyardFixture` (or `=failing|stale|limited|off|empty|offline`)
-  shows synthetic data without GitHub, three projects; `=many` shows sixteen,
-  more lanes than a town's sea holds. The page drops the parameter at once.
+  shows synthetic data without GitHub, three projects with releases and one
+  (`example-org/notes`) with none, so no lane, plus `scratch-notes` without a
+  GitHub remote; `=many` shows sixteen with releases, more lanes than a town's
+  sea holds, and three open folders not read. The page drops the parameter at once.
   `offline` answers once, then fails every read as if World stopped answering.

@@ -318,6 +318,10 @@ export function TerminalComposer({
 
   // Measure at the collapsed width first, including soft wraps. CSS caps the
   // unfocused preview to one row; scrollHeight still reports its full content.
+  // Measure in the next frame, not in the key's input event: reading
+  // scrollHeight there forces a style and layout pass on every key (#1231).
+  // A remeasure caused by the measurement itself (expanding) stays in frame.
+  const measuringFrameRef = useRef(false);
   useEffect(() => {
     const textarea = textareaRef.current;
     if (!textarea) return;
@@ -349,21 +353,45 @@ export function TerminalComposer({
         Number.parseFloat(style.lineHeight) +
         Number.parseFloat(style.paddingTop) +
         Number.parseFloat(style.paddingBottom);
-      if (/\r|\n/.test(text) || contentHeight > oneRow + 1) setExpanded(true);
+      // Commit before this frame paints, as the input event's render did.
+      if (/\r|\n/.test(text) || contentHeight > oneRow + 1)
+        flushSync(() => setExpanded(true));
     };
-    measure();
-    // Keyboard/viewport rotation and UI scaling can introduce a soft wrap
-    // without changing the draft. Do not refocus or replace the editor.
-    if (typeof ResizeObserver === "undefined") return;
-    let measuredWidth = textarea.getBoundingClientRect().width;
-    const observer = new ResizeObserver(() => {
-      const width = textarea.getBoundingClientRect().width;
-      if (width === measuredWidth) return;
-      measuredWidth = width;
-      measure();
-    });
-    observer.observe(textarea);
-    return () => observer.disconnect();
+    // Expanding inside measure() commits synchronously, so React may run this
+    // effect's cleanup (and its replacement) before measure() returns. A
+    // disposed run must not install an observer or measure with its stale
+    // draft and focus, or it could re-expand a later short draft.
+    let disposed = false;
+    let observer: ResizeObserver | undefined;
+    const start = () => {
+      measuringFrameRef.current = true;
+      try {
+        measure();
+      } finally {
+        measuringFrameRef.current = false;
+      }
+      // Keyboard/viewport rotation and UI scaling can introduce a soft wrap
+      // without changing the draft. Do not refocus or replace the editor.
+      if (disposed || typeof ResizeObserver === "undefined") return;
+      let measuredWidth = textarea.getBoundingClientRect().width;
+      observer = new ResizeObserver(() => {
+        if (disposed) return;
+        const width = textarea.getBoundingClientRect().width;
+        if (width === measuredWidth) return;
+        measuredWidth = width;
+        measure();
+      });
+      observer.observe(textarea);
+    };
+    const frame =
+      measuringFrameRef.current || typeof requestAnimationFrame !== "function"
+        ? (start(), undefined)
+        : requestAnimationFrame(start);
+    return () => {
+      disposed = true;
+      if (frame !== undefined) cancelAnimationFrame(frame);
+      observer?.disconnect();
+    };
   }, [text, mode, open, editorFocused, expanded, surface, recipient, agent]);
 
   // Restore the shared selection after a programmatic insertion. The shared
