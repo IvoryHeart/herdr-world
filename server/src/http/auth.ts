@@ -8,7 +8,18 @@ import { worldCliToken } from "../config/session-secret";
 import { readJsonBody } from "./json-body";
 import { renderLoginPage } from "./login-page";
 
-const AUTH_COOKIE = "herdr_world_auth";
+/**
+ * Before #1250 every World used this one name. Browsers share cookies across
+ * ports of a host, so Worlds on one host logged each other out; a session
+ * this World signed under it still counts once and moves to the new name.
+ */
+const LEGACY_AUTH_COOKIE = "herdr_world_auth";
+const AUTH_COOKIE_PREFIX = `${LEGACY_AUTH_COOKIE}_`;
+/** Other World cookies checked for this World's session after a move. */
+const MOVED_COOKIE_CANDIDATES = 32;
+/** Longest return path a login carries; longer ones land on `/`. */
+const RETURN_PATH_MAX_LENGTH = 2048;
+const RETURN_PATH_BASE = "http://world.invalid";
 const AUTH_TOKEN_TTL_SECONDS = 30 * 24 * 60 * 60;
 const LOGIN_WINDOW_MS = 60_000;
 const LOGIN_MAX_ATTEMPTS = 20;
@@ -41,6 +52,69 @@ function base64UrlDecode(value: string) {
     padded.replace(/-/g, "+").replace(/_/g, "/"),
     "base64",
   ).toString("utf8");
+}
+
+/**
+ * The session cookie name for the World the browser reached. Cookies are
+ * scoped to a host but not to its port, so the name carries the port the
+ * browser used (its scheme's default when the address has none): each
+ * World on a host keeps its own cookie, and a browser holds at most one per
+ * port, however many previews come and go (one name per signing secret
+ * would pile up until request headers outgrow the server's limit).
+ */
+function authCookieName(req: Request): string {
+  const url = new URL(req.url);
+  const port = url.port || (url.protocol === "https:" ? "443" : "80");
+  return `${AUTH_COOKIE_PREFIX}${port}`;
+}
+
+/**
+ * The same-origin path and query a login returns to, or null when `raw` is
+ * not one: only a relative path (no scheme, no `//`, no backslash, no
+ * control character), never the login page, and never with a `token`.
+ * @internal Exported for its open-redirect tests.
+ */
+export function safeReturnPath(raw: string | null): string | null {
+  if (
+    !raw ||
+    raw.length > RETURN_PATH_MAX_LENGTH ||
+    !raw.startsWith("/") ||
+    raw.startsWith("//") ||
+    // Backslashes read as slashes, and browsers drop tabs and newlines
+    // from addresses, so `/\t/host` would become `//host`.
+    raw.includes("\\") ||
+    hasControlCharacter(raw)
+  )
+    return null;
+  let url: URL;
+  try {
+    url = new URL(raw, RETURN_PATH_BASE);
+  } catch {
+    return null;
+  }
+  if (url.origin !== RETURN_PATH_BASE) return null;
+  if (url.searchParams.has("token")) url.searchParams.delete("token");
+  const path = `${url.pathname}${url.search}`;
+  // Dot segments can normalise `/.//host` into `//host`.
+  if (path.startsWith("//") || path.includes("\\")) return null;
+  if (url.pathname === "/login") return null;
+  return path;
+}
+
+function hasControlCharacter(text: string): boolean {
+  for (let i = 0; i < text.length; i++) {
+    const code = text.charCodeAt(i);
+    if (code < 0x20 || code === 0x7f) return true;
+  }
+  return false;
+}
+
+/** `/login`, carrying the request's own path and query when it has one. */
+function loginLocation(url: URL): string {
+  const next = safeReturnPath(`${url.pathname}${url.search}`);
+  return next && next !== "/"
+    ? `/login?next=${encodeURIComponent(next)}`
+    : "/login";
 }
 
 export function createAuthHandlers(args: {
@@ -191,13 +265,61 @@ export function createAuthHandlers(args: {
     return `${payload}.${sign(payload)}`;
   }
 
-  function authCookie(): string {
-    return `${AUTH_COOKIE}=${signedToken()}; HttpOnly; SameSite=Lax; Path=/; Max-Age=${AUTH_TOKEN_TTL_SECONDS}${args.secureCookies ? "; Secure" : ""}`;
+  function cookieAttributes(maxAge: number): string {
+    return `HttpOnly; SameSite=Lax; Path=/; Max-Age=${maxAge}${args.secureCookies ? "; Secure" : ""}`;
   }
 
-  function authCookieHeaders(req: Request): Record<string, string> {
+  function setCookie(req: Request, token: string, maxAge: number): string {
+    return `${authCookieName(req)}=${token}; ${cookieAttributes(maxAge)}`;
+  }
+
+  function clearCookie(name: string): string {
+    return `${name}=; ${cookieAttributes(0)}`;
+  }
+
+  /** Seconds the token has left, from its verified payload. */
+  function remainingSeconds(token: string): number {
+    try {
+      const { exp } = JSON.parse(base64UrlDecode(token.split(".")[0]!)) as {
+        exp: number;
+      };
+      return Math.max(1, exp - Math.floor(Date.now() / 1000));
+    } catch {
+      return AUTH_TOKEN_TTL_SECONDS;
+    }
+  }
+
+  /**
+   * A session found under another World cookie name, moved to this World's
+   * name: the same token, so Web Push and open sockets keep their session,
+   * for the time it has left. Only the legacy shared name is cleared; an
+   * earlier port's cookie stays, since that port may still reach this World
+   * (a forwarded port) and each port holds one cookie at most.
+   */
+  function migratedCookieHeaders(
+    req: Request,
+    session: { token: string; moved: string },
+  ): [string, string][] {
+    const headers: [string, string][] = [
+      [
+        "set-cookie",
+        setCookie(req, session.token, remainingSeconds(session.token)),
+      ],
+    ];
+    if (session.moved === LEGACY_AUTH_COOKIE)
+      headers.push(["set-cookie", clearCookie(LEGACY_AUTH_COOKIE)]);
+    return headers;
+  }
+
+  function authCookieHeaders(req: Request): [string, string][] {
     // Reauthentication keeps every live tab on the same session token.
-    return isAuthed(req) ? {} : { "set-cookie": authCookie() };
+    const session = authedSession(req);
+    if (session?.moved)
+      return migratedCookieHeaders(req, { ...session, moved: session.moved });
+    if (session) return [];
+    return [
+      ["set-cookie", setCookie(req, signedToken(), AUTH_TOKEN_TTL_SECONDS)],
+    ];
   }
 
   function secretsEqual(actual: string, expected: string): boolean {
@@ -228,14 +350,85 @@ export function createAuthHandlers(args: {
     }
   }
 
+  /**
+   * This World's valid sessions in the request, the current name first. A
+   * session can also sit under another World cookie name: the legacy shared
+   * name, or the name of a port this World used before a restart. `first`
+   * stops at the first one found.
+   */
+  function ownSessions(
+    req: Request,
+    first: boolean,
+  ): { name: string; token: string }[] {
+    if (!authRequired) return [];
+    const header = req.headers.get("cookie");
+    if (!header) return [];
+    const name = authCookieName(req);
+    const sessions: { name: string; token: string }[] = [];
+    const current = parseCookie(header, name);
+    if (current !== null && isValidSignedToken(current)) {
+      sessions.push({ name, token: current });
+      if (first) return sessions;
+    }
+    let checked = 0;
+    for (const part of header.split(";")) {
+      const separator = part.indexOf("=");
+      const key = part.slice(0, Math.max(0, separator)).trim();
+      if (
+        separator < 0 ||
+        key === name ||
+        (key !== LEGACY_AUTH_COOKIE && !key.startsWith(AUTH_COOKIE_PREFIX))
+      )
+        continue;
+      // Bounded: a browser's other Worlds, not an arbitrary cookie pile.
+      if (++checked > MOVED_COOKIE_CANDIDATES) break;
+      const token = parseCookie(part, key);
+      if (token === null || !isValidSignedToken(token)) continue;
+      sessions.push({ name: key, token });
+      if (first) break;
+    }
+    return sessions;
+  }
+
+  /** This World's session; `moved` names its other cookie, if it is there. */
+  function authedSession(
+    req: Request,
+  ): { token: string; moved?: string } | null {
+    const [session] = ownSessions(req, true);
+    if (!session) return null;
+    return session.name === authCookieName(req)
+      ? { token: session.token }
+      : { token: session.token, moved: session.name };
+  }
+
   function isAuthed(req: Request): boolean {
-    if (!authRequired) return true;
-    const token = parseCookie(req.headers.get("cookie"), AUTH_COOKIE);
-    return token !== null && isValidSignedToken(token);
+    return !authRequired || authedSession(req) !== null;
   }
 
   function sessionToken(req: Request): string | null {
-    return parseCookie(req.headers.get("cookie"), AUTH_COOKIE);
+    return (
+      authedSession(req)?.token ??
+      parseCookie(req.headers.get("cookie"), authCookieName(req))
+    );
+  }
+
+  /**
+   * A page load signed in under another World cookie name: the same address
+   * again with the session under this World's name, so it moves once.
+   */
+  function migrateLegacyCookie(req: Request): Response | null {
+    if (req.method !== "GET") return null;
+    const session = authedSession(req);
+    if (!session?.moved) return null;
+    const url = new URL(req.url);
+    return new Response(null, {
+      status: 302,
+      headers: [
+        ["location", safeReturnPath(`${url.pathname}${url.search}`) ?? "/"],
+        ["cache-control", "no-store"],
+        ...migratedCookieHeaders(req, { ...session, moved: session.moved }),
+      ],
+    });
   }
 
   /** Failed agent CLI tokens, kept apart so they never lock out a login. */
@@ -276,13 +469,15 @@ export function createAuthHandlers(args: {
       req.headers.get("sec-fetch-site") === "cross-site"
     )
       return new Response("forbidden", { status: 403 });
-    return new Response(null, {
-      status: 204,
-      headers: {
-        "set-cookie": `${AUTH_COOKIE}=; HttpOnly; SameSite=Lax; Path=/; Max-Age=0${args.secureCookies ? "; Secure" : ""}`,
-        "cache-control": "no-store",
-      },
-    });
+    const headers: [string, string][] = [
+      ["set-cookie", clearCookie(authCookieName(req))],
+      ["cache-control", "no-store"],
+    ];
+    // A session this World signed under another name would sign it back in.
+    for (const session of ownSessions(req, false))
+      if (session.name !== authCookieName(req))
+        headers.push(["set-cookie", clearCookie(session.name)]);
+    return new Response(null, { status: 204, headers });
   }
 
   function handleTokenLogin(req: Request, ip = "unknown"): Response | null {
@@ -299,15 +494,17 @@ export function createAuthHandlers(args: {
     const valid = secretsEqual(suppliedToken, args.urlLoginToken);
     if (valid) attempts.failures = 0;
     else failLogin(attempts);
-    const location = valid ? `${url.pathname}${url.search}` : "/login";
+    const location = valid
+      ? (safeReturnPath(`${url.pathname}${url.search}`) ?? "/")
+      : loginLocation(url);
     return new Response(null, {
       status: 303,
-      headers: {
-        location,
-        ...(valid ? authCookieHeaders(req) : {}),
-        "cache-control": "no-store",
-        "referrer-policy": "no-referrer",
-      },
+      headers: [
+        ["location", location],
+        ...(valid ? authCookieHeaders(req) : []),
+        ["cache-control", "no-store"],
+        ["referrer-policy", "no-referrer"],
+      ],
     });
   }
 
@@ -369,11 +566,11 @@ export function createAuthHandlers(args: {
     if (usePin) pinFailures = 0;
     return new Response(JSON.stringify({ ok: true }), {
       status: 200,
-      headers: {
-        "content-type": "application/json",
-        "cache-control": "no-store",
+      headers: [
+        ["content-type", "application/json"],
+        ["cache-control", "no-store"],
         ...authCookieHeaders(req),
-      },
+      ],
     });
   }
 
@@ -385,14 +582,17 @@ export function createAuthHandlers(args: {
     return handleCredentialLogin(req, ip, true);
   }
 
-  function loginPage(): Response {
+  function loginPage(req: Request): Response {
+    const next =
+      safeReturnPath(new URL(req.url).searchParams.get("next")) ?? "/";
     if (!authRequired) {
       return new Response(null, {
         status: 302,
-        headers: { location: "/", "cache-control": "no-store" },
+        headers: { location: next, "cache-control": "no-store" },
       });
     }
-    return new Response(renderLoginPage(Boolean(args.pin), args.tokenCommand), {
+    const page = renderLoginPage(Boolean(args.pin), args.tokenCommand, next);
+    return new Response(page, {
       headers: {
         "content-type": "text/html; charset=utf-8",
         "cache-control": "no-store",
@@ -410,15 +610,20 @@ export function createAuthHandlers(args: {
     handlePinLogin,
     handleLogout,
     loginPage,
+    migrateLegacyCookie,
   };
 }
 
-export function unauthenticatedLoginRedirect(): Response {
+export function unauthenticatedLoginRedirect(req: Request): Response {
   // Use a relative Location so reverse proxies preserve the public origin
-  // instead of leaking the internal upstream host. Intentionally ignores
-  // request URLs and forwarded headers.
+  // instead of leaking the internal upstream host. Only the request's path
+  // and query travel, as `next`, so the login returns to the same page and
+  // its switches; its host and forwarded headers are ignored.
   return new Response(null, {
     status: 302,
-    headers: { location: "/login" },
+    headers: {
+      location: loginLocation(new URL(req.url)),
+      "cache-control": "no-store",
+    },
   });
 }

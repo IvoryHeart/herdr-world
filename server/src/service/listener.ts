@@ -160,6 +160,7 @@ export function listen(deps: ListenerDeps) {
     handlePinLogin,
     handleLogout,
     loginPage,
+    migrateLegacyCookie,
     bearerAuth,
   } = deps.auth;
   const { handleUpdateCheck, handleUpdateInstall } = deps.update;
@@ -386,7 +387,7 @@ export function listen(deps: ListenerDeps) {
       return handleLogin(req, clientIp);
     }
     if (url.pathname === "/login") {
-      return loginPage();
+      return loginPage(req);
     }
     // The login page's logo and favicon must also work before login.
     if (url.pathname === "/herdr-world-icon-192.png") {
@@ -460,7 +461,7 @@ export function listen(deps: ListenerDeps) {
     if (!isAuthed(req)) {
       const accept = req.headers.get("accept") ?? "";
       if (req.method === "GET" && accept.includes("text/html")) {
-        return unauthenticatedLoginRedirect();
+        return unauthenticatedLoginRedirect(req);
       }
       return new Response("unauthorized", { status: 401 });
     }
@@ -471,6 +472,10 @@ export function listen(deps: ListenerDeps) {
       config.publicOrigin,
     );
     if (admissionError) return admissionError;
+    if (req.headers.get("accept")?.includes("text/html")) {
+      const migrated = migrateLegacyCookie(req);
+      if (migrated) return migrated;
+    }
 
     if (url.pathname.startsWith("/ide/"))
       return handleIdeRequest(req, url, server);
