@@ -11,6 +11,8 @@
  *
  * Bounds that only fire when something fails (request timeouts) are not
  * waits a test takes and stay with their callers.
+ *
+ * @internal Exported for the timing tests; production code calls `timing`.
  */
 export const PRODUCTION_TIMINGS = {
   /** A sibling World reads the open questions of homes on its runtimes. */
@@ -35,9 +37,10 @@ export const PRODUCTION_TIMINGS = {
 } as const;
 
 export type TimingName = keyof typeof PRODUCTION_TIMINGS;
+/** @internal */
 export type Timings = { readonly [name in TimingName]: number };
 
-/** Orders every timing set keeps: `[shorter, longer]`. */
+/** @internal Orders every timing set keeps: `[shorter, longer]`. */
 export const TIMING_ORDER: readonly (readonly [TimingName, TimingName])[] = [
   // A failed read keeps the last list for a few reads, so items do not flicker.
   ["askPeerPollMs", "askPeerGraceMs"],
@@ -49,6 +52,7 @@ export const TIMING_ORDER: readonly (readonly [TimingName, TimingName])[] = [
 ];
 
 /**
+ * @internal
  * Test values that cannot be a few milliseconds: a library refuses less
  * (proper-lockfile clamps `stale` to at least 2 s and `update` to at least
  * 1 s), or an order above such a minimum needs more.

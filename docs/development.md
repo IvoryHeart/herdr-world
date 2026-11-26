@@ -104,6 +104,20 @@ seconds without renewal, and stale reports have no open link. See the
 [Shipyard API guide](shipyard-api.md#local-instance-registry) for bounds and CLI
 try commands. No discovery probes or additional servers are started by Shipyard.
 
+## Waiting in tests
+
+Tests react instead of pausing. Await the event, promise, message, DOM change or
+counted read the case checks; when code gives no signal, add one to the code
+under test (as `afterAskPeerReads` does) rather than polling. To prove that
+something does not happen, count the cycles that would have done it. Product
+timers take their durations from `shared/timings.ts`; a test runs the same real
+timers on the few-millisecond set with `useTestTimings()` or `withTestTimings()`
+from `shared/testing/timings.ts`, and a spawned process with
+`--preload ./shared/testing/timings-preload.ts`. Production code never switches
+the set. `bun run check:test-waits` (static lane) fails on a new fixed sleep in a
+test file; `scripts/test-waits-allowlist.json` only shrinks. After removing
+sleeps, `bun scripts/check-test-waits.ts --update` lowers its entry.
+
 ## Development tools
 
 To inspect the Claude limits ownership repair without a live account, open
