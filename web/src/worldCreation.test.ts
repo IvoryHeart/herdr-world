@@ -566,11 +566,11 @@ test("acknowledged creation survives runtime retirement without publishing into 
 
 test("unacknowledged preparation has a finite deadline and releases its owner demand", async () => {
   fixture();
-  await withTestTimings(() =>
-    expect(store.createQualifiedTab(owner, "b")).rejects.toThrow(
+  await withTestTimings(async () => {
+    await expect(store.createQualifiedTab(owner, "b")).rejects.toThrow(
       "preparation timed out; nothing was created",
-    ),
-  );
+    );
+  });
   expect(creationSources()).toEqual([]);
 });
 
