@@ -5,6 +5,8 @@
   "requirement": "openspec/specs/runtime-federation/spec.md",
   "properties": "Captured host/generation remains the dispatch owner; no fallback after explicit rejection",
   "existingTests": [
+    "server/src/herdr-core/transport.test.ts",
+    "web/src/api.test.ts",
     "server/src/connections/protocol.test.ts",
     "server/src/connections/session-link-routing.test.ts",
     "server/src/connections/http-routing.test.ts",
@@ -26,6 +28,8 @@
       "verification/composition.md"
     ],
     "tests": [
+      "server/src/herdr-core/transport.test.ts",
+      "web/src/api.test.ts",
       "server/src/connections/protocol.test.ts",
       "server/src/connections/session-link-routing.test.ts",
       "server/src/connections/http-routing.test.ts",
@@ -37,7 +41,7 @@
     "checks": ["bun run check", "bun run verification:check"],
     "review": "Accepted within documented bounds by review 5516249164; existing consumer/platform checks and excluded claims remain mandatory."
   },
-  "evidenceDecision": "Qualified manager leases supply dispatch authority. Protocol and HTTP tests check malformed/stale generations, explicit rejection, legacy omission and cancellation of stale streams. Usage revalidation directly checks one-shot AbortSignal socket cancellation without expanding operation authority or the model domain. Candidate Roamgate transport consumers add explicit master/forward ownership, bounded session scheduling and qualified status reconciliation checks; existing model bounds and native-platform exclusions remain unchanged. Independent candidate acceptance is still required.",
+  "evidenceDecision": "Qualified manager leases supply dispatch authority. Protocol and HTTP tests check malformed/stale generations, explicit rejection, legacy omission and cancellation of stale streams. Usage revalidation directly checks one-shot AbortSignal socket cancellation without expanding operation authority or the model domain. Candidate Roamgate transport consumers add explicit master/forward ownership, bounded session scheduling and qualified status reconciliation checks; existing model bounds and native-platform exclusions remain unchanged. Independent candidate acceptance is still required. Mutation regressions check production core transport selection, forwarded versus remote endpoint identity and configured state directories; client pushes from sibling hosts at the same generation stay isolated.",
   "promotion": {
     "decision": "accepted",
     "review": "https://github.com/IvoryHeart/herdr-world/pull/188#pullrequestreview-5516249164",

@@ -79,6 +79,41 @@ test("a replacement, changed foreground or retired lease sends nothing", async (
     );
   }
 });
+test("the decisive terminal.get refuses a same-name foreground with a new pid", async () => {
+  const { w, address, lease, fence } = await setup();
+  w.fake.onCall = (method) => {
+    if (method === "terminal.get") {
+      // Change only the get reply, leaving the subscribed mirror unchanged.
+      w.fake.terminal(address)!.foreground = { pid: 53000, name: "codex" };
+    }
+  };
+  await expect(
+    lease.runtime.send(fence, "Answer", async () => true),
+  ).rejects.toMatchObject({ reason: "foreground-changed" });
+  expect(w.fake.calls.filter((c) => c.method === "terminal.send")).toEqual([]);
+});
+
+test("revocation during the decisive terminal.get prevents native send", async () => {
+  const { w, lease, fence } = await setup();
+  let authorized = true;
+  w.fake.onCall = (method) => {
+    if (method === "terminal.get") authorized = false;
+  };
+  await expect(
+    lease.runtime.send(
+      fence,
+      "Answer",
+      async () => true,
+      1000,
+      () => authorized,
+    ),
+  ).rejects.toMatchObject({ reason: "lease" });
+  expect(w.fake.calls.filter((c) => c.method === "terminal.get")).toHaveLength(
+    1,
+  );
+  expect(w.fake.calls.filter((c) => c.method === "terminal.send")).toEqual([]);
+});
+
 test("a lost send reply is uncertain and is never retried", async () => {
   const { w, lease, fence } = await setup();
   w.fake.dropNextWriteReply = true;

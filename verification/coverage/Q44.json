@@ -5,6 +5,8 @@
   "requirement": "openspec/specs/world-adapters/spec.md",
   "properties": "Instance-qualified opaque IDs; complete-list absence only; reset and evidence fences; event payloads never publish; declared verbs and acquisition limits; retired and disabled owners cannot acquire or publish; synthetic code excluded from the production bundle",
   "existingTests": [
+    "server/src/herdr-core/connections.test.ts",
+    "server/src/herdr-core/native-send.test.ts",
     "server/src/adapters/conformance.test.ts",
     "server/src/adapters/session.test.ts",
     "server/src/adapters/registry.test.ts",
@@ -27,6 +29,8 @@
     "models": [],
     "contracts": ["verification/contracts/adapter-conformance.md"],
     "tests": [
+      "server/src/herdr-core/connections.test.ts",
+      "server/src/herdr-core/native-send.test.ts",
       "server/src/adapters/conformance.test.ts",
       "server/src/adapters/session.test.ts",
       "server/src/adapters/registry.test.ts",
@@ -40,7 +44,7 @@
     ],
     "review": "The accepted delivery link records the merged design contract, not implementation acceptance. This adapter implementation awaits independent PR review."
   },
-  "evidenceDecision": "P3 selects direct external-source conformance rather than a finite model. Existing runtime/snapshot models remain required for their unchanged owner fences; these tests establish the new adapter boundary, not durable identity, effect recovery or v2 delivery. Typed runtime-port translation and actual raw-client-free snapshot, Desk screen and terminal-setting consumers add direct compatibility evidence; native traffic, lease ownership and no-replay behavior retain their existing contracts. Remaining callback areas are explicitly TUI-only; no core runtime is enabled.",
+  "evidenceDecision": "P3 selects direct external-source conformance rather than a finite model. Existing runtime/snapshot models remain required for their unchanged owner fences; these tests establish the new adapter boundary, not durable identity, effect recovery or v2 delivery. Typed runtime-port translation and actual raw-client-free snapshot, Desk screen and terminal-setting consumers add direct compatibility evidence; native traffic, lease ownership and no-replay behavior retain their existing contracts. Remaining callback areas are explicitly TUI-only; no core runtime is enabled. Mutation regressions exercise native write and float-shell lease refusal through a sibling runtime, and decisive foreground-pid and authorization checks. These extend direct core consumer conformance rather than the provider-neutral model domain.",
   "promotion": {
     "decision": "pending",
     "scope": "New adapter boundary only; independent implementation review and CI required."
