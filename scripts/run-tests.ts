@@ -1,3 +1,4 @@
+import { retryTests } from "./test-retry";
 import { fileURLToPath } from "node:url";
 import { availableParallelism } from "node:os";
 import {
@@ -22,7 +23,19 @@ import { cleanupRunTemp, createRunTemp, sweepStaleRunTemps } from "./test-temp";
 // `--web-browser` selects the Chrome-driven suites outside World, which CI runs
 // as their own job; HERDR_TEST_EXCLUDE_WORLD_BROWSER=1 leaves out everything
 // that job and the World shards run.
-const selection = liveTestArgs(process.argv.slice(2));
+const runnerArgs = process.argv.slice(2);
+const retryKind = runnerArgs
+  .find((arg) => arg.startsWith("--retry-flaky="))
+  ?.split("=")[1];
+const flakeReport = runnerArgs
+  .find((arg) => arg.startsWith("--flake-report="))
+  ?.slice("--flake-report=".length);
+if (retryKind && (!["unit", "browser"].includes(retryKind) || !flakeReport))
+  throw new Error("Retry requires unit/browser mode and a flake report");
+const selection = liveTestArgs(
+  runnerArgs.filter((arg) => !/^--(?:retry-flaky|flake-report)=/.test(arg)),
+);
+if (retryKind && selection.live) throw new Error("Live checks never retry");
 const webBrowser = selection.args[0] === "--web-browser";
 const args = webBrowser
   ? [...webBrowserSuites, ...selection.args.slice(1)]
@@ -95,34 +108,55 @@ try {
   if (runWorldAfter)
     commands.push([process.execPath, "scripts/run-world-tests.ts"]);
   for (const command of commands) {
-    const child = Bun.spawn(command, {
-      stdin: "inherit",
-      stdout: "inherit",
-      stderr: "inherit",
-      env: {
-        ...env,
-        ...(warm ? { HERDR_CHROME_WARM: "1" } : {}),
-        ...(usesBrowser ? heldEnv("browser") : {}),
-      },
-    });
-    const interrupt = () => child.kill("SIGINT");
-    const terminate = () => child.kill("SIGTERM");
-    const hangup = () => child.kill("SIGHUP");
-    process.on("SIGINT", interrupt);
-    process.on("SIGTERM", terminate);
-    process.on("SIGHUP", hangup);
-    try {
-      process.exitCode = await child.exited;
-      const failures = tripwireFailures(env);
-      if (failures) {
-        console.error(failures);
-        process.exitCode = 1;
+    const run = async (command: string[]) => {
+      const child = Bun.spawn(command, {
+        stdin: "inherit",
+        stdout: "inherit",
+        stderr: "inherit",
+        env: {
+          ...env,
+          ...(warm ? { HERDR_CHROME_WARM: "1" } : {}),
+          ...(usesBrowser ? heldEnv("browser") : {}),
+        },
+      });
+      const interrupt = () => child.kill("SIGINT");
+      const terminate = () => child.kill("SIGTERM");
+      const hangup = () => child.kill("SIGHUP");
+      process.on("SIGINT", interrupt);
+      process.on("SIGTERM", terminate);
+      process.on("SIGHUP", hangup);
+      try {
+        const code = await child.exited;
+        const failures = tripwireFailures(env);
+        if (failures) {
+          console.error(failures);
+          return 1;
+        }
+        return code;
+      } finally {
+        process.off("SIGINT", interrupt);
+        process.off("SIGTERM", terminate);
+        process.off("SIGHUP", hangup);
       }
-    } finally {
-      process.off("SIGINT", interrupt);
-      process.off("SIGTERM", terminate);
-      process.off("SIGHUP", hangup);
-    }
+    };
+    const junit = testArgs
+      .find((arg) => arg.startsWith("--reporter-outfile="))
+      ?.slice("--reporter-outfile=".length);
+    process.exitCode =
+      retryKind && command[1] === "test"
+        ? await retryTests({
+            kind: retryKind as "unit" | "browser",
+            report: flakeReport!,
+            junit:
+              junit ||
+              (() => {
+                throw new Error("Retry requires JUnit output");
+              })(),
+            command,
+            run,
+            healthy: () => !tripwireFailures(env),
+          })
+        : await run(command);
     if (process.exitCode !== 0) break;
   }
 } finally {

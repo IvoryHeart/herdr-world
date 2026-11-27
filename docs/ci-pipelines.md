@@ -86,13 +86,50 @@ Once the queue's checks pass and review requirements hold, GitHub merges the PR.
 FirstMate enables the queue in the ruleset after this workflow change merges;
 the workflow does not change repository settings.
 
-A failing unit, browser or behavioral test step retries once inside its existing
-job. A second failure fails the job. Before a behavioral retry, the failed
-run and resource receipts move into retained `retries/` diagnostics. The aggregate
-reads only the current `runs/` and `resources/`, keeping its one-receipt-per-shard
-check intact. Release/nightly infrastructure failures
-receive one automatic failed-job retry; main's issue remains visible through its
-infrastructure retry. There are no automatic revert branches or PRs.
+### Flaky tests
+
+CI retries a failed **unit file** or exact **browser case** once inside its existing
+job. Passing files and unrelated browser cases run once; World retries reuse the
+already-built browser assets. A recovered case is recorded as **flaky**; a second
+failure, missing recovery evidence, crash or isolation-tripwire violation stays red.
+Models, static checks, privacy and PR-description checks never retry. Local test
+commands do not enable recovery by default.
+
+Every test shard retains `flaky-tests-*` JSON artifacts, including failed jobs and
+previous attempts of a rerun. **Delivery checks** lists every recovered file and
+case under **Flaky tests**, and checks the open issue history with a read-only
+token. A test that flakes on more than three distinct CI runs in seven days
+blocks runs selecting its file, including a later first-pass success. Attempts
+of the same run count once; occurrences exactly seven days old still count.
+Once breached, the open cause stays blocked until explicit fix or quarantine;
+waiting for the original window to expire does not clear it.
+
+The trusted **Flaky test tracking** workflow uses default-branch code, reads the
+source run's artifacts as data, and serializes updates across branches. It creates
+one open issue labelled `flaky` per file/case, preserving the run links and owner
+notes. Close the issue after fixing the cause; another flake after closure starts
+a new issue. To quarantine explicitly, the owner adds `flaky-quarantined` to its
+open issue (create that label if needed). Quarantine exempts only the frequency
+limit: tests still run and a second failure still fails CI. No automatic skip,
+quarantine or issue closure occurs.
+
+While accounting is pending, the trusted workflow holds a `Delivery checks`
+commit status, then records success or failure after updating history. GitHub
+[requires both a same-named status and check to pass](https://docs.github.com/en/pull-requests/how-tos/merge-and-close-pull-requests/troubleshooting-required-status-checks),
+so concurrently finishing runs cannot erase a fourth occurrence. History/API
+errors keep accounting red or pending. The tracker becomes active when its
+workflow reaches the default branch; a stacked preview still exercises the
+read-only gate and complete synthetic runner/policy regressions.
+
+To inspect it in GitHub, open a PR's **Checks**, select **Delivery checks**, then
+read **Flaky tests** in its summary. Open **Actions → Flaky test tracking** for
+issue-update evidence, or **Issues → Labels → flaky** for causes and run links.
+The focused `scripts/test-retry.test.ts` fixtures deliberately fail once and pass,
+fail twice, crash and trip the isolation guard without creating real flaky issues.
+
+Release/nightly infrastructure failures retain their separate one-time automatic
+failed-job retry. Main's issue remains visible through its infrastructure retry.
+There are no automatic revert branches or PRs.
 
 ## Side workflows
 
@@ -129,7 +166,7 @@ base. Keep those fixes and their assertions:
 | Owner topology | Plaque cards open on the real click contract (`18811673d`) and camera readiness gates pointer input. |
 | Lighthouse lamps | Hold overflow catalogue responses explicitly; visible and overflow lanes settle independently (`fe80db7a6`). |
 | Windows Board after-commit | Reap the child after stdio close before reopening/removing its tree (`740a1dfa3`); the crash marker remains the actual commit boundary. |
-| Behavioral timeout | Core controls have a dedicated shard, bounded parallel faults and reused checker sessions (`fe80db7a6`); complete verification remains mandatory, with one in-job retry of a failed test step. |
+| Behavioral timeout | Core controls have a dedicated shard, bounded parallel faults and reused checker sessions (`fe80db7a6`); complete verification remains mandatory, with one in-job retry per failed file/case (models never retry). |
 | Core/Codex listing | Disable pinned Codex startup updates in the transparent recorder, including cached-update controls (`efddfb837`); every launched identity must still appear in World and CLI. |
 
 Local targeted runs cover the browser cases, fixture/recorder regressions and
@@ -144,7 +181,7 @@ explicit consumers. Model-backed owners select behavioral verification;
 model-free owners retain affected tests and inventory checks. World runtime
 changes select production/concurrent context suites. Non-browser and web test
 inventories are disjoint; browser shards retain the pinned Chrome and existing
-isolation rules. Each failed test step retries once; timing gates remain separate. See the nightly
+isolation rules. Only failed unit files or browser cases retry once; models never retry and timing gates remain separate. See the nightly
 latency signal for measured input delays.
 
 Three verification runners partition the complete accepted model inventory by
