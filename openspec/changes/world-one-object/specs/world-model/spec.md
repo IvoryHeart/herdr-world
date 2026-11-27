@@ -83,16 +83,21 @@ observation.
 ### Requirement: Pending, refused and uncertain commands
 
 Between a command and its observation, the browser that sent it SHALL show the
-requested value, marked pending, in every view of that browser. A stored or observed
-outcome SHALL travel in the World revision that carries its value, and the browser
-SHALL keep the pending value until its replica has that revision, so the old value
-never shows in between. World SHALL list
-commands in progress so other clients can mark the entity as changing. A refused or
-failed command SHALL show World's value again at once, with the reason where the user
-acted. A command whose acknowledgement was lost SHALL be uncertain until the first
-observation after reconnection decides it. A change that needs several source steps
-SHALL be a durable job whose state is part of the World object, so a reload or a
-service restart loses nothing.
+requested value, marked pending, in every view of that browser.
+
+#### Scenario: Pending command observation and recovery
+
+- **WHEN** a browser sends a World command
+- **THEN** A stored or observed
+  outcome SHALL travel in the World revision that carries its value, and the browser
+  SHALL keep the pending value until its replica has that revision, so the old value
+  never shows in between. World SHALL list
+  commands in progress so other clients can mark the entity as changing. A refused or
+  failed command SHALL show World's value again at once, with the reason where the user
+  acted. A command whose acknowledgement was lost SHALL be uncertain until the first
+  observation after reconnection decides it. A change that needs several source steps
+  SHALL be a durable job whose state is part of the World object, so a reload or a
+  service restart loses nothing.
 
 #### Scenario: Refusal
 - **WHEN** World or the runtime refuses a command

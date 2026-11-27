@@ -3,18 +3,23 @@
 ### Requirement: Caller-scoped question listing
 
 World SHALL support `herdr-world ask ls [--json]` through its existing CLI endpoint,
-using the common listing flags and output conventions of `result ls`. It SHALL
-list the verified calling terminal's retained questions, newest first by creation
-time, with newest insertion first for equal timestamps. Each entry SHALL expose
-its ID, state, nonnegative age in milliseconds and the question's first line.
-Open, answered and withdrawn questions SHALL be included without a state filter;
-existing owner dismissals SHALL retain their dismissed state. Withdrawal SHALL
-take precedence over an earlier answer or dismissal.
+using the common listing flags and output conventions of `result ls`.
 
-Listing ownership SHALL reuse question withdrawal's immutable connection and stable
-terminal identity, including its stricter fallback for legacy identities. An
-unverified caller SHALL be refused. Listing SHALL NOT mutate questions, acknowledge
-answers, publish ledger changes or send owner alerts.
+#### Scenario: Question list contents and authority
+
+- **WHEN** a caller lists retained questions
+- **THEN** It SHALL
+  list the verified calling terminal's retained questions, newest first by creation
+  time, with newest insertion first for equal timestamps. Each entry SHALL expose
+  its ID, state, nonnegative age in milliseconds and the question's first line.
+  Open, answered and withdrawn questions SHALL be included without a state filter;
+  existing owner dismissals SHALL retain their dismissed state. Withdrawal SHALL
+  take precedence over an earlier answer or dismissal.
+
+  Listing ownership SHALL reuse question withdrawal's immutable connection and stable
+  terminal identity, including its stricter fallback for legacy identities. An
+  unverified caller SHALL be refused. Listing SHALL NOT mutate questions, acknowledge
+  answers, publish ledger changes or send owner alerts.
 
 #### Scenario: Find an open question and withdraw it
 - **WHEN** a verified agent asks “Proceed?” and runs `ask ls`
@@ -35,11 +40,16 @@ answers, publish ledger changes or send owner alerts.
 
 The CLI and server SHALL refuse a whole question consisting only of an ask
 subcommand or `ls`, `list`, `get`, `answer`, `withdraw` or `help`, ignoring case
-and surrounding whitespace. Refusal SHALL provide a hint naming the appropriate
-command, create no question and send no owner alert, including a CLI fallback
-alert. Valid explicit subcommands SHALL retain their normal behavior; `ask help`
-SHALL point to `ask --help` without asking a question. Ordinary questions and
-multiword text containing these words SHALL remain valid.
+and surrounding whitespace.
+
+#### Scenario: Command words and ordinary questions
+
+- **WHEN** the CLI or service receives ask text
+- **THEN** Refusal SHALL provide a hint naming the appropriate
+  command, create no question and send no owner alert, including a CLI fallback
+  alert. Valid explicit subcommands SHALL retain their normal behavior; `ask help`
+  SHALL point to `ask --help` without asking a question. Ordinary questions and
+  multiword text containing these words SHALL remain valid.
 
 #### Scenario: A listing word is mistaken for a subcommand
 - **WHEN** an agent runs `herdr-world ask list`

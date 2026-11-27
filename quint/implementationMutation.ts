@@ -46,6 +46,8 @@ export type ImplementationFault =
   | "move-no-fork-guard"
   | "move-native-handoff"
   | "move-no-settle"
+  | "write-cas"
+  | "write-settle-publish"
   | "ide-queue"
   | "ide-start-epoch";
 export async function mutateImplementation(
@@ -85,6 +87,7 @@ export async function mutateImplementation(
       "seen-blind-write",
     ],
     "ide-lifecycle": ["ide-queue", "ide-start-epoch"],
+    "world-write-path": ["primary", "write-cas", "write-settle-publish"],
     "effect-recovery": [
       "primary",
       "effect-authorization",
@@ -122,6 +125,7 @@ export async function mutateImplementation(
     "herdr-core-runtime": "server/src/herdr-core/mirror.ts",
     "herdr-core-seen": "web/src/world/coreShared.ts",
     "agent-move": "server/src/world/agent-move.ts",
+    "world-write-path": "server/src/world/snapshot.ts",
     "ide-lifecycle": "server/src/ide/instances.ts",
     "binding-resolution": "server/src/world/binding-resolution.ts",
     "observation-base": "server/src/world/observation-v1.ts",
@@ -164,7 +168,9 @@ export async function mutateImplementation(
                       ? "web/src/world/observationBase.ts"
                       : name === "creation-flow" && fault === "admission-fence"
                         ? "web/src/world/createdTerminalAdmission.ts"
-                        : owners[name];
+                        : name === "world-write-path" && fault === "write-cas"
+                          ? "server/src/world/commands.ts"
+                          : owners[name];
   const original = await readFile(resolve(root, owner), "utf8");
   let contents: string;
   if (name === "claude-tap-lock") {
@@ -301,6 +307,23 @@ export async function mutateImplementation(
       ],
       // The service writes over a label another client changed meanwhile.
       "seen-blind-write": ["  if (shared !== expected) return null;\n", ""],
+    };
+    const [guard, replacement] = guards[fault]!;
+    assert.equal(original.split(guard).length, 2, `${fault} target changed`);
+    contents = original.replace(guard, replacement);
+  } else if (name === "world-write-path") {
+    const guards: Record<string, [string, string]> = {
+      // The epoch fence: a read that began before the host's last change
+      // is applied anyway and may settle a command with an old value.
+      primary: ["} else if (!this.admitted(work)) {", "} else if (false) {"],
+      // Compare-and-set: a change over a value the browser saw before
+      // another change is sent anyway.
+      "write-cas": ["if (input.expected !== current)", "if (false)"],
+      // A settle that leaves the value unchanged publishes no revision.
+      "write-settle-publish": [
+        "if (changed || settled) this.revision += 1;",
+        "if (changed) this.revision += 1;",
+      ],
     };
     const [guard, replacement] = guards[fault]!;
     assert.equal(original.split(guard).length, 2, `${fault} target changed`);
@@ -578,7 +601,9 @@ export async function mutateImplementation(
                   ? "quint/ide-lifecycle.ts"
                   : name === "observation-base"
                     ? "quint/observation-subjects.ts"
-                    : owner,
+                    : name === "world-write-path"
+                      ? "quint/world-write-path.ts"
+                      : owner,
       ),
     ],
     target: "bun",

@@ -133,11 +133,15 @@ transform (`web/src/world/testing/town-golden/overlayHold.ts`). The cold-pan fix
 in `townWorldTransform.ts` retains that layer with a 3D translation from the
 first paint, preventing missing overlay tiles when a gesture starts. This also
 changes Chrome's rasterization of the Shipyard signs at the laptop and wide
-viewports. Their nine reference images include that intentional change; the
-remaining ten references are unchanged. Reverting only the translation to 2D
-matches all prior references, while the production 3D translation matches the
-updated references. Keep the production transform in the fixture so the report
-continues to detect changes to those signs.
+viewports and the Post Office sign at phone and linux-half sizes, including the
+seven phone weather scenes. All eighteen affected references include that
+intentional change; the portrait reference is unchanged. The first refresh
+missed the nine Post Office references, producing sign-only mismatches in
+[CI run 45912538489](https://github.com/IvoryHeart/herdr-world/actions/runs/45912538489).
+Restoring the 2D translation matches those old Post Office references, confirming
+the cause; the production 3D translation matches the updated references. Keep
+the production transform in the fixture so the report continues to detect
+changes to those signs.
 
 Install the pinned browser using the existing [development guidance](development.md#verification),
 then run through the browser queue:

@@ -656,12 +656,24 @@ if (process.argv.includes("--parallel=${failingBatch === "isolated" ? 1 : 2}") &
       for (let pass = 1; pass <= runs; pass++) {
         const prefix = `shard-5-of-6${runs > 1 ? `-pass-${pass}` : ""}`;
         expected.push({
-          args: [selection.world[0], "--parallel=1", "--max-concurrency=1"],
+          args: [
+            selection.world[0],
+            "--parallel=1",
+            "--max-concurrency=1",
+            "--retry-flaky=browser",
+            `--flake-report=.agents/delivery/flakes-world-all-${pass}-1-${process.env.GITHUB_RUN_ATTEMPT || "local"}.json`,
+          ],
           label: `${prefix}-isolated`,
         });
         if (pass === failingPass && failingBatch === "isolated") break;
         expected.push({
-          args: [selection.world[1], "--parallel=2", "--max-concurrency=1"],
+          args: [
+            selection.world[1],
+            "--parallel=2",
+            "--max-concurrency=1",
+            "--retry-flaky=browser",
+            `--flake-report=.agents/delivery/flakes-world-all-${pass}-2-${process.env.GITHUB_RUN_ATTEMPT || "local"}.json`,
+          ],
           label: `${prefix}-parallel`,
         });
         if (pass === failingPass) break;
@@ -696,3 +708,89 @@ test("area files and shared metadata select the inventory check and preserve mod
     }
   }
 });
+
+test.each(["unit", "world", "web"])(
+  "an empty %s CI shard retains empty evidence and starts no test process",
+  (lane) => {
+    const root = mkdtempSync(join(tmpdir(), "ci-empty-shard-"));
+    try {
+      const child = Bun.spawnSync(
+        [
+          process.execPath,
+          join(import.meta.dir, "ci-tests.ts"),
+          lane,
+          lane === "world" ? "1" : "1/2",
+        ],
+        {
+          cwd: root,
+          env: {
+            ...process.env,
+            HERDR_CI_SELECTION: JSON.stringify({
+              unit: [],
+              world: [],
+              web: [],
+            }),
+          },
+          stdout: "pipe",
+          stderr: "pipe",
+        },
+      );
+      expect(child.exitCode).toBe(0);
+      expect(child.stderr.toString()).toBe("");
+      expect(child.stdout.toString()).toContain("no affected suites");
+      const file = lane === "world" ? "1" : "1-of-2";
+      const report = join(
+        root,
+        `.agents/delivery/flakes-${lane}-${file}-empty-${process.env.GITHUB_RUN_ATTEMPT || "local"}.json`,
+      );
+      expect(JSON.parse(readFileSync(report, "utf8"))).toEqual({
+        files: [],
+        flaky: [],
+      });
+    } finally {
+      rmSync(root, { recursive: true, force: true });
+    }
+  },
+);
+
+test.each(["unit", "web"])(
+  "%s CI reports preserve the workflow upload path and opt into scoped retry",
+  (lane) => {
+    const root = mkdtempSync(join(tmpdir(), "ci-report-path-"));
+    try {
+      mkdirSync(join(root, "scripts"));
+      writeFileSync(
+        join(root, "scripts/run-tests.ts"),
+        'await Bun.write("args.json", JSON.stringify(process.argv.slice(2)));',
+      );
+      const selection = {
+        unit: ["scripts/example.test.ts"],
+        web: ["web/src/Example.browser.test.ts"],
+        world: [],
+      };
+      const child = Bun.spawnSync(
+        [process.execPath, join(import.meta.dir, "ci-tests.ts"), lane, "1/2"],
+        {
+          cwd: root,
+          env: {
+            ...process.env,
+            HERDR_CI_SELECTION: JSON.stringify(selection),
+          },
+          stdout: "pipe",
+          stderr: "pipe",
+        },
+      );
+      expect(child.exitCode).toBe(0);
+      expect(child.stderr.toString()).toBe("");
+      const args = JSON.parse(readFileSync(join(root, "args.json"), "utf8"));
+      expect(args).toContain(
+        `--reporter-outfile=.agents/delivery/${lane === "web" ? "web-browser" : "unit"}-1-of-2.xml`,
+      );
+      expect(args).toContain(
+        `--retry-flaky=${lane === "unit" ? "unit" : "browser"}`,
+      );
+    } finally {
+      rmSync(root, { recursive: true, force: true });
+    }
+  },
+);

@@ -967,6 +967,12 @@
 
 The overlay's initial 3D translation establishes its compositor layer before
 input moves it. The motion-only raster hint is removed at rest so text can
-rerasterize at the settled zoom. Frame acceptance records explicit gesture
-boundaries and still refuses presented missing content; two-CPU runs expose the
-first-pan promotion race without changing the assertions.
+rerasterize at the settled zoom. The frame budget
+(`web/src/world/town/TownFrameBudget.browser.test.ts`) records explicit gesture
+boundaries and counts each shown frame once, by its presentation time: Chrome
+reports some frames twice, adding a FORKED or STATE_PRESENTED_PARTIAL reporter
+for a main frame shown in them. When raster falls behind on two starved cores,
+the moving layer can show a frame before a tile it uncovered is drawn (#1384),
+so at most 1 in 20 shown frames per pan or zoom may have such a tile.
+Re-rasterizing the overlay while it moves, the pre-#1318 patchy drawing, fails
+the raster budget instead.

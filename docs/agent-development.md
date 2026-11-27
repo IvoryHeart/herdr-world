@@ -43,7 +43,13 @@ The pinned CLI has no bulk command, so `scripts/archive-changes.ts` sequences it
 validated archive command. The feature-map migration archives the five completed
 legacy deltas with `--skip-specs`: they were already synchronized under the old
 rule, and current contracts include subsequent extensions that must be preserved.
-Future batches apply specs normally. Leave the CLI upgrade to its separate change.
+Future batches apply specs normally. `bun run spec:check` uses OpenSpec 2.1.1 to
+strictly validate current specs and active deltas, then checks that every archived
+change has completed tasks. Keep requirement bodies within 500 characters; put
+detailed rules and edge cases in scenarios without changing their meaning.
+The PR check permits a current-spec length repair only when an overlong body
+becomes at most 500 characters by moving its exact words into one new scenario,
+with existing scenarios, requirement names and surrounding text unchanged.
 
 ## OpenSpec skills
 
@@ -57,8 +63,13 @@ Use the repository's adapted skills:
 
 These live in `.agents/skills/`; `.claude/skills/` links to the same files.
 The `.openspec-target` marker stays `agents`, the CLI's generation target.
-An `openspec update` can regenerate its own `openspec-*` skills without replacing
-our `world-openspec-*` adaptations. Keep the pinned CLI until its separate upgrade.
+The pinned CLI is OpenSpec 2.1.1; invoke it with `bun run spec -- <arguments>`.
+Before updating workflows, inspect `bun run spec -- update --dry-run --json` and
+check that it leaves `world-openspec-*` untouched. Then run `bun run spec -- update`
+and choose **Keep in this project**. `skillsScope: project` in
+`openspec/config.yaml` keeps that choice for the team. Generated stock `openspec-*`
+skills are ignored local output; the tracked `world-openspec-*` adaptations remain
+the workflow entry points. Use those skill names instead of legacy `/opsx:*` commands.
 
 ## Capture PR evidence
 

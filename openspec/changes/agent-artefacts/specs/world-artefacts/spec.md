@@ -11,17 +11,22 @@ World things tied to the agent and room that made them, kept in the Library.
 
 World SHALL derive each agent's artefacts on the server from that agent's bound
 harness transcript and carry them on the per-agent desk read, for Herdr and
-herdr-core agents alike. Each record SHALL hold a stable ID for its place on
-its connection, title, kind (`document`, `report`, `page`, `image` or `file`),
-where it lives (an absolute file path on the agent's host or an HTTP(S) link),
-when it was made, its evidence, whether the file still exists and its maker:
-the immutable connection ID, pane ID, harness, the agent session Herdr reported
-(as a fingerprint, or none) and the room (workspace) it was made in. The room
-SHALL be the one World first saw that maker's transcript in, kept while the
-service runs even if the agent moves rooms, and never another agent's. Records
-SHALL be newest first, one per place, at most 24 per session. Views SHALL
-display these records only and SHALL NOT derive or keep their own maker, room,
-record or list.
+herdr-core agents alike.
+
+#### Scenario: Artefact projection and ownership
+
+- **WHEN** World projects an agent's artefacts
+- **THEN** Each record SHALL hold a stable ID for its place on
+  its connection, title, kind (`document`, `report`, `page`, `image` or `file`),
+  where it lives (an absolute file path on the agent's host or an HTTP(S) link),
+  when it was made, its evidence, whether the file still exists and its maker:
+  the immutable connection ID, pane ID, harness, the agent session Herdr reported
+  (as a fingerprint, or none) and the room (workspace) it was made in. The room
+  SHALL be the one World first saw that maker's transcript in, kept while the
+  service runs even if the agent moves rooms, and never another agent's. Records
+  SHALL be newest first, one per place, at most 24 per session. Views SHALL
+  display these records only and SHALL NOT derive or keep their own maker, room,
+  record or list.
 
 #### Scenario: The same file is written twice
 - **WHEN** an agent writes the same report path twice
@@ -52,13 +57,18 @@ record or list.
 For Claude Code and Codex, World SHALL treat a file-creating tool call naming a
 path, and a patch that adds a file, as reliable evidence, resolving relative
 paths against the working folder the transcript recorded for that call (a
-shell call's own `workdir` first), never against a later folder. A call the
-transcript does not place SHALL resolve only when the session used one folder.
-Links printed by publishing commands SHALL be reliable published links. Links
-the agent wrote in its reply SHALL be marked as a guess and shown as one.
-Edits of existing files, code and configuration files, harness bookkeeping and
-links carrying credentials SHALL NOT be artefacts. World SHALL NOT open, type
-into or otherwise act on the agent.
+shell call's own `workdir` first), never against a later folder.
+
+#### Scenario: Harness discovery evidence
+
+- **WHEN** World discovers artefacts from harness records
+- **THEN** A call the
+  transcript does not place SHALL resolve only when the session used one folder.
+  Links printed by publishing commands SHALL be reliable published links. Links
+  the agent wrote in its reply SHALL be marked as a guess and shown as one.
+  Edits of existing files, code and configuration files, harness bookkeeping and
+  links carrying credentials SHALL NOT be artefacts. World SHALL NOT open, type
+  into or otherwise act on the agent.
 
 #### Scenario: Codex adds a Markdown plan
 - **WHEN** a Codex patch adds `plan.md` in the session's folder
@@ -86,15 +96,20 @@ unknown rather than gone. Links SHALL never be fetched.
 
 World SHALL answer one host's artefact shelf on its immutable connection ID at
 exactly its current generation, refusing any other generation and never
-answering from another connection. The shelf SHALL hold the records of the
-host's running agents and of its agents that have gone, re-derived from the
-transcripts Apartments recorded for them, with a gone maker named as it was.
-A gone maker's room SHALL be the host's room that has the label Apartments
-recorded, when exactly one room has it now; otherwise the room SHALL be unknown
-and the record SHALL keep that label as the room's name as it was.
-One record SHALL stand per ID, a running maker's first, newest first, at most
-400, saying when more were found. The shelf SHALL be derived on each read and
-SHALL NOT be stored.
+answering from another connection.
+
+#### Scenario: Shelf identity and departed makers
+
+- **WHEN** World reads a host's artefact shelf
+- **THEN** The shelf SHALL hold the records of the
+  host's running agents and of its agents that have gone, re-derived from the
+  transcripts Apartments recorded for them, with a gone maker named as it was.
+  A gone maker's room SHALL be the host's room that has the label Apartments
+  recorded, when exactly one room has it now; otherwise the room SHALL be unknown
+  and the record SHALL keep that label as the room's name as it was.
+  One record SHALL stand per ID, a running maker's first, newest first, at most
+  400, saying when more were found. The shelf SHALL be derived on each read and
+  SHALL NOT be stored.
 
 #### Scenario: The agent is stopped
 - **WHEN** an agent that wrote a report is stopped
@@ -109,25 +124,30 @@ SHALL NOT be stored.
 ### Requirement: The Library is the home of artefacts
 
 The Library SHALL show a "Made by agents" wing beside memory and instructions,
-filtered by the Library's own readers (everything, a project, an agent). Each
-artefact SHALL show its kind, title, maker, project, when it was made, and
-whether it was deleted or is a guess. The Library's search SHALL find
-artefacts by title, kind, maker, project and path or link, alongside memory.
-Opening one SHALL show it in the Library's reader (Markdown, text, images and
-PDFs), with **Open in Files** for a file, which opens a live agent's Inspector
-at Files on that path on its own connection, and **Open link** for a link,
-which opens a new tab without an opener. Town's Library sign SHALL count the
-artefacts on its shelves.
+filtered by the Library's own readers (everything, a project, an agent).
 
-A live host with no agent whose harness has a memory adapter (every agent on
-it stopped) SHALL still offer the Library while its shelf holds something
-agents made: Town's sign (counting only what was made), the town center's and
-Board's Library entries, Settings and the command box SHALL open it on that
-wing alone, without reading or offering to edit the host's memory, and its
-search SHALL look through the made things only. A made file SHALL be read
-through its maker's room when no agent there runs. Memory SHALL return when
-an agent with a memory adapter starts on the host. A host with neither SHALL
-offer no Library.
+#### Scenario: Library readers and availability
+
+- **WHEN** World presents or opens the Library
+- **THEN** Each
+  artefact SHALL show its kind, title, maker, project, when it was made, and
+  whether it was deleted or is a guess. The Library's search SHALL find
+  artefacts by title, kind, maker, project and path or link, alongside memory.
+  Opening one SHALL show it in the Library's reader (Markdown, text, images and
+  PDFs), with **Open in Files** for a file, which opens a live agent's Inspector
+  at Files on that path on its own connection, and **Open link** for a link,
+  which opens a new tab without an opener. Town's Library sign SHALL count the
+  artefacts on its shelves.
+
+  A live host with no agent whose harness has a memory adapter (every agent on
+  it stopped) SHALL still offer the Library while its shelf holds something
+  agents made: Town's sign (counting only what was made), the town center's and
+  Board's Library entries, Settings and the command box SHALL open it on that
+  wing alone, without reading or offering to edit the host's memory, and its
+  search SHALL look through the made things only. A made file SHALL be read
+  through its maker's room when no agent there runs. Memory SHALL return when
+  an agent with a memory adapter starts on the host. A host with neither SHALL
+  offer no Library.
 
 #### Scenario: Search finds a report
 - **WHEN** the owner searches the Library for words in a report's title

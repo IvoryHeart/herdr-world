@@ -37,8 +37,11 @@ test("merge queue runs the protected Linux delivery graph on the queue commit", 
   expect(ci.jobs.delivery.name).toBe("Delivery checks");
   expect(ci.jobs.delivery.needs).toEqual([
     "validation-scope",
-    "validation",
+    "pr-description",
+    "static",
+    "unit-tests",
     "world-browser",
+    "web-browser",
     "behavioral",
     "dependency-security",
   ]);

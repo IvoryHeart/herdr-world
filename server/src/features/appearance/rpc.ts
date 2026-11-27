@@ -1,17 +1,25 @@
-import { planBoardPatch } from "../world/board-plan";
+import { planBoardPatch } from "../../world/board-plan";
 import {
   parseAppearanceTarget,
   parseAppearanceFields,
   continuingAppearance,
-} from "../../../shared/appearance";
-import { tabCardKey } from "../../../shared/terminalColor";
-import type { BridgeRpcContext } from "./context";
-import { worldRuntimeLease } from "../world/runtime-lease";
+} from "../../../../shared/appearance";
+import { tabCardKey } from "../../../../shared/terminalColor";
+import type { BridgeRpcContext, RpcServices } from "../../rpc/context";
+import type { FeatureKernel } from "../contract";
+import { worldRuntimeLease } from "../../world/runtime-lease";
+
+type Context = Omit<BridgeRpcContext, "services"> & {
+  services: Pick<
+    RpcServices,
+    "board" | "publishBoardChanged" | "publishWorldInvalidation" | "coreControl"
+  > & {
+    connectionManager: ReturnType<FeatureKernel["connections"]>;
+  };
+};
 
 /** Exact-runtime admission for World metadata and native names. */
-export async function handleAppearanceRpc(
-  rpc: BridgeRpcContext,
-): Promise<void> {
+export async function handleAppearanceRpc(rpc: Context): Promise<void> {
   const { id, method, params, sendReply, sendError } = rpc;
   const { board, publishBoardChanged, publishWorldInvalidation } = rpc.services;
   try {

@@ -53,11 +53,12 @@ update changes tool semantics or models, take ownership of its failing gate;
 automation does not weaken verification or approve/merge a PR.
 
 Behavioral verification CI uses Node 24.19.0 and Eclipse Temurin JDK
-21.0.13+9 (Linux x64). The shards and aggregate install that exact Java build
+21.0.13+9 (Linux x64). The model shards install that exact Java build
 through a commit-pinned `actions/setup-java`, reusing its runner tool cache when
 available. They do not select the runner image's preinstalled Java. Use the same
-build locally to reproduce CI tool identities; aggregation rejects differing
-tool identities, including Java patch versions.
+build locally to reproduce CI tool identities. Delivery checks aggregates the
+retained manifests without installing Node, Java or the checker; it still rejects
+differing tool identities, including Java patch versions.
 
 ## Validation
 
@@ -129,6 +130,10 @@ pushed ref for privacy. Description, changelog, source coverage, size, dead-code
 unit and behavioral policies run in CI. Before handoff, validate the exact PR body
 with `bun run check:pr-body <file> <base-ref>`. Non-documentation PRs retain the two
 impact lines and independent review; neither policy runs inside pre-push.
+The event-based description check waives only those two lines when GitHub's
+event sender and PR author both have login `dependabot[bot]` and type `Bot`.
+Title/body claims grant no exception. Source coverage, spec-edit policy, privacy,
+file-based test selection and independent review still apply.
 
 ### Privacy before publication
 
@@ -159,6 +164,12 @@ on the exact `users.noreply.github.com` domain, so bot signoffs and human coauth
 pass. This exception permits only those email values; all other privacy rules
 still apply, including Claude coauthor detection. Added file content retains its
 existing email policy.
+For verified Dependabot events, metadata permits only the exact `support` mailbox
+at `github.com` and `49699333+dependabot[bot]` at `users.noreply.github.com`.
+These are the standard signoff and coauthor identities, listed in
+`scripts/privacy-allowlist.ts`; other mailboxes and lookalike domains fail.
+This does not exempt generated dependency licenses: new copyright addresses
+still require their own attribution review.
 A missing or rewritten previous push head falls back to `origin/main`
 (or all history if main is unavailable); an unavailable requested head fails.
 Branch pushes exclude published main history. Merge commits scan lines absent
@@ -257,7 +268,7 @@ full unit inventory locally and full CI gate, even when that input is absent fro
 | Non-browser tests | Tests reaching changed inputs | All tests, across two CI runners |
 | Behavioral verification | Model/tooling/OpenSpec inputs or model-backed coverage owners; model-free owners run the cheap coverage inventory check | All accepted models, across three CI groups balanced by measured work |
 | World browser tests | Nearest consumer suites in the import graph; World runtime paths add the dense end-to-end suites (production and concurrent contexts, terminal handoff) | All six World shards |
-| Web browser tests | Affected registered browser suites | All suites, across two runners |
+| Web browser shards | Affected registered browser suites | All suites, across two runners |
 | Native installation | None; PRs run Linux checks | Tags and advisory nightly |
 | Release walk | None; runs with release acceptance | Exact tagged/nightly package, real TUI/core and signed-out Claude/Codex on Linux/macOS |
 

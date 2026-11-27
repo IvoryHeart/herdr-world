@@ -1,6 +1,6 @@
 import { herdrRuntimeFixture } from "../adapters/testing/runtime";
 import { expect, test } from "bun:test";
-import { handleDeskRpc } from "./desk";
+import { handleDeskRpc } from "../features/desk/rpc";
 import type { BridgeRpcContext } from "./context";
 import { WorldDeskRegistry } from "../world/desk-state";
 import { deskSessionFingerprint } from "../world/desk-observation";

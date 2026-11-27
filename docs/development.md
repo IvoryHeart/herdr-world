@@ -486,7 +486,8 @@ PR CI and Release run the remaining repository checks with one file worker and u
 to two concurrent cases, preserving the upstream test configuration. Both call the
 [shared World browser workflow](../.github/workflows/world-browser.yml), which runs
 six separate runners, each with one file worker and one active case, and
-**Web browser tests**. Browser jobs install the Chrome for Testing build pinned in
+the web browser lane (**Web browser shards** in PR CI). Browser jobs install the
+Chrome for Testing build pinned in
 [`tools/chrome/test-chrome.json`](../tools/chrome/test-chrome.json) (checksum
 verified, cached) and print its version and the runner's CPU, so a browser
 update is a reviewed change rather than a runner-image roll-out. Ubuntu 24.04
@@ -503,13 +504,14 @@ World browser suites between the six shards, discovering `*.test.ts` and
 until measured, and stale weights add no suites. Shared bundle entries are
 discovered from `web/src/world/*.browser.tsx`. Inventory checks reject missing
 or duplicate assignments. The required Delivery checks status succeeds only when
-repository validation, every World shard and the web browser job pass.
+every applicable static, dependency, unit, World/web browser and model leaf,
+along with PR description policy, passes.
 Markdown-only and exact-head reuse keep their existing shorter paths.
 PR CI supplies Linux source/browser evidence; main reports the same immutable
 PR result without heavy checks. Release tags build/test installed channel bytes
 before sealing. Release-please updates version/changelog metadata and dispatches
-ordinary PR CI automatically. **Web browser tests** runs the Chrome-driven suites outside
-World (`webBrowserSuites`) one file at a time.
+ordinary PR CI automatically. The web browser lane runs the Chrome-driven suites
+outside World (`webBrowserSuites`) one file at a time.
 
 Each World run writes JUnit results and per-file timings under `.agents/delivery/`.
 CI uploads them as `world-browser-N-attempt-M` artifacts, and the web job's JUnit results as `web-browser-attempt-M`, including on test failure. Compare

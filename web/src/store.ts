@@ -1675,28 +1675,6 @@ export const store = {
     );
   },
 
-  renameWorkspace(workspaceId: string, label: string) {
-    return action((lease) =>
-      lease.client.call("workspace.rename", {
-        workspace_id: workspaceId,
-        label,
-      }),
-    );
-  },
-
-  renameQualifiedWorkspace(
-    target: QualifiedRuntimeTarget,
-    workspaceId: string,
-    label: string,
-  ) {
-    return qualifiedAction(target, (lease) =>
-      lease.client.call("workspace.rename", {
-        workspace_id: workspaceId,
-        label,
-      }),
-    );
-  },
-
   closeWorkspace(workspaceId: string) {
     return action(
       (lease) =>

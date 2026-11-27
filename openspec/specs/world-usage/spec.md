@@ -14,7 +14,12 @@ in the [support table](../../../FEATURES.md#runtime-support). The
 
 ### Requirement: Numeric usage entities from host connectors
 
-World SHALL collect usage by default from available Claude, Codex, Pi and Gemini session files through each service-owned local or SSH runtime. Usage SHALL be view-neutral World entities, with deterministic digest-derived identity, source provenance, qualified connection ID and runtime generation. Published observations SHALL contain only validated numeric counters, model identifiers, timestamps and opaque attribution/deduplication evidence, never conversation content, transcript paths, native session IDs or raw source errors. A bounded private parser/offset cache MAY retain file metadata on its own transcript host, never content, and SHALL be dropped on runtime generation change. Reads SHALL NOT allocate durable ID records. Unsupported formats and missing prerequisites SHALL be explicit.
+World SHALL collect usage by default from available Claude, Codex, Pi and Gemini session files through each service-owned local or SSH runtime.
+
+#### Scenario: Numeric usage identity, privacy and bounds
+
+- **WHEN** World collects harness usage
+- **THEN** Usage SHALL be view-neutral World entities, with deterministic digest-derived identity, source provenance, qualified connection ID and runtime generation. Published observations SHALL contain only validated numeric counters, model identifiers, timestamps and opaque attribution/deduplication evidence, never conversation content, transcript paths, native session IDs or raw source errors. A bounded private parser/offset cache MAY retain file metadata on its own transcript host, never content, and SHALL be dropped on runtime generation change. Reads SHALL NOT allocate durable ID records. Unsupported formats and missing prerequisites SHALL be explicit.
 
 #### Scenario: Default collection without OTel
 - **WHEN** a host has readable supported harness logs and no OTel configuration
@@ -50,7 +55,12 @@ Usage SHALL identify its host and SHALL name pane, tab and workspace only with o
 
 ### Requirement: Counted-once windows and retention
 
-The read contract SHALL offer today and seven UTC calendar days including today as half-open bounded windows. Per-message/turn identity SHALL prevent repeated Claude/Pi/Gemini usage from counting twice; Codex cumulative counts SHALL contribute only known nonnegative deltas, without assigning an unknown baseline to a model or window. Daily session/model rollups SHALL retain at most seven days. Response and collection bounds SHALL be fixed and any loss of coverage SHALL be explicit, with each response below the 1 MiB frame. Time SHALL mean usage-observation span, not active or billable time.
+The read contract SHALL offer today and seven UTC calendar days including today as half-open bounded windows.
+
+#### Scenario: Usage windows, deduplication and coverage
+
+- **WHEN** World aggregates numeric usage
+- **THEN** Per-message/turn identity SHALL prevent repeated Claude/Pi/Gemini usage from counting twice; Codex cumulative counts SHALL contribute only known nonnegative deltas, without assigning an unknown baseline to a model or window. Daily session/model rollups SHALL retain at most seven days. Response and collection bounds SHALL be fixed and any loss of coverage SHALL be explicit, with each response below the 1 MiB frame. Time SHALL mean usage-observation span, not active or billable time.
 
 #### Scenario: Repeated and mixed-model records
 - **WHEN** the same response appears twice or cumulative Codex snapshots repeat around a model switch
@@ -94,7 +104,12 @@ The read contract SHALL offer today and seven UTC calendar days including today 
 
 ### Requirement: Honest prices and optional telemetry
 
-Tokens SHALL remain visible independently of pricing. USD cost SHALL be labelled an estimate from disjoint token categories and an explicit versioned local exact-model price table; missing/unknown rates SHALL produce null rather than zero or an invoice claim. Logs SHALL win for matching harness message/turn identity. Unidentified overlapping OTel totals SHALL be labelled comparisons and excluded from totals. OTel totals MAY contribute for an explicitly identified scope with no log connector coverage. Missing, stale, partial and unsupported source states SHALL remain visible to every view consuming the shared response.
+Tokens SHALL remain visible independently of pricing.
+
+#### Scenario: Usage prices and telemetry overlap
+
+- **WHEN** World reports usage and optional telemetry
+- **THEN** USD cost SHALL be labelled an estimate from disjoint token categories and an explicit versioned local exact-model price table; missing/unknown rates SHALL produce null rather than zero or an invoice claim. Logs SHALL win for matching harness message/turn identity. Unidentified overlapping OTel totals SHALL be labelled comparisons and excluded from totals. OTel totals MAY contribute for an explicitly identified scope with no log connector coverage. Missing, stale, partial and unsupported source states SHALL remain visible to every view consuming the shared response.
 
 #### Scenario: Unknown price
 - **WHEN** usage names a model absent from the local price table
@@ -110,7 +125,12 @@ Tokens SHALL remain visible independently of pricing. USD cost SHALL be labelled
 
 ### Requirement: Subscription limit observations
 
-The usage read SHALL report, per qualified host, the newest subscription-limit observation each supported harness persists on that host: each window's length, percent used and reset time, and the observation time. It SHALL carry no account IDs, plan names, credit balances, credentials, prompts, paths or raw provider errors. An observation older than three hours or past any window's reset SHALL be stale; a host with no observation SHALL be missing; a harness that persists no usable limits record SHALL be unsupported with a fixed reason. None of these SHALL be presented as zero or full.
+The usage read SHALL report, per qualified host, the newest subscription-limit observation each supported harness persists on that host: each window's length, percent used and reset time, and the observation time.
+
+#### Scenario: Limit data privacy and freshness
+
+- **WHEN** World reads subscription-limit observations
+- **THEN** It SHALL carry no account IDs, plan names, credit balances, credentials, prompts, paths or raw provider errors. An observation older than three hours or past any window's reset SHALL be stale; a host with no observation SHALL be missing; a harness that persists no usable limits record SHALL be unsupported with a fixed reason. None of these SHALL be presented as zero or full.
 
 #### Scenario: Codex reports limit windows
 - **WHEN** a Codex rollout on a host records token counts with primary and secondary rate-limit windows
@@ -183,12 +203,17 @@ original issue #1086 counterexample remains a rejected fault control.
 ### Requirement: Fresh uniquely attributed context fill
 
 World SHALL report a pane's newest main-thread prompt size only for the one
-session uniquely bound to it on a fresh qualified observation. Context size
-SHALL include applicable cache input and exclude output, sidechains, API errors,
-synthetic messages and future-dated records. The window SHALL come from the
-harness's report or an explicit model-name table; an unknown model or unresolved
-window SHALL remain unknown. Only numeric sizes, model names, timestamps and
-opaque digests SHALL leave the transcript host.
+session uniquely bound to it on a fresh qualified observation.
+
+#### Scenario: Context attribution and numeric projection
+
+- **WHEN** World reports context fill
+- **THEN** Context size
+  SHALL include applicable cache input and exclude output, sidechains, API errors,
+  synthetic messages and future-dated records. The window SHALL come from the
+  harness's report or an explicit model-name table; an unknown model or unresolved
+  window SHALL remain unknown. Only numeric sizes, model names, timestamps and
+  opaque digests SHALL leave the transcript host.
 
 #### Scenario: Ambiguous or stale context
 - **WHEN** a session has duplicate pane claims, its host is stale, or its runtime
@@ -202,13 +227,18 @@ opaque digests SHALL leave the transcript host.
 ### Requirement: Shared usage analytics read
 
 World SHALL provide `world.usage.analytics` and the authenticated local CLI
-`usage` read over the same numeric harness evidence. It SHALL aggregate before
-legacy detail clipping and group by agent, Git project, qualified room, UTC
-day or run (one harness session on one transcript host) for today or seven UTC
-calendar dates. Metrics SHALL distinguish unknown
-from observed zero and disclose partial coverage. Optional explicit harness
-cost SHALL remain separate from configured price estimates and SHALL NOT imply
-a subscription charge or invoice. Stale numeric rows SHALL NOT enter totals.
+`usage` read over the same numeric harness evidence.
+
+#### Scenario: Analytics aggregation and unknown values
+
+- **WHEN** World reads shared usage analytics
+- **THEN** It SHALL aggregate before
+  legacy detail clipping and group by agent, Git project, qualified room, UTC
+  day or run (one harness session on one transcript host) for today or seven UTC
+  calendar dates. Metrics SHALL distinguish unknown
+  from observed zero and disclose partial coverage. Optional explicit harness
+  cost SHALL remain separate from configured price estimates and SHALL NOT imply
+  a subscription charge or invoice. Stale numeric rows SHALL NOT enter totals.
 
 #### Scenario: Unknown cost and no time evidence
 - **WHEN** logs expose tokens without dollar charges or observed runtime status intervals
@@ -233,13 +263,18 @@ a subscription charge or invoice. Stale numeric rows SHALL NOT enter totals.
 ### Requirement: Observed time with explicit gaps
 
 World SHALL count only observed working and blocked status intervals as active
-and waiting-on-you time, respectively; idle SHALL NOT imply owner wait. An
-explicit usage-limit block SHALL NOT count as owner wait. Status continuity
-SHALL expire after at most fifteen seconds without fresh observation and SHALL
-end on semantic invalidation, disconnect or generation retirement. Numeric
-daily history SHALL be bounded to seven UTC dates and 8,192 rows. Open intervals
-SHALL NOT resume after restart. Corrupt/unavailable history and capacity loss
-SHALL be explicit. Transcript observation span SHALL remain separate.
+and waiting-on-you time, respectively; idle SHALL NOT imply owner wait.
+
+#### Scenario: Observed time expiry and history
+
+- **WHEN** World counts status intervals
+- **THEN** An
+  explicit usage-limit block SHALL NOT count as owner wait. Status continuity
+  SHALL expire after at most fifteen seconds without fresh observation and SHALL
+  end on semantic invalidation, disconnect or generation retirement. Numeric
+  daily history SHALL be bounded to seven UTC dates and 8,192 rows. Open intervals
+  SHALL NOT resume after restart. Corrupt/unavailable history and capacity loss
+  SHALL be explicit. Transcript observation span SHALL remain separate.
 
 #### Scenario: Repeated reads, midnight and restart
 - **WHEN** an interval crosses UTC midnight, is read twice and the service restarts
@@ -249,13 +284,18 @@ SHALL be explicit. Transcript observation span SHALL remain separate.
 
 Analytics SHALL derive opaque project identities from qualified Git common
 directories, group linked worktrees on that connection together, and leave
-unresolved projects unknown. At most 32 distinct checkouts SHALL be resolved,
-four at a time. Agent/room/project evidence SHALL be revalidated after async
-reads and SHALL NOT attach to changed sessions or retired generations.
-Known authored PR creation and merge timestamps SHALL count distinct events
-from the existing work-source catalogue; agent association SHALL require one
-matching current session-qualified link. Missing dates, shared links and
-incomplete source history SHALL NOT imply zero or proven agent authorship.
+unresolved projects unknown.
+
+#### Scenario: Analytics attribution and PR evidence
+
+- **WHEN** World attributes analytics or PR events
+- **THEN** At most 32 distinct checkouts SHALL be resolved,
+  four at a time. Agent/room/project evidence SHALL be revalidated after async
+  reads and SHALL NOT attach to changed sessions or retired generations.
+  Known authored PR creation and merge timestamps SHALL count distinct events
+  from the existing work-source catalogue; agent association SHALL require one
+  matching current session-qualified link. Missing dates, shared links and
+  incomplete source history SHALL NOT imply zero or proven agent authorship.
 
 #### Scenario: Session changes during project lookup
 - **WHEN** the program, room or checkout changes before lookup completes
@@ -268,13 +308,18 @@ incomplete source history SHALL NOT imply zero or proven agent authorship.
 ### Requirement: Analytics bounds, privacy and refusals
 
 Analytics SHALL publish no native sessions, transcript contents, filesystem
-paths, credentials, account identifiers or raw source errors. Project labels
-MAY contain a checkout basename. Response rows SHALL be capped at 512 within
-768 KiB, with totals computed before clipping and explicit truncation. Queries
-SHALL refuse unsupported keys/windows/grouping, arbitrary paths and unqualified
-pane/room selectors; connection filters SHALL name both immutable ID and
-generation. A CLI-only synthetic fixture SHALL exercise known time/tokens/PRs,
-unknown dollars and a subscription limit without provider or service I/O.
+paths, credentials, account identifiers or raw source errors.
+
+#### Scenario: Analytics privacy, query and response bounds
+
+- **WHEN** World serves analytics queries
+- **THEN** Project labels
+  MAY contain a checkout basename. Response rows SHALL be capped at 512 within
+  768 KiB, with totals computed before clipping and explicit truncation. Queries
+  SHALL refuse unsupported keys/windows/grouping, arbitrary paths and unqualified
+  pane/room selectors; connection filters SHALL name both immutable ID and
+  generation. A CLI-only synthetic fixture SHALL exercise known time/tokens/PRs,
+  unknown dollars and a subscription limit without provider or service I/O.
 
 #### Scenario: Unqualified or injected query
 - **WHEN** a caller supplies a pane without connection identity or a transcript path/fixture API parameter

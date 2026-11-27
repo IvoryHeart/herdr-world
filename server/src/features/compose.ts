@@ -71,6 +71,9 @@ export function composeFeatures(
       return instances.get(key)!.api as T;
     },
     rpc: rpc as ReadonlyMap<string, FeatureRpcHandler>,
+    acquisitions: forward.flatMap((f) =>
+      f.acquisition ? [f.acquisition] : [],
+    ),
     connectionStatus: (status: ConnectionStatus) => {
       for (const f of forward) f.connectionStatus?.(status);
     },

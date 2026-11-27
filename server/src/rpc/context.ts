@@ -41,8 +41,6 @@ export type RpcServices = {
   clock: import("../service/ports").Clock;
   bindings?: import("../storage/world-bindings").WorldBindings;
   serviceIncarnation?: string;
-  /** Test seam: the environment World's harness skills resolve against. */
-  worldIntegrationRuntime?: () => import("../cli/command").CliRuntime;
   bindBoardRecipients(
     ops: readonly BoardOp[],
     observed: ReadonlyMap<string, ObservedAgent>,
@@ -115,6 +113,10 @@ export type RpcServices = {
   publishDeskChanged: DeskService["publish"];
   worldCli: ReturnType<typeof createWorldCliService>;
   worldSnapshots: ObservedSnapshots | null;
+  /** Publish World's own values (settings, commands) under a new revision. */
+  publishWorld?(): void;
+  /** World commands (world.command); absent in narrow test services. */
+  worldCommands?: import("../world/commands").WorldCommands;
   boardElements?: import("../world/board-element-service").BoardElementService;
   /** Installed web IDEs and their World-owned servers (world.ide.*). */
   ide?: import("../ide/service").IdeService;

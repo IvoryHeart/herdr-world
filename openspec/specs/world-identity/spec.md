@@ -12,18 +12,23 @@ in the active `world-protocol-identity` change.
 ### Requirement: World IDs
 
 WorldStorage SHALL provide a shared asynchronous ID allocator for new World-owned
-records in `world.sqlite`. Each new ID SHALL contain a lowercase kind prefix and
-eight random base32 symbols. The store SHALL check existing reservations and
-reserve the ID durably before returning it. IDs SHALL NOT derive from counters,
-clocks, source native IDs, labels, paths or runtime fences.
+records in `world.sqlite`.
 
-Existing SQLite IDs and record IDs imported from the ledger JSON store SHALL
-remain unchanged and SHALL be reserved against new allocation. Allocation SHALL
-check all registered families, regardless of a legacy ID's prefix. Reservations
-SHALL survive record deletion, history retention and restart. A restored stopped
-backup SHALL resume with fresh entropy and its saved registry, rather than a
-rolled-back sequence. Closing storage SHALL refuse new allocation and drain
-admitted allocations before releasing the worker.
+#### Scenario: ID entropy, reservations and shutdown
+
+- **WHEN** World allocates or retains World IDs
+- **THEN** Each new ID SHALL contain a lowercase kind prefix and
+  eight random base32 symbols. The store SHALL check existing reservations and
+  reserve the ID durably before returning it. IDs SHALL NOT derive from counters,
+  clocks, source native IDs, labels, paths or runtime fences.
+
+  Existing SQLite IDs and record IDs imported from the ledger JSON store SHALL
+  remain unchanged and SHALL be reserved against new allocation. Allocation SHALL
+  check all registered families, regardless of a legacy ID's prefix. Reservations
+  SHALL survive record deletion, history retention and restart. A restored stopped
+  backup SHALL resume with fresh entropy and its saved registry, rather than a
+  rolled-back sequence. Closing storage SHALL refuse new allocation and drain
+  admitted allocations before releasing the worker.
 
 #### Scenario: Imported IDs collide with new candidates
 - **WHEN** a random candidate equals an existing imported ID, including one in a
@@ -53,66 +58,69 @@ a binding that names:
 - the native ID;
 - the continuity evidence for that kind.
 
-**Per-kind declarations.** Each record kind SHALL declare its evidence, the continuity
-paths it accepts, its absence rule and its lifetime. No general rule SHALL override a
-kind's declaration.
+#### Scenario: Binding evidence, states and kind lifetimes
 
-**Continuity paths.** The only ways a binding moves to another native ID SHALL be:
-- a witnessed terminal ID appearing under a new native ID in a current, complete
-  listing of the same runtime;
-- the result of a move World itself performed, naming the new native ID for the
-  witnessed terminal;
-- explicit user action.
+- **WHEN** World binds or resolves a source entity
+- **THEN** **Per-kind declarations.** Each record kind SHALL declare its evidence, the continuity
+  paths it accepts, its absence rule and its lifetime. No general rule SHALL override a
+  kind's declaration.
 
-Source events, labels, working directories, agent kinds, reused pane IDs and runtime
-generations SHALL NOT prove continuity.
+  **Continuity paths.** The only ways a binding moves to another native ID SHALL be:
+  - a witnessed terminal ID appearing under a new native ID in a current, complete
+    listing of the same runtime;
+  - the result of a move World itself performed, naming the new native ID for the
+    witnessed terminal;
+  - explicit user action.
 
-**Absence.** The only authoritative absences SHALL be:
-- a close observed on the current runtime generation for the bound target;
-- a qualified not-found on the current runtime generation;
-- a current, complete listing in which every witnessed terminal is absent.
+  Source events, labels, working directories, agent kinds, reused pane IDs and runtime
+  generations SHALL NOT prove continuity.
 
-**States.** A binding SHALL be in one of four states:
-- **attached:** a current, complete observation shows the native ID exactly once with
-  matching evidence;
-- **unresolved:** the source is offline, stale, filtered or partially listed; the
-  record has not been observed since World started; or the native ID, terminal or
-  session appears more than once in one current observation;
-- **unconfirmed:** the native ID is present in a current observation, but the evidence
-  does not match;
-- **ended:** an absence the kind declares has occurred, while the binding still names
-  the checked target.
+  **Absence.** The only authoritative absences SHALL be:
+  - a close observed on the current runtime generation for the bound target;
+  - a qualified not-found on the current runtime generation;
+  - a current, complete listing in which every witnessed terminal is absent.
 
-Rules for each state:
-- Only attached bindings SHALL authorize actions, and only through a freshly qualified
-  target.
-- An unresolved binding SHALL keep its saved native ID and evidence unchanged.
-- An unconfirmed binding SHALL become attached only by explicit user action or a rule
-  its record kind declares.
-- A record whose agent session is the explicit unknown identity SHALL bind to its
-  terminal.
+  **States.** A binding SHALL be in one of four states:
+  - **attached:** a current, complete observation shows the native ID exactly once with
+    matching evidence;
+  - **unresolved:** the source is offline, stale, filtered or partially listed; the
+    record has not been observed since World started; or the native ID, terminal or
+    session appears more than once in one current observation;
+  - **unconfirmed:** the native ID is present in a current observation, but the evidence
+    does not match;
+  - **ended:** an absence the kind declares has occurred, while the binding still names
+    the checked target.
 
-**Existing kinds keep their current rules:**
-- **Board strings:** follow only moves World performs. They end only on an observed
-  close or a qualified not-found, and stay unresolved while their target is missing
-  from the topology. A string bound to a workspace or tab that held no terminals keeps
-  its weak evidence: it is attached while the target exists, and never authorizes
-  Send.
-- **Terminal appearance:** stays with its record while any witnessed terminal is
-  present, including after a lost move acknowledgement. It is reclaimed only when a
-  current, complete listing shows every witnessed terminal absent.
-- **Tab colour:** follows appearance, and is also dropped on an observed tab close.
-- **Agent interest:** follows its terminal and is dropped only by a complete pane
-  listing of the current runtime that omits it.
+  Rules for each state:
+  - Only attached bindings SHALL authorize actions, and only through a freshly qualified
+    target.
+  - An unresolved binding SHALL keep its saved native ID and evidence unchanged.
+  - An unconfirmed binding SHALL become attached only by explicit user action or a rule
+    its record kind declares.
+  - A record whose agent session is the explicit unknown identity SHALL bind to its
+    terminal.
 
-**Layout preferences are not bindings.** This covers Board card positions, pins and
-folds, and the workspace and host colours saved under card keys. They claim no
-identity. Each SHALL:
-- key on the connection profile and native ID only;
-- carry no continuity evidence;
-- be inherited when a native ID is reused.
+  **Existing kinds keep their current rules:**
+  - **Board strings:** follow only moves World performs. They end only on an observed
+    close or a qualified not-found, and stay unresolved while their target is missing
+    from the topology. A string bound to a workspace or tab that held no terminals keeps
+    its weak evidence: it is attached while the target exists, and never authorizes
+    Send.
+  - **Terminal appearance:** stays with its record while any witnessed terminal is
+    present, including after a lost move acknowledgement. It is reclaimed only when a
+    current, complete listing shows every witnessed terminal absent.
+  - **Tab colour:** follows appearance, and is also dropped on an observed tab close.
+  - **Agent interest:** follows its terminal and is dropped only by a complete pane
+    listing of the current runtime that omits it.
 
-Tab colours stay terminal appearance, under the Terminal colour requirement.
+  **Layout preferences are not bindings.** This covers Board card positions, pins and
+  folds, and the workspace and host colours saved under card keys. They claim no
+  identity. Each SHALL:
+  - key on the connection profile and native ID only;
+  - carry no continuity evidence;
+  - be inherited when a native ID is reused.
+
+  Tab colours stay terminal appearance, under the Terminal colour requirement.
 
 #### Scenario: Host offline
 - **WHEN** a bound entity's host is offline or its listing is partial
@@ -183,22 +191,27 @@ next incarnation before it acts.
 
 ### Requirement: Per-field claims
 
-A field that more than one source can report SHALL carry claims. Each claim SHALL
-record:
-- the value;
-- the source that delivered it, and its author when known and different;
-- when it was observed;
-- whether it was reported or inferred;
-- the source's revision, when the source has one.
+A field that more than one source can report SHALL carry claims.
 
-Several claims SHALL coexist for one field.
-- Each field SHALL declare the rule that chooses what to display.
-- A claim SHALL be removed only by its own source's complete listing or an explicit
-  retraction. Another source's silence SHALL NOT remove it.
-- A verb SHALL declare which claims authorize it, rather than using the most recent
-  claim.
-- A harness's native session or thread ID SHALL be a claim about the agent, never
-  World's identity for it.
+#### Scenario: Claims, display and action authority
+
+- **WHEN** World handles a field reported by multiple sources
+- **THEN** Each claim SHALL
+  record:
+  - the value;
+  - the source that delivered it, and its author when known and different;
+  - when it was observed;
+  - whether it was reported or inferred;
+  - the source's revision, when the source has one.
+
+  Several claims SHALL coexist for one field.
+  - Each field SHALL declare the rule that chooses what to display.
+  - A claim SHALL be removed only by its own source's complete listing or an explicit
+    retraction. Another source's silence SHALL NOT remove it.
+  - A verb SHALL declare which claims authorize it, rather than using the most recent
+    claim.
+  - A harness's native session or thread ID SHALL be a claim about the agent, never
+    World's identity for it.
 
 #### Scenario: Two sources disagree
 - **WHEN** Herdr reports an agent idle and World infers it working from its transcript
@@ -218,27 +231,32 @@ Several claims SHALL coexist for one field.
 ### Requirement: Explicit record lifetimes
 
 Each kind of World record SHALL declare what happens when its binding ends: archive,
-clear, keep unresolved, or move to "Needs a home". Durable identity alone SHALL NOT
-extend a record's lifetime. Desk marks/recent opens and the watchlist have these lifetimes:
+clear, keep unresolved, or move to "Needs a home".
 
-- Watchlist follows its witnessed terminal on its original source, including a
-  uniquely observed terminal move. Complete current absence clears it.
-- Desk metadata requires its captured known session. Complete current terminal
-  absence or a replacement ends the capture as bounded unassociated history.
-  Missing known-session evidence never silently retargets a saved mark.
-- Unknown-session Desk captures require process-local live ownership; terminal
-  reuse cannot carry review through World/runtime restart or null-to-known
-  ownership. A later returning known fingerprint cannot inherit an intervening
-  owner's review. No durable runtime/incarnation identity is invented.
-- Offline, partial, stale and duplicate observations attach nothing. Known
-  restart captures remain unresolved/protected until fresh complete source
-  classification or confirmed unavailability. Fresh native progress names a new
-  Desk stop; older progress cannot erase a newer mark. Exact Undo and bounded
-  recency/display expiry retain their existing behavior.
-- Retired completion receipts remain in a private draining archive under the
-  storage contract. Only fresh same-source/terminal/known-session/unchanged native
-  sequence evidence can convert one into Desk. Unknown receipts never resolve;
-  neither a name nor terminal-only evidence establishes continuity.
+#### Scenario: Record-specific end and restart rules
+
+- **WHEN** World manages record lifetimes and source evidence
+- **THEN** Durable identity alone SHALL NOT
+  extend a record's lifetime. Desk marks/recent opens and the watchlist have these lifetimes:
+
+  - Watchlist follows its witnessed terminal on its original source, including a
+    uniquely observed terminal move. Complete current absence clears it.
+  - Desk metadata requires its captured known session. Complete current terminal
+    absence or a replacement ends the capture as bounded unassociated history.
+    Missing known-session evidence never silently retargets a saved mark.
+  - Unknown-session Desk captures require process-local live ownership; terminal
+    reuse cannot carry review through World/runtime restart or null-to-known
+    ownership. A later returning known fingerprint cannot inherit an intervening
+    owner's review. No durable runtime/incarnation identity is invented.
+  - Offline, partial, stale and duplicate observations attach nothing. Known
+    restart captures remain unresolved/protected until fresh complete source
+    classification or confirmed unavailability. Fresh native progress names a new
+    Desk stop; older progress cannot erase a newer mark. Exact Undo and bounded
+    recency/display expiry retain their existing behavior.
+  - Retired completion receipts remain in a private draining archive under the
+    storage contract. Only fresh same-source/terminal/known-session/unchanged native
+    sequence evidence can convert one into Desk. Unknown receipts never resolve;
+    neither a name nor terminal-only evidence establishes continuity.
 
 #### Scenario: Watchlist after a restart
 - **WHEN** World restarts and then verifies the original terminal in a complete,

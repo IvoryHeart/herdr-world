@@ -5,6 +5,7 @@ import { existsSync, readFileSync, renameSync } from "node:fs";
 import { replaceDataFile } from "../config/data-paths";
 import type { TerminalRef } from "../../../shared/relations";
 import type { BoardOp } from "./board-store";
+import type { PublishedCommand } from "./commands";
 
 /**
  * What agents and other terminals did through the `herdr-world` CLI
@@ -54,6 +55,11 @@ export type LedgerChange = {
   redo?: BoardOp[];
   /** A group change: the group the terminal was in before, rebuilt on undo. */
   regroup?: { ref: TerminalRef; members: TerminalRef[] | null };
+  /**
+   * A World command (world.command): its identity, the value it expected and
+   * asked for, and its state, updated in place until it settles.
+   */
+  world_command?: PublishedCommand;
 };
 
 export type LedgerAsk = {

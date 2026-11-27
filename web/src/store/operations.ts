@@ -490,8 +490,12 @@ export function operationalStore(
       assertQualifiedLeaseCurrent(context, lease);
       return store.createQualifiedTab(context, workspaceId, options);
     },
-    renameWorkspace: (workspaceId: string, label: string) =>
-      call("workspace.rename", { workspace_id: workspaceId, label }),
+    /** A room on this connection and generation, for a World command. */
+    room: (workspaceId: string) => ({
+      connectionId: context.connectionId,
+      generation: context.runtimeGeneration,
+      workspaceId,
+    }),
     closeWorkspace: (workspaceId: string) =>
       call("workspace.close", { workspace_id: workspaceId }),
     closeWorkspaceOrThrow: (workspaceId: string) =>

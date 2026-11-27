@@ -74,7 +74,8 @@ test("activity during a read stays actionable but forces a follow-up acquisition
   expect(service.invalidate("local", "activity")).toBe(1);
   release();
   const first = await pending;
-  expect(first.revision).toBe(1);
+  // The activity, then the first read's new value, each advance it.
+  expect(first.revision).toBe(2);
   expect(first.connections[0]).toMatchObject({
     stale: false,
     actionable: true,
@@ -98,7 +99,8 @@ test("activity dirties an already fresh cache and advances its revision", async 
   repaint();
   service.invalidate("local", "activity");
   const next = await service.snapshot();
-  expect(next.revision).toBe(first.revision + 1);
+  // The activity advances it, and so does the read that changed the value.
+  expect(next.revision).toBe(first.revision + 2);
   expect(calls()).toBe(8);
   expect(next.connections[0]).toMatchObject({
     stale: false,
