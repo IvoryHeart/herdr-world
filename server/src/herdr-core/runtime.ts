@@ -49,6 +49,7 @@ import {
   type CoreStreamConnector,
 } from "./stream";
 import {
+  type CoreTopology,
   CoreDeskMemory,
   CoreRoomNames,
   CoreFirstSight,
@@ -105,6 +106,7 @@ export type CoreRuntimeOptions = {
     alerts: CoreAlert[],
     terminals: CoreMirrorTerminal[],
     coreName: string,
+    rows: CoreTopology,
   ): void;
   livenessIntervalMs?: number;
   livenessTimeoutMs?: number;
@@ -297,6 +299,12 @@ export function createCoreConnectionRuntime(
       alerts,
       mirror.terminals(),
       coreSummary?.name ?? "herdr-core",
+      coreTopology(mirror.terminals(), coreSummary?.name ?? "herdr-core", {
+        world: layout(),
+        app: mirror.appLayout,
+        roomNames,
+        coreId: epoch?.coreId,
+      }),
     );
   };
   /**
@@ -394,6 +402,7 @@ export function createCoreConnectionRuntime(
       coreTopology(terminals, coreSummary?.name ?? "herdr-core", {
         firstSight,
         world: layout(),
+        app: mirror.appLayout,
         coreId: epoch?.coreId,
         occupancy: (address) => mirror.occupancy(address),
         now: at,
@@ -508,6 +517,34 @@ export function createCoreConnectionRuntime(
     };
   }
 
+  let appRead: Promise<void> | null = null;
+  // Coalesce notifications. A reply overtaken by another doc event is discarded;
+  // that event requests a new read. No retry timer or writes to the app document.
+  const refreshAppLayout = (): Promise<void> => {
+    if (appRead) return appRead;
+    const current = client;
+    if (!current?.hello.methods.includes("doc.get")) return Promise.resolve();
+    appRead = (async () => {
+      let revision: number;
+      do {
+        revision = mirror.appLayoutRevision;
+        try {
+          const reply = await current.appLayout();
+          if (failed || stopped || !options.context.isCurrent()) return;
+          mirror.acceptAppLayout(reply, revision);
+        } catch {
+          // Keep the last read for display; unknown ownership refuses moves.
+          if (revision === mirror.appLayoutRevision) break;
+        }
+      } while (revision !== mirror.appLayoutRevision && !failed && !stopped);
+      readModelChanged();
+      notify();
+    })().finally(() => {
+      appRead = null;
+    });
+    return appRead;
+  };
+
   async function startBackground() {
     const current = client;
     if (!current || stopped) throw new Error("connection runtime is disposed");
@@ -518,6 +555,7 @@ export function createCoreConnectionRuntime(
         sight(null, terminals);
       },
       line: (line) => {
+        const appRevision = mirror.appLayoutRevision;
         const outcome = mirror.apply(line);
         if (outcome === "applied") sight(line);
         if (outcome === "retired") {
@@ -526,6 +564,7 @@ export function createCoreConnectionRuntime(
           return;
         }
         if (outcome === "applied") {
+          if (appRevision !== mirror.appLayoutRevision) void refreshAppLayout();
           schedulePublish();
           notify();
         }
@@ -533,6 +572,11 @@ export function createCoreConnectionRuntime(
       end: (error) => fail(error),
     });
     if (failed) throw new CoreMirrorRetiredError(mirror.retired ?? "closed");
+    await refreshAppLayout();
+    if (failed || stopped)
+      throw new CoreUnavailableError(
+        "core disconnected during app layout read",
+      );
     ready = true;
     publish(true);
     readModelChanged();

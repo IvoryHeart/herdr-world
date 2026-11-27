@@ -1,3 +1,4 @@
+import { appLayoutFixture } from "./testing/app-layout.fixture";
 import { afterEach, describe, expect, test } from "bun:test";
 import { CoreKillConfirmation } from "./kill-plan";
 import {
@@ -56,6 +57,7 @@ describe("launching in herdr-core (M2, M3)", () => {
           ? (await createCoreRoom(w.lease(), w.topology, "Crew")).workspace_id
           : "hc:space:crew";
       if (owner === "app") {
+        w.fake.setAppLayout(appLayoutFixture({ id: "crew", name: "Crew" }));
         w.fake.create({
           labels: {
             "herdr.space": "crew",
@@ -64,6 +66,7 @@ describe("launching in herdr-core (M2, M3)", () => {
           },
         });
         await w.settle();
+        await until(() => w.lease().runtime.core.mirror.appLayoutCurrent);
       }
       const started = [];
       for (const label of ["First", "Second"]) {
@@ -450,6 +453,9 @@ describe("launching in herdr-core (M2, M3)", () => {
 
   test("a launch into an app space keeps the app's name for the room World records", async () => {
     const w = await world();
+    w.fake.setAppLayout(appLayoutFixture({ id: "s1", name: "web" }));
+    await w.settle();
+    await until(() => w.lease().runtime.core.mirror.appLayoutCurrent);
     const app = w.fake.create({
       argv: ["/bin/sh"],
       labels: { "herdr.space": "s1", "herdr.tab": "c1", where: "web / one" },
@@ -781,6 +787,9 @@ describe("World's rooms of a core (M1)", () => {
 
   test("a launch into an app space joins it there, shells included", async () => {
     const w = await world();
+    w.fake.setAppLayout(appLayoutFixture({ id: "s1", name: "web" }));
+    await w.settle();
+    await until(() => w.lease().runtime.core.mirror.appLayoutCurrent);
     w.fake.create({
       argv: ["claude"],
       labels: { "herdr.space": "s1", "herdr.tab": "c1", where: "web / a" },

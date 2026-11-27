@@ -8,6 +8,19 @@
 
 **Code:**
 
+- `server/src/herdr-core/app-layout.ts`, `server/src/herdr-core/app-layout.test.ts`
+  (bounded read-only app layout projection and authority regressions)
+- `server/src/herdr-core/testing/app-layout.fixture.ts`, `server/src/herdr-core/fixture.ts`,
+  `server/src/herdr-core/fixture-addresses.test.ts` (upstream document wire shape;
+  `?coreFixture` preview for app-owned move refusal)
+- `server/src/herdr-core/mirror.ts`, `server/src/herdr-core/runtime.ts`,
+  `server/src/herdr-core/client.ts`, `server/src/herdr-core/hello.ts`
+  (document read, invalidation, refresh and protocol reply types)
+- `server/src/herdr-core/topology.ts`, `server/src/herdr-core/topology.test.ts`,
+  `server/src/herdr-core/world-read-model.test.ts` (unified placement and names)
+- `server/src/herdr-core/float-shell.ts`, `server/src/herdr-core/push.ts`
+  (room consumers use the same app placement)
+- `web/src/world/coreAgents.test.ts` (shared placement through all view projections)
 - `server/src/herdr-core/host-runtime.ts`
 - `server/src/herdr-core/host-runtime.test.ts`
 - `server/src/herdr-core/operations.ts`, `server/src/herdr-core/operations.test.ts`
@@ -45,7 +58,7 @@
 
 **Pitfalls:**
 
-- Core desk moves use native placement, not TUI split replay.
+- Core desk moves use native placement only before app adoption; adopted placement belongs to Herdr’s app.
 
 ## Usage reference
 
@@ -156,27 +169,45 @@ required. The app's `reconcile` / `adopt` implementation in
 uses those IDs. Core's [schema](https://github.com/herdrdev/herdr-core/blob/2e8043a2a47db0130943135805f4ec82c2a764bd/schema/README.md)
 and `hc schema` describe free-form label maps, not a core space registry.
 
-Names are separate: the app's `Model::space_name` / `tab_name` in
-[`src/model.rs`](https://github.com/herdrdev/herdr-app/blob/1180a5cec3b8bd4dfebf4a9b217ab8cb59a96ffa/src/model.rs)
-use its layout's explicit names, else the first terminal's folder and tab ordinal.
-`where=<space> / <tab>` is a readable caption, not an adoption naming input.
-There is no supported display-name label; that part of
-[Q8 / app #43](https://github.com/herdrdev/herdr-app/issues/43) remains open.
-World keeps its own names and never writes the app-owned layout.
+The app owns adopted placement in the core document `herdr-app`:
+`spaces[{id,name,folder,tabs:[{id,name,root}]}]`. Terminal membership lives in
+`root`'s terminal blocks, nested row/column/stack children and floating content.
+See [`mirror::Document`](https://github.com/herdrdev/herdr-app/blob/1180a5cec3b8bd4dfebf4a9b217ab8cb59a96ffa/src/mirror.rs),
+[`mirror_sync` (`doc.get`/`doc.set`)](https://github.com/herdrdev/herdr-app/blob/1180a5cec3b8bd4dfebf4a9b217ab8cb59a96ffa/src/mirror_sync.rs)
+and the guide's **The model** section. Labels adopt terminals with no existing
+pane; relabelling an adopted terminal does not move that pane. World reads the
+document on connect and local app `doc` events / missed cuts, never writes it.
+Adopted membership precedes World's saved placement, then labels/parent fallback.
+The projection is shared by all views, alerts and room checks. A missing document
+falls back to labels; unavailable or invalid reads prevent moves until ownership
+can be established. An overtaken read cannot establish current ownership.
 
-The crew dispatcher must keep `herdr.space=crew` on **every** crew terminal,
-use a distinct `herdr.tab=crew-<issue>` per desk (the same value for panes sharing
-a desk), and set `where=Crew / crew-<issue>`. Launch with `--keep` and
-`herdr.seen=0`; preserve unrelated labels on moves. Do not change the space ID to
-each issue's name or add speculative name labels. These are already the reported
-crew grouping labels; no additional grouping label is missing. They cannot
-guarantee the app's displayed name **Crew** until upstream supports naming.
+Names come from the app document's explicit names. Its
+[`Model::space_name` / `tab_name`](https://github.com/herdrdev/herdr-app/blob/1180a5cec3b8bd4dfebf4a9b217ab8cb59a96ffa/src/model.rs)
+otherwise use the first terminal's folder (then the space folder) and tab ordinal.
+World preserves its existing stable derived-name fallback and suffixes; it never
+reads `where` for room or tab names. The app only writes that caption.
+There is no supported display-name label. World refuses a move of an adopted
+terminal with **Move it in Herdr's app so the change also appears on your phone**.
+Unadopted moves retain existing placement labels and program/lease fences.
 
-World's existing launch/move writes meet this contract. Provider regressions and
-the isolated live-core test pin that fact. The owner's Android observation still
-needs an app fix/investigation; see the prepared
-[upstream report](../../../docs/herdr-app-placement-report.md). The native app
-was unavailable locally, so its grouping was not independently reproduced.
+**Q8 reopened:** desktop adoption and phone Spaces must be verified separately.
+The [mobile guide](https://herdr.dev/mobile/) says spaces appear when the desktop
+app runs there too. Correct labels without an app document do not prove phone
+grouping. A null document is consistent with no desktop adoption, not evidence
+of an Android defect. App external naming [#43](https://github.com/herdrdev/herdr-app/issues/43)
+remains open. No installed desktop or phone app was available for rendering
+acceptance; see the [placement evidence](../../../docs/herdr-app-placement-report.md).
+
+The crew dispatcher should retain `herdr.space=crew`, a distinct
+`herdr.tab=crew-<issue>` per desk (same for its split panes), `--keep` and initial
+`herdr.seen=0`. `where=Crew / crew-<issue>` is an optional readable caption;
+it neither creates a phone space nor names it. Desktop adoption must publish
+its layout before phone Spaces can share that structure; use the app's supported
+commands for an explicit **Crew** name. Desks started without a parent also
+lack helper nesting in the phone's terminal list; the crew repository handles
+that parentage separately. World must not manufacture parent relationships or
+write the app document to compensate.
 
 ### Runtime limits
 

@@ -37,6 +37,7 @@ export type { CoreRunRequest } from "./run-params";
 import {
   CORE_PROTOCOL_GENERATION,
   type CoreHello,
+  type CoreServerStatus,
   isRecord,
   type ObservationMethod,
   parseHello,
@@ -44,6 +45,7 @@ import {
 export {
   CORE_PROTOCOL_GENERATION,
   type CoreHello,
+  type CoreServerStatus,
   REQUIRED_CORE_FEATURES,
   REQUIRED_CORE_METHODS,
 } from "./hello";
@@ -71,6 +73,7 @@ const FLOAT_SHELL_METHODS = [
 ] as const;
 type CoreMethod =
   | ObservationMethod
+  | "doc.get"
   | CoreWriteMethod
   | (typeof FLOAT_SHELL_METHODS)[number];
 /** Watching a terminal: `terminal.attach` as an observer, nothing else. */
@@ -82,15 +85,6 @@ export const WATCH_HISTORY_LINES = 500;
 const HELLO_LINE_LIMIT = 1 << 20;
 /** Unclaimed stream bytes held while a subscribe reply is still in flight. */
 const MAX_UNCLAIMED_BYTES = 8 << 20;
-
-export type CoreServerStatus = {
-  core: { id: string; name: string };
-  version: string;
-  pid: number;
-  uptime_ms: number;
-  live: number;
-  finished: number;
-};
 
 export type CoreTerminalRecord = Record<string, unknown> & {
   address: string;
@@ -401,6 +395,11 @@ export class CoreClient {
       {},
       timeoutMs,
     ) as Promise<CoreServerStatus>;
+  }
+
+  /** Read the app-owned layout without creating or changing it. */
+  appLayout(timeoutMs = 5_000): Promise<unknown> {
+    return this.call("doc.get", { name: "herdr-app" }, timeoutMs);
   }
 
   getTerminal(address: string, timeoutMs = 5_000) {

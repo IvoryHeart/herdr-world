@@ -1,3 +1,5 @@
+import { appLayoutFixture } from "./testing/app-layout.fixture";
+import { until } from "./testing/core-world";
 import { moveCore } from "./town-move";
 import { createCoreRoom, launchCore } from "./operations";
 import { createRpcDispatcher } from "../service/rpc-dispatch";
@@ -47,6 +49,19 @@ test("Town moves core agents between desks and rooms through placement labels", 
     });
     core.fake.report(address, { state: "working", app: "claude" });
   }
+  core.fake.setAppLayout(
+    appLayoutFixture(
+      {
+        id: "source",
+        name: "source",
+        tabs: [
+          { id: "a", name: "a" },
+          { id: "b", name: "b" },
+        ],
+      },
+      { id: "target", name: "target", tabs: [{ id: "c", name: "c" }] },
+    ),
+  );
   await core.connect();
   const rows = await core.rows();
   const lease = core.lease();
@@ -190,6 +205,9 @@ const tabFor = async (
 
 test("two desks moved into Crew keep one space ID and distinct tab IDs", async () => {
   const w = await fixture();
+  w.fake.setAppLayout(appLayoutFixture({ id: "crew", name: "Crew" }));
+  await w.settle();
+  await until(() => w.lease().runtime.core.mirror.appLayoutCurrent);
   w.fake.create({
     labels: {
       "herdr.space": "crew",

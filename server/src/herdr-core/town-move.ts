@@ -1,3 +1,4 @@
+import { coreAppPlacement } from "./app-layout";
 import type { ReadyRuntimeLease } from "../connections/manager";
 import { createMoveQueue, type MoveOutcome } from "../world/desk-move";
 import { CoreFenceError, CoreOperationFence } from "./fence";
@@ -59,6 +60,7 @@ async function performMove(
   const rows = () =>
     coreTopology(runtime.core.mirror.terminals(), runtime.identity.label, {
       world: topology.get(coreId),
+      app: runtime.core.mirror.appLayout,
     });
   let dispatched = false;
   try {
@@ -101,6 +103,21 @@ async function performMove(
         : p.tab_id === source.tab_id,
     );
     const addresses = new Set(selected.map((p) => String(p.pane_id)));
+    const checkAppOwnership = () => {
+      if (!runtime.core.mirror.appLayoutCurrent)
+        throw new CoreOperationRefused(
+          "Herdr app placement is unavailable. World cannot check whether the app owns this terminal; try again after reconnecting.",
+        );
+      if (
+        [...addresses].some((address) =>
+          coreAppPlacement(runtime.core.mirror.appLayout, address),
+        )
+      )
+        throw new CoreOperationRefused(
+          "Herdr's app owns this terminal's placement. Move it in Herdr's app so the change also appears on your phone.",
+        );
+    };
+    checkAppOwnership();
     const fences = selected.map((p) =>
       CoreOperationFence.admit(lease, String(p.pane_id), null, {
         foreground: false,
@@ -152,6 +169,7 @@ async function performMove(
     };
     const check = () => {
       host.check("dispatch");
+      checkAppOwnership();
       for (const fence of [...fences, ...targetFences])
         fence.check("dispatch", "program");
       if (target && !rows().tabs.some((t) => t.tab_id === target.tab_id))
@@ -187,7 +205,11 @@ async function performMove(
         return false;
       let record = runtime.core.terminal(String(p.pane_id));
       for (let depth = 0; record && depth < 32; depth++) {
-        if (record.labels?.["herdr.space"]) return false;
+        if (
+          coreAppPlacement(runtime.core.mirror.appLayout, record.address) ||
+          record.labels?.["herdr.space"]
+        )
+          return false;
         if (typeof record.parent !== "string") return false;
         if (addresses.has(record.parent)) return true;
         record = runtime.core.terminal(record.parent);
@@ -265,6 +287,7 @@ async function performMove(
       await runtime.label(fence, labels);
       await topology.update(coreId, (current) => {
         host.check("publication");
+        checkAppOwnership();
         fence.check("publication", "program");
         const next = structuredClone(current);
         const address = fence.occupant!.address;
@@ -304,6 +327,7 @@ async function performMove(
       });
       runtime.layoutChanged();
     }
+    checkAppOwnership();
     const after = rows();
     if (
       !selected.every((p) =>

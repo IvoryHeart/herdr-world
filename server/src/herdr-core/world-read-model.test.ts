@@ -1,3 +1,4 @@
+import { appLayoutFixture } from "./testing/app-layout.fixture";
 import { afterEach, describe, expect, test } from "bun:test";
 import { mkdtempSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
@@ -143,6 +144,19 @@ function coreAgents(fake: FakeCore) {
   fake.report(builder, { state: "working", app: "codex" });
   fake.report(scout, { state: "working" });
   fake.report(scout, { state: "idle" });
+  fake.setAppLayout(
+    appLayoutFixture({
+      id: "s1",
+      name: "web",
+      tabs: [
+        {
+          id: "c1",
+          name: "review",
+          terminals: [reviewer, builder, scout, "t4"],
+        },
+      ],
+    }),
+  );
   return { reviewer, builder, scout };
 }
 
@@ -327,7 +341,7 @@ describe("core agents in World's read model", () => {
     await until(async () => (await status("scout")) === "done");
     const methods = new Set(fake.calls.map((call) => call.method));
     expect([...methods].sort()).toEqual(
-      ["hello", "events.subscribe", "server.status"].sort(),
+      ["hello", "doc.get", "events.subscribe", "server.status"].sort(),
     );
   });
 
@@ -403,6 +417,13 @@ describe("core agents in World's read model", () => {
       argv: ["claude"],
       labels: { "herdr.space": "s9", where: "café ✓ 漢字 / tâche" },
     });
+    fake.setAppLayout(
+      appLayoutFixture({
+        id: "s9",
+        name: "café ✓ 漢字",
+        tabs: [{ id: "c9", name: "tâche", terminals: ["t1"] }],
+      }),
+    );
     await w.service.create(coreProfile(stateDir));
     await until(async () => (await w.read("box-core")).snapshot !== null);
     const snapshot = (await w.read("box-core")).snapshot!;

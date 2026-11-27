@@ -134,13 +134,13 @@ export function createCoreConnections(args: {
         local: profile.type === "local",
         firstSight,
         attention,
-        onAlerts: (alerts, terminals, coreName) => {
+        onAlerts: (alerts, terminals, coreName, rows) => {
           const service = args.profiles();
           const connections = [
             ...(service.list?.() ?? []),
             ...service.coreList(),
           ];
-          for (const event of coreTaskEvents(alerts, terminals, coreName))
+          for (const event of coreTaskEvents(alerts, terminals, coreName, rows))
             args.push?.(
               connectionTaskPush(
                 event,

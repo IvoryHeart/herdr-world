@@ -1,28 +1,29 @@
 ## Why
 
-Two terminals carrying the same `herdr.space=crew` appear as separate spaces in
-the owner's Android app (#1435). World's labels already match the published app
-adoption contract; its documentation incorrectly promises that `where` also names
-spaces in Herdr's apps.
+World treated app adoption labels and the output-only `where` caption as the
+app's layout. Once a desktop app adopts a terminal, its `herdr-app` document
+owns membership and names; phones consume that layout. Label-only moves and
+caption naming can therefore disagree with the apps (#1435).
 
 ## What Changes
 
-- Pin launches and moves to one machine-local space ID with distinct tab IDs,
-  including readback from an isolated real core.
-- Correct the naming promise: app layout names and label-based grouping are
-  separate; no supported display-name label exists yet.
-- Document dispatcher labels and prepare an upstream Android report without
-  changing app-owned layout or the stacked PR's room-name derivation.
+- Observe the app document read-only at connect and on local document events
+  and missed cuts. Adopted membership and names precede World overrides and
+  labels in the single shared read model.
+- Retain existing launch labels for desktop adoption. Refuse moves of adopted
+  terminals or unknown app ownership, explaining that placement belongs to the app.
+- Stop interpreting `where` as a name. Preserve the stacked change's derived
+  name memory and folder/tab/agent fallback for otherwise unnamed rooms.
+- Correct fixtures and reopen Q8 desktop/phone acceptance. No app document writes.
 
 ## Capabilities
 
 ### Modified Capabilities
 
-- `herdr-core-runtime`: clarify app placement identity and its naming limit for
-  World-started terminals and moves.
+- `herdr-core-runtime`: app layout observation, placement authority and naming.
 
 ## Impact
 
-Existing launch/move writes stay unchanged. Focused provider and live-core tests,
-capability notes, and an upstream report supply the evidence. No new storage,
-view-specific state, dependencies or runtime authority changes.
+Framed client, mirror, runtime, shared topology, moves and their consumers/tests.
+No new durable store, dependency or view-local state. Crew parentage changes
+remain in the dispatcher's repository.

@@ -1,3 +1,4 @@
+import { appLayoutFixture } from "./testing/app-layout.fixture";
 import { afterEach, describe, expect, test } from "bun:test";
 import {
   existsSync,
@@ -239,6 +240,122 @@ describe("herdr-core live (real release binary)", () => {
   );
 
   live(
+    "app document changes override labels and refuse adopted moves on an isolated core",
+    async () => {
+      const core = new ScratchCore(bin!);
+      scratch.push(core);
+      await core.start();
+      const w = worldFor(core.stateDir);
+      try {
+        await core.hc(
+          "run",
+          "--bg",
+          "--keep",
+          "--label",
+          "herdr.space=crew",
+          "--label",
+          "herdr.tab=one",
+          "--",
+          "/bin/sleep",
+          "600",
+        );
+        await core.hc(
+          "run",
+          "--bg",
+          "--keep",
+          "--label",
+          "herdr.space=crew",
+          "--label",
+          "herdr.tab=two",
+          "--",
+          "/bin/sleep",
+          "600",
+        );
+        await w.service.create(w.profile);
+        await until(() => w.core.manager.status("core").state === "ready");
+        const lease = w.core.manager.readyRuntimeLease("core")!;
+        expect((await lease.runtime.operations.listTabs()).tabs).toHaveLength(
+          2,
+        );
+        // This emulates the external app, using core's public JSON-RPC connect.
+        // World's client exposes only doc.get; the test process owns scratch core.
+        const publish = async (version: number, name: string) => {
+          const value = appLayoutFixture({
+            id: "app-crew",
+            name,
+            tabs: [
+              { id: "first", name: "First", terminals: ["t1"] },
+              { id: "second", name: "Second", terminals: ["t2"] },
+            ],
+          });
+          const proc = Bun.spawn([bin!, "connect"], {
+            env: core.env,
+            cwd: core.env.HOME,
+            stdin: "pipe",
+            stdout: "pipe",
+            stderr: "pipe",
+          });
+          proc.stdin.write(
+            JSON.stringify({
+              jsonrpc: "2.0",
+              id: 1,
+              method: "doc.set",
+              params: { name: "herdr-app", version, value },
+            }) + "\n",
+          );
+          proc.stdin.end();
+          const [out, err, code] = await Promise.all([
+            new Response(proc.stdout).text(),
+            new Response(proc.stderr).text(),
+            proc.exited,
+          ]);
+          if (code !== 0 || JSON.parse(out).error)
+            throw new Error(`Scratch app publish failed: ${err || out}`);
+        };
+        await publish(0, "Crew");
+        await until(
+          () =>
+            lease.runtime.core.mirror.appLayoutCurrent &&
+            lease.runtime.core.mirror.appLayout?.spaces[0]?.name === "Crew",
+        );
+        expect(
+          (await lease.runtime.operations.listWorkspaces()).workspaces,
+        ).toMatchObject([{ workspace_id: "hc:space:app-crew", label: "Crew" }]);
+        const target = await createCoreRoom(lease, w.topology, "Other");
+        expect(
+          await moveCore(lease, w.topology, {
+            kind: "desk",
+            tab_id: "hc:space:app-crew:tab:first",
+            workspace_id: target.workspace_id,
+          }),
+        ).toMatchObject({
+          status: "refused",
+          message: expect.stringContaining("Herdr's app"),
+        });
+        await publish(1, "Renamed crew");
+        await until(
+          () =>
+            lease.runtime.core.mirror.appLayout?.spaces[0]?.name ===
+            "Renamed crew",
+        );
+        for (const [address, tab] of [
+          ["t1", "one"],
+          ["t2", "two"],
+        ]) {
+          const native = JSON.parse(await core.hc("get", "--json", address!));
+          expect(native.labels["herdr.space"]).toBe("crew");
+          expect(native.labels["herdr.tab"]).toBe(tab);
+        }
+      } finally {
+        w.service.stopSupervision();
+        await w.core.stop();
+        w.topology.close();
+      }
+    },
+    30_000,
+  );
+
+  live(
     "connected; kill -9 goes stale; the same agents return at the same addresses",
     async () => {
       const core = new ScratchCore(bin!);
@@ -288,7 +405,7 @@ describe("herdr-core live (real release binary)", () => {
   );
 
   test.skipIf(!bin || !Bun.which("cc"))(
-    "core agents reach World's read model with core's status and the app's rooms",
+    "core agents reach World's read model with native status and label grouping",
     async () => {
       const core = new ScratchCore(bin!);
       scratch.push(core);
@@ -382,7 +499,8 @@ int main(void) {
       });
       expect(
         view!.workspaces.find((s) => s.workspace_id === "hc:space:s1")?.label,
-      ).toBe("web");
+      ).toBe("home");
+      // No app document exists: the folder names the room, never where=web.
       // Finished while World watched, no client has marked it seen: done.
       expect(pane("scout")).toMatchObject({
         agent: "gemini",
