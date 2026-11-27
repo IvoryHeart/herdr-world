@@ -358,11 +358,31 @@ test("the CI runner executes only its selected lane and rejects invalid selector
 test("CI unit and web partitions are disjoint and exhaustive", () => {
   const selection = selectValidation(graph, ["package.json"]);
   for (const lane of ["unit", "web"] as const) {
-    const first = selectedCITests(selection, lane, "1/2");
-    const second = selectedCITests(selection, lane, "2/2");
-    expect([...first, ...second].sort()).toEqual([...selection[lane]].sort());
-    expect(first.some((path) => second.includes(path))).toBe(false);
-    expect(() => selectedCITests(selection, lane, "3/2")).toThrow();
+    const count = lane === "unit" ? 4 : 2;
+    const files = Array.from({ length: count }, (_, index) =>
+      selectedCITests(selection, lane, `${index + 1}/${count}`),
+    ).flat();
+    expect(files.sort()).toEqual([...selection[lane]].sort());
+    expect(new Set(files).size).toBe(files.length);
+    expect(() =>
+      selectedCITests(selection, lane, `${count + 1}/${count}`),
+    ).toThrow();
+  }
+});
+
+test("unit scheduling and timing inputs always select full validation", () => {
+  for (const path of [
+    "scripts/ci-unit-shards.ts",
+    "scripts/ci-unit-timings.ts",
+    "scripts/ci-unit-timings.json",
+    "scripts/ci-unit-comparison.ts",
+  ]) {
+    const selection = selectValidation(
+      { ...graph, files: new Set([...graph.files, path]) },
+      [path],
+    );
+    expect(selection.full).toBe(true);
+    expect(selection.unit).toContain(unit);
   }
 });
 
@@ -770,7 +790,7 @@ test.each(["unit", "world", "web"])(
           process.execPath,
           join(import.meta.dir, "ci-tests.ts"),
           lane,
-          lane === "world" ? "1" : "1/2",
+          lane === "world" ? "1" : lane === "unit" ? "1/4" : "1/2",
         ],
         {
           cwd: root,
@@ -789,7 +809,8 @@ test.each(["unit", "world", "web"])(
       expect(child.exitCode).toBe(0);
       expect(child.stderr.toString()).toBe("");
       expect(child.stdout.toString()).toContain("no affected suites");
-      const file = lane === "world" ? "1" : "1-of-2";
+      const file =
+        lane === "world" ? "1" : lane === "unit" ? "1-of-4" : "1-of-2";
       const report = join(
         root,
         `.agents/delivery/flakes-${lane}-${file}-empty-${process.env.GITHUB_RUN_ATTEMPT || "local"}.json`,
@@ -820,7 +841,12 @@ test.each(["unit", "web"])(
         world: [],
       };
       const child = Bun.spawnSync(
-        [process.execPath, join(import.meta.dir, "ci-tests.ts"), lane, "1/2"],
+        [
+          process.execPath,
+          join(import.meta.dir, "ci-tests.ts"),
+          lane,
+          lane === "unit" ? "1/4" : "1/2",
+        ],
         {
           cwd: root,
           env: {
@@ -835,11 +861,15 @@ test.each(["unit", "web"])(
       expect(child.stderr.toString()).toBe("");
       const args = JSON.parse(readFileSync(join(root, "args.json"), "utf8"));
       expect(args).toContain(
-        `--reporter-outfile=.agents/delivery/${lane === "web" ? "web-browser" : "unit"}-1-of-2.xml`,
+        `--reporter-outfile=.agents/delivery/${lane === "web" ? "web-browser-1-of-2" : "unit-1-of-4"}.xml`,
       );
       expect(args).toContain(
         `--retry-flaky=${lane === "unit" ? "unit" : "browser"}`,
       );
+      expect(args).toContain(`--parallel=${lane === "unit" ? 4 : 2}`);
+      expect(args).toContain("--max-concurrency=2");
+      if (lane === "unit")
+        expect(args).toContain("--timings=scripts/ci-unit-timings.json");
     } finally {
       rmSync(root, { recursive: true, force: true });
     }

@@ -11,7 +11,9 @@
 - `server/src/herdr/cli.ts`
 - `server/src/http/herdr-setup.test.ts`
 - `server/src/verbs/registry.ts`
-- `server/src/verbs/policy.test.ts`
+- `server/src/verbs/policy.test.ts` (browser RPC inventory; conservative source
+  prefilter retains Unicode escapes and all call assertions within the existing
+  timeout when unit files run concurrently)
 - `server/src/service/world-service.test.ts`
 - `server/src/bridge/`
 - `server/src/verbs/`

@@ -35,6 +35,7 @@ const FULL = [
   /^bunfig\.toml$/,
   /^\.github\/workflows\//,
   /^scripts\/(?:validation-scope|coverage|coverage-scope|ci-validation-proof|ci-tests|ci-verification|ci-content-key|ci-model-cache|ci-reuse-full-check|ci-delivery-result|check-pr-body|file-size-ratchet)\.ts$/,
+  /^scripts\/ci-unit-(?:(?:shards|timings|comparison)\.ts|timings\.json)$/,
   /(?:^|\/)tsconfig[^/]*\.json$/,
   /^web\/vite\.config\.ts$/,
   /^web\/index\.html$/,

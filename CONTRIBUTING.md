@@ -79,6 +79,9 @@ assets required by server typechecks and process tests.
 
 `test:quick` excludes only `{uiScale,mobileTerminal,filePreviewNavigation,TerminalThemeDialog,VisualPreview,ThemedSelect,ThemedSelect.browser,HerdrSetupCard}.test.ts`; it includes other browser and integration tests.
 All required PR checks run on Linux, including native input changes. Main reports existing PR evidence without heavy checks. Release tags build/test/seal native bytes; nightly native checks remain advisory.
+CI units use four timed shards with four files running at once and unchanged case concurrency.
+Only the shard selecting build consumers builds process-test assets. Scheduling
+changes require twenty paired serial/parallel controls; see [unit evidence](docs/ci-pipelines.md#non-browser-units).
 
 Tests sit beside their source. `bun scripts/affected.ts origin/main` lists branch impact.
 
