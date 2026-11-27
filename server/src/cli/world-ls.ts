@@ -7,6 +7,8 @@ type LsRuntime = {
 };
 export type LsResult = {
   grouping?: string;
+  /** Town buildings under the setting; hosts are machines either way. */
+  buildings?: number;
   groups?: {
     label: string;
     runtimes: { connection_id: string; runtime: string; label: string }[];
@@ -20,11 +22,11 @@ export type LsResult = {
 };
 
 /**
- * `herdr-world ls` for people: the groups World publishes (the ones Town,
- * Desk, Board and the Hosts control show), each runtime with its rooms, then
- * any host World holds no runtime on.
+ * `herdr-world ls` for people: the hosts (machines) World publishes, the
+ * ones Town, Desk, Board and the Hosts control list, each runtime with its
+ * rooms, then any host World holds no runtime on.
  */
-export function lsHuman({ grouping, groups, hosts }: LsResult) {
+export function lsHuman({ grouping, buildings, groups, hosts }: LsResult) {
   const runtimeLines = (runtime: LsRuntime) => [
     `  ${runtime.kind} ${runtime.version ?? "(version unknown)"} — ${runtime.state}`,
     ...(runtime.workspaces ?? []).map(
@@ -51,7 +53,10 @@ export function lsHuman({ grouping, groups, hosts }: LsResult) {
     groups.flatMap((group) => group.runtimes.map((each) => each.connection_id)),
   );
   return [
-    `Group runtimes: ${grouping === "runtime" ? "one per runtime" : "one per machine"}`,
+    `Group runtimes: ${grouping === "runtime" ? "one per runtime" : "one per machine"}` +
+      (buildings === undefined
+        ? ""
+        : ` (${buildings} Town ${buildings === 1 ? "building" : "buildings"})`),
     ...groups.map((group) =>
       [
         group.label,

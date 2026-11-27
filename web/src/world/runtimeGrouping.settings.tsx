@@ -1,6 +1,7 @@
 /**
- * World's "Group runtimes" setting (#1307): one value every view that groups
- * by where agents run follows. The control shows World's published value
+ * World's "Group runtimes" setting (#1307): how Town draws a machine's
+ * runtimes, as one building or one per runtime. Hosts are machines in every
+ * view whatever it says (shared/hostGrouping.ts). The control shows World's published value
  * (the replica) and changes it through a World command, so every browser
  * follows the same publication (runtimeGrouping.ts). It replaced Town's own
  * "Town buildings" choice, so its words still find it under that name.
@@ -18,7 +19,7 @@ defineSettings("runtime-grouping", [
     category: "system",
     title: "Group runtimes",
     description:
-      "Show a machine's Herdr TUI and herdr-core together, or each runtime apart, in Town, Desk and the navigator",
+      "Draw a machine's Herdr TUI and herdr-core as one Town building, or one building per runtime. Hosts stay machines everywhere",
     words: [
       "town buildings",
       "buildings",

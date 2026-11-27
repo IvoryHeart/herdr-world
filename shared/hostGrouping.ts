@@ -1,9 +1,13 @@
 /**
- * How World groups the runtimes it holds (openspec world-one-object, step 2):
- * the "Group runtimes" setting (`ui.runtimeGrouping`, #1307) applied to the
- * connection catalogue. One group per machine (this computer or one SSH
- * destination, the service's host catalogue, connections/hosts.ts `hostId`)
- * holding every runtime World holds there, or one group per runtime.
+ * How World groups the runtimes it holds (openspec world-one-object, step 2),
+ * at two levels. A host is a machine, always (this computer or one SSH
+ * destination, the service's host catalogue, connections/hosts.ts `hostId`),
+ * holding every runtime World holds there: every host list and count (the
+ * Hosts control and filter, Desk, the navigator, Board, `herdr-world ls`)
+ * reads `hosts`. Within a host, the "Group runtimes" setting
+ * (`ui.runtimeGrouping`, #1307) decides only how its runtimes are drawn: one
+ * Town building per machine, or one per runtime (`groups`). It never changes
+ * how many hosts there are.
  *
  * The service derives it once (service/world-commands.ts) and publishes it in
  * `world.snapshot` as `host_grouping`, under the same revision as the setting
@@ -150,12 +154,18 @@ export function groupingHosts(
   ];
 }
 
-/** The group a runtime stands in: its machine, or itself. */
+/**
+ * The group a runtime stands in: its machine, or itself. A second view of an
+ * endpoint is the same runtime, so it stands in its anchor's group.
+ */
 function runtimeGroupKey(
   host: Pick<GroupingHost, "id" | "machine">,
   grouping: RuntimeGrouping,
+  anchorOf: ReadonlyMap<string, string>,
 ) {
-  return grouping === "machine" ? host.machine : `runtime:${host.id}`;
+  return grouping === "machine"
+    ? host.machine
+    : `runtime:${anchorOf.get(host.id) ?? host.id}`;
 }
 
 type HostGroupMember = {
@@ -164,7 +174,7 @@ type HostGroupMember = {
   label: string;
 };
 
-/** Runtimes every view shows together. */
+/** Runtimes shown together: a host (machine), or one building of one. */
 type HostGroup = {
   key: string;
   /**
@@ -187,10 +197,25 @@ type HostEndpoint = {
   shown: string;
 };
 
+/** One Town building: some or all of one host's runtimes. */
+type HostBuilding = HostGroup & {
+  /** The key of the host (machine) it stands on. */
+  host: string;
+};
+
 export type HostGrouping = {
   grouping: RuntimeGrouping;
-  /** In the order of the runtimes they are named after (`compareWorldOrder`). */
-  groups: HostGroup[];
+  /**
+   * The machines: what every host list and count shows, whatever the
+   * setting. In the order of the runtimes they are named after
+   * (`compareWorldOrder`).
+   */
+  hosts: HostGroup[];
+  /**
+   * How Town draws the runtimes as buildings under the setting: one per
+   * host, or one per runtime. In the same order as `hosts`' runtimes.
+   */
+  groups: HostBuilding[];
   endpoints: HostEndpoint[];
 };
 
@@ -221,11 +246,11 @@ const worldOrder = (hosts: readonly GroupingHost[]) =>
 function hostGroups(
   hosts: readonly GroupingHost[],
   grouping: RuntimeGrouping,
-  behind: ReadonlySet<string>,
+  behind: ReadonlyMap<string, string>,
 ): HostGroup[] {
   const byKey = new Map<string, HostGroup & { at: number; named: boolean }>();
   worldOrder(hosts).forEach((host, index) => {
-    const key = runtimeGroupKey(host, grouping);
+    const key = runtimeGroupKey(host, grouping, behind);
     const group = byKey.get(key) ?? {
       key,
       label: host.label,
@@ -283,14 +308,21 @@ export function deriveHostGrouping(
 ): HostGrouping {
   const grouping = parseRuntimeGrouping(setting) ?? RUNTIME_GROUPING_DEFAULT;
   const endpoints = hostEndpoints(hosts, stale);
-  const behind = new Set(
+  const behind = new Map(
     endpoints.flatMap(({ views, anchor }) =>
-      views.filter((view) => view !== anchor),
+      views.flatMap((view) =>
+        view !== anchor ? [[view, anchor] as const] : [],
+      ),
     ),
   );
+  const hostOf = new Map(hosts.map((host) => [host.id, host.machine]));
   return {
     grouping,
-    groups: hostGroups(hosts, grouping, behind),
+    hosts: hostGroups(hosts, "machine", behind),
+    groups: hostGroups(hosts, grouping, behind).map((group) => ({
+      ...group,
+      host: hostOf.get(group.members[0]!.connection_id)!,
+    })),
     endpoints,
   };
 }
@@ -367,36 +399,22 @@ export function parseHostGrouping(value: unknown): HostGrouping | null {
   if (
     !item ||
     !grouping ||
+    !Array.isArray(item.hosts) ||
     !Array.isArray(item.groups) ||
     !Array.isArray(item.endpoints)
   )
     return null;
-  const groups = item.groups.slice(0, LIMITS.connections).flatMap((entry) => {
-    const group = record(entry);
-    const key = text(group?.key);
-    const label = typeof group?.label === "string" ? group.label : null;
-    if (!group || !key || label === null || !Array.isArray(group.members))
-      return [];
-    const members = group.members
-      .slice(0, LIMITS.connections)
-      .flatMap((each): HostGroupMember[] => {
-        const member = record(each);
-        const id = text(member?.connection_id);
-        return member &&
-          id &&
-          (member.runtime === "herdr" || member.runtime === "herdr-core") &&
-          typeof member.label === "string"
-          ? [
-              {
-                connection_id: id,
-                runtime: member.runtime,
-                label: member.label,
-              },
-            ]
-          : [];
-      });
-    return members.length ? [{ key, label, members }] : [];
-  });
+  const hosts = item.hosts
+    .slice(0, LIMITS.connections)
+    .flatMap((entry) => parseGroup(entry) ?? []);
+  const hostKeys = new Set(hosts.map(({ key }) => key));
+  const groups = item.groups
+    .slice(0, LIMITS.connections)
+    .flatMap((entry): HostBuilding[] => {
+      const group = parseGroup(entry);
+      const host = text(record(entry)?.host);
+      return group && host && hostKeys.has(host) ? [{ ...group, host }] : [];
+    });
   const endpoints = item.endpoints
     .slice(0, LIMITS.connections)
     .flatMap((entry): HostEndpoint[] => {
@@ -417,5 +435,26 @@ export function parseHostGrouping(value: unknown): HostGrouping | null {
         ? [{ views, anchor, shown }]
         : [];
     });
-  return { grouping, groups, endpoints };
+  return { grouping, hosts, groups, endpoints };
+}
+
+function parseGroup(value: unknown): HostGroup | null {
+  const group = record(value);
+  const key = text(group?.key);
+  const label = typeof group?.label === "string" ? group.label : null;
+  if (!group || !key || label === null || !Array.isArray(group.members))
+    return null;
+  const members = group.members
+    .slice(0, LIMITS.connections)
+    .flatMap((each): HostGroupMember[] => {
+      const member = record(each);
+      const id = text(member?.connection_id);
+      return member &&
+        id &&
+        (member.runtime === "herdr" || member.runtime === "herdr-core") &&
+        typeof member.label === "string"
+        ? [{ connection_id: id, runtime: member.runtime, label: member.label }]
+        : [];
+    });
+  return members.length ? { key, label, members } : null;
 }

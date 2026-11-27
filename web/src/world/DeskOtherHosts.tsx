@@ -18,7 +18,7 @@ export function DeskOtherHosts({
   world: WorldObject;
   filtered: WorldObject;
   label: string | undefined;
-  /** The "Group runtimes" groups; without it each connection is its own. */
+  /** World's published hosts; without it each connection is its own. */
   groupOf?: DeskHostGroupOf;
   /** Whether an agent is pinned: a host's agents list pinned ones first. */
   pinned?: (leaf: WorldLeafObject) => boolean;

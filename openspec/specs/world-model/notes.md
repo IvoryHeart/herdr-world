@@ -19,9 +19,10 @@ until it is archived. Navigation and usage guidance; contracts live in OpenSpec.
 - `server/src/world/snapshot-records.ts` (bounded record selection and coverage counts)
 - `server/src/world/commands.ts` (World commands: compare-and-set, own connection and
   generation, settle only on a read that started after the acknowledgement)
-- `shared/hostGrouping.ts` (runtime grouping: groups in World's host order, endpoint
-  anchors and the view Town shows; derived in every `world.snapshot` reply, never
-  stored)
+- `shared/hostGrouping.ts` (runtime grouping at two levels: `hosts`, the machines
+  every host list and count reads, and `groups`, Town's buildings under "Group
+  runtimes", each naming its host; World's host order, endpoint anchors and the
+  view Town shows; derived in every `world.snapshot` reply, never stored)
 - `server/src/world/setting-commands.ts` ("Group runtimes" as a `world.command`:
   one `setting change` entry in the ledger history, written as accepted before the
   setting and replaced by stored or failed; an entry a failed write or restart leaves

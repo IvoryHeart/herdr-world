@@ -31,10 +31,10 @@ export function writeHostsFilter(ids: HostsFilter) {
 
 /**
  * The overview scope is independent of operational ownership and legacy focus.
- * It is kept as connection IDs but read by World's published groups: `ids`
- * covers every runtime of each selected group (`hostsFilterByGroup`), so a
- * selection saved per connection shows its whole group, under either "Group
- * runtimes" choice. View-only: operations stay qualified by connection ID and
+ * It is kept as connection IDs but read by World's published hosts
+ * (machines): `ids` covers every runtime of each selected machine
+ * (`hostsFilterByGroup`), so a selection saved per connection shows its whole
+ * machine, under either "Group runtimes" choice. View-only: operations stay qualified by connection ID and
  * generation.
  */
 export function useHostsFilter(

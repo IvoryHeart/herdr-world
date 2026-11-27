@@ -12,9 +12,10 @@ export type CoreConnectionProfileSummary = Omit<
  * One host World can show or put work on, whichever runtime serves it. Every
  * "which host?" list and choice reads this one catalogue (`worldHosts`), so a
  * herdr-core connection is a host like any Herdr (TUI) connection. Which
- * hosts stand together (a machine, or each runtime alone) is not decided
- * here: World publishes it (`host_grouping`, shared/hostGrouping.ts) and
- * every view reads it through `hostGroupOf`.
+ * machine (host) each runtime stands on is not decided here: World publishes
+ * it (`host_grouping` `hosts`, shared/hostGrouping.ts) and every host list
+ * and count reads it through `hostGroupOf`. A host is a machine, whatever
+ * "Group runtimes" says; that setting only changes Town's buildings.
  */
 export type WorldHost = {
   id: string;
@@ -87,18 +88,18 @@ export function machineStatus(states: readonly ConnectionLifecycleState[]) {
 }
 
 /**
- * A Hosts filter widened to whole groups: a selected runtime selects every
- * runtime of its published group, so a selection saved per connection
+ * A Hosts filter widened to whole hosts: a selected runtime selects every
+ * runtime of its published host (machine), so a selection saved per connection
  * (before #1227) shows its whole group. IDs no group lists are kept as they
  * are. Returns the given list when it already covers its groups.
  */
 export function hostsFilterByGroup<Ids extends readonly string[] | null>(
   ids: Ids,
-  grouping: Pick<HostGrouping, "groups"> | undefined,
+  grouping: Pick<HostGrouping, "hosts"> | undefined,
 ): Ids {
   if (ids === null) return ids;
   const selected = new Set(ids);
-  const added = (grouping?.groups ?? []).flatMap((group) =>
+  const added = (grouping?.hosts ?? []).flatMap((group) =>
     group.members.some((member) => selected.has(member.connection_id))
       ? group.members
           .map((member) => member.connection_id)
@@ -108,29 +109,31 @@ export function hostsFilterByGroup<Ids extends readonly string[] | null>(
   return (added.length ? [...ids, ...added] : ids) as Ids;
 }
 
-/** One row of the Hosts list: a published group and its runtimes' state. */
+/** One row of the Hosts list: a published host (machine) and its runtimes. */
 export type HostGroupRow = {
   key: string;
   label: string;
   /** Its runtimes the catalogue lists, in published order. */
   ids: string[];
+  /** In rows of two or more runtimes, each one's tag ("Herdr TUI", …). */
+  runtimes: string[];
   /** Its runtimes' states summarised, e.g. "ready" or "1 of 2 reconnecting". */
   status: string;
 };
 
 /**
- * The Hosts list: World's published groups in their order, each with the
- * live state of its runtimes. A runtime World has not grouped yet is a row of
+ * The Hosts list: World's published hosts (machines) in their order, each
+ * with its runtimes and their live state. A runtime World has not grouped yet is a row of
  * its own, after them.
  */
 export function hostGroupRows(
   hosts: readonly WorldHost[],
-  grouping: Pick<HostGrouping, "groups"> | undefined,
+  grouping: Pick<HostGrouping, "hosts"> | undefined,
 ): HostGroupRow[] {
   const byId = new Map(hosts.map((host) => [host.id, host]));
   const grouped = new Set<string>();
   const rows: HostGroupRow[] = [];
-  for (const group of grouping?.groups ?? []) {
+  for (const group of grouping?.hosts ?? []) {
     const members = group.members.flatMap((member) => {
       const host = byId.get(member.connection_id);
       return host ? [host] : [];
@@ -141,6 +144,7 @@ export function hostGroupRows(
       key: group.key,
       label: group.label,
       ids: members.map(({ id }) => id),
+      runtimes: members.length > 1 ? runtimeTags(members) : [],
       status: machineStatus(members.map(({ state }) => state)),
     });
   }
@@ -150,15 +154,16 @@ export function hostGroupRows(
         key: `runtime:${host.id}`,
         label: host.label,
         ids: [host.id],
+        runtimes: [],
         status: host.state,
       });
   return rows;
 }
 
-/** How many published groups hold these runtimes. */
+/** How many published hosts (machines) hold these runtimes. */
 export function hostGroupCount(
   ids: readonly string[],
-  grouping: Pick<HostGrouping, "groups"> | undefined,
+  grouping: Pick<HostGrouping, "hosts"> | undefined,
 ) {
   const groupOf = hostGroupOf(grouping);
   return new Set(ids.map((id) => groupOf(id)?.key ?? `runtime:${id}`)).size;
@@ -175,23 +180,22 @@ export function hostRuntimeLabel(host: Pick<WorldHost, "runtime">) {
 }
 
 const groupOfCache = /* @__PURE__ */ new WeakMap<
-  Pick<HostGrouping, "groups">,
+  Pick<HostGrouping, "hosts">,
   HostGroupOf
 >();
 
 /**
- * Each connection's published group, by connection ID: World's "Group
- * runtimes" applied once on the service. A connection no group lists (yet)
- * is a group of its own.
+ * Each connection's published host (machine), by connection ID: worked out
+ * once on the service. A connection no host lists (yet) is a host of its own.
  */
 export function hostGroupOf(
-  grouping: Pick<HostGrouping, "groups"> | undefined,
+  grouping: Pick<HostGrouping, "hosts"> | undefined,
 ): HostGroupOf {
   if (!grouping) return () => undefined;
   const known = groupOfCache.get(grouping);
   if (known) return known;
   const byId = new Map<string, { key: string; label: string; order: number }>();
-  for (const group of grouping.groups)
+  for (const group of grouping.hosts)
     for (const member of group.members)
       byId.set(member.connection_id, {
         key: group.key,
@@ -239,8 +243,8 @@ export type RuntimeGroup<T> = {
 };
 
 /**
- * A view's per-connection items, grouped as World publishes their
- * connections' groups (`hostGroupOf`), in World's published order. An item
+ * A view's per-connection items, grouped by their connections' published
+ * hosts (machines, `hostGroupOf`), in World's published order. An item
  * whose connection World has not grouped stands alone, after them. The navigator
  * and Board both group through this, so they never disagree.
  */
@@ -274,17 +278,24 @@ export function groupByRuntime<T>(
   for (const entry of byKey.values()) {
     if (entry.members.length < 2) continue;
     const sources = entry.members.map(sourceOf);
-    const kinds = sources.map(({ runtime }) => runtime ?? "herdr");
-    sources.forEach((source, index) => {
-      const kind = kinds[index]!;
-      // Two runtimes of one kind on a machine: their names tell them apart.
-      entry.tags.set(
-        source.connectionId,
-        kinds.filter((each) => each === kind).length > 1
-          ? `${runtimeTag(kind)} · ${source.label}`
-          : runtimeTag(kind),
-      );
-    });
+    const tags = runtimeTags(sources);
+    sources.forEach((source, index) =>
+      entry.tags.set(source.connectionId, tags[index]!),
+    );
   }
   return [...byKey.values()];
+}
+
+/** Each of a machine's runtimes' tags: "Herdr TUI", "herdr-core", … */
+function runtimeTags(
+  sources: readonly { label: string; runtime?: WorldHost["runtime"] }[],
+) {
+  const kinds = sources.map(({ runtime }) => runtime ?? "herdr");
+  return sources.map((source, index) => {
+    const kind = kinds[index]!;
+    // Two runtimes of one kind on a machine: their names tell them apart.
+    return kinds.filter((each) => each === kind).length > 1
+      ? `${runtimeTag(kind)} · ${source.label}`
+      : runtimeTag(kind);
+  });
 }

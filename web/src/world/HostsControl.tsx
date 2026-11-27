@@ -20,7 +20,7 @@ export type HostsControlProps = {
   onChange(ids: HostsFilter): void;
 };
 
-/** How many hosts (World's published groups) an explicit selection shows. */
+/** How many hosts (World's published machines) an explicit selection shows. */
 export function selectedHostCount(
   connections: readonly WorldHost[],
   ids: readonly string[],
@@ -32,7 +32,7 @@ export function selectedHostCount(
   );
 }
 
-/** "All hosts", "No hosts", or how many hosts (groups) the filter shows. */
+/** "All hosts", "No hosts", or how many hosts (machines) the filter shows. */
 export function hostsSelectionLabel(
   connections: readonly WorldHost[],
   ids: HostsFilter,
@@ -65,9 +65,10 @@ export function useConnectionManager() {
 /**
  * The Hosts filter itself, shared by the top bar's Hosts menu and the phone's
  * corner view menu so both show and change the one filter of this browser.
- * One row per group World publishes (#1227, #1397), as Town has one building
- * per group: a row shows or hides every runtime of the group, and its status
- * sums theirs up. Each runtime's own detail stays in Manage connections.
+ * One row per host (machine) World publishes (#1227, #1397), whatever "Group
+ * runtimes" says: a row names its runtimes, shows or hides every one of
+ * them, and its status sums theirs up. Each runtime's own detail stays in
+ * Manage connections.
  */
 export function HostsFilterOptions({
   connections,
@@ -97,7 +98,16 @@ export function HostsFilterOptions({
               );
             }}
           />
-          {machine.label} · {machine.status}
+          <span className="world-hosts-row">
+            <span>
+              {machine.label} · {machine.status}
+            </span>
+            {machine.runtimes.length ? (
+              <small className="world-hosts-runtimes">
+                {machine.runtimes.join(", ")}
+              </small>
+            ) : null}
+          </span>
         </label>
       ))}
       {!connections.length ? (
@@ -111,8 +121,8 @@ export function HostsFilterOptions({
 }
 
 /**
- * The overview's Hosts menu: every group World publishes, with its Herdr
- * (TUI) and herdr-core runtimes, to show or hide in World's views.
+ * The overview's Hosts menu: every host (machine) World publishes, with its
+ * Herdr (TUI) and herdr-core runtimes, to show or hide in World's views.
  */
 export function HostsControl({
   connections,

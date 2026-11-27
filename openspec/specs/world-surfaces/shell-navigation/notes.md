@@ -91,22 +91,27 @@
   labels each with its server and keeps worktrees nested. Selecting a row opens
   its server; another server's menu only navigates. Stale hosts stay out, and a
   failed observation shows its error.
-- **Settings → This World → Group runtimes** decides how Town's buildings,
-  World's navigator, Desk's other-host summaries and Board's zones group a machine's
-  runtimes, for every browser. **One per machine** (the default) puts this
-  computer's Herdr TUI and herdr-core under one navigator heading with a
-  **Herdr TUI** row and a **herdr-core** row (each with its own tree, colour
-  and actions), one Town building, one Desk host and one Board zone; **One per runtime** shows
-  each runtime apart. A machine on its own runtime keeps a plain host row.
+- A host is a machine, always. World's navigator puts this computer's Herdr
+  TUI and herdr-core under one heading with a **Herdr TUI** row and a
+  **herdr-core** row (each with its own tree, colour and actions); Desk's
+  other-host summaries, Board's zones, the Hosts control (each machine's
+  runtimes named inside its row) and its filter count and name machines the
+  same way. A machine on its own runtime keeps a plain host row.
+- **Settings → This World → Group runtimes** decides only how Town draws a
+  machine's runtimes, for every browser: **One per machine** (the default),
+  one building; **One per runtime**, one building per runtime (two
+  connections to one socket are one runtime). It never changes how many
+  hosts there are.
   The value lives in the service's settings (`ui.runtimeGrouping`); the
   browser keeps no copy. One browser's earlier Town buildings choice moves
   there once, as an `only_if_absent` update the service applies inside its
   settings writer. Changing it is a World command (`world.command`, entity
   `setting`) that leaves one history entry; a plain settings write of it is
-  refused. The service works out groups, members, order and labels
-  (`shared/hostGrouping.ts`) and publishes them with the setting in one
-  World revision; views read them through `hostGroupOf` / `groupByRuntime`
-  in `web/src/worldHosts.ts`. The Hosts filter always lists machines.
+  refused. The service works out both levels, hosts (machines) and Town's
+  buildings, with members, order and labels (`shared/hostGrouping.ts`), and
+  publishes them with the setting in one World revision; host lists read
+  `hosts` through `hostGroupOf` / `groupByRuntime` in `web/src/worldHosts.ts`,
+  and only Town reads the buildings (`groups`).
 - Workspace rows show numbered tab chips with each tab's agent status, folding
   extra tabs into **+N**, and keep the server badge in the right column. In
   Spaces a chip focuses its tab; in World's navigator it selects the workspace

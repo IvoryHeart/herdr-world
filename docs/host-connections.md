@@ -4,7 +4,7 @@ One host is this computer or one exact OpenSSH destination. Add a remote host wi
 `herdr-world connections add sample@host.example`; use `--windows` for Windows SSH.
 No runtime flag is needed. `connections` lists hosts with runtime kind, discovered
 version and current state. `herdr-world ls` includes their rooms, desks and agents,
-and the runtime groups every view shows (Settings → Group runtimes).
+and how many Town buildings Settings → Group runtimes draws; hosts stay machines.
 `connections discover <host-id>` connects and rediscovers; an SSH destination is
 also accepted for rediscovery. `connections remove <host-id>` removes that host's
 runtime profiles and transports, without stopping the external runtime programs.

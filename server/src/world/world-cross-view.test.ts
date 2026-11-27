@@ -18,6 +18,7 @@ import type {
 } from "../../../shared/hostGrouping";
 import type { ConnectionSummary } from "../../../web/src/api";
 import {
+  hostGroupCount,
   hostGroupOf,
   hostGroupRows,
   worldHosts,
@@ -40,11 +41,13 @@ import { buildWorldObject } from "../../../web/src/world/worldObject";
 // One World, every view (openspec world-one-object, task 2.2). The service
 // publishes one snapshot; two browsers' replicas adopt it; Town, Desk, Board,
 // the navigator (Spaces), the Hosts control and `herdr-world ls` each show
-// the same facts. Facts so far: 1. grouping.
+// the same facts. Facts so far: 1. grouping. A host is a machine, always:
+// every host list and count shows World's published machines; "Group
+// runtimes" changes only Town's buildings.
 //
-// The machine: this computer's Herdr seen through two connections of one
-// socket (a startup default and a saved profile), a second Herdr on another
-// socket, and an SSH host. Each fact runs through the service composition
+// The shared-socket fixture: this computer's Herdr seen through two
+// connections of one socket (a startup default and a saved profile), a
+// second Herdr on another socket, and an SSH host. Each fact runs through the service composition
 // (world-commands.ts), the browser's decoder and store (runtimeStore.ts) and
 // each view's own projection; nothing below derives a fact itself.
 
@@ -95,19 +98,52 @@ const rooms: Record<string, string[]> = {
   remote: ["Api"],
 };
 
+type Fixture = {
+  catalogue: (GroupingProfile & ConnectionSummary)[];
+  core: (GroupingProfile & ConnectionSummary & { runtime: "herdr-core" })[];
+  rooms: Record<string, string[]>;
+};
+const sharedSocket: Fixture = { catalogue, core: [], rooms };
+
+/**
+ * Two machines: this computer runs a Herdr TUI and a herdr-core, and an SSH
+ * machine runs a Herdr TUI.
+ */
+const twoMachines: Fixture = {
+  catalogue: [
+    { ...catalogue[0]!, id: "tui", label: "Laptop" },
+    { ...catalogue[3]!, id: "box", label: "Box" },
+  ],
+  core: [
+    {
+      id: "core",
+      label: "Laptop core",
+      source: "core-profile",
+      runtime: "herdr-core",
+      is_default: false,
+      state: "ready",
+      generation: 1,
+      type: "local",
+      core_state_dir: "/run/herdr-fixture/core",
+      core_session: "fixture",
+    },
+  ],
+  rooms: { tui: ["Web"], core: ["Lab"], box: ["Api"] },
+};
+
 let root: string;
 beforeEach(() => {
   root = mkdtempSync(join(tmpdir(), "world-cross-view-"));
 });
 afterEach(() => rmSync(root, { recursive: true, force: true }));
 
-function service() {
+function service({ catalogue, core, rooms }: Fixture = sharedSocket) {
   /** Connections that answer, with their runtime generation. */
-  const live = new Map(catalogue.map(({ id }) => [id, 1]));
+  const live = new Map([...catalogue, ...core].map(({ id }) => [id, 1]));
   let now = 1_000;
   const snapshots = new WorldSnapshotService({
-    list: () =>
-      catalogue.map(({ id, label, source, is_default }) => ({
+    list: () => [
+      ...catalogue.map(({ id, label, source, is_default }) => ({
         id,
         label,
         source,
@@ -115,6 +151,16 @@ function service() {
         state: live.has(id) ? ("ready" as const) : ("error" as const),
         generation: live.get(id) ?? 1,
       })),
+      ...core.map(({ id, label, source, is_default }) => ({
+        id,
+        label,
+        source,
+        is_default,
+        runtime: "herdr-core" as const,
+        state: live.has(id) ? ("ready" as const) : ("error" as const),
+        generation: live.get(id) ?? 1,
+      })),
+    ],
     readyRuntimeLease: (id: string) => {
       const generation = live.get(id);
       if (generation === undefined) return null;
@@ -171,7 +217,7 @@ function service() {
     settings,
     broadcast: (line) =>
       notices.push(JSON.parse(line).control.revision as number),
-    profiles: () => ({ list: () => catalogue, coreList: () => [] }),
+    profiles: () => ({ list: () => catalogue, coreList: () => core }),
   });
   const cli = createWorldCli({
     board: new BoardStore(join(root, "board.json")),
@@ -239,6 +285,7 @@ function browser(reply: (params?: unknown) => Promise<unknown>) {
 }
 
 type Partition = [group: string, connections: string[]][];
+type Group = { key: string; members: { connection_id: string }[] };
 const byKey = (a: TownBuilding, b: TownBuilding) => a[0].localeCompare(b[0]);
 type TownBuilding = [group: string, keyedBy: string, connections: string[]];
 const townBuilding = (
@@ -248,11 +295,21 @@ const townBuilding = (
 ): TownBuilding => [group, keyedBy, [...ids].sort()];
 
 /** Each view's groups, by connection, read off what the view renders. */
-function views(replica: WorldRuntimeStore) {
+function views(replica: WorldRuntimeStore, fixture: Fixture = sharedSocket) {
   const state = replica.get();
   const grouping = state.hostGrouping!;
   const world = buildWorldObject(state.connections);
   const groupOf = hostGroupOf(grouping);
+  // Town's building of each connection: the published building it stands in.
+  const buildingOf = new Map(
+    grouping.groups.flatMap(({ key, members }) =>
+      members.map((member) => [member.connection_id, key] as const),
+    ),
+  );
+  const catalogued = worldHosts({
+    connections: fixture.catalogue,
+    coreConnections: fixture.core as never,
+  });
   const partition = (
     entries: { key: string; ids: readonly string[] }[],
   ): Partition => entries.map(({ key, ids }) => [key, [...ids]]);
@@ -275,7 +332,7 @@ function views(replica: WorldRuntimeStore) {
     town: [...buildings]
       .map(([building, ids]) =>
         townBuilding(
-          groupOf(hostOf.get(building)!.connectionId)!.key,
+          buildingOf.get(hostOf.get(building)!.connectionId)!,
           hostOf.get(building)!.connectionId,
           [...ids],
         ),
@@ -307,15 +364,27 @@ function views(replica: WorldRuntimeStore) {
         }),
       ),
     ),
-    hosts: partition(
-      hostGroupRows(worldHosts({ connections: catalogue }), grouping),
+    hosts: partition(hostGroupRows(catalogued, grouping)),
+    /** The Hosts control's count, and its filter's "N hosts" (HostsControl.tsx). */
+    hostCount: hostGroupCount(
+      catalogued.map(({ id }) => id),
+      grouping,
     ),
   };
 }
 
-/** The published groups, by connection (all, or those a view shows). */
+/** The published machines, by connection (all, or those a view shows). */
 function published(grouping: HostGrouping, shows?: readonly string[]) {
-  return grouping.groups.flatMap(({ key, members }): Partition => {
+  return partitionOf(grouping.hosts, shows);
+}
+
+/** Town's published buildings, by connection. */
+function buildings(grouping: HostGrouping, shows?: readonly string[]) {
+  return partitionOf(grouping.groups, shows);
+}
+
+function partitionOf(groups: readonly Group[], shows?: readonly string[]) {
+  return groups.flatMap(({ key, members }): Partition => {
     const ids = members
       .map((member) => member.connection_id)
       .filter((id) => !shows || shows.includes(id));
@@ -323,11 +392,25 @@ function published(grouping: HostGrouping, shows?: readonly string[]) {
   });
 }
 
-/** Every view shows World's groups: the same members, order and keys. */
-function expectAgreement(replica: WorldRuntimeStore) {
-  const seen = views(replica);
+/**
+ * Every view shows World's machines as its hosts, and Town World's
+ * buildings: the same members, order and keys.
+ */
+function expectAgreement(
+  replica: WorldRuntimeStore,
+  fixture: Fixture = sharedSocket,
+) {
+  const seen = views(replica, fixture);
   const all = published(seen.grouping);
   expect(seen.hosts).toEqual(all);
+  expect(seen.hostCount).toBe(all.length);
+  // Each building stands on one published machine.
+  const machineOf = new Map(
+    all.flatMap(([key, ids]) => ids.map((id) => [id, key] as const)),
+  );
+  for (const { host, members } of seen.grouping.groups)
+    for (const member of members)
+      expect(machineOf.get(member.connection_id)).toBe(host);
   const held = replica.get().connections.map((each) => each.connectionId);
   expect(seen.board).toEqual(published(seen.grouping, held));
   expect(seen.navigator).toEqual(published(seen.grouping, held));
@@ -342,7 +425,7 @@ function expectAgreement(replica: WorldRuntimeStore) {
     views.filter((view) => view !== anchor),
   );
   expect(seen.town).toEqual(
-    published(
+    buildings(
       seen.grouping,
       held.filter((id) => !hidden.includes(id)),
     )
@@ -390,7 +473,7 @@ test("grouping: one snapshot, every view and the CLI show the same groups", asyn
     ),
   ).toEqual(published(machine.grouping));
   expect(await world.cli(["ls"])).toStartWith(
-    "Group runtimes: one per machine\nStudio\n",
+    "Group runtimes: one per machine (2 Town buildings)\nStudio\n",
   );
 
   // An explicit change is one World command: one revision, one history entry.
@@ -414,16 +497,21 @@ test("grouping: one snapshot, every view and the CLI show the same groups", asyn
   for (const replica of [first, second]) {
     const seen = expectAgreement(replica);
     expect(seen.grouping.grouping).toBe("runtime");
+    // Hosts stay machines; Town draws one building per runtime, the shared
+    // socket's two views being one runtime.
     expect(seen.board.map(([key]) => key)).toEqual([
-      "runtime:tui-default",
+      "local",
+      "ssh:dev.example.test",
+    ]);
+    expect(seen.town.map(([key]) => key)).toEqual([
       "runtime:remote",
       "runtime:second",
-      "runtime:tui-profile",
+      "runtime:tui-default",
     ]);
   }
   expect(views(first)).toEqual(views(second));
   expect(await world.cli(["ls"])).toStartWith(
-    "Group runtimes: one per runtime\nStudio\n",
+    "Group runtimes: one per runtime (3 Town buildings)\nStudio\n",
   );
   const history = JSON.parse(await world.cli(["history", "--json"])).result;
   expect(
@@ -490,4 +578,64 @@ test("grouping: offline and stale hosts, a reconnect and a late reply change no 
   ]);
   // Regrouping from topology is not a command: no history.
   expect(world.ledger.get().changes).toEqual([]);
+});
+
+test("grouping: two runtimes on one machine and a second machine are 2 hosts everywhere; Town draws 3 buildings only one per runtime", async () => {
+  const world = service(twoMachines);
+  const replica = browser(world.reply);
+  await replica.refresh();
+  const lsHosts = async () =>
+    JSON.parse(await world.cli(["ls", "--json"])).result.groups.map(
+      (group: { key: string; runtimes: { connection_id: string }[] }) => [
+        group.key,
+        group.runtimes.map((runtime) => runtime.connection_id),
+      ],
+    );
+  const machines: Partition = [
+    ["local", ["tui", "core"]],
+    ["ssh:dev.example.test", ["box"]],
+  ];
+  for (const [setting, town] of [
+    [
+      "machine",
+      [
+        ["local", "tui", ["core", "tui"]],
+        ["ssh:dev.example.test", "box", ["box"]],
+      ],
+    ],
+    [
+      "runtime",
+      [
+        ["runtime:box", "box", ["box"]],
+        ["runtime:core", "core", ["core"]],
+        ["runtime:tui", "tui", ["tui"]],
+      ],
+    ],
+  ] as const) {
+    if (setting === "runtime")
+      await world.world.settingCommands.submit({
+        id: "cmd-runtime",
+        entity: { kind: "setting", key: "runtimeGrouping" },
+        field: "value",
+        expected: "machine",
+        value: "runtime",
+      });
+    await replica.refresh();
+    const seen = expectAgreement(replica, twoMachines);
+    expect(seen.grouping.grouping).toBe(setting);
+    // 2 hosts in the Hosts control, its filter, Desk, the navigator,
+    // Board and `herdr-world ls`, whatever the setting.
+    expect(seen.hosts).toEqual(machines);
+    expect(seen.hostCount).toBe(2);
+    for (const view of [seen.board, seen.navigator, seen.desk])
+      expect(view).toEqual(machines);
+    expect(await lsHosts()).toEqual(machines);
+    // Town: 2 buildings one per machine, 3 one per runtime.
+    expect(seen.town).toEqual(
+      town.map(([key, keyedBy, ids]) => townBuilding(key, keyedBy, [...ids])),
+    );
+    expect(await world.cli(["ls"])).toStartWith(
+      `Group runtimes: one per ${setting} (${town.length} Town buildings)\nLaptop\n`,
+    );
+  }
 });

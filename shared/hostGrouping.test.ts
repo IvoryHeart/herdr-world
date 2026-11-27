@@ -77,6 +77,18 @@ test("one group per machine holding each runtime, or one per runtime, in World's
   expect(byRuntime.groups[3]!.members).toEqual([
     { connection_id: "local-core", runtime: "herdr-core", label: "local-core" },
   ]);
+  // Each building names the machine it stands on; the machines (hosts)
+  // stay the same whatever the setting.
+  expect(byRuntime.groups.map((group) => group.host)).toEqual([
+    "local",
+    "ssh:box.example.test",
+    "ssh:box.example.test",
+    "local",
+  ]);
+  expect(byRuntime.hosts).toEqual(byMachine.hosts);
+  expect(byMachine.groups).toEqual(
+    byMachine.hosts.map((host) => ({ ...host, host: host.key })),
+  );
 });
 
 test("a missing or unknown setting groups by machine", () => {
@@ -160,23 +172,40 @@ test("a published grouping parses back; malformed entries are dropped and lists 
   );
   expect(parseHostGrouping(null)).toBeNull();
   expect(
-    parseHostGrouping({ grouping: "galaxy", groups: [], endpoints: [] }),
+    parseHostGrouping({
+      grouping: "galaxy",
+      hosts: [],
+      groups: [],
+      endpoints: [],
+    }),
   ).toBeNull();
+  // Without the host level (an older publication) there is nothing to show.
+  expect(
+    parseHostGrouping({ grouping: "machine", groups: [], endpoints: [] }),
+  ).toBeNull();
+  const many = Array.from({ length: 600 }, (_, i) => ({
+    key: `k${i}`,
+    label: "",
+    members: [{ connection_id: `c${i}`, runtime: "herdr", label: "" }],
+  }));
+  const ok = {
+    key: "ok",
+    label: "ok",
+    members: [{ connection_id: "b", runtime: "herdr", label: "b" }],
+  };
   expect(
     parseHostGrouping({
       grouping: "machine",
-      groups: [
+      hosts: [
         { key: "local", label: "x", members: [{ connection_id: "a" }] },
-        {
-          key: "ok",
-          label: "ok",
-          members: [{ connection_id: "b", runtime: "herdr", label: "b" }],
-        },
-        ...Array.from({ length: 600 }, (_, i) => ({
-          key: `k${i}`,
-          label: "",
-          members: [{ connection_id: `c${i}`, runtime: "herdr", label: "" }],
-        })),
+        ok,
+        ...many,
+      ],
+      groups: [
+        { ...ok, host: "ok" },
+        // A building on no published host, or on none at all.
+        { ...ok, key: "lost", host: "local" },
+        { ...ok, key: "bare" },
       ],
       endpoints: [
         { views: ["a"], anchor: "a", shown: "a" },
@@ -185,20 +214,21 @@ test("a published grouping parses back; malformed entries are dropped and lists 
       ],
     }),
   ).toMatchObject({
-    groups: expect.arrayContaining([
+    hosts: expect.arrayContaining([
       { key: "ok", label: "ok", members: [expect.anything()] },
     ]),
+    groups: [
+      { key: "ok", label: "ok", host: "ok", members: [expect.anything()] },
+    ],
     endpoints: [{ views: ["a", "b"], anchor: "b", shown: "a" }],
   });
   const parsed = parseHostGrouping({
     grouping: "machine",
-    groups: Array.from({ length: 600 }, (_, i) => ({
-      key: `k${i}`,
-      label: "",
-      members: [{ connection_id: `c${i}`, runtime: "herdr", label: "" }],
-    })),
+    hosts: many,
+    groups: many.map((group) => ({ ...group, host: group.key })),
     endpoints: [],
   });
+  expect(parsed?.hosts.length).toBe(512);
   expect(parsed?.groups.length).toBe(512);
 });
 

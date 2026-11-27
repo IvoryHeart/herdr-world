@@ -289,7 +289,8 @@ if (process.env.WORLD_HOSTS_FILTER_TEST !== "1") {
       ),
     ];
     expect(rows.map((row) => row.parentElement?.textContent)).toEqual([
-      "Synthetic alpha · 1 of 2 reconnecting",
+      // A machine's runtimes are named inside its row.
+      "Synthetic alpha · 1 of 2 reconnectingHerdr TUI, herdr-core",
       "Synthetic beta · ready",
     ]);
     expect(rows.map((row) => row.checked)).toEqual([true, false]);

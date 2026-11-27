@@ -132,34 +132,46 @@ function published(setting: "machine" | "runtime") {
   };
 }
 
-test("the Hosts list shows World's published groups with their runtimes' state", () => {
+test("the Hosts list shows World's published machines with their runtimes and state", () => {
   const { hosts, grouping } = published("machine");
-  expect(hostGroupRows(hosts, grouping)).toEqual([
+  const rows = [
     {
       key: "local",
       label: "Local",
       ids: ["local", "local-core"],
+      runtimes: ["Herdr TUI", "herdr-core"],
       status: "1 of 2 reconnecting",
     },
     // In World's order: by name, so "old" before "remote".
-    { key: "connection:old", label: "old", ids: ["old"], status: "ready" },
+    {
+      key: "connection:old",
+      label: "old",
+      ids: ["old"],
+      runtimes: [],
+      status: "ready",
+    },
     {
       key: "ssh:box.example.test",
       label: "remote",
       ids: ["remote", "remote-core"],
+      runtimes: ["Herdr TUI", "herdr-core"],
       status: "ready",
     },
-  ]);
+  ];
+  expect(hostGroupRows(hosts, grouping)).toEqual(rows);
   expect(hostGroupCount(["local", "local-core", "remote"], grouping)).toBe(2);
+  // A host is a machine, whatever "Group runtimes" says: one per runtime
+  // changes Town's buildings, never the Hosts list or its count.
   const byRuntime = published("runtime").grouping;
-  expect(hostGroupRows(hosts, byRuntime).map(({ ids }) => ids)).toEqual([
-    ["local"],
-    ["local-core"],
-    ["old"],
-    ["remote"],
-    ["remote-core"],
+  expect(hostGroupRows(hosts, byRuntime)).toEqual(rows);
+  expect(hostGroupCount(["local", "local-core"], byRuntime)).toBe(1);
+  expect(byRuntime.groups.map(({ key, host }) => [key, host])).toEqual([
+    ["runtime:local", "local"],
+    ["runtime:local-core", "local"],
+    ["runtime:old", "connection:old"],
+    ["runtime:remote", "ssh:box.example.test"],
+    ["runtime:remote-core", "ssh:box.example.test"],
   ]);
-  expect(hostGroupCount(["local", "local-core"], byRuntime)).toBe(2);
 });
 
 test("a runtime World has not grouped yet is a row of its own, and nothing is grouped before World answers", () => {
@@ -196,9 +208,11 @@ test("a selection saved per connection widens to its whole published group", () 
     "local",
     "local-core",
   ]);
-  // One per runtime: nothing widens.
-  const alone = ["local"];
-  expect(hostsFilterByGroup(alone, published("runtime").grouping)).toBe(alone);
+  // One per runtime still widens to the machine: hosts are machines.
+  expect(hostsFilterByGroup(["local"], published("runtime").grouping)).toEqual([
+    "local",
+    "local-core",
+  ]);
 });
 
 test("each connection's group comes from the publication, one lookup per publication", () => {
@@ -214,5 +228,5 @@ test("each connection's group comes from the publication, one lookup per publica
   expect(groupOf("unknown")).toBeUndefined();
   expect(hostGroupOf(grouping)).toBe(groupOf);
   const byRuntime = hostGroupOf(published("runtime").grouping);
-  expect(byRuntime("local-core")?.key).toBe("runtime:local-core");
+  expect(byRuntime("local-core")).toEqual(groupOf("local-core"));
 });

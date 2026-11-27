@@ -1,11 +1,11 @@
 import type { WorldObject } from "./worldObject";
 import { inPublishedOrder, type HostGroupOf } from "../worldHosts";
 
-/** A connection's group under "Group runtimes" (worldHosts.ts `hostGroupOf`). */
+/** A connection's published host, its machine (worldHosts.ts `hostGroupOf`). */
 export type DeskHostGroupOf = HostGroupOf;
 
 type Elsewhere = {
-  /** The group's key: a machine, or one runtime (worldHosts.ts). */
+  /** The host's key: its machine (worldHosts.ts). */
   key: string;
   /** The group's runtimes that have agents here, in published order. */
   connectionIds: string[];
@@ -17,8 +17,8 @@ type Elsewhere = {
 };
 
 /**
- * Desk's own host label: the one host, as "Group runtimes" groups them (a
- * machine's runtimes count once, or each runtime apart), else "N hosts".
+ * Desk's own host label: the one host (a machine's runtimes count once,
+ * whatever "Group runtimes" says), else "N hosts".
  */
 export function deskHostLabel(
   world: WorldObject,
@@ -37,8 +37,8 @@ export function deskHostLabel(
 
 /**
  * Read-only summaries of managed hosts other than the selected one, one per
- * group of World's "Group runtimes" setting: a machine's runtimes together,
- * or each runtime apart. Without `groupOf` each connection is its own.
+ * published host: a machine's runtimes together, whatever "Group runtimes"
+ * says. Without `groupOf` each connection is its own.
  */
 export function otherHostSummaries(
   world: WorldObject,
