@@ -1,19 +1,15 @@
 import { expect, test } from "bun:test";
 import type { ConnectionSummary } from "./api";
+import { deriveHostGrouping, groupingHosts } from "../../shared/hostGrouping";
 import {
-  hostCount as countHosts,
+  hostGroupCount,
   hostGroupOf,
-  runtimeGroupKey,
-  worldHostGroups,
-  hostsFilterByMachine,
+  hostGroupRows,
+  hostsFilterByGroup,
   machineStatus,
   worldHosts,
-  worldMachines,
   type CoreConnectionProfileSummary,
 } from "./worldHosts";
-
-const hostCount = (connections: ConnectionSummary[]) =>
-  countHosts(worldHosts({ connections }));
 
 function core(
   id: string,
@@ -52,55 +48,6 @@ function connection(
   };
 }
 
-test("automatic and saved connections to the same local runtime count once", () => {
-  const connections = [
-    connection("startup-default", {
-      source: "startup-config",
-      is_default: true,
-    }),
-    connection("local"),
-    connection("remote", { type: "ssh", ssh_destination: "example.test" }),
-  ];
-  expect(hostCount(connections)).toBe(2);
-  expect(hostCount(connections.slice(0, 1))).toBe(1);
-});
-
-test("local endpoints are one machine; disconnected hosts remain counted", () => {
-  expect(
-    hostCount([
-      connection("local"),
-      connection("other", { client_socket_path: "/tmp/other-client.sock" }),
-      connection("offline", { type: "ssh", state: "disconnected" }),
-    ]),
-  ).toBe(2);
-});
-
-test("matching SSH endpoints count once without conflating destinations", () => {
-  const remote = {
-    type: "ssh" as const,
-    ssh_destination: "example.test",
-    remote_control_socket_path: "/tmp/example-control.sock",
-    remote_client_socket_path: "/tmp/example-client.sock",
-  };
-  expect(
-    hostCount([
-      connection("remote", remote),
-      connection("alias", remote),
-      connection("other", { ...remote, ssh_destination: "other.example.test" }),
-    ]),
-  ).toBe(2);
-});
-
-test("unknown machines are distinct and an empty catalogue counts zero", () => {
-  expect(
-    hostCount([
-      connection("first", { type: undefined }),
-      connection("second", { type: undefined }),
-    ]),
-  ).toBe(2);
-  expect(hostCount([])).toBe(0);
-});
-
 test("herdr-core hosts join the one host list after Herdr's, with their runtime", () => {
   const hosts = worldHosts({
     connections: [connection("local")],
@@ -132,27 +79,6 @@ test("herdr-core hosts join the one host list after Herdr's, with their runtime"
       generation: 3,
     },
   ]);
-  // Both run on this computer: one machine.
-  expect(countHosts(hosts)).toBe(1);
-});
-
-test("a machine's cores count once; other destinations count apart", () => {
-  const remote = { type: "ssh" as const, ssh_destination: "core.example.test" };
-  expect(
-    countHosts(
-      worldHosts({
-        connections: [],
-        coreConnections: [
-          core("a"),
-          core("b"),
-          core("c", { core_session: "other" }),
-          core("d", remote),
-          core("e", remote),
-          core("f", { ...remote, ssh_destination: "two.example.test" }),
-        ],
-      }),
-    ),
-  ).toBe(3);
 });
 
 test("a core ID the Herdr catalogue already lists stays the Herdr host", () => {
@@ -177,39 +103,6 @@ test("unchanged catalogue slices return the same list (stable for React)", () =>
   );
 });
 
-test("one machine per computer or SSH destination, holding each runtime", () => {
-  const hosts = worldHosts({
-    connections: [
-      connection("local", { label: "Local" }),
-      connection("remote", {
-        type: "ssh",
-        ssh_destination: "box.example.test",
-      }),
-      connection("old", { type: undefined }),
-    ],
-    coreConnections: [
-      core("local-core", { label: "Local core", state: "reconnecting" }),
-      core("remote-core", { type: "ssh", ssh_destination: "box.example.test" }),
-    ],
-  });
-  expect(worldMachines(hosts)).toEqual([
-    {
-      machine: "local",
-      label: "Local",
-      ids: ["local", "local-core"],
-      status: "1 of 2 reconnecting",
-    },
-    {
-      machine: "ssh:box.example.test",
-      label: "remote",
-      ids: ["remote", "remote-core"],
-      status: "ready",
-    },
-    { machine: "connection:old", label: "old", ids: ["old"], status: "ready" },
-  ]);
-  expect(worldMachines(hosts)).toBe(worldMachines(hosts));
-});
-
 test("a machine's status names each state its runtimes are not ready in", () => {
   expect(machineStatus(["ready", "ready"])).toBe("ready");
   expect(machineStatus(["disconnected", "disconnected"])).toBe("disconnected");
@@ -218,76 +111,122 @@ test("a machine's status names each state its runtimes are not ready in", () => 
   );
 });
 
-test("a selection saved per connection widens to its whole machine", () => {
-  const hosts = worldHosts({
-    connections: [
-      connection("local"),
-      connection("remote", {
-        type: "ssh",
-        ssh_destination: "box.example.test",
-      }),
-    ],
-    coreConnections: [core("local-core")],
+/** The catalogue and the grouping World publishes for it. */
+function published(setting: "machine" | "runtime") {
+  const connections = [
+    connection("local", { label: "Local" }),
+    connection("remote", { type: "ssh", ssh_destination: "box.example.test" }),
+    connection("old", { type: undefined }),
+  ];
+  const coreConnections = [
+    core("local-core", { label: "Local core", state: "reconnecting" }),
+    core("remote-core", { type: "ssh", ssh_destination: "box.example.test" }),
+  ];
+  return {
+    hosts: worldHosts({ connections, coreConnections }),
+    grouping: deriveHostGrouping(
+      groupingHosts(connections, coreConnections),
+      setting,
+      () => false,
+    ),
+  };
+}
+
+test("the Hosts list shows World's published machines with their runtimes and state", () => {
+  const { hosts, grouping } = published("machine");
+  const rows = [
+    {
+      key: "local",
+      label: "Local",
+      ids: ["local", "local-core"],
+      runtimes: ["Herdr TUI", "herdr-core"],
+      status: "1 of 2 reconnecting",
+    },
+    // In World's order: by name, so "old" before "remote".
+    {
+      key: "connection:old",
+      label: "old",
+      ids: ["old"],
+      runtimes: [],
+      status: "ready",
+    },
+    {
+      key: "ssh:box.example.test",
+      label: "remote",
+      ids: ["remote", "remote-core"],
+      runtimes: ["Herdr TUI", "herdr-core"],
+      status: "ready",
+    },
+  ];
+  expect(hostGroupRows(hosts, grouping)).toEqual(rows);
+  expect(hostGroupCount(["local", "local-core", "remote"], grouping)).toBe(2);
+  // A host is a machine, whatever "Group runtimes" says: one per runtime
+  // changes Town's buildings, never the Hosts list or its count.
+  const byRuntime = published("runtime").grouping;
+  expect(hostGroupRows(hosts, byRuntime)).toEqual(rows);
+  expect(hostGroupCount(["local", "local-core"], byRuntime)).toBe(1);
+  expect(byRuntime.groups.map(({ key, host }) => [key, host])).toEqual([
+    ["runtime:local", "local"],
+    ["runtime:local-core", "local"],
+    ["runtime:old", "connection:old"],
+    ["runtime:remote", "ssh:box.example.test"],
+    ["runtime:remote-core", "ssh:box.example.test"],
+  ]);
+});
+
+test("a runtime World has not grouped yet is a row of its own, and nothing is grouped before World answers", () => {
+  const { hosts, grouping } = published("machine");
+  const later = worldHosts({
+    connections: [connection("new")],
   });
-  expect(hostsFilterByMachine(null, hosts)).toBeNull();
-  expect(hostsFilterByMachine([], hosts)).toEqual([]);
-  expect(hostsFilterByMachine(["local"], hosts)).toEqual([
+  expect(hostGroupRows(later, grouping).map(({ key }) => key)).toEqual([
+    "runtime:new",
+  ]);
+  expect(hostGroupRows(hosts, undefined).map(({ ids }) => ids)).toEqual(
+    hosts.map(({ id }) => [id]),
+  );
+  expect(hostGroupOf(undefined)("local")).toBeUndefined();
+});
+
+test("a selection saved per connection widens to its whole published group", () => {
+  const { grouping } = published("machine");
+  expect(hostsFilterByGroup(null, grouping)).toBeNull();
+  expect(hostsFilterByGroup([], grouping)).toEqual([]);
+  expect(hostsFilterByGroup(["local"], grouping)).toEqual([
     "local",
     "local-core",
   ]);
-  expect(hostsFilterByMachine(["local-core"], hosts)).toEqual([
+  expect(hostsFilterByGroup(["local-core"], grouping)).toEqual([
     "local-core",
     "local",
   ]);
-  const whole = ["remote"];
-  expect(hostsFilterByMachine(whole, hosts)).toBe(whole);
-  // An ID the catalogue does not list (yet) is kept for pruning to decide.
-  expect(hostsFilterByMachine(["gone", "local"], hosts)).toEqual([
+  const whole = ["remote", "remote-core"];
+  expect(hostsFilterByGroup(whole, grouping)).toBe(whole);
+  // An ID no group lists (yet) is kept for pruning to decide.
+  expect(hostsFilterByGroup(["gone", "local"], grouping)).toEqual([
     "gone",
+    "local",
+    "local-core",
+  ]);
+  // One per runtime still widens to the machine: hosts are machines.
+  expect(hostsFilterByGroup(["local"], published("runtime").grouping)).toEqual([
     "local",
     "local-core",
   ]);
 });
 
-test("one grouping rule: a machine's runtimes together, or each runtime apart", () => {
-  const hosts = worldHosts({
-    connections: [
-      connection("tui"),
-      connection("remote", {
-        type: "ssh",
-        ssh_destination: "dev.example.test",
-      }),
-    ],
-    coreConnections: [core("core")],
+test("each connection's group comes from the publication, one lookup per publication", () => {
+  const { grouping } = published("machine");
+  const groupOf = hostGroupOf(grouping);
+  expect(groupOf("local")).toEqual({ key: "local", label: "Local", order: 0 });
+  // Its place in World's order: its group's, then its own.
+  expect(groupOf("local-core")).toEqual({
+    key: "local",
+    label: "Local",
+    order: 1,
   });
-  const byMachine = worldHostGroups(hosts, "machine");
-  expect(
-    byMachine.map((group) => [
-      group.key,
-      group.label,
-      group.hosts.map(({ id }) => id),
-    ]),
-  ).toEqual([
-    ["local", "tui", ["tui", "core"]],
-    ["ssh:dev.example.test", "remote", ["remote"]],
-  ]);
-  expect(worldHostGroups(hosts, "machine")).toBe(byMachine);
-  const byRuntime = worldHostGroups(hosts, "runtime");
-  expect(byRuntime.map((group) => group.hosts.map(({ id }) => id))).toEqual([
-    ["tui"],
-    ["remote"],
-    ["core"],
-  ]);
-  // The Hosts list's machines are the same groups.
-  expect(worldMachines(hosts).map(({ ids }) => ids)).toEqual(
-    byMachine.map((group) => group.hosts.map(({ id }) => id)),
-  );
-  const groupOf = hostGroupOf(hosts, "machine");
-  expect(groupOf("core")).toBe(groupOf("tui"));
   expect(groupOf("unknown")).toBeUndefined();
-  expect(hostGroupOf(hosts, "runtime")("core")).not.toBe(
-    hostGroupOf(hosts, "runtime")("tui"),
-  );
-  expect(runtimeGroupKey(hosts[0]!, "machine")).toBe("local");
-  expect(runtimeGroupKey(hosts[0]!, "runtime")).toBe("runtime:tui");
+  expect(hostGroupOf(grouping)).toBe(groupOf);
+  const byRuntime = hostGroupOf(published("runtime").grouping);
+  expect(byRuntime("local-core")).toEqual(groupOf("local-core"));
 });

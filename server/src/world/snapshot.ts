@@ -4,6 +4,8 @@ import type {
   WorldSnapshot,
   WorldConnectionSnapshot,
   WorldSnapshotResult,
+  WorldPublished,
+  WorldPublication,
 } from "./snapshot-types";
 export type {
   WorldSnapshotPriority,
@@ -94,9 +96,6 @@ export type AdmittedRead = {
   rooms: readonly Record<string, unknown>[];
 };
 
-/** World's own published values beside topology, under the same revision. */
-export type WorldPublished = Record<string, unknown>;
-
 type RawHostSnapshot = readonly [unknown, unknown, unknown, unknown];
 type HostOutcome = { raw: RawHostSnapshot } | { error: string };
 type HostWork<Runtime> = {
@@ -138,7 +137,7 @@ export class WorldSnapshotService<Runtime extends RuntimeWithOperations> {
   /** Per host, the newest read applied to the cache (the epoch fence). */
   private readonly lastApplied = new Map<string, number>();
   private admittedReadHook?: (read: AdmittedRead) => boolean;
-  private publishedValues?: () => Promise<WorldPublished> | WorldPublished;
+  private publication?: WorldPublication;
   /** The admitted read each built connection shows (none: no snapshot). */
   private readonly sourceReads = new WeakMap<
     WorldConnectionSnapshot,
@@ -164,12 +163,9 @@ export class WorldSnapshotService<Runtime extends RuntimeWithOperations> {
     this.observation = new WorldObservation(incarnation);
   }
 
-  /**
-   * The values World publishes beside topology (settings, commands). Read
-   * after the revision is taken, so a reply's values are at least that new.
-   */
-  publishWith(values: () => Promise<WorldPublished> | WorldPublished) {
-    this.publishedValues = values;
+  /** World's own values beside topology (settings, commands, grouping). */
+  publishWith(publication: WorldPublication) {
+    this.publication = publication;
   }
 
   /** Called on each admitted read; true when it changed a published value. */
@@ -328,14 +324,15 @@ export class WorldSnapshotService<Runtime extends RuntimeWithOperations> {
     // under a newer revision.
     let revision = this.revision;
     let published: WorldPublished = {};
-    for (let attempt = 0; this.publishedValues; attempt++) {
+    for (let attempt = 0; this.publication; attempt++) {
       revision = this.revision;
-      published = await this.publishedValues();
+      published = await this.publication.values();
       if (this.revision === revision || attempt >= 3) break;
     }
     const connections = this.newest(gathered, priorities);
     return {
       ...published,
+      ...this.publication?.derive?.(published, connections),
       revision,
       observed_at: this.now(),
       connections,

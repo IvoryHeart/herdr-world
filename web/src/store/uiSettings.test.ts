@@ -1,10 +1,10 @@
 import { afterAll, expect, spyOn, test } from "bun:test";
 import { bridge, type ConnectionStatus } from "../api";
 import {
-  RUNTIME_GROUPING_SETTING_KEY,
-  runtimeGrouping,
-  saveRuntimeGrouping,
-} from "../world/runtimeGrouping";
+  saveTownReceptionFilter,
+  TOWN_RECEPTION_SETTING_KEY,
+  townReceptionFilter,
+} from "../world/town/townReceptionSetting";
 import { followPublishedUiSettings, installUiSettings } from "./uiSettings";
 
 type Published = { ui: Record<string, unknown>; revision: number };
@@ -51,6 +51,10 @@ function replica() {
 
 const settle = () => new Promise((resolve) => setTimeout(resolve, 0));
 
+const BLOCKED = { default: ["blocked" as const], hosts: {} };
+const ASK = { default: ["ask" as const], hosts: {} };
+const marks = () => townReceptionFilter().default.join();
+
 test("a newer publication skipped during this browser's save is applied when the save ends", async () => {
   installUiSettings();
   onStatus("connected");
@@ -59,38 +63,29 @@ test("a newer publication skipped during this browser's save is applied when the
   followPublishedUiSettings(world);
   world.publish({ ui: {}, revision: 0 });
 
-  // This browser saves runtime (commit 1); its answer is delayed.
-  const saving = saveRuntimeGrouping("runtime");
+  // This browser saves "blocked" (commit 1); its answer is delayed.
+  const saving = saveTownReceptionFilter(BLOCKED);
   await settle();
-  expect(runtimeGrouping()).toBe("runtime");
+  expect(marks()).toBe("blocked");
   // Another browser's later commit (2) is published first.
-  world.publish({
-    ui: { [RUNTIME_GROUPING_SETTING_KEY]: "machine" },
-    revision: 2,
-  });
-  expect(runtimeGrouping()).toBe("runtime");
+  world.publish({ ui: { [TOWN_RECEPTION_SETTING_KEY]: ASK }, revision: 2 });
+  expect(marks()).toBe("blocked");
   acks.shift()!(1);
   await saving;
-  expect(runtimeGrouping()).toBe("machine");
+  expect(marks()).toBe("ask");
   // An unchanged publication keeps it.
-  world.publish({
-    ui: { [RUNTIME_GROUPING_SETTING_KEY]: "machine" },
-    revision: 2,
-  });
-  expect(runtimeGrouping()).toBe("machine");
+  world.publish({ ui: { [TOWN_RECEPTION_SETTING_KEY]: ASK }, revision: 2 });
+  expect(marks()).toBe("ask");
 
   // A save (commit 3), then another browser restores the value shown before
   // it (commit 4): the restored value is applied, not suppressed as the
   // value this browser last adopted.
-  const again = saveRuntimeGrouping("runtime");
+  const again = saveTownReceptionFilter(BLOCKED);
   await settle();
   acks.shift()!(3);
   await again;
-  expect(runtimeGrouping()).toBe("runtime");
+  expect(marks()).toBe("blocked");
   // The browser next reads commit 4, never commit 3.
-  world.publish({
-    ui: { [RUNTIME_GROUPING_SETTING_KEY]: "machine" },
-    revision: 4,
-  });
-  expect(runtimeGrouping()).toBe("machine");
+  world.publish({ ui: { [TOWN_RECEPTION_SETTING_KEY]: ASK }, revision: 4 });
+  expect(marks()).toBe("ask");
 });
