@@ -37,3 +37,4 @@ operations:
     guidance:
       - Archive only after implementation, spec synchronization, and verification.
       - Record limitations truthfully; do not check unfinished tasks.
+skillsScope: project

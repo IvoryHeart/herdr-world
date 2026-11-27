@@ -2,7 +2,12 @@
 
 ### Requirement: World agent identity
 
-World SHALL give each Claude Code or Codex occupant it observes one agent record with a store-issued `a-` World ID. The ID SHALL be immutable and never reused. Names, folders and harness kinds SHALL be labels and claims, never identity. An agent SHALL be live, away, unresolved or ended. It SHALL keep its ID across renames, moves between rooms or desks, World restarts, new conversations in its own terminal, and moves or resumes that World performs. It SHALL end only when the user ends it, or when it is away with no seat and no known conversation. An ended agent SHALL never return automatically, and its record SHALL be kept.
+World SHALL give each Claude Code or Codex occupant it observes one agent record with a store-issued `a-` World ID.
+
+#### Scenario: Agent identity continuity and end
+
+- **WHEN** World observes or manages an agent
+- **THEN** The ID SHALL be immutable and never reused. Names, folders and harness kinds SHALL be labels and claims, never identity. An agent SHALL be live, away, unresolved or ended. It SHALL keep its ID across renames, moves between rooms or desks, World restarts, new conversations in its own terminal, and moves or resumes that World performs. It SHALL end only when the user ends it, or when it is away with no seat and no known conversation. An ended agent SHALL never return automatically, and its record SHALL be kept.
 
 #### Scenario: Renamed and moved in Herdr
 - **WHEN** a live agent's pane is renamed and moved to another tab, and a complete listing still witnesses its terminal
@@ -22,7 +27,12 @@ World SHALL give each Claude Code or Codex occupant it observes one agent record
 
 ### Requirement: Agent seat binding and same-agent evidence
 
-An agent's place SHALL be a `seat` binding under verified source bindings, with the connection ID, witnessed terminal and harness kind as evidence. Pane, tab and room IDs SHALL be evidence only. An observation SHALL be the same agent only through the witnessed terminal in a current, complete listing of the same runtime, through World's own move or resume result naming the terminal, or through the user's confirmation. A conversation resumed in a terminal World did not start SHALL produce a new agent and an offer to confirm it as the earlier agent. It SHALL NOT be merged automatically. One terminal SHALL hold at most one agent.
+An agent's place SHALL be a `seat` binding under verified source bindings, with the connection ID, witnessed terminal and harness kind as evidence.
+
+#### Scenario: Same-agent evidence and conflicts
+
+- **WHEN** World binds an agent to a seat
+- **THEN** Pane, tab and room IDs SHALL be evidence only. An observation SHALL be the same agent only through the witnessed terminal in a current, complete listing of the same runtime, through World's own move or resume result naming the terminal, or through the user's confirmation. A conversation resumed in a terminal World did not start SHALL produce a new agent and an offer to confirm it as the earlier agent. It SHALL NOT be merged automatically. One terminal SHALL hold at most one agent.
 
 #### Scenario: World resumes an agent after a runtime restart
 - **WHEN** a runtime restart leaves an agent away and World resumes its conversation in a new terminal
@@ -38,7 +48,12 @@ An agent's place SHALL be a `seat` binding under verified source bindings, with 
 
 ### Requirement: Agent ambiguity binds nothing
 
-World SHALL NOT attach, move or end an agent's seat on ambiguous evidence. A partial, stale or failed listing, a terminal listed twice, or one conversation claimed by two live terminals SHALL leave the agents involved unresolved or in conflict, with their seats, facts and conversations unchanged. Reused pane IDs, names, folders and runtime generations SHALL never prove continuity. An agent that is unresolved, or whose conversation is unknown or in conflict, SHALL NOT authorize actions that need its conversation.
+World SHALL NOT attach, move or end an agent's seat on ambiguous evidence.
+
+#### Scenario: Ambiguous agent observations
+
+- **WHEN** World assesses an agent's identity or conversation
+- **THEN** A partial, stale or failed listing, a terminal listed twice, or one conversation claimed by two live terminals SHALL leave the agents involved unresolved or in conflict, with their seats, facts and conversations unchanged. Reused pane IDs, names, folders and runtime generations SHALL never prove continuity. An agent that is unresolved, or whose conversation is unknown or in conflict, SHALL NOT authorize actions that need its conversation.
 
 #### Scenario: Duplicate terminal in one listing
 - **WHEN** one runtime listing names a witnessed terminal twice
@@ -54,7 +69,12 @@ World SHALL NOT attach, move or end an agent's seat on ambiguous evidence. A par
 
 ### Requirement: Agent conversation claim
 
-Each agent SHALL have a declared conversation field with per-field claims. Only a source naming the foreground process's own conversation SHALL set it, in this order: the harness's per-process record (Claude Code `sessions/<pid>.json` fenced by the process start time; the Codex thread lock that the process holds, excluding sub-agent threads), Herdr's harness report, the launch argument until the record is read, and the user's link in Chat. This SHALL apply on Herdr TUI and herdr-core, locally and over a connection's SSH read path. Titles, transcript inference and folder recency SHALL NOT set it. The conversation SHALL be known, empty, unknown with a reason, or in conflict. World SHALL re-read it when the runtime reports a change for the terminal and otherwise at most every 5 seconds per process. A new conversation in the same seat SHALL become current, and the previous one SHALL stay in the agent's history.
+Each agent SHALL have a declared conversation field with per-field claims.
+
+#### Scenario: Conversation source precedence
+
+- **WHEN** World reads an agent's conversation claim
+- **THEN** Only a source naming the foreground process's own conversation SHALL set it, in this order: the harness's per-process record (Claude Code `sessions/<pid>.json` fenced by the process start time; the Codex thread lock that the process holds, excluding sub-agent threads), Herdr's harness report, the launch argument until the record is read, and the user's link in Chat. This SHALL apply on Herdr TUI and herdr-core, locally and over a connection's SSH read path. Titles, transcript inference and folder recency SHALL NOT set it. The conversation SHALL be known, empty, unknown with a reason, or in conflict. World SHALL re-read it when the runtime reports a change for the terminal and otherwise at most every 5 seconds per process. A new conversation in the same seat SHALL become current, and the previous one SHALL stay in the agent's history.
 
 #### Scenario: Codex agent that has not spoken yet
 - **WHEN** a Codex process holds one thread lock and its thread has no saved turn
@@ -78,7 +98,12 @@ Each agent SHALL have a declared conversation field with per-field claims. Only 
 
 ### Requirement: One agent record for every view
 
-The World snapshot SHALL carry one entry per agent ID with its name, colour, look, status text, Town and Board placement, groups, interest, profile, state, conversation state and source or reason, and seat, and SHALL carry `agent_id` on each terminal row it attributes, all under one revision. Town, Desk, Board, Spaces and the `herdr-world` CLI SHALL read these fields from that entry, SHALL select agents by `agent_id`, SHALL NOT decide which agent a terminal is, and SHALL change a field only through an agent operation naming the agent ID. An agent's room and host SHALL come from its seat. A shown colour SHALL come from one shared resolver: the agent's own colour, else its tab's place colour, else the colour inherited from its spawning agent, else its room's chosen colour, else the room's default. A chosen colour SHALL always win over an inherited one. A rename SHALL update the record and then the runtime's name, and a rename observed in the runtime SHALL update the record. Grouping agents by machine or runtime SHALL follow the one World Group runtimes setting in every view.
+The World snapshot SHALL carry one entry per agent ID with its name, colour, look, status text, Town and Board placement, groups, interest, profile, state, conversation state and source or reason, and seat, and SHALL carry `agent_id` on each terminal row it attributes, all under one revision.
+
+#### Scenario: Agent projection and field ownership
+
+- **WHEN** a World view reads or changes an agent
+- **THEN** Town, Desk, Board, Spaces and the `herdr-world` CLI SHALL read these fields from that entry, SHALL select agents by `agent_id`, SHALL NOT decide which agent a terminal is, and SHALL change a field only through an agent operation naming the agent ID. An agent's room and host SHALL come from its seat. A shown colour SHALL come from one shared resolver: the agent's own colour, else its tab's place colour, else the colour inherited from its spawning agent, else its room's chosen colour, else the room's default. A chosen colour SHALL always win over an inherited one. A rename SHALL update the record and then the runtime's name, and a rename observed in the runtime SHALL update the record. Grouping agents by machine or runtime SHALL follow the one World Group runtimes setting in every view.
 
 #### Scenario: Three views, one agent
 - **WHEN** Town, Desk and Board render from the same snapshot

@@ -29,7 +29,12 @@ Release-please SHALL keep one reviewed release PR current using the simple strat
 - **THEN** Release independently builds and tests the tagged bytes; main SHALL start no heavy checks and provide no release artifact
 
 ### Requirement: Reviewed post-merge contract synchronization
-Feature PRs SHALL express contract changes in their OpenSpec change folder alongside implementation and capability notes. Completed merged changes SHALL synchronize through reviewed archive PRs in merge order; incomplete tasks SHALL stay active. The archive helper SHALL restore a conflicting change's partial writes and retain earlier successful archives. No Help or archive bot SHALL run on main pushes. Automation SHALL never push main or merge the PR.
+Feature PRs SHALL express contract changes in their OpenSpec change folder alongside implementation and capability notes.
+
+#### Scenario: Synchronization ordering and failure
+
+- **WHEN** completed merged changes are synchronized and archived
+- **THEN** Completed merged changes SHALL synchronize through reviewed archive PRs in merge order; incomplete tasks SHALL stay active. The archive helper SHALL restore a conflicting change's partial writes and retain earlier successful archives. No Help or archive bot SHALL run on main pushes. Automation SHALL never push main or merge the PR.
 
 #### Scenario: A completed change is archived
 - **WHEN** the pinned archive helper prepares a synchronization PR
@@ -54,7 +59,12 @@ Feature PRs SHALL express contract changes in their OpenSpec change folder along
 ## ADDED Requirements
 
 ### Requirement: Tested release channels
-A release SHALL publish only bytes that pass fresh installer starts on Linux/macOS x64/arm64, npm, Homebrew and native Windows archive starts; running-service upgrades from the previous published release through installer and Homebrew on Linux/macOS preserving data and service health; real Claude/Codex starts and World listings on TUI/core; and the shipped-dependency audit. Only the tag run and advisory nightly SHALL build native candidates. The standard immutable Actions artifact SHALL seal every tested publication file within that source run, and only after every contract job (packages, walks, fresh installs, npm and Homebrew checks, audit) succeeded; a cancelled or skipped contract job is not success. The seal SHALL record each contract job's result, and publication from retained bytes SHALL accept only a seal from the same run that records every contract job as succeeded. Required PR checks SHALL run on Linux only and retry a failed test step once inside its job.
+A release SHALL publish only bytes that pass fresh installer starts on Linux/macOS x64/arm64, npm, Homebrew and native Windows archive starts; running-service upgrades from the previous published release through installer and Homebrew on Linux/macOS preserving data and service health; real Claude/Codex starts and World listings on TUI/core; and the shipped-dependency audit.
+
+#### Scenario: Release validation and publication evidence
+
+- **WHEN** a release candidate is built, checked or published
+- **THEN** Only the tag run and advisory nightly SHALL build native candidates. The standard immutable Actions artifact SHALL seal every tested publication file within that source run, and only after every contract job (packages, walks, fresh installs, npm and Homebrew checks, audit) succeeded; a cancelled or skipped contract job is not success. The seal SHALL record each contract job's result, and publication from retained bytes SHALL accept only a seal from the same run that records every contract job as succeeded. Required PR checks SHALL run on Linux only and retry a failed test step once inside its job.
 
 #### Scenario: Queued PR validates its combined commit
 - **WHEN** an owner-approved PR joins main's merge queue and GitHub requests merge-group checks
@@ -72,7 +82,12 @@ A release SHALL publish only bytes that pass fresh installer starts on Linux/mac
 - **AND** a rerun that finds retained bytes without a record of every contract job succeeding builds and tests the tagged bytes again before publication
 
 ### Requirement: Recoverable release publication
-Publication SHALL use standard GitHub Release actions, npm publish with provenance and the Homebrew bump action with create-pullrequest and the tap token. Product-specific multi-platform Formula generation MAY complete the same PR through a standard PR action. Publication SHALL keep identical existing GitHub assets, skip matching npm integrity and reuse one tap PR. Infrastructure failures SHALL retry once automatically. Failed release summaries SHALL name the failed stage and rerun behavior; Pages SHALL deploy independently of tap success.
+Publication SHALL use standard GitHub Release actions, npm publish with provenance and the Homebrew bump action with create-pullrequest and the tap token.
+
+#### Scenario: Publication retries and reuse
+
+- **WHEN** World publishes a release
+- **THEN** Product-specific multi-platform Formula generation MAY complete the same PR through a standard PR action. Publication SHALL keep identical existing GitHub assets, skip matching npm integrity and reuse one tap PR. Infrastructure failures SHALL retry once automatically. Failed release summaries SHALL name the failed stage and rerun behavior; Pages SHALL deploy independently of tap success.
 
 #### Scenario: Publication is interrupted
 - **WHEN** a tag run stops after GitHub publication
@@ -89,7 +104,12 @@ Publication SHALL use standard GitHub Release actions, npm publish with provenan
 - **THEN** it rebuilds the tagged packages and verifies every channel contract before publication
 
 ### Requirement: Stable managed release service
-A managed Homebrew World service SHALL execute through the selected formula's stable opt path, never a versioned Cellar path. A Homebrew upgrade SHALL refresh and restart a running generated service belonging to that formula automatically, preserving its configuration and data, without taking over another installation's service. Homebrew's post-install sandbox cannot read the home folder, so the post-install step SHALL find the service manager's main process started from that formula's kegs (on macOS, the process launchd started for World's job label, never a terminal World launchd adopted), point older keg executables at opt, signal that process and wait until the service runs from opt. A supervised World started from a keg whose generated definition still names a versioned keg SHALL move that definition to opt before it listens.
+A managed Homebrew World service SHALL execute through the selected formula's stable opt path, never a versioned Cellar path.
+
+#### Scenario: Homebrew service handoff
+
+- **WHEN** a managed Homebrew World service is installed, started or upgraded
+- **THEN** A Homebrew upgrade SHALL refresh and restart a running generated service belonging to that formula automatically, preserving its configuration and data, without taking over another installation's service. Homebrew's post-install sandbox cannot read the home folder, so the post-install step SHALL find the service manager's main process started from that formula's kegs (on macOS, the process launchd started for World's job label, never a terminal World launchd adopted), point older keg executables at opt, signal that process and wait until the service runs from opt. A supervised World started from a keg whose generated definition still names a versioned keg SHALL move that definition to opt before it listens.
 
 #### Scenario: Running Homebrew upgrade
 - **WHEN** Homebrew replaces and removes the previous keg while World is running as its managed service

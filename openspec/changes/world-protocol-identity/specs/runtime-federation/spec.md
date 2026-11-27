@@ -3,16 +3,21 @@
 ### Requirement: Service incarnation fences observation
 
 World SHALL generate a new random service incarnation at each start and SHALL send it in
-the WebSocket hello as `service_incarnation`. Every observation base, subscription cursor
-and persisted capture that names a runtime generation SHALL also name the incarnation.
-World SHALL NOT accept a base, cursor or capture from another incarnation as current:
-- a base from another incarnation SHALL receive complete observation;
-- a cursor from another incarnation SHALL receive an explicit reset;
-- a captured runtime generation SHALL NOT match a runtime of the current process.
+the WebSocket hello as `service_incarnation`.
 
-Connection ID, runtime generation, service incarnation, transport epoch, observation
-epoch, subscription generation and source revision SHALL remain separate fields, and
-none SHALL substitute for another.
+#### Scenario: Observation fences across service starts
+
+- **WHEN** World exchanges observation bases, cursors or captures
+- **THEN** Every observation base, subscription cursor
+  and persisted capture that names a runtime generation SHALL also name the incarnation.
+  World SHALL NOT accept a base, cursor or capture from another incarnation as current:
+  - a base from another incarnation SHALL receive complete observation;
+  - a cursor from another incarnation SHALL receive an explicit reset;
+  - a captured runtime generation SHALL NOT match a runtime of the current process.
+
+  Connection ID, runtime generation, service incarnation, transport epoch, observation
+  epoch, subscription generation and source revision SHALL remain separate fields, and
+  none SHALL substitute for another.
 
 #### Scenario: Two processes both reach generation 1
 - **WHEN** World restarts and a host's new runtime again has generation 1
@@ -33,31 +38,34 @@ request SHALL name the base it holds:
 - the service incarnation;
 - for each admitted host, its connection ID, runtime generation and host token.
 
-A host token SHALL identify one host's projected observation for one runtime generation,
-and equal tokens SHALL mean identical projected content.
+#### Scenario: Based host replacement and repair
 
-Each reply SHALL name the service incarnation and each host's token. For each catalogue
-host the service SHALL send the complete host observation, except when the incarnation,
-generation and token all equal the base. In that case it SHALL send an unchanged
-confirmation:
-- the host's current state, generation, staleness, actionability and errors;
-- its token;
-- no topology.
+- **WHEN** a browser requests aggregate observation
+- **THEN** A host token SHALL identify one host's projected observation for one runtime generation,
+  and equal tokens SHALL mean identical projected content.
 
-The browser SHALL apply each reply as one publication and SHALL reuse its retained host
-for each unchanged confirmation. A confirmation SHALL NOT restore actionability that the
-browser's own qualification has retired.
+  Each reply SHALL name the service incarnation and each host's token. For each catalogue
+  host the service SHALL send the complete host observation, except when the incarnation,
+  generation and token all equal the base. In that case it SHALL send an unchanged
+  confirmation:
+  - the host's current state, generation, staleness, actionability and errors;
+  - its token;
+  - no topology.
 
-The following SHALL produce complete host observation through the existing bounded
-snapshot path:
-- an unknown or missing base;
-- a changed generation;
-- a changed incarnation.
+  The browser SHALL apply each reply as one publication and SHALL reuse its retained host
+  for each unchanged confirmation. A confirmation SHALL NOT restore actionability that the
+  browser's own qualification has retired.
 
-A reply that confirms a host the browser no longer holds SHALL be discarded and
-followed by a request without a base. A request without a base SHALL receive today's
-complete reply, and a service that rejects a base SHALL receive no further bases on
-that socket.
+  The following SHALL produce complete host observation through the existing bounded
+  snapshot path:
+  - an unknown or missing base;
+  - a changed generation;
+  - a changed incarnation.
+
+  A reply that confirms a host the browser no longer holds SHALL be discarded and
+  followed by a request without a base. A request without a base SHALL receive today's
+  complete reply, and a service that rejects a base SHALL receive no further bases on
+  that socket.
 
 #### Scenario: One host changes
 - **WHEN** one agent's status changes on one of three hosts and the browser refreshes
@@ -93,13 +101,18 @@ that socket.
 The service SHALL treat Herdr events as invalidation, not as an authoritative replica,
 and SHALL NOT apply event payloads, buffered or live, to the observed model.
 - Every event SHALL invalidate its host for a complete re-list.
-- Reads MAY start before the event subscription is acknowledged. Every acknowledgement,
-  including one after a reconnect, SHALL force a reconciling re-list of that host.
-- A read during which a relevant event arrived MAY be published, and another read SHALL
-  follow it.
-- Subscription loss, lost events and re-acknowledgement SHALL invalidate the host and
-  re-list it. They SHALL NOT by themselves retire actionability. Runtime replacement
-  and connection loss retire it, under the existing qualified-admission rules.
+- Reads MAY start before the event subscription is acknowledged.
+
+#### Scenario: Herdr invalidation and reconciliation
+
+- **WHEN** World observes Herdr reads and events
+- **THEN** Every acknowledgement,
+    including one after a reconnect, SHALL force a reconciling re-list of that host.
+  - A read during which a relevant event arrived MAY be published, and another read SHALL
+    follow it.
+  - Subscription loss, lost events and re-acknowledgement SHALL invalidate the host and
+    re-list it. They SHALL NOT by themselves retire actionability. Runtime replacement
+    and connection loss retire it, under the existing qualified-admission rules.
 
 #### Scenario: A pane moves
 - **WHEN** Herdr reports a pane move, which can change the pane's ID
@@ -126,22 +139,25 @@ When the hello advertises `world_subscriptions`, a browser SHALL be able to subs
 a named query with schema-validated parameters and receive a bootstrap followed by
 ordered change batches.
 
-Each delivery SHALL carry its subscription generation. Each batch SHALL carry a cursor
-of service incarnation, subscription generation and World sequence, meaning the client's
-state reflects every change up to that sequence. A client SHALL apply each batch as one
-unit.
+#### Scenario: Subscription delivery, resume and release
 
-When a client resubscribes with a cursor, the service SHALL continue from the next
-change if all of these hold:
-- the cursor's incarnation is current;
-- its sequence is within retained history;
-- its query and parameters are unchanged.
+- **WHEN** a browser uses a World subscription
+- **THEN** Each delivery SHALL carry its subscription generation. Each batch SHALL carry a cursor
+  of service incarnation, subscription generation and World sequence, meaning the client's
+  state reflects every change up to that sequence. A client SHALL apply each batch as one
+  unit.
 
-Otherwise the service SHALL send an explicit reset followed by a new bootstrap.
+  When a client resubscribes with a cursor, the service SHALL continue from the next
+  change if all of these hold:
+  - the cursor's incarnation is current;
+  - its sequence is within retained history;
+  - its query and parameters are unchanged.
 
-A client SHALL discard deliveries from an older subscription generation or incarnation.
-A service SHALL refuse an unknown query or invalid parameters without acquiring
-anything. Unsubscribing or losing the socket SHALL release the subscription's interests.
+  Otherwise the service SHALL send an explicit reset followed by a new bootstrap.
+
+  A client SHALL discard deliveries from an older subscription generation or incarnation.
+  A service SHALL refuse an unknown query or invalid parameters without acquiring
+  anything. Unsubscribing or losing the socket SHALL release the subscription's interests.
 
 #### Scenario: Resume within history
 - **WHEN** a browser reconnects to the same service and resubscribes with a cursor still
@@ -169,22 +185,25 @@ anything. Unsubscribing or losing the socket SHALL release the subscription's in
 **Watch and watermark.** A subscription's bootstrap SHALL install the change watch for
 its query and capture its watermark in one step, so that no change falls between them.
 
-**Pages.** Bootstrap rows SHALL be the query's state at the watermark, sent in pages.
-Each page SHALL:
-- contain whole rows;
-- stay within a byte bound counted as sent on the wire;
-- be sent only against a credit for that socket, subscription generation and page
-  number.
+#### Scenario: Bootstrap pages, credit and repair
 
-**Ordering.** Changes after the watermark SHALL follow the bootstrap, in order and once.
+- **WHEN** World bootstraps a subscription
+- **THEN** **Pages.** Bootstrap rows SHALL be the query's state at the watermark, sent in pages.
+  Each page SHALL:
+  - contain whole rows;
+  - stay within a byte bound counted as sent on the wire;
+  - be sent only against a credit for that socket, subscription generation and page
+    number.
 
-**Credit ownership.** A credit from another socket, subscription generation or page
-number SHALL NOT release a page. A reset SHALL retire the bootstrap's pending credits.
+  **Ordering.** Changes after the watermark SHALL follow the bootstrap, in order and once.
 
-**Concurrency.** At most two bootstraps per socket SHALL transfer at once.
+  **Credit ownership.** A credit from another socket, subscription generation or page
+  number SHALL NOT release a page. A reset SHALL retire the bootstrap's pending credits.
 
-**Repair path.** The complete snapshot path SHALL stay available for repair until a
-reviewed replacement closes the same claims.
+  **Concurrency.** At most two bootstraps per socket SHALL transfer at once.
+
+  **Repair path.** The complete snapshot path SHALL stay available for repair until a
+  reviewed replacement closes the same claims.
 
 #### Scenario: Change during bootstrap
 - **WHEN** a row changes after the watermark and before the last page is sent
@@ -211,20 +230,23 @@ path:
 - **Durable ordered** items: asks, notices, receipts and intent status;
 - **Replaceable** state rows.
 
-Lane rules:
-- Interactive replies SHALL be sent ahead of subscription traffic that has not begun
-  transmitting.
-- Durable ordered items SHALL NOT be coalesced or dropped. A durable subscription that
-  cannot keep up SHALL be reset and re-bootstrapped from durable state.
-- Replaceable rows MAY be coalesced only by the change composition rules.
-- A subscription whose queued bytes exceed its bound SHALL be reset. The socket SHALL be
-  closed only when the terminal path's own bound requires it.
+#### Scenario: Lane priority and bounded backlog
 
-The terminal path keeps its existing rules:
-- only self-contained repaints may replace pending repaints for the same qualified
-  endpoint;
-- incremental terminal output stays ordered and complete;
-- interactive priority is limited by bytes already queued on the socket.
+- **WHEN** World delivers socket traffic
+- **THEN** Lane rules:
+  - Interactive replies SHALL be sent ahead of subscription traffic that has not begun
+    transmitting.
+  - Durable ordered items SHALL NOT be coalesced or dropped. A durable subscription that
+    cannot keep up SHALL be reset and re-bootstrapped from durable state.
+  - Replaceable rows MAY be coalesced only by the change composition rules.
+  - A subscription whose queued bytes exceed its bound SHALL be reset. The socket SHALL be
+    closed only when the terminal path's own bound requires it.
+
+  The terminal path keeps its existing rules:
+  - only self-contained repaints may replace pending repaints for the same qualified
+    endpoint;
+  - incremental terminal output stays ordered and complete;
+  - interactive priority is limited by bytes already queued on the socket.
 
 #### Scenario: Slow consumer
 - **WHEN** a browser falls behind a busy topology subscription
@@ -246,9 +268,12 @@ Replaceable changes SHALL be composed only within one entity lifetime of one key
 - patches SHALL merge as ordered field assignments, the later assignment winning;
 - a delete SHALL end the lifetime.
 
-A delete followed by a recreate of the same key SHALL be delivered as the end of one
-lifetime and the start of another, never merged. Applying a delivered batch SHALL yield
-the same state as applying every original change up to that batch's cursor.
+#### Scenario: Ordered composition and lifetimes
+
+- **WHEN** World composes replaceable changes
+- **THEN** A delete followed by a recreate of the same key SHALL be delivered as the end of one
+  lifetime and the start of another, never merged. Applying a delivered batch SHALL yield
+  the same state as applying every original change up to that batch's cursor.
 
 #### Scenario: Repeated status changes
 - **WHEN** an agent's status changes three times before the next delivery
@@ -265,17 +290,21 @@ the same state as applying every original change up to that batch's cursor.
 ### Requirement: Incremental observation preparation
 
 Admitted observations and document or mark changes SHALL prepare only their readers.
-Rooms SHALL reuse their prepared presentation when their observation slice and
-owner/presentation inputs are unchanged. Appearance, relations, profiles, watches,
-seen marks and Town master SHALL invalidate only the readers of the changed inputs.
-Host and World counts, attention and summaries SHALL use per-room contributions.
 
-A view's topology SHALL be prepared only for mounted consumers and their consumed
-Hosts/watch projection. Changes outside that projection SHALL update aggregate World
-data without preparing hidden view rooms. The Board document
-SHALL remain available for appearance and relations in all views. A newly selected
-view SHALL finish missing model preparation before presentation. Incremental output
-SHALL equal complete preparation of the same observation, documents and marks.
+#### Scenario: Consumer invalidation and preparation
+
+- **WHEN** World prepares observations or documents for views
+- **THEN** Rooms SHALL reuse their prepared presentation when their observation slice and
+  owner/presentation inputs are unchanged. Appearance, relations, profiles, watches,
+  seen marks and Town master SHALL invalidate only the readers of the changed inputs.
+  Host and World counts, attention and summaries SHALL use per-room contributions.
+
+  A view's topology SHALL be prepared only for mounted consumers and their consumed
+  Hosts/watch projection. Changes outside that projection SHALL update aggregate World
+  data without preparing hidden view rooms. The Board document
+  SHALL remain available for appearance and relations in all views. A newly selected
+  view SHALL finish missing model preparation before presentation. Incremental output
+  SHALL equal complete preparation of the same observation, documents and marks.
 
 #### Scenario: One room changes
 - **WHEN** one agent changes status in a host with ten rooms

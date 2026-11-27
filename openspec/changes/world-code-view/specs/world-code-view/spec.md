@@ -10,19 +10,23 @@ This is a decision proposal; it does not describe a shipped editor or proxy.
 
 World SHALL represent IDEs within its integrations model, with read-only detection,
 explicit enablement per immutable host connection and opening per admitted project.
-The provider SHALL identify its installed product/version, web/desktop capability
-and availability reason. Discovery SHALL NOT start, install or update an IDE.
-World SHALL NOT bundle an IDE, silently accept its terms, change a selected
-provider or overwrite user-managed configuration. Existing harness integration
-behavior SHALL remain unchanged. Microsoft VS Code web, OpenVSCode, code-server,
-VS Code desktop, Cursor, JetBrains Gateway and Zed SHALL be distinct provider
-choices/capability records rather than aliases claiming identical functionality.
-Every failure to open a project in Code (provider missing on the project's
-host, server stopped, open refused, page not secure enough) SHALL say what went
-wrong and on which computer, and SHALL offer both Try again (the same open,
-or on a page not secure enough a fresh check) and a way back to the provider
-list (enable, disable, setup) without leaving Code. A failure SHALL belong to its provider: choosing
-another provider SHALL NOT keep showing it.
+
+#### Scenario: IDE choices and open failures
+
+- **WHEN** World detects, configures or opens an IDE provider
+- **THEN** The provider SHALL identify its installed product/version, web/desktop capability
+  and availability reason. Discovery SHALL NOT start, install or update an IDE.
+  World SHALL NOT bundle an IDE, silently accept its terms, change a selected
+  provider or overwrite user-managed configuration. Existing harness integration
+  behavior SHALL remain unchanged. Microsoft VS Code web, OpenVSCode, code-server,
+  VS Code desktop, Cursor, JetBrains Gateway and Zed SHALL be distinct provider
+  choices/capability records rather than aliases claiming identical functionality.
+  Every failure to open a project in Code (provider missing on the project's
+  host, server stopped, open refused, page not secure enough) SHALL say what went
+  wrong and on which computer, and SHALL offer both Try again (the same open,
+  or on a page not secure enough a fresh check) and a way back to the provider
+  list (enable, disable, setup) without leaving Code. A failure SHALL belong to its provider: choosing
+  another provider SHALL NOT keep showing it.
 
 #### Scenario: Detect without starting
 
@@ -42,17 +46,22 @@ another provider SHALL NOT keep showing it.
 ### Requirement: Real workbench in the common World frame
 
 Code SHALL project the same qualified hosts, rooms, projects, agent occurrences
-and terminals as other World views. Its center SHALL display the selected installed
-IDE's actual web workbench after feasibility admission; World SHALL NOT substitute
-a custom editor or save protocol. The IDE SHALL own editing, Git, extensions,
-profiles and Workspace Trust. World SHALL retain host/room/agent/PR context.
-Opening a project SHALL preserve the exact connection, runtime generation,
-workspace and admitted checkout; ambiguous roots SHALL require explicit selection.
-Selecting an agent terminal SHALL NOT silently change the checkout or branch.
-The workbench's light or dark appearance SHALL follow World's resolved theme
-(the system's when World follows the system) and change live with it; World
-SHALL do this through configuration defaults on the workbench page, never by
-writing the user's IDE settings, so an explicit setting of the user's own wins.
+and terminals as other World views.
+
+#### Scenario: Workbench context and theme
+
+- **WHEN** Code displays an admitted project
+- **THEN** Its center SHALL display the selected installed
+  IDE's actual web workbench after feasibility admission; World SHALL NOT substitute
+  a custom editor or save protocol. The IDE SHALL own editing, Git, extensions,
+  profiles and Workspace Trust. World SHALL retain host/room/agent/PR context.
+  Opening a project SHALL preserve the exact connection, runtime generation,
+  workspace and admitted checkout; ambiguous roots SHALL require explicit selection.
+  Selecting an agent terminal SHALL NOT silently change the checkout or branch.
+  The workbench's light or dark appearance SHALL follow World's resolved theme
+  (the system's when World follows the system) and change live with it; World
+  SHALL do this through configuration defaults on the workbench page, never by
+  writing the user's IDE settings, so an explicit setting of the user's own wins.
 
 #### Scenario: Open a room and an agent checkout
 
@@ -75,9 +84,14 @@ A workbench shown once SHALL stay loaded, at its size, while another project,
 view or Spaces is in front, while World detaches from and reattaches to its
 server, and while World asks for a connection after the last one was removed;
 its editors, unsaved edits, terminals, webviews and scroll SHALL stay as they
-were. Only a page reload, a Stop that ended the server, or its server ending or
-failing SHALL load it again, and Code SHALL then say it loaded again. A Stop
-that fails leaves the server running and its workbench loaded.
+were.
+
+#### Scenario: Workbench reload and stop outcomes
+
+- **WHEN** a workbench has been shown
+- **THEN** Only a page reload, a Stop that ended the server, or its server ending or
+  failing SHALL load it again, and Code SHALL then say it loaded again. A Stop
+  that fails leaves the server running and its workbench loaded.
 
 #### Scenario: Switch to Town and back
 
@@ -108,27 +122,32 @@ that fails leaves the server running and its workbench loaded.
 
 An embedded provider SHALL remain unavailable until its distribution terms,
 owner licence acceptance, same-origin behavior and explicit full shell/file-write
-trust pass admission. World SHALL call installed servers only and SHALL NOT claim
-that nonbundling alone grants embedding rights. The owner SHALL be told that an
-IDE is not confined to the selected project and same-origin workbench/extension
-code shares World's browser authority. Failed licence, frame, worker,
-secure-context or origin compatibility SHALL block embedding with a concrete
-reason and an explicit desktop handoff option. World SHALL NOT silently relax
-its global origin/CSP policy, rewrite restricted product assets or assert desktop
-extension parity based only on Marketplace availability.
+trust pass admission.
 
-Webviews load from VS Code's own webview origin. Stock VS Code and OpenVSCode
-Server frame webviews and their web worker extension host from
-`https://<hash>.vscode-cdn.net`, as their product configuration says; the frame
-rule World adds to IDE route responses SHALL admit `https://*.vscode-cdn.net` as
-the one origin besides World's own. World SHALL NOT rewrite the webview host page
-or `product.json`, serve webviews from its own origin, open a second World origin
-for them, or change the policy of World's own pages or any other route. Webview
-content (extension panels, notebook outputs, previews of repository files) is
-untrusted; it stays cross-origin to World, so it cannot reach World's window,
-storage, cookies or API, and its service worker's scope is its own origin. The
-decision, its threat model and the rejected options are recorded in
-`docs/design/code-view/webview-origin.md`.
+#### Scenario: Embedding admission and webview isolation
+
+- **WHEN** World admits or serves an embedded IDE
+- **THEN** World SHALL call installed servers only and SHALL NOT claim
+  that nonbundling alone grants embedding rights. The owner SHALL be told that an
+  IDE is not confined to the selected project and same-origin workbench/extension
+  code shares World's browser authority. Failed licence, frame, worker,
+  secure-context or origin compatibility SHALL block embedding with a concrete
+  reason and an explicit desktop handoff option. World SHALL NOT silently relax
+  its global origin/CSP policy, rewrite restricted product assets or assert desktop
+  extension parity based only on Marketplace availability.
+
+  Webviews load from VS Code's own webview origin. Stock VS Code and OpenVSCode
+  Server frame webviews and their web worker extension host from
+  `https://<hash>.vscode-cdn.net`, as their product configuration says; the frame
+  rule World adds to IDE route responses SHALL admit `https://*.vscode-cdn.net` as
+  the one origin besides World's own. World SHALL NOT rewrite the webview host page
+  or `product.json`, serve webviews from its own origin, open a second World origin
+  for them, or change the policy of World's own pages or any other route. Webview
+  content (extension panels, notebook outputs, previews of repository files) is
+  untrusted; it stays cross-origin to World, so it cannot reach World's window,
+  storage, cookies or API, and its service worker's scope is its own origin. The
+  decision, its threat model and the rejected options are recorded in
+  `docs/design/code-view/webview-origin.md`.
 
 #### Scenario: Official webviews load from VS Code's webview origin
 
@@ -150,14 +169,19 @@ decision, its threat model and the rejected options are recorded in
 
 All embedded browser HTTP/WebSocket traffic SHALL use World-owned same-origin
 routes authorized by the current owner session and bound to a fixed admitted
-server instance. Upstreams SHALL be private local endpoints or private forwards
-through the captured service-owned OpenSSH connection. Browser-supplied arbitrary
-upstream destinations SHALL be refused. Server tokens SHALL NOT enter browser
-URLs, history, logs or persistent browser storage. Cookies, redirects and worker
-scope SHALL NOT overwrite World authentication or intercept World/PWA resources.
-Logout, disablement and connection retirement SHALL revoke proxy authority and
-close attached streams; retirement SHALL NOT stop the server itself.
-Unsupported platforms SHALL be explained without fallback.
+server instance.
+
+#### Scenario: Proxy authorization and revocation
+
+- **WHEN** embedded IDE traffic passes through World
+- **THEN** Upstreams SHALL be private local endpoints or private forwards
+  through the captured service-owned OpenSSH connection. Browser-supplied arbitrary
+  upstream destinations SHALL be refused. Server tokens SHALL NOT enter browser
+  URLs, history, logs or persistent browser storage. Cookies, redirects and worker
+  scope SHALL NOT overwrite World authentication or intercept World/PWA resources.
+  Logout, disablement and connection retirement SHALL revoke proxy authority and
+  close attached streams; retirement SHALL NOT stop the server itself.
+  Unsupported platforms SHALL be explained without fallback.
 
 #### Scenario: SSH project opens
 
@@ -178,15 +202,20 @@ Unsupported platforms SHALL be explained without fallback.
 
 A small optional World extension SHALL provide named terminal profiles attaching
 existing connection/runtime-generation/session-qualified Herdr panes and core
-terminals. Profile discovery/attachment SHALL NOT launch replacement agents.
-The extension SHALL use a separately paired, narrow, expiring and revocable
-capability rather than the owner's login token. TUI attachment SHALL disclose
-that attaching/resizing changes pane dimensions for every viewer before attachment;
-existing control/resize ownership SHALL be respected. Core SHALL use a verified
-screen-watch/typing/resize adapter and SHALL NOT be treated as a raw PTY.
-Unsupported runtime adapters SHALL refuse with a reason. Editor keystrokes SHALL
-NOT become terminal input. Hide/close/retirement SHALL release World attachment
-and input demand without ending agents; uncertain input SHALL NOT be replayed.
+terminals.
+
+#### Scenario: Terminal extension authority and lifecycle
+
+- **WHEN** the World extension discovers or attaches a runtime terminal
+- **THEN** Profile discovery/attachment SHALL NOT launch replacement agents.
+  The extension SHALL use a separately paired, narrow, expiring and revocable
+  capability rather than the owner's login token. TUI attachment SHALL disclose
+  that attaching/resizing changes pane dimensions for every viewer before attachment;
+  existing control/resize ownership SHALL be respected. Core SHALL use a verified
+  screen-watch/typing/resize adapter and SHALL NOT be treated as a raw PTY.
+  Unsupported runtime adapters SHALL refuse with a reason. Editor keystrokes SHALL
+  NOT become terminal input. Hide/close/retirement SHALL release World attachment
+  and input demand without ending agents; uncertain input SHALL NOT be replayed.
 
 #### Scenario: Attach a TUI profile with shared viewers
 
@@ -206,12 +235,17 @@ and input demand without ending agents; uncertain input SHALL NOT be replayed.
 ### Requirement: Settings and extension capability evidence
 
 World SHALL use the selected installed IDE's supported settings, profile, extension
-and update mechanisms. It SHALL distinguish project configuration, browser state,
-server/workspace extensions and desktop user state rather than promise shared
-live directories. Microsoft Marketplace/Settings Sync and Open VSX capabilities
-SHALL be identified per provider. Version changes SHALL trigger compatibility
-revalidation. Copilot, Pylance, Remote and C# Dev Kit SHALL be explicit compatibility
-cases with licence, entitlement and web/remote-host limitations recorded.
+and update mechanisms.
+
+#### Scenario: Provider settings and compatibility
+
+- **WHEN** World uses an installed IDE provider
+- **THEN** It SHALL distinguish project configuration, browser state,
+  server/workspace extensions and desktop user state rather than promise shared
+  live directories. Microsoft Marketplace/Settings Sync and Open VSX capabilities
+  SHALL be identified per provider. Version changes SHALL trigger compatibility
+  revalidation. Copilot, Pylance, Remote and C# Dev Kit SHALL be explicit compatibility
+  cases with licence, entitlement and web/remote-host limitations recorded.
 
 #### Scenario: Desktop user opens a new server
 
@@ -250,42 +284,46 @@ non-actionable. This view SHALL NOT add World commit/push/approve/merge authorit
 
 Servers SHALL start only on explicit admitted demand, reuse only compatible proven
 host/user/provider/profile instances and use measured active-server/window limits.
-World SHALL distinguish external from World-started processes. Closing Code SHALL
-detach clients without killing Herdr agents or an externally owned IDE server.
-Uncertain starts SHALL be reconciled against the captured instance before retry;
-retiring a connection SHALL NOT restart it elsewhere.
 
-Going away SHALL NOT stop a World-started server: closing Code or the browser,
-World stopping, restarting or updating, a connection reconnecting or changing
-destination, the SSH link dropping and the host being unreachable SHALL leave the
-server and every process under it running on its host, with no idle timeout. Such
-a server SHALL NOT be tied to World's process or to the transport that started it.
-It SHALL carry an identity on its host (World, connection, provider, folder and its
-own token) that a later World verifies before reattaching; World SHALL reattach
-only to its own server for the same provider and folder, under the connection's
-current generation, and a concurrent second start for the same folder SHALL find
-the first instead of starting another.
+#### Scenario: Server reuse, survival and explicit stop
 
-Only the person pressing Stop on that server SHALL stop a World-started server,
-after saying that everything running in it ends. Nothing else SHALL stop one:
-not closing the view, World restarting or updating, a dropped connection, the
-server limit, an idle period, disabling its provider or removing its host's
-connection. Disabling a provider or removing a connection with servers still
-running SHALL list them first, each with Stop as a separate, explicit choice.
-At the server limit World SHALL refuse another start and show the running ones;
-it SHALL NOT stop one to make room. Stopping SHALL end the server's whole process
-tree on its host, including descendants re-parented out of it. A stop that
-cannot reach the host SHALL leave the server listed with the reason.
+- **WHEN** World manages an IDE server
+- **THEN** World SHALL distinguish external from World-started processes. Closing Code SHALL
+  detach clients without killing Herdr agents or an externally owned IDE server.
+  Uncertain starts SHALL be reconciled against the captured instance before retry;
+  retiring a connection SHALL NOT restart it elsewhere.
 
-Every World-started server not known to have ended SHALL be listed per host and
-folder with since-when and Stop, and counted against the limit. World SHALL keep
-that list durably, so a restart lists every server before any host answers,
-including servers on a host World no longer has a connection for. A start whose
-answer is lost SHALL count as possibly running, not failed. A server whose SSH
-connection was removed SHALL be listed as running but unreachable from World,
-with the command that stops it on that host; World SHALL NOT reach it through
-another connection, and SHALL drop it from the list only when the person
-forgets it.
+  Going away SHALL NOT stop a World-started server: closing Code or the browser,
+  World stopping, restarting or updating, a connection reconnecting or changing
+  destination, the SSH link dropping and the host being unreachable SHALL leave the
+  server and every process under it running on its host, with no idle timeout. Such
+  a server SHALL NOT be tied to World's process or to the transport that started it.
+  It SHALL carry an identity on its host (World, connection, provider, folder and its
+  own token) that a later World verifies before reattaching; World SHALL reattach
+  only to its own server for the same provider and folder, under the connection's
+  current generation, and a concurrent second start for the same folder SHALL find
+  the first instead of starting another.
+
+  Only the person pressing Stop on that server SHALL stop a World-started server,
+  after saying that everything running in it ends. Nothing else SHALL stop one:
+  not closing the view, World restarting or updating, a dropped connection, the
+  server limit, an idle period, disabling its provider or removing its host's
+  connection. Disabling a provider or removing a connection with servers still
+  running SHALL list them first, each with Stop as a separate, explicit choice.
+  At the server limit World SHALL refuse another start and show the running ones;
+  it SHALL NOT stop one to make room. Stopping SHALL end the server's whole process
+  tree on its host, including descendants re-parented out of it. A stop that
+  cannot reach the host SHALL leave the server listed with the reason.
+
+  Every World-started server not known to have ended SHALL be listed per host and
+  folder with since-when and Stop, and counted against the limit. World SHALL keep
+  that list durably, so a restart lists every server before any host answers,
+  including servers on a host World no longer has a connection for. A start whose
+  answer is lost SHALL count as possibly running, not failed. A server whose SSH
+  connection was removed SHALL be listed as running but unreachable from World,
+  with the command that stops it on that host; World SHALL NOT reach it through
+  another connection, and SHALL drop it from the list only when the person
+  forgets it.
 
 #### Scenario: Close a project using an external server
 

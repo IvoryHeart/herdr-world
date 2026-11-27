@@ -165,66 +165,70 @@ including when different data folders select the same registry.
 ### Requirement: Hosts own independently discovered runtime connections
 
 A host SHALL be this computer or one exact OpenSSH alias / `user@host` destination.
-Adding a host SHALL require no runtime selection. A registered provider SHALL own
-presence/version probes and the default connection profile for its runtime. World
-SHALL discover all registered providers on host connection and explicit rediscovery,
-and SHALL connect every found runtime independently, subject to the per-runtime
-connection intent below. Discovery SHALL NOT install
-or start a runtime, probe installation requirements, or persist secrets or SSH options.
-SSH discovery SHALL use only fixed, bounded, noninteractive read-only probes.
 
-A successfully discovered empty host SHALL remain saved and report the registered
-installation choices. Once any runtime is found, ordinary host responses SHALL NOT
-suggest installing siblings; the Integrations API SHALL retain additional choices
-per host. Failed probes SHALL be incomplete evidence, not evidence of absence.
-Successful siblings SHALL still connect when another provider probe fails.
-Saved endpoints SHALL be admitted through their original runtime transports;
-a live qualified runtime SHALL remain found even when executable lookup misses.
+#### Scenario: Host discovery, connection intent and projections
 
-Each runtime SHALL retain its immutable connection ID, independent generation and
-owning manager. Host identity SHALL NOT grant downstream operation authority or
-select a fallback runtime. Missing runtimes SHALL retire their leases and retain
-stale, non-actionable topology. Reachable siblings SHALL remain independently live.
-Existing profiles SHALL be grouped by local machine or exact SSH destination without
-rewriting IDs, native resource bindings, room positions, pins, colours or saved filter
-ticks. Rediscovery SHALL reuse historical runtime IDs. Different aliases SHALL NOT
-be assumed equivalent. Explicit startup overrides SHALL retain their pinned behavior.
+- **WHEN** World manages a host's runtimes
+- **THEN** Adding a host SHALL require no runtime selection. A registered provider SHALL own
+  presence/version probes and the default connection profile for its runtime. World
+  SHALL discover all registered providers on host connection and explicit rediscovery,
+  and SHALL connect every found runtime independently, subject to the per-runtime
+  connection intent below. Discovery SHALL NOT install
+  or start a runtime, probe installation requirements, or persist secrets or SSH options.
+  SSH discovery SHALL use only fixed, bounded, noninteractive read-only probes.
 
-Existing per-connection auto-connect settings SHALL remain authoritative after host
-migration; a nonempty host's auto-connect flag SHALL reflect whether any member
-profile enables it. Startup SHALL attempt only the saved default and auto-connect
-profiles, plus newly discovered runtimes on eligible hosts. Empty hosts SHALL retain
-their saved auto-connect policy. Saved startup targets SHALL start independently
-before discovery; a host discovery or persistence failure SHALL NOT prevent other
-hosts from starting or reject whole-service startup.
+  A successfully discovered empty host SHALL remain saved and report the registered
+  installation choices. Once any runtime is found, ordinary host responses SHALL NOT
+  suggest installing siblings; the Integrations API SHALL retain additional choices
+  per host. Failed probes SHALL be incomplete evidence, not evidence of absence.
+  Successful siblings SHALL still connect when another provider probe fails.
+  Saved endpoints SHALL be admitted through their original runtime transports;
+  a live qualified runtime SHALL remain found even when executable lookup misses.
 
-When automatic startup or reconnect discovery finds only existing runtimes and
-the saved registry has no host catalogue, World SHALL expose discovery metadata
-in memory without rewriting the saved registry or its schema version. An explicit
-host discovery or a newly discovered runtime SHALL persist the host migration.
+  Each runtime SHALL retain its immutable connection ID, independent generation and
+  owning manager. Host identity SHALL NOT grant downstream operation authority or
+  select a fallback runtime. Missing runtimes SHALL retire their leases and retain
+  stale, non-actionable topology. Reachable siblings SHALL remain independently live.
+  Existing profiles SHALL be grouped by local machine or exact SSH destination without
+  rewriting IDs, native resource bindings, room positions, pins, colours or saved filter
+  ticks. Rediscovery SHALL reuse historical runtime IDs. Different aliases SHALL NOT
+  be assumed equivalent. Explicit startup overrides SHALL retain their pinned behavior.
 
-Automatic rediscovery and per-connection Connect SHALL preserve each existing
-runtime's connection intent. Explicit Disconnect SHALL cancel that runtime's intent
-and retries; sibling reconnection SHALL NOT restore them. Temporary discovery
-absence SHALL suspend retries without cancelling intent. Explicit host Connect or
-rediscovery SHALL authorize connecting every found runtime on that host.
-Per-connection Connect SHALL attempt its exact saved endpoint even when earlier
-discovery reported absence, and SHALL report its connection failure to the caller.
+  Existing per-connection auto-connect settings SHALL remain authoritative after host
+  migration; a nonempty host's auto-connect flag SHALL reflect whether any member
+  profile enables it. Startup SHALL attempt only the saved default and auto-connect
+  profiles, plus newly discovered runtimes on eligible hosts. Empty hosts SHALL retain
+  their saved auto-connect policy. Saved startup targets SHALL start independently
+  before discovery; a host discovery or persistence failure SHALL NOT prevent other
+  hosts from starting or reject whole-service startup.
 
-The snapshot and connection-list APIs SHALL add a host catalogue containing runtime
-kind, version, lifecycle and immutable connection ID, retaining the existing
-per-connection arrays. Host snapshot runtime entries SHALL carry their own generation,
-staleness and actionability; topology SHALL remain indexed by connection ID.
-`herdr-world connections` SHALL list hosts and runtimes. `herdr-world ls` SHALL
-return hosts with their runtimes and rooms, retaining the per-connection projection.
+  When automatic startup or reconnect discovery finds only existing runtimes and
+  the saved registry has no host catalogue, World SHALL expose discovery metadata
+  in memory without rewriting the saved registry or its schema version. An explicit
+  host discovery or a newly discovered runtime SHALL persist the host migration.
 
-The packaged-release consumer is `scripts/release-walk/journeys.py`: its listing
-journey checks that projection and the aggregate for every launched agent's
-connection, generation, room and pane/terminal binding. Its upgrade journey permits
-new host catalogue metadata while requiring every previously saved registry field
-to remain exact. `scripts/release-walk.test.ts` feeds real service/CLI output into
-the listing consumer; `scripts/release-walk/journeys_test.py` covers migration and
-rejected omissions or identity changes. Native Linux/macOS walks remain required.
+  Automatic rediscovery and per-connection Connect SHALL preserve each existing
+  runtime's connection intent. Explicit Disconnect SHALL cancel that runtime's intent
+  and retries; sibling reconnection SHALL NOT restore them. Temporary discovery
+  absence SHALL suspend retries without cancelling intent. Explicit host Connect or
+  rediscovery SHALL authorize connecting every found runtime on that host.
+  Per-connection Connect SHALL attempt its exact saved endpoint even when earlier
+  discovery reported absence, and SHALL report its connection failure to the caller.
+
+  The snapshot and connection-list APIs SHALL add a host catalogue containing runtime
+  kind, version, lifecycle and immutable connection ID, retaining the existing
+  per-connection arrays. Host snapshot runtime entries SHALL carry their own generation,
+  staleness and actionability; topology SHALL remain indexed by connection ID.
+  `herdr-world connections` SHALL list hosts and runtimes. `herdr-world ls` SHALL
+  return hosts with their runtimes and rooms, retaining the per-connection projection.
+
+  The packaged-release consumer is `scripts/release-walk/journeys.py`: its listing
+  journey checks that projection and the aggregate for every launched agent's
+  connection, generation, room and pane/terminal binding. Its upgrade journey permits
+  new host catalogue metadata while requiring every previously saved registry field
+  to remain exact. `scripts/release-walk.test.ts` feeds real service/CLI output into
+  the listing consumer; `scripts/release-walk/journeys_test.py` covers migration and
+  rejected omissions or identity changes. Native Linux/macOS walks remain required.
 
 #### Scenario: Both runtimes on this computer
 - **WHEN** herdr-core and the Herdr TUI are installed on this computer
@@ -279,19 +283,23 @@ rejected omissions or identity changes. Native Linux/macOS walks remain required
 
 `world.snapshot` SHALL return the complete managed-connection catalogue within 20 seconds when
 individual ready runtimes are slow or unreachable, with at most four concurrent host observations.
-It SHALL prioritize a bounded set of managed connections with open operational contexts or visible
-view scope, distribute attempts fairly within that set and guarantee background progress for other
-ready hosts. Each completed host SHALL be admitted independently; unfinished hosts SHALL expose
-explicitly stale, non-actionable cached topology or no child topology. A ready host's control
-operations SHALL NOT wait for aggregate observation of unrelated hosts.
 
-Scheduling hints SHALL be validated for syntax and bounded size, SHALL NOT grant operation
-authority and SHALL NOT change connection lifecycle or view filters. The existing single selected-host
-hint SHALL remain accepted as a compatibility shorthand for one priority connection. Repeated hints
-SHALL be deduplicated. Malformed hints and malformed or unknown `selected_connection_id` values SHALL
-be rejected without default routing. Well-formed unknown identities in `priority_connection_ids`
-and `priorities[].connection_id` SHALL be ignored so removed profiles cannot block healthy aggregate
-observation.
+#### Scenario: Aggregate scheduling and hint admission
+
+- **WHEN** World reads an aggregate snapshot
+- **THEN** It SHALL prioritize a bounded set of managed connections with open operational contexts or visible
+  view scope, distribute attempts fairly within that set and guarantee background progress for other
+  ready hosts. Each completed host SHALL be admitted independently; unfinished hosts SHALL expose
+  explicitly stale, non-actionable cached topology or no child topology. A ready host's control
+  operations SHALL NOT wait for aggregate observation of unrelated hosts.
+
+  Scheduling hints SHALL be validated for syntax and bounded size, SHALL NOT grant operation
+  authority and SHALL NOT change connection lifecycle or view filters. The existing single selected-host
+  hint SHALL remain accepted as a compatibility shorthand for one priority connection. Repeated hints
+  SHALL be deduplicated. Malformed hints and malformed or unknown `selected_connection_id` values SHALL
+  be rejected without default routing. Well-formed unknown identities in `priority_connection_ids`
+  and `priorities[].connection_id` SHALL be ignored so removed profiles cannot block healthy aggregate
+  observation.
 
 #### Scenario: Many inactive hosts are slow
 - **WHEN** open-context hosts respond promptly while other ready hosts stall
@@ -349,19 +357,24 @@ and non-actionable until current observation is admitted.
 
 The service and client SHALL qualify snapshots, events, actions, HTTP resources and terminal
 sessions by connection and runtime generation, and SHALL require compatible capabilities before
-dispatch. A browser SHALL admit independent operational contexts on several ready managed
-connections concurrently over one World origin. Every operation SHALL capture its owning
-connection, generation and resource identity; view filters, another window's focus and another
-connection's lifecycle SHALL NOT supply or replace that target. Aggregate observation SHALL NOT
-by itself grant mutation authority. The service SHALL revalidate the target runtime lease at dispatch.
+dispatch.
 
-A replaced or unavailable runtime SHALL invalidate only its own old contexts and pending work.
-World transport disconnect or authentication loss SHALL invalidate all operational contexts.
-Late replies, events, HTTP resources and terminal frames SHALL NOT update a replacement context.
-World SHALL NOT replay terminal input or automatically retry a mutation with an uncertain outcome
-across a disconnect; it SHALL report uncertainty naming the owning host even after browser-observed
-runtime retirement. It SHALL re-observe only a currently admitted exact target before a user retry,
-without redirecting a refresh to a replacement runtime or another host.
+#### Scenario: Qualified contexts and retirement
+
+- **WHEN** World admits observations or operations on managed runtimes
+- **THEN** A browser SHALL admit independent operational contexts on several ready managed
+  connections concurrently over one World origin. Every operation SHALL capture its owning
+  connection, generation and resource identity; view filters, another window's focus and another
+  connection's lifecycle SHALL NOT supply or replace that target. Aggregate observation SHALL NOT
+  by itself grant mutation authority. The service SHALL revalidate the target runtime lease at dispatch.
+
+  A replaced or unavailable runtime SHALL invalidate only its own old contexts and pending work.
+  World transport disconnect or authentication loss SHALL invalidate all operational contexts.
+  Late replies, events, HTTP resources and terminal frames SHALL NOT update a replacement context.
+  World SHALL NOT replay terminal input or automatically retry a mutation with an uncertain outcome
+  across a disconnect; it SHALL report uncertainty naming the owning host even after browser-observed
+  runtime retirement. It SHALL re-observe only a currently admitted exact target before a user retry,
+  without redirecting a refresh to a replacement runtime or another host.
 
 #### Scenario: Colliding native identifiers
 - **WHEN** two hosts contain the same native pane identifier and both have open operational contexts
@@ -443,56 +456,61 @@ SHALL include the executable and session so changing them prevents silent recove
 ### Requirement: Focused observation without per-client polling
 
 When the World service advertises `world_shared_acquisition`, a browser SHALL NOT re-list a
-managed connection or fetch the connection catalogue periodically. Its only timers that re-list a
-host or fetch the catalogue SHALL be a retry of a failed fetch or re-list, and a re-list's own
-debounce and follow-ups. Without that capability, the browser SHALL keep today's 5-second re-list
-and catalogue fetch.
+managed connection or fetch the connection catalogue periodically.
 
-The focused store SHALL re-list an admitted owner's workspaces, tabs, panes and agents, and read
-that owner's active tab layout, after:
-- a Herdr event or World resynchronization admitted for that owner;
-- a World change notice for that owner;
-- the browser's own action on it;
-- a catalogue change that admits or replaces it;
-- reconnection;
-- the start of a hold on it: a change of active connection, each admitted Inspector
-  conversation, and every held owner when the page is shown.
+#### Scenario: Focused refresh, recency and repair
 
-It SHALL fetch the connection catalogue and browser count after a catalogue change notice, after
-reconnection and when the page returns.
+- **WHEN** a browser observes managed connections
+- **THEN** Its only timers that re-list a
+  host or fetch the catalogue SHALL be a retry of a failed fetch or re-list, and a re-list's own
+  debounce and follow-ups. Without that capability, the browser SHALL keep today's 5-second re-list
+  and catalogue fetch.
 
-For every owner that a visible browser holds, the World service SHALL keep these outputs current:
-- topology, labels, order, focus, agent status and presentation, agent names and pane tokens,
-  after the re-list that follows their Herdr event;
-- agent recency, git status, worktree parents, endpoint availability, workspace metadata and any
-  change whose Herdr event did not arrive, within one 5-second observation period, that
-  observation's bounded duration and one re-list;
-- the connection catalogue and browser count, within one fetch after the change.
+  The focused store SHALL re-list an admitted owner's workspaces, tabs, panes and agents, and read
+  that owner's active tab layout, after:
+  - a Herdr event or World resynchronization admitted for that owner;
+  - a World change notice for that owner;
+  - the browser's own action on it;
+  - a catalogue change that admits or replaces it;
+  - reconnection;
+  - the start of a hold on it: a change of active connection, each admitted Inspector
+    conversation, and every held owner when the page is shown.
 
-The service SHALL send a change notice to a browser only when its observation differs from the
-lists that browser last received for that owner. The focused re-list SHALL mark its four list
-calls on the request frame, and only replies to marked calls SHALL update that record. Replies to
-other callers of the same methods SHALL NOT. Activity times and pane scroll positions SHALL
-NOT count as differences. No browser reads a pane's scroll position, and on Herdr 0.9.3 it
-changes with output alone.
+  It SHALL fetch the connection catalogue and browser count after a catalogue change notice, after
+  reconnection and when the page returns.
 
-Agent recency SHALL come from the service's reading of session-file activity. It SHALL reach the
-browser through `agent.list` and through pushed values, and SHALL NOT be pushed before a reading
-exists. For each pane, terminal, agent and agent session, a browser SHALL keep the latest time it
-has seen, so recency never moves backwards. An entry for another agent session SHALL NOT apply. Maxima SHALL be keyed by the
-complete identity through initial pane/layout admission. The browser SHALL retain
-read-only session maxima separately from runtime admission, so a World service
-restart that resets generation counters SHALL NOT lower the same external agent
-session's recency. Rejoining that data SHALL NOT admit operations or obsolete
-controls for a retired generation.
+  For every owner that a visible browser holds, the World service SHALL keep these outputs current:
+  - topology, labels, order, focus, agent status and presentation, agent names and pane tokens,
+    after the re-list that follows their Herdr event;
+  - agent recency, git status, worktree parents, endpoint availability, workspace metadata and any
+    change whose Herdr event did not arrive, within one 5-second observation period, that
+    observation's bounded duration and one re-list;
+  - the connection catalogue and browser count, within one fetch after the change.
 
-Change notices and recency SHALL be admitted only for a ready owner whose generation matches the
-browser's catalogue. Herdr subscription loss, browser reconnection and runtime replacement SHALL
-be repaired by the existing resynchronization, catalogue fetch and re-list. A failed catalogue
-fetch, or a failed re-list of a held owner, SHALL be retried once per period until one succeeds,
-the owner is retired or released, or the page is hidden. Pending-focus settlement, browser-local
-navigation, attachment advertisements and completion tracking SHALL keep their existing rules. A
-bootstrap, reconnect or resynchronization observation SHALL NOT be reported as a completed task.
+  The service SHALL send a change notice to a browser only when its observation differs from the
+  lists that browser last received for that owner. The focused re-list SHALL mark its four list
+  calls on the request frame, and only replies to marked calls SHALL update that record. Replies to
+  other callers of the same methods SHALL NOT. Activity times and pane scroll positions SHALL
+  NOT count as differences. No browser reads a pane's scroll position, and on Herdr 0.9.3 it
+  changes with output alone.
+
+  Agent recency SHALL come from the service's reading of session-file activity. It SHALL reach the
+  browser through `agent.list` and through pushed values, and SHALL NOT be pushed before a reading
+  exists. For each pane, terminal, agent and agent session, a browser SHALL keep the latest time it
+  has seen, so recency never moves backwards. An entry for another agent session SHALL NOT apply. Maxima SHALL be keyed by the
+  complete identity through initial pane/layout admission. The browser SHALL retain
+  read-only session maxima separately from runtime admission, so a World service
+  restart that resets generation counters SHALL NOT lower the same external agent
+  session's recency. Rejoining that data SHALL NOT admit operations or obsolete
+  controls for a retired generation.
+
+  Change notices and recency SHALL be admitted only for a ready owner whose generation matches the
+  browser's catalogue. Herdr subscription loss, browser reconnection and runtime replacement SHALL
+  be repaired by the existing resynchronization, catalogue fetch and re-list. A failed catalogue
+  fetch, or a failed re-list of a held owner, SHALL be retried once per period until one succeeds,
+  the owner is retired or released, or the page is hidden. Pending-focus settlement, browser-local
+  navigation, attachment advertisements and completion tracking SHALL keep their existing rules. A
+  bootstrap, reconnect or resynchronization observation SHALL NOT be reported as a completed task.
 
 #### Scenario: Idle host
 
@@ -586,23 +604,28 @@ bootstrap, reconnect or resynchronization observation SHALL NOT be reported as a
 ### Requirement: Shared acquisition with reference-counted interest
 
 The World service SHALL acquire each focused observation, recency reading and declared Desk read
-at most once per period for all browsers. It SHALL publish each change to the browsers that hold
-it. Interest SHALL be keyed by connection ID and runtime generation, plus pane and agent session
-for session-scoped targets.
+at most once per period for all browsers.
 
-A browser SHALL hold interest only while its page is visible. It SHALL hold its active connection,
-each connection that owns an open Inspector window, and the Desk targets it shows. It SHALL replace
-its whole declaration on every change and SHALL release it when hidden. The service SHALL count
-holders across sockets, and SHALL release a socket's declarations when that socket closes. When no
-holder remains, the service SHALL stop that acquisition and discard its cached results.
+#### Scenario: Interest ownership and acquisition fences
 
-The service SHALL keep, per socket and owner, a record of the lists it last sent that socket, and
-SHALL compare observations with that record (Focused observation without per-client polling). It
-SHALL NOT overlap two acquisitions of one resource. It SHALL NOT publish a result whose runtime
-lease or generation is no longer current, or whose last holder has released it. It SHALL NOT send
-a placeholder before a result exists. Malformed declarations SHALL be rejected and well-formed
-unknown owners ignored. Interest SHALL NOT grant operation authority, select or wake a host, or
-change a view filter.
+- **WHEN** World shares acquisitions across browsers
+- **THEN** It SHALL publish each change to the browsers that hold
+  it. Interest SHALL be keyed by connection ID and runtime generation, plus pane and agent session
+  for session-scoped targets.
+
+  A browser SHALL hold interest only while its page is visible. It SHALL hold its active connection,
+  each connection that owns an open Inspector window, and the Desk targets it shows. It SHALL replace
+  its whole declaration on every change and SHALL release it when hidden. The service SHALL count
+  holders across sockets, and SHALL release a socket's declarations when that socket closes. When no
+  holder remains, the service SHALL stop that acquisition and discard its cached results.
+
+  The service SHALL keep, per socket and owner, a record of the lists it last sent that socket, and
+  SHALL compare observations with that record (Focused observation without per-client polling). It
+  SHALL NOT overlap two acquisitions of one resource. It SHALL NOT publish a result whose runtime
+  lease or generation is no longer current, or whose last holder has released it. It SHALL NOT send
+  a placeholder before a result exists. Malformed declarations SHALL be rejected and well-formed
+  unknown owners ignored. Interest SHALL NOT grant operation authority, select or wake a host, or
+  change a view filter.
 
 #### Scenario: Two browsers hold one host
 
@@ -657,24 +680,29 @@ change a view filter.
 ### Requirement: Service incarnation and based aggregate replies
 
 Each World service start SHALL issue a random `service_incarnation`, sent in the
-WebSocket hello and every `world.snapshot` reply. The hello SHALL advertise
-`world_observation_v1`. Runtime generations and service incarnation SHALL remain
-separate fences; restarting both hosts at generation 1 SHALL NOT admit a base
-from the previous service as current.
+WebSocket hello and every `world.snapshot` reply.
 
-The service SHALL accept an optional `base` containing `service_incarnation` and
-at most 64 `hosts`, each with a unique `connection_id`, a nonnegative integer
-`generation`, and a nonempty opaque `token` of at most 64 characters. Invalid bases
-SHALL be refused before host acquisition, without default routing.
+#### Scenario: Observation bases, tokens and replacement
 
-Every reply SHALL include each host's token, null when no snapshot exists. Equal
-tokens SHALL identify equal projected snapshot content and producing generation.
-Only when incarnation, connection, runtime generation, snapshot generation and
-token all match the base SHALL the service omit topology with `unchanged: true`.
-A confirmation SHALL include current state, generation, snapshot generation,
-staleness, actionability and errors. Every other host SHALL receive a complete
-replacement through the bounded existing observation and chunk transport path.
-Service-side snapshot consumers SHALL continue to receive complete topology.
+- **WHEN** World exchanges based aggregate replies
+- **THEN** The hello SHALL advertise
+  `world_observation_v1`. Runtime generations and service incarnation SHALL remain
+  separate fences; restarting both hosts at generation 1 SHALL NOT admit a base
+  from the previous service as current.
+
+  The service SHALL accept an optional `base` containing `service_incarnation` and
+  at most 64 `hosts`, each with a unique `connection_id`, a nonnegative integer
+  `generation`, and a nonempty opaque `token` of at most 64 characters. Invalid bases
+  SHALL be refused before host acquisition, without default routing.
+
+  Every reply SHALL include each host's token, null when no snapshot exists. Equal
+  tokens SHALL identify equal projected snapshot content and producing generation.
+  Only when incarnation, connection, runtime generation, snapshot generation and
+  token all match the base SHALL the service omit topology with `unchanged: true`.
+  A confirmation SHALL include current state, generation, snapshot generation,
+  staleness, actionability and errors. Every other host SHALL receive a complete
+  replacement through the bounded existing observation and chunk transport path.
+  Service-side snapshot consumers SHALL continue to receive complete topology.
 
 #### Scenario: One host changes
 - **WHEN** a caller sends a base for two hosts and only one projected snapshot changes
@@ -692,16 +720,21 @@ Service-side snapshot consumers SHALL continue to receive complete topology.
 ### Requirement: Browser admission of based observation
 
 A browser SHALL send its held base only when the hello advertises
-`world_observation_v1`. It SHALL apply each reply as one publication, retaining
-unchanged content by identity and applying current metadata. A confirmation SHALL
-NOT restore actionability retired by the browser's qualified client.
+`world_observation_v1`.
 
-A confirmation for content no longer held SHALL discard the entire reply and
-trigger one request without a base. A changed incarnation SHALL prevent reuse of
-all old content, and replies from another incarnation SHALL be rejected. A base
-refusal SHALL disable further bases on that socket. Unrelated transient storage or
-read failures SHALL NOT disable negotiated bases. Existing coalescing, fallback
-refresh and chunk transport SHALL remain in place for negotiated and older clients.
+#### Scenario: Browser base admission and repair
+
+- **WHEN** a browser handles based observation
+- **THEN** It SHALL apply each reply as one publication, retaining
+  unchanged content by identity and applying current metadata. A confirmation SHALL
+  NOT restore actionability retired by the browser's qualified client.
+
+  A confirmation for content no longer held SHALL discard the entire reply and
+  trigger one request without a base. A changed incarnation SHALL prevent reuse of
+  all old content, and replies from another incarnation SHALL be rejected. A base
+  refusal SHALL disable further bases on that socket. Unrelated transient storage or
+  read failures SHALL NOT disable negotiated bases. Existing coalescing, fallback
+  refresh and chunk transport SHALL remain in place for negotiated and older clients.
 
 #### Scenario: Transient database failure
 - **WHEN** a based pull fails because the database is temporarily locked
@@ -723,17 +756,21 @@ refresh and chunk transport SHALL remain in place for negotiated and older clien
 ### Requirement: Incremental observation preparation
 
 Admitted observations and document or mark changes SHALL prepare only their readers.
-Rooms SHALL reuse their prepared presentation when their observation slice and
-owner/presentation inputs are unchanged. Appearance, relations, profiles, watches,
-seen marks and Town master SHALL invalidate only the readers of the changed inputs.
-Host and World counts, attention and summaries SHALL use per-room contributions.
 
-A view's topology SHALL be prepared only for mounted consumers and their consumed
-Hosts/watch projection. Changes outside that projection SHALL update aggregate World
-data without preparing hidden view rooms. The Board document
-SHALL remain available for appearance and relations in all views. A newly selected
-view SHALL finish missing model preparation before presentation. Incremental output
-SHALL equal complete preparation of the same observation, documents and marks.
+#### Scenario: Consumer invalidation and preparation
+
+- **WHEN** World prepares observations or documents for views
+- **THEN** Rooms SHALL reuse their prepared presentation when their observation slice and
+  owner/presentation inputs are unchanged. Appearance, relations, profiles, watches,
+  seen marks and Town master SHALL invalidate only the readers of the changed inputs.
+  Host and World counts, attention and summaries SHALL use per-room contributions.
+
+  A view's topology SHALL be prepared only for mounted consumers and their consumed
+  Hosts/watch projection. Changes outside that projection SHALL update aggregate World
+  data without preparing hidden view rooms. The Board document
+  SHALL remain available for appearance and relations in all views. A newly selected
+  view SHALL finish missing model preparation before presentation. Incremental output
+  SHALL equal complete preparation of the same observation, documents and marks.
 
 #### Scenario: One room changes
 - **WHEN** one agent changes status in a host with ten rooms
@@ -764,24 +801,29 @@ SHALL equal complete preparation of the same observation, documents and marks.
 
 World SHALL bind each reused SSH command connection to its owning runtime's private
 control path, preserve the service user's OpenSSH policy, and never substitute a
-master belonging to another connection or generation. Background command sessions
-SHALL leave capacity for interactive commands; queueing and any safe read retry
-SHALL spend the caller's deadline, including recovery health checks. Retirement
-SHALL abort queued work before process dispatch. Runtime command helpers SHALL
-require their owning caller's runner and SHALL NOT substitute a module-global
-command runner. A failed-start master whose exit
-is unconfirmed SHALL retain child/path ownership and prevent replacement.
-Mutating commands SHALL NOT be retried after an ambiguous master failure.
+master belonging to another connection or generation.
 
-On-demand local and reverse forwards SHALL require authentication, an explicit
-connection ID and current runtime generation. As upstream, browser forwarding
-controls SHALL be offered only on pages served over loopback, because listeners
-bind on the service host. The service SHALL NOT add a forwarding-specific
-WebSocket-peer gate. The service SHALL own
-forward state independently of views, bound live processes and discovery, refuse
-reverse exposure of its own listener/development proxy, and stop only the retiring
-runtime's forwards without automatically reopening them. Remote loopback is a
-requested bind subject to the SSH server's GatewayPorts policy.
+#### Scenario: SSH command ownership and forwarding
+
+- **WHEN** World runs SSH commands or manages forwards
+- **THEN** Background command sessions
+  SHALL leave capacity for interactive commands; queueing and any safe read retry
+  SHALL spend the caller's deadline, including recovery health checks. Retirement
+  SHALL abort queued work before process dispatch. Runtime command helpers SHALL
+  require their owning caller's runner and SHALL NOT substitute a module-global
+  command runner. A failed-start master whose exit
+  is unconfirmed SHALL retain child/path ownership and prevent replacement.
+  Mutating commands SHALL NOT be retried after an ambiguous master failure.
+
+  On-demand local and reverse forwards SHALL require authentication, an explicit
+  connection ID and current runtime generation. As upstream, browser forwarding
+  controls SHALL be offered only on pages served over loopback, because listeners
+  bind on the service host. The service SHALL NOT add a forwarding-specific
+  WebSocket-peer gate. The service SHALL own
+  forward state independently of views, bound live processes and discovery, refuse
+  reverse exposure of its own listener/development proxy, and stop only the retiring
+  runtime's forwards without automatically reopening them. Remote loopback is a
+  requested bind subject to the SSH server's GatewayPorts policy.
 
 #### Scenario: Two runtimes use the same SSH destination
 
