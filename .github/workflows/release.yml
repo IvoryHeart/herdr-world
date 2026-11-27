@@ -86,7 +86,7 @@ jobs:
               done
             fi
           fi
-      - uses: softprops/action-gh-release@3bb12739c298aeb8a4eeaf626c5b8d85266b0e65 # v2
+      - uses: softprops/action-gh-release@8a0cd651e5b2365bd640854a3fa5dfc70e4875f3 # v3.0.4
         with:
           files: candidate/github/*
           fail_on_unmatched_files: true
@@ -169,7 +169,7 @@ jobs:
           echo "merged=$merged" >> "$GITHUB_OUTPUT"
       # This standard action handles one URL. The standard PR action below
       # completes its SAME PR with our product's four URLs and install check.
-      - uses: mislav/bump-homebrew-formula-action@56a283fa15557e9abaa4bdb63b8212abc68e655c # v3
+      - uses: mislav/bump-homebrew-formula-action@f865c8b0dbebd6e263cc06782a0e974c61cf12d2 # v3
         if: steps.tap.outputs.branch == '' && steps.tap.outputs.merged != 'true'
         with:
           formula-name: ${{ steps.tap.outputs.formula }}
@@ -200,7 +200,7 @@ jobs:
       - name: Apply the exact tested product Formula and tap check
         if: steps.tap.outputs.merged != 'true'
         run: cp -R candidate/tap/. tap/
-      - uses: peter-evans/create-pull-request@22a9089034f40e5a961c8808d113e2c98fb63676 # v7
+      - uses: peter-evans/create-pull-request@3ffccacd46053766916f087ce41d627c0b8cf2d1 # v8.1.3
         if: steps.tap.outputs.merged != 'true'
         with:
           token: ${{ secrets.HOMEBREW_TAP_TOKEN }}
