@@ -19,6 +19,8 @@ import { worldBrowserSuites } from "./world-browser-suites";
  * `--full` (`check:delivery`) additionally runs every World/web browser test and
  * behavioral model. `--browser` runs the Chrome lanes; `--static` runs static
  * checks only, with independent commands running concurrently into separate logs.
+ * CI uses `--static-group=repository|types|build` on separate matrix runners
+ * to keep builds, type checking and repository analysis from competing for CPUs.
  * Heavy lanes share the machine-wide browser/verification slots;
  * non-browser units use a light slot. Logs are reset at the start of each run.
  */
@@ -33,6 +35,17 @@ type Lane = {
 const args = process.argv.slice(2);
 const browserOnly = args.includes("--browser");
 const staticOnly = args.includes("--static");
+const staticGroup = args
+  .find((arg) => arg.startsWith("--static-group="))
+  ?.slice("--static-group=".length);
+if (
+  staticGroup !== undefined &&
+  (!staticOnly || !["repository", "types", "build"].includes(staticGroup))
+) {
+  throw new Error(
+    "--static-group requires --static and one of: repository, types, build",
+  );
+}
 const full = args.includes("--full") || browserOnly || staticOnly;
 const base = args.find((arg) => arg.startsWith("--base="))?.slice(7);
 const scopeBase = args
@@ -91,6 +104,16 @@ const STATIC = [
   "help:check",
 ].map((script) => ["bun", "run", script]);
 STATIC.push(["bun", "scripts/check-knowledge-map-links.ts"]);
+const staticCommands = STATIC.filter((command) => {
+  const script = command[2];
+  const group =
+    script === "build"
+      ? "build"
+      : script === "typecheck:quick" || script === "typecheck:bun"
+        ? "types"
+        : "repository";
+  return staticGroup === undefined || group === staticGroup;
+});
 
 function trackedTests() {
   const result = Bun.spawnSync(["git", "ls-files"], { cwd: root });
@@ -198,7 +221,7 @@ const selection = scope();
 const { busy, quiet, verification } = plan(selection);
 const lanes = [...verification, ...busy, ...quiet];
 mkdirSync(logs, { recursive: true });
-for (const name of ["static", "unit", "browser", "quiet", "verification"])
+for (const name of ["unit", "browser", "quiet", "verification"])
   writeFileSync(join(logs, `${name}.log`), "");
 console.info(
   `[gate] ${staticOnly ? "static" : browserOnly ? "browser" : full ? "full" : tooling ? "tooling" : "changed"}: ${selection.why}; lanes: ${[...(browserOnly ? [] : ["static"]), ...lanes.map((lane) => lane.name)].join(", ")}`,
@@ -211,7 +234,7 @@ const results: Result[] = [];
 let firstStaticFailure: Result | undefined;
 if (!browserOnly) {
   const checked = await Promise.all(
-    STATIC.map(async (command) => {
+    staticCommands.map(async (command) => {
       const result = await runLane({
         name: `static-${basename(command.at(-1)!, ".ts").replaceAll(":", "-")}`,
         queue: null,
@@ -230,7 +253,7 @@ if (!browserOnly) {
     appendFileSync(
       process.env.GITHUB_STEP_SUMMARY,
       [
-        "## Static checks",
+        `## Static checks${staticGroup ? ` (${staticGroup})` : ""}`,
         "",
         verdict,
         "",
@@ -238,7 +261,7 @@ if (!browserOnly) {
         "| --- | --- | ---: | --- |",
         ...checked.map(
           (result, index) =>
-            `| \`${STATIC[index]!.join(" ")}\` | ${result.code === 0 ? "passed" : `failed (exit ${result.code})`} | ${result.seconds.toFixed(1)} | \`${basename(result.log)}\` |`,
+            `| \`${staticCommands[index]!.join(" ")}\` | ${result.code === 0 ? "passed" : `failed (exit ${result.code})`} | ${result.seconds.toFixed(1)} | \`${basename(result.log)}\` |`,
         ),
         "",
         "",

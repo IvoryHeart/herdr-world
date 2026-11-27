@@ -52,6 +52,7 @@ type WorkflowJob = {
       suite?: string[];
       suites?: string[];
       order?: string[];
+      group?: string;
     };
   };
   steps: WorkflowStep[];
@@ -815,8 +816,25 @@ test("release package verification extracts into a temp folder tar would unescap
 
 test("Static checks retain concurrent command logs even after failure", () => {
   const job = workflow.jobs.static!;
+  expect(job.strategy?.["fail-fast"]).toBe(false);
+  expect(job.strategy?.matrix?.group).toBe(
+    '${{ fromJSON(needs.validation-scope.outputs.mode == \'docs\' && \'["repository"]\' || \'["repository","types","build"]\') }}',
+  );
+  expect(job.name).toBe("Static checks (${{ matrix.group }})");
+  expect(job.needs).toBe("validation-scope");
+  expect(job["continue-on-error"] ?? false).toBe(false);
   expect(
-    job.steps.find((step) => step.run === "bun run check:static"),
+    job.steps.find((step) => step.uses?.startsWith("actions/checkout@"))?.with,
+  ).toMatchObject({
+    "fetch-depth": 0,
+    filter: "blob:none",
+    ref: "${{ github.sha }}",
+  });
+  expect(
+    job.steps.find(
+      (step) =>
+        step.run === "bun run check:static --static-group=${{ matrix.group }}",
+    ),
   ).toMatchObject({
     if: "needs.validation-scope.outputs.mode != 'docs'",
   });
@@ -827,7 +845,7 @@ test("Static checks retain concurrent command logs even after failure", () => {
     if: "always() && needs.validation-scope.outputs.mode != 'docs'",
     uses: "actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9",
     with: {
-      name: "static-check-logs",
+      name: "static-check-logs-${{ matrix.group }}",
       path: ".agents/delivery/lanes/static-*.log",
       "include-hidden-files": true,
       "if-no-files-found": "error",

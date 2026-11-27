@@ -27,8 +27,15 @@ alongside non-browser shards. Its independent commands run concurrently, each
 with a separate `static-*.log` in `.agents/delivery/lanes/`; any failure fails the
 lane after all commands finish. The terminal names the first completed failure,
 and CI's Static checks summary lists every command, outcome, duration and log.
-Download the `static-check-logs` artifact for complete output, including failed
-checks. Static checks never retry. `check:changed` remains an explicit local affected
+CI splits the same commands across three Static checks matrix runners: `build`
+runs the production build, `types` runs both type commands, and `repository` runs
+the other nine checks. This avoids CPU contention on a single hosted runner;
+local `check:static` still runs all twelve concurrently. Each runner publishes
+its own summary and `static-check-logs-<group>` artifact, including failed checks.
+Every matrix runner must pass; failure never cancels another group. Documentation
+changes retain their existing `check:docs` command on one repository runner.
+Checkout retains full Git history for ratchets, filtering historical file blobs.
+Static checks never retry. `check:changed` remains an explicit local affected
 check and `check:delivery` an explicit complete local gate. Neither is a push hook.
 `check:source` is a local compatibility command, not a release gate.
 `check:pr-body <file> <base-ref>` validates the exact committed PR description in

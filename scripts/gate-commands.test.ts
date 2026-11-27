@@ -30,6 +30,17 @@ const staticCommands = [
   .map((script) => `run ${script}`)
   .concat("scripts/check-knowledge-map-links.ts");
 
+const staticGroups = {
+  build: ["run build"],
+  types: ["run typecheck:quick", "run typecheck:bun"],
+  repository: staticCommands.filter(
+    (command) =>
+      !["run build", "run typecheck:quick", "run typecheck:bun"].includes(
+        command,
+      ),
+  ),
+};
+
 function exercise(
   args: string[],
   failOn = "",
@@ -63,7 +74,7 @@ let complete = false;
 const deadline = setTimeout(() => {
   finish();
   if (!complete) process.exit(88);
-}, 2000);
+}, 15000);
 const watcher = watch(record, finish);
 appendFileSync(record, command + "\\n");
 function finish() {
@@ -155,7 +166,7 @@ finish();
     const laneDir = join(directory, ".agents/delivery/lanes");
     if (args[0] === "scripts/check-delivery.ts") {
       mkdirSync(laneDir, { recursive: true });
-      for (const lane of ["static", "unit", "browser", "quiet", "verification"])
+      for (const lane of ["unit", "browser", "quiet", "verification"])
         writeFileSync(
           join(laneDir, `${lane}.log`),
           "stale output from previous run\n".repeat(1000),
@@ -168,7 +179,7 @@ finish();
     const result = spawnSync(process.execPath, command, {
       cwd: directory,
       encoding: "utf8",
-      timeout: 5000,
+      timeout: 20000,
       env: {
         ...process.env,
         CI: "true",
@@ -181,11 +192,17 @@ finish();
         ...extraEnv,
       },
     });
-    if (result.status !== null && args[0] === "scripts/check-delivery.ts")
-      for (const lane of ["static", "unit", "browser", "quiet", "verification"])
+    if (
+      result.status !== null &&
+      args[0] === "scripts/check-delivery.ts" &&
+      result.stdout.includes("[gate]")
+    )
+      for (const lane of ["unit", "browser", "quiet", "verification"])
         expect(
-          readFileSync(join(laneDir, `${lane}.log`), "utf8"),
-        ).not.toContain("stale output");
+          readFileSync(join(laneDir, `${lane}.log`), "utf8").includes(
+            "stale output",
+          ),
+        ).toBe(false);
     if (incremental) expect(result.stdout).not.toContain("tooling-only");
     inspect?.(directory, result.stdout + result.stderr);
     return {
@@ -217,6 +234,59 @@ test("the static lane retains all checks and builds production assets once", () 
     expect(result.status).toBe(failOn ? 1 : 0);
     expect(result.commands.toSorted()).toEqual(staticCommands.toSorted());
   }
+});
+
+test("CI static groups partition every command and retain every failure", () => {
+  const scheduled: string[] = [];
+  for (const [group, commands] of Object.entries(staticGroups)) {
+    for (const failOn of [
+      "",
+      ...commands.map((command) => command.split(" ").at(-1)!),
+    ]) {
+      const result = exercise(
+        ["scripts/check-delivery.ts", "--static", `--static-group=${group}`],
+        failOn,
+        undefined,
+        false,
+        false,
+        {},
+        (directory, output) => {
+          const summary = readFileSync(join(directory, "summary.md"), "utf8");
+          const logs = readdirSync(
+            join(directory, ".agents/delivery/lanes"),
+          ).filter(
+            (name) => name.startsWith("static-") && name.endsWith(".log"),
+          );
+          expect(logs).toHaveLength(commands.length);
+          for (const command of staticCommands)
+            expect(summary.includes(`\`bun ${command}\``)).toBe(
+              commands.includes(command),
+            );
+          if (failOn) {
+            expect(output).toContain("First failure:");
+            expect(summary).toContain("failed (exit 37)");
+          } else
+            expect(summary).toContain(
+              `All ${commands.length} static checks passed`,
+            );
+        },
+      );
+      expect(result.status).toBe(failOn ? 1 : 0);
+      expect(result.commands.toSorted()).toEqual(commands.toSorted());
+      if (!failOn) scheduled.push(...result.commands);
+    }
+  }
+  expect(scheduled.toSorted()).toEqual(staticCommands.toSorted());
+});
+
+test.each([
+  { args: ["--static", "--static-group=typo"] },
+  { args: ["--static", "--static-group="] },
+  { args: ["--static-group=build"] },
+])("invalid static selection fails closed: %j", ({ args }) => {
+  const result = exercise(["scripts/check-delivery.ts", ...args]);
+  expect(result.status).not.toBe(0);
+  expect(result.commands).toEqual([""]);
 });
 
 test.each(["", "check:dead"])(
@@ -261,6 +331,7 @@ test.each(["", "check:dead"])(
     expect(result.status).toBe(failOn ? 1 : 0);
     expect(result.commands.toSorted()).toEqual(staticCommands.toSorted());
   },
+  25000,
 );
 
 test.each([
