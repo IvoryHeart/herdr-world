@@ -17,11 +17,11 @@ concurrency:
 
 jobs:
   shards:
-    name: Behavioral models (${{ matrix.shard }}/3)
+    name: Behavioral models (${{ matrix.shard }}/26)
     strategy:
       fail-fast: false
       matrix:
-        shard: [1, 2, 3]
+        shard: [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23, 24, 25, 26]
     runs-on: ubuntu-24.04
     timeout-minutes: 20
     steps:
@@ -41,17 +41,6 @@ jobs:
           distribution: temurin
           java-version: ${{ env.VERIFICATION_JAVA_VERSION }}
           architecture: x64
-      - run: bun install --frozen-lockfile
-      - uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
-        with:
-          path: ~/.cache/herdr-world/verification/checker
-          key: verification-checker-${{ runner.os }}-${{ hashFiles('tools/quint/checker.json') }}
-      - name: Install locked development tooling and verified checker
-        run: bun run verification:setup
-      - name: Validate maintained types and tooling notices
-        run: |
-          bun run verification:typecheck
-          bun run verification:notices:check
       - name: Hash model, adapter, replay, tooling and seed inputs
         id: content
         run: bun scripts/ci-model-cache.ts key ${{ matrix.shard }}
@@ -59,14 +48,29 @@ jobs:
         if: github.event_name == 'pull_request'
         with:
           path: .agents/model-cache/${{ matrix.shard }}
-          key: model-evidence-v1-${{ matrix.shard }}-${{ steps.content.outputs.hash }}
+          key: model-evidence-v2-${{ matrix.shard }}-${{ steps.content.outputs.hash }}
       - name: Validate reusable model evidence
         id: reuse
         if: github.event_name == 'pull_request'
         run: bun scripts/ci-model-cache.ts restore ${{ matrix.shard }}
+      - run: bun install --frozen-lockfile
+        if: steps.reuse.outputs.reused != 'true'
+      - if: steps.reuse.outputs.reused != 'true'
+        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: ~/.cache/herdr-world/verification/checker
+          key: verification-checker-${{ runner.os }}-${{ hashFiles('tools/quint/checker.json') }}
+      - name: Install locked development tooling and verified checker
+        if: steps.reuse.outputs.reused != 'true'
+        run: bun run verification:setup
+      - name: Validate maintained types and tooling notices
+        if: steps.reuse.outputs.reused != 'true'
+        run: |
+          bun run verification:typecheck
+          bun run verification:notices:check
       - name: Run all accepted models within enforced resource limits
         if: steps.reuse.outputs.reused != 'true'
-        run: bun run verification:resources --system --shard=${{ matrix.shard }}/3
+        run: bun run verification:resources --system --shard=${{ matrix.shard }}/26
       - name: Exercise a failing candidate and verify retained diagnostics
         if: steps.reuse.outputs.reused != 'true'
         run: bun run verification:diagnostic-control
@@ -74,10 +78,10 @@ jobs:
         if: steps.reuse.outputs.reused != 'true'
         run: bun scripts/ci-model-cache.ts save ${{ matrix.shard }}
       - uses: actions/cache/save@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
-        if: success() && steps.reuse.outputs.reused != 'true'
+        if: success() && github.event_name == 'push' && github.ref == 'refs/heads/main'
         with:
           path: .agents/model-cache/${{ matrix.shard }}
-          key: model-evidence-v1-${{ matrix.shard }}-${{ steps.content.outputs.hash }}
+          key: model-evidence-v2-${{ matrix.shard }}-${{ steps.content.outputs.hash }}
       - name: Retain source-bound evidence manifests
         if: always()
         uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7

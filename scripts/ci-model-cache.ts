@@ -3,13 +3,21 @@ import { appendFileSync } from "node:fs";
 import { mkdir, readFile, readdir, writeFile } from "node:fs/promises";
 import { resolve } from "node:path";
 import { readVerificationResources } from "./verification-resources";
-import { contentKey } from "./ci-content-key";
+import { createHash } from "node:crypto";
+import { execFileSync } from "node:child_process";
+import { modelInputs } from "./ci-model-inputs";
+import { fingerprintInputs } from "./verification-evidence";
+import {
+  verificationJobs,
+  verificationJob,
+  modelPartScope,
+} from "./ci-model-plan";
 import { verificationShard, type Shard } from "./ci-verification";
 import type {
   InputFingerprint,
   VerificationManifest,
 } from "./verification-evidence";
-import limits from "../tools/quint/resources.json";
+import limits from "../tools/quint/model-resources.json";
 import checker from "../tools/quint/checker.json";
 import tooling from "../tools/quint/package.json";
 
@@ -52,7 +60,7 @@ export function validateModelBundle(
   assert(
     bundle.shard.complete &&
       bundle.shard.index === index &&
-      bundle.shard.total === 3 &&
+      bundle.shard.total === verificationJobs.length &&
       !bundle.shard.reuse,
     "Incomplete or recursively reused group",
   );
@@ -99,7 +107,7 @@ export function validateModelBundle(
     );
     assert.deepEqual(
       manifest.scope,
-      { kind: "focused", models: [record.model] },
+      modelPartScope(index),
       "Wrong cached case scope",
     );
     assert.deepEqual(
@@ -182,13 +190,29 @@ async function keyForToolIdentity(
     toolIdentity.platform,
     toolIdentity.arch,
   ].join("\n");
+  const job = verificationJob(index);
+  const files = execFileSync("git", ["ls-files", "-z"], { cwd: root })
+    .toString()
+    .split("\0")
+    .filter(Boolean);
+  const inputs = await fingerprintInputs(
+    root,
+    modelInputs(root, files, job.model),
+  );
+  const hash = createHash("sha256")
+    .update(
+      JSON.stringify({
+        schema: 2,
+        model: job.model,
+        part: job.part,
+        tools,
+        inputs,
+      }),
+    )
+    .digest("hex");
   return {
-    ...(await contentKey(
-      root,
-      "models",
-      JSON.stringify(verificationShard(index)),
-      tools,
-    )),
+    hash,
+    inputs,
     runtime: toolIdentity.runtime,
     toolIdentity,
   };

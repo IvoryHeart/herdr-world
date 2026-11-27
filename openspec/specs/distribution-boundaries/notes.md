@@ -13,6 +13,9 @@
 - `scripts/coverage.ts`
 - `scripts/coverage.test.ts`
 - `quint/models.ts`
+- `scripts/ci-model-plan.ts`, `scripts/ci-model-inputs.ts`, `scripts/ci-model-cache.ts` (independent model input closures and main-only evidence reuse)
+- `scripts/ci-model-parts.ts`, `scripts/ci-verification.ts` (complete split-model evidence and canonical aggregation)
+- `tools/quint/model-resources.json`, `tools/quint/tlc-ci.json` (owner-approved four-CPU model-only CI envelope)
 - `scripts/features.ts`
 - `scripts/build-pages.ts`
 - `scripts/pages-features.ts`

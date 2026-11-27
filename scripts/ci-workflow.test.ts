@@ -1,3 +1,4 @@
+import { verificationJobs } from "./ci-model-plan";
 import { expect, test } from "bun:test";
 import {
   mkdirSync,
@@ -541,10 +542,19 @@ test("accepted behavioral evidence stays unfiltered whenever its protected depen
     permissions: Record<string, string>;
     jobs: Record<string, WorkflowJob & { "timeout-minutes": number }>;
   };
+  expect(workflow.jobs["model-evidence"].if).toBe(
+    "github.event_name == 'push' && github.ref == 'refs/heads/main'",
+  );
+  expect(workflow.jobs["model-evidence"].uses).toBe(
+    "./.github/workflows/behavioral-verification.yml",
+  );
+  expect(workflow.jobs.delivery.needs).not.toContain("model-evidence");
   expect(candidate.on.workflow_call).toBeNull();
   expect(candidate.permissions).toEqual({ contents: "read" });
   const job = candidate.jobs.shards;
-  expect(job.strategy?.matrix?.shard).toEqual([1, 2, 3]);
+  expect(job.strategy?.matrix?.shard).toEqual(
+    verificationJobs.map((_, index) => index + 1),
+  );
   expect(job.strategy?.["fail-fast"]).toBe(false);
   expect(candidate.jobs.candidate.needs).toBe("shards");
   expect(candidate.jobs.candidate.name).toBe("Behavioral verification");
@@ -599,13 +609,44 @@ test("accepted behavioral evidence stays unfiltered whenever its protected depen
       (step) => step.run === "bun scripts/ci-verification.ts aggregate",
     ),
   ).toBe(true);
+  const keyStep = job.steps.findIndex((step) => step.id === "content");
+  const restoreStep = job.steps.findIndex((step) => step.id === "reuse");
+  const setupStep = job.steps.findIndex(
+    (step) => step.run === "bun run verification:setup",
+  );
+  expect(keyStep).toBeLessThan(restoreStep);
+  expect(restoreStep).toBeLessThan(setupStep);
+  expect(job.steps[setupStep].if).toBe("steps.reuse.outputs.reused != 'true'");
+  const save = job.steps.find((step) =>
+    step.uses?.startsWith("actions/cache/save@"),
+  )!;
+  expect(save.if).toBe(
+    "success() && github.event_name == 'push' && github.ref == 'refs/heads/main'",
+  );
+  const restore = job.steps.find((step) =>
+    step.uses?.startsWith("actions/cache/restore@"),
+  )!;
+  expect(restore.if).toBe("github.event_name == 'pull_request'");
+  const localLimits = JSON.parse(
+    await Bun.file("tools/quint/resources.json").text(),
+  );
+  const modelLimits = JSON.parse(
+    await Bun.file("tools/quint/model-resources.json").text(),
+  );
+  expect(localLimits.cpuQuotaPercent).toBe(200);
+  expect(modelLimits).toEqual({ ...localLimits, cpuQuotaPercent: 400 });
+  const localTlc = JSON.parse(await Bun.file("tools/quint/tlc.json").text());
+  expect(JSON.parse(await Bun.file("tools/quint/tlc-ci.json").text())).toEqual({
+    ...localTlc,
+    workers: 4,
+  });
   expect(job.if).toBeUndefined();
   expect(job["continue-on-error"]).toBeUndefined();
   expect(job["timeout-minutes"]).toBe(20);
   const verify = job.steps.find(
     (step) =>
       step.run ===
-      "bun run verification:resources --system --shard=${{ matrix.shard }}/3",
+      "bun run verification:resources --system --shard=${{ matrix.shard }}/26",
   )!;
   expect(verify).toBeDefined();
   expect(verify.if).toBe("steps.reuse.outputs.reused != 'true'");

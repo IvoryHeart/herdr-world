@@ -14,6 +14,8 @@ export type VerificationManifest = {
     kind: "focused" | "full-sequential" | "full-parallel";
     models: string[];
     workers?: number;
+    /** Partial CI evidence cannot substitute for a complete canonical model. */
+    part?: string;
   };
   execution?: {
     workers: number;
