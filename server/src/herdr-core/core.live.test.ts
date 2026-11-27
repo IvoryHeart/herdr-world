@@ -185,14 +185,27 @@ describe("herdr-core live (real release binary)", () => {
     60_000,
   );
 
-  live(
+  test.skipIf(!bin || !Bun.which("cc"))(
     "core agents reach World's read model with core's status and the app's rooms",
     async () => {
       const core = new ScratchCore(bin!);
       scratch.push(core);
       await core.start();
       const msg = Buffer.from("Which branch?").toString("base64");
-      // OSC 7501 as a harness hook writes it: a blocked Claude Code asking.
+      // A native Claude stand-in keeps the reporter in the foreground. Plain
+      // sleep leaves a departed Claude's report, which World correctly idles.
+      const claude = join(core.root, "claude");
+      const compile = Bun.spawnSync(["cc", "-x", "c", "-", "-o", claude], {
+        stdin: Buffer.from(`#include <stdio.h>
+#include <unistd.h>
+int main(void) {
+  printf("\\033]7501;state=blocked:kind=question:app=claude-code:msg=${msg}\\033\\\\");
+  fflush(stdout);
+  pause();
+  return 0;
+}`),
+      });
+      expect(compile.exitCode).toBe(0);
       await core.hc(
         "run",
         "--bg",
@@ -206,9 +219,7 @@ describe("herdr-core live (real release binary)", () => {
         "--label",
         "where=web / review",
         "--",
-        "sh",
-        "-c",
-        `printf '\\033]7501;state=blocked:kind=question:app=claude-code:msg=${msg}\\033\\\\'; exec sleep 600`,
+        claude,
       );
       // A turn that ends while World watches, then a plain shell.
       await core.hc(
@@ -257,6 +268,15 @@ describe("herdr-core live (real release binary)", () => {
         status_message: "Which branch?",
         workspace_id: "hc:space:s1",
         runtime: "herdr-core",
+      });
+      const native = JSON.parse(
+        await core.hc("get", "--json", String(byName.get("reviewer"))),
+      );
+      expect(native.status).toMatchObject({
+        state: "blocked",
+        kind: "question",
+        app: "claude-code",
+        msg: "Which branch?",
       });
       expect(
         view!.workspaces.find((s) => s.workspace_id === "hc:space:s1")?.label,

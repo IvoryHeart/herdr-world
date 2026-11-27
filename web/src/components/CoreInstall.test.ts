@@ -36,7 +36,7 @@ const confirm = (simulated: boolean, core: string | null = null) =>
         dir: "~/.local/bin",
         login: "systemd",
       },
-      version: "0.1.21",
+      version: "0.1.22",
       session: "default",
       simulated,
       onConfirm() {},

@@ -9,7 +9,7 @@ import sys
 import traceback
 
 HARNESS_VERSIONS = {'claude': '2.1.328', 'codex': '0.170.0'}
-CORE_VERSION = '0.1.21'
+CORE_VERSION = '0.1.22'
 PAIRS = [(runtime, kind) for runtime in ('herdr', 'herdr-core')
          for kind in ('claude', 'codex')]
 
