@@ -18,8 +18,7 @@
 - `web/src/world/town/townLens.test.ts`
 - `web/src/world/usage/UsageLens.tsx`, `web/src/world/usage/usageModel.ts`, `web/src/world/usage/UsageBreakdown.tsx`
 - `web/src/world/town/TownObservatory.tsx`
-- `web/src/world/usage/usageModel.test.ts`
-- `web/src/world/usage/UsageScreens.dom.test.ts`
+- `web/src/world/usage/usageModel.test.ts`, `web/src/world/usage/UsageScreens.dom.test.ts`
 - `web/src/world/town/townObservatory.test.ts`
 - `web/src/world/usage/UsageLens.browser.tsx`
 - `web/src/world/TownView.tsx`
