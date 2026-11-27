@@ -117,10 +117,12 @@ from `shared/testing/timings.ts`, and a spawned process with
 the set. `bun run check:test-waits` (static lane) fails on a new fixed sleep in a
 test file; `scripts/test-waits-allowlist.json` only shrinks. Every pausing line
 counts, including each call of a pausing helper and pauses inside one. A tick of
-at most 10 ms is exempt only directly in a loop that polls: its condition or a
-conditional exit reads observable state. A tick in a fixed-count loop, a loop
-over a collection or the clock, or a callback declared in a loop (a test body)
-counts. After removing sleeps, `bun scripts/check-test-waits.ts --update`
+at most 10 ms is exempt only directly in a loop that polls, where every
+iteration checks the thing it waits for: its condition or a conditional exit
+reads observable state, or it leaves after real work succeeds in `try`. A tick
+in a loop bounded only by a count (`i = i + 1`), a collection or elapsed time
+(`Date.now() - started < 500`), one whose exit only a counter gates, or a
+callback declared in a loop (a test body) counts. After removing sleeps, `bun scripts/check-test-waits.ts --update`
 lowers its entry.
 
 ## Development tools

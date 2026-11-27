@@ -9,10 +9,10 @@
  * of a helper that pauses (`settle()`, `sleep(80)`), in the same file or
  * imported from another test file. Not pauses: a 0 ms yield, a deadline
  * timer that rejects, and a poll tick of at most `POLL_TICK_MS` directly in a
- * loop that polls, one whose condition or conditional exit reads observable
- * state (the last resort when nothing signals). A tick in a fixed-count loop,
- * a loop over a collection or the clock, or a callback that runs later (a
- * test body declared in a loop) is a pause.
+ * loop that polls, where every iteration checks the thing it waits for (the
+ * last resort when nothing signals). A tick in a loop bounded only by a count,
+ * a collection or elapsed time, one whose exit only a counter gates, or a
+ * callback that runs later (a test body declared in a loop) is a pause.
  *
  * `bun scripts/check-test-waits.ts --update` lowers the allowlist to the
  * current counts; it never raises one.
@@ -78,12 +78,59 @@ function children(node: Node): Node[] {
   return out;
 }
 
-const CLOCK = /^(?:Date|performance)$/;
-const isClock = (node: Node) =>
-  node.type === "CallExpression" &&
-  (node.callee as Node).type === "MemberExpression" &&
-  isIdentifier((node.callee as Node).object, CLOCK) &&
-  isIdentifier((node.callee as Node).property, "now");
+/** A clock read: `Date.now()`, `performance.now()`, `Bun.nanoseconds()`, `new Date()`. */
+const isClock = (node: Node) => {
+  if (node.type === "NewExpression")
+    return (
+      isIdentifier(node.callee, "Date") && !(node.arguments as Node[]).length
+    );
+  if (node.type !== "CallExpression") return false;
+  const callee = node.callee as Node;
+  if (callee.type !== "MemberExpression") return false;
+  return (
+    ((isIdentifier(callee.object, "Date") ||
+      isIdentifier(callee.object, "performance")) &&
+      isIdentifier(callee.property, "now")) ||
+    (isIdentifier(callee.object, "Bun") &&
+      isIdentifier(callee.property, "nanoseconds"))
+  );
+};
+
+/** Whether an expression reads the clock anywhere outside nested functions. */
+function readsClock(node: Node) {
+  let found = false;
+  within(node, (current) => {
+    if (isClock(current)) found = true;
+  });
+  return found;
+}
+
+/**
+ * Names a file sets from the clock (`const started = Date.now()`,
+ * `deadline = performance.now() + 500`): a loop bounded by them waits on
+ * elapsed time, not on the thing it checks.
+ */
+function clockNames(program: Node) {
+  const out = new Set<string>();
+  const visit = (node: Node) => {
+    if (
+      node.type === "VariableDeclarator" &&
+      isIdentifier(node.id) &&
+      node.init &&
+      readsClock(node.init as Node)
+    )
+      out.add((node.id as Node).name as string);
+    if (
+      node.type === "AssignmentExpression" &&
+      isIdentifier(node.left) &&
+      readsClock(node.right as Node)
+    )
+      out.add((node.left as Node).name as string);
+    for (const child of children(node)) visit(child);
+  };
+  visit(program);
+  return out;
+}
 const COMPARISON = new Set(["<", "<=", ">", ">=", "==", "===", "!=", "!=="]);
 
 /** Walks a subtree without entering nested functions. */
@@ -96,20 +143,45 @@ function within(node: Node, visit: (node: Node, path: Node[]) => void) {
   step(node, []);
 }
 
-/** Identifiers a loop counts with: `i++`, `n -= 1`. */
+const isStep = (node: Node) =>
+  node.type === "NumericLiteral" ||
+  node.type === "BigIntLiteral" ||
+  isIdentifier(node);
+
+/**
+ * Identifiers a loop counts with: `i++`, `n -= 1`, `i = i + 1`, and anything
+ * a `for` statement's update step sets.
+ */
 function counters(loop: Node) {
   const out = new Set<string>();
-  within(loop, (node) => {
-    const target =
-      node.type === "UpdateExpression"
-        ? (node.argument as Node)
-        : node.type === "AssignmentExpression" &&
-            (node.operator === "+=" || node.operator === "-=") &&
-            (node.right as Node).type === "NumericLiteral"
-          ? (node.left as Node)
-          : null;
+  const counter = (target: Node | undefined) => {
     if (target && isIdentifier(target)) out.add(target.name as string);
+  };
+  within(loop, (node) => {
+    if (node.type === "UpdateExpression") counter(node.argument as Node);
+    if (node.type !== "AssignmentExpression") return;
+    const left = node.left as Node;
+    const right = node.right as Node;
+    if (node.operator !== "=") {
+      if (isStep(right)) counter(left);
+      return;
+    }
+    // `i = i + 1`, `n = 2 * n`: the name stepped by a constant or a name.
+    if (
+      isIdentifier(left) &&
+      right.type === "BinaryExpression" &&
+      [right.left as Node, right.right as Node].some((side) =>
+        isIdentifier(side, left.name as string),
+      ) &&
+      [right.left as Node, right.right as Node].every(isStep)
+    )
+      counter(left);
   });
+  if (loop.type === "ForStatement" && loop.update)
+    within(loop.update as Node, (node) => {
+      if (node.type === "UpdateExpression") counter(node.argument as Node);
+      if (node.type === "AssignmentExpression") counter(node.left as Node);
+    });
   return out;
 }
 
@@ -122,11 +194,11 @@ function observes(test: Node, counted: ReadonlySet<string>): boolean {
     case "BinaryExpression":
       if (COMPARISON.has(test.operator as string)) {
         const sides = [test.left as Node, test.right as Node];
-        // `i < cases.length` counts; `Date.now() < deadline` is a deadline.
+        // `i < cases.length` counts; `Date.now() - started < 500` is a deadline.
         if (
           sides.some(
             (side) =>
-              isClock(side) ||
+              readsClock(side) ||
               (isIdentifier(side) && counted.has(side.name as string)),
           )
         )
@@ -158,13 +230,24 @@ function observes(test: Node, counted: ReadonlySet<string>): boolean {
   }
 }
 
+/** What a file's loops are judged against. */
+type LoopContext = {
+  /** Names set from the clock (`started`, `deadline`). */
+  clocks: ReadonlySet<string>;
+  /** Primitive pauses and local helpers that pause: no work to wait on. */
+  pauses: (call: Node) => boolean;
+};
+
 /**
- * A poll: a loop whose condition, or a conditional exit (`if (check())
- * return`, a `break` after work that succeeded in `try`), reads observable
- * state. A loop over a fixed count, a collection or the clock only pauses.
+ * A poll: a loop where every iteration checks the thing it waits for. Its
+ * condition reads observable state, or it has a conditional exit that does
+ * (`if (check()) return`), or it leaves after real work succeeded in `try`
+ * (`try { await fetch(url); return; } catch {}`). A loop bounded only by a
+ * count, a collection or the clock, or whose exit only a counter or the clock
+ * gates, merely pauses.
  */
-function polls(loop: Node): boolean {
-  const counted = counters(loop);
+function polls(loop: Node, context: LoopContext): boolean {
+  const counted = new Set([...counters(loop), ...context.clocks]);
   if (loop.test && observes(loop.test as Node, counted)) return true;
   let exits = false;
   within(loop.body as Node, (node, path) => {
@@ -180,16 +263,36 @@ function polls(loop: Node): boolean {
       )
     )
       return;
-    exits = path.some((outer, index) => {
-      if (outer.type === "TryStatement") return path[index + 1] === outer.block;
-      return (
-        (outer.type === "IfStatement" ||
-          outer.type === "ConditionalExpression") &&
-        observes(outer.test as Node, counted)
+    const gates = path.filter(
+      (outer) =>
+        outer.type === "IfStatement" || outer.type === "ConditionalExpression",
+    );
+    if (gates.length)
+      exits = gates.some((gate) => observes(gate.test as Node, counted));
+    else
+      exits = path.some(
+        (outer, index) =>
+          outer.type === "TryStatement" &&
+          path[index + 1] === outer.block &&
+          works(outer.block as Node, context),
       );
-    });
   });
   return exits;
+}
+
+/** Whether a block calls something other than a pause or the clock. */
+function works(block: Node, context: LoopContext) {
+  let found = false;
+  within(block, (node) => {
+    if (
+      (node.type === "CallExpression" || node.type === "NewExpression") &&
+      !isIdentifier(node.callee, "Promise") &&
+      !isClock(node) &&
+      !context.pauses(node)
+    )
+      found = true;
+  });
+  return found;
 }
 
 function delayOf(
@@ -323,6 +426,49 @@ function parseSource(path: string, text: string): Parsed {
     }
   }
 
+  // Loops judge work against primitive pauses and the local helpers that
+  // reach one (`settle()`), and their bounds against clock-set names.
+  const primitive = (call: Node) => {
+    const callee = call.callee as Node;
+    return (
+      call.type === "CallExpression" &&
+      (isCall(call, "Bun", /^sleep(?:Sync)?$/) ||
+        isIdentifier(callee, "setTimeout") ||
+        (callee.type === "MemberExpression" &&
+          isIdentifier(callee.property, "setTimeout")) ||
+        (isIdentifier(callee) && timersPromises.has(callee.name as string)))
+    );
+  };
+  const helpers: Array<{ name: string; node: Node }> = [];
+  const collect = (node: Node, parent: Node | undefined) => {
+    const name = FUNCTIONS.has(node.type) ? helperName(node, parent) : null;
+    if (name) helpers.push({ name, node });
+    for (const child of children(node)) collect(child, node);
+  };
+  collect(ast.program as Node, undefined);
+  const pausers = new Set<string>();
+  const reaches = (node: Node): boolean =>
+    (node.type === "CallExpression" &&
+      (primitive(node) ||
+        (isIdentifier(node.callee) &&
+          pausers.has((node.callee as Node).name as string)))) ||
+    children(node).some(reaches);
+  for (let changed = true; changed; ) {
+    changed = false;
+    for (const { name, node } of helpers)
+      if (!pausers.has(name) && reaches(node.body as Node)) {
+        pausers.add(name);
+        changed = true;
+      }
+  }
+  const context: LoopContext = {
+    clocks: clockNames(ast.program as Node),
+    pauses: (call) =>
+      primitive(call) ||
+      (isIdentifier(call.callee) &&
+        pausers.has((call.callee as Node).name as string)),
+  };
+
   // Primitive pauses and identifier calls, each with its nearest named
   // helper and whether a loop lies between them and that helper.
   const sites: Site[] = [];
@@ -370,7 +516,7 @@ function parseSource(path: string, text: string): Parsed {
       }
     }
     // The nearest loop decides: a short tick is exempt only when it polls.
-    if (LOOPS.has(node.type)) nextLoop = polls(node);
+    if (LOOPS.has(node.type)) nextLoop = polls(node, context);
     if (node.type === "CallExpression") {
       // A timer raced against real work bounds a failure; it is no pause.
       if (isCall(node, "Promise", /^(?:race|any)$/)) return;

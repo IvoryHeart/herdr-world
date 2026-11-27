@@ -70,6 +70,29 @@ for (let i = 0; i < 50; i++) { if (host.firstChild) return; await act(async () =
   ).toEqual([]);
 });
 
+test("a sleep loop with no condition it waits on is a pause", () => {
+  expect(
+    lines(`for (let i=0; i<100; i=i+1) await Bun.sleep(5);
+const started=Date.now(); while (Date.now()-started<500) await Bun.sleep(5);
+for (let i=0;i<100;i++) { try { await Bun.sleep(5); if (i===99) break; } catch {} }
+const deadline = performance.now() + 500; while (performance.now() < deadline) await Bun.sleep(5);
+let n = 0; while (n < 100) { n = n + 1; await Bun.sleep(5); }
+for (let i = 0; i < 100; i = 1 + i) await Bun.sleep(5);
+for (;;) { try { await Bun.sleep(5); break; } catch {} }
+const settle = () => Bun.sleep(5);
+for (;;) { try { await settle(); return; } catch {} await Bun.sleep(5); }`),
+  ).toEqual([1, 2, 3, 4, 5, 6, 7, 8, 9, 9]);
+});
+
+test("a sleep loop that checks a real condition every iteration polls", () => {
+  expect(
+    lines(`const started=Date.now(); while (!server.ready && Date.now()-started<500) await Bun.sleep(5);
+for (let i=0; i<100; i=i+1) { if (await check()) break; await Bun.sleep(5); }
+for (let i=0;i<100;i++) { try { await fetch(url); break; } catch {} await Bun.sleep(5); }
+for (let i=0;i<100;i++) { try { await Bun.sleep(5); if (i===99 || seen.length) break; } catch {} }`),
+  ).toEqual([]);
+});
+
 test("a callback declared in a loop runs later, outside the loop", () => {
   expect(
     lines(`for (const x of cases) test("case", async () => { await Bun.sleep(5); });
