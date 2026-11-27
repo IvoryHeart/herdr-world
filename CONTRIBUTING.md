@@ -304,8 +304,11 @@ local lane; platform acceptance and enforced CI accounting remain separate.
 
 CI verification groups are partial evidence. The aggregate requires every accepted
 model exactly once, the current complete source inventory/revision, matching tool
-identities and successful resource accounting for all three groups. Each runner
-retains the 4 GiB/no-swap/two-CPU limit and its OOM/cancellation controls. The
+identities and successful resource accounting for every group, including every IDE/core check part. Model CI uses
+the owner-approved four-CPU quota and four TLC workers (2026-11-26), retaining
+the 4 GiB/no-swap limit and all OOM/cancellation controls. Other lanes keep
+their existing CPU limits. Main independently saves complete per-model evidence;
+PRs reuse it only for identical model input closures and pinned tool identities. The
 bounded payload has a sibling supervisor in the delegated service subtree, so
 even a payload-wide OOM kill preserves exit reporting and resource accounting.
 The supervisor is outside the payload's memory limit and measured peak; the

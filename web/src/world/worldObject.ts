@@ -1,6 +1,7 @@
 import { isLocalCoreAddress } from "../../../shared/coreAddress";
 export { worldObjectWithWatches } from "./worldWatches";
 import { agentActivityAt } from "../../../shared/agentMetadata";
+import { compareWorldOrder } from "../../../shared/hostGrouping";
 import { sha256 } from "./worldDigest";
 import { roomInputCache } from "./worldRoomCache";
 import {
@@ -571,11 +572,11 @@ export async function prepareWorldObject(
   }
   if (!isCurrent()) return null;
   const hosts = [...connections]
-    .sort(
-      (left, right) =>
-        Number(right.isDefault) - Number(left.isDefault) ||
-        left.label.localeCompare(right.label) ||
-        left.connectionId.localeCompare(right.connectionId),
+    .sort((left, right) =>
+      compareWorldOrder(
+        { ...left, id: left.connectionId },
+        { ...right, id: right.connectionId },
+      ),
     )
     .map((connection) => buildHost(connection, selectedConnectionId));
   const spaces: WorldSpaceObject[] = [];
@@ -969,11 +970,11 @@ export function buildWorldObject(
   // Synchronous: a render that reaches here blocks on the whole World.
   if (DEVTOOLS) countWorldWork("world.sync-build");
   const hosts = [...connections]
-    .sort(
-      (left, right) =>
-        Number(right.isDefault) - Number(left.isDefault) ||
-        left.label.localeCompare(right.label) ||
-        left.connectionId.localeCompare(right.connectionId),
+    .sort((left, right) =>
+      compareWorldOrder(
+        { ...left, id: left.connectionId },
+        { ...right, id: right.connectionId },
+      ),
     )
     .map((connection) => buildHost(connection, selectedConnectionId));
   const spaces = hosts.flatMap((host) => host.spaces);
