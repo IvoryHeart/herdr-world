@@ -4,6 +4,7 @@ import {
   mkdirSync,
   mkdtempSync,
   readFileSync,
+  readdirSync,
   rmSync,
   writeFileSync,
 } from "node:fs";
@@ -13,6 +14,21 @@ import { fileURLToPath } from "node:url";
 import { acquireAllCheckSlots, acquireCheckSlot } from "./check-lock";
 
 const root = fileURLToPath(new URL("../", import.meta.url));
+const staticCommands = [
+  "features:check",
+  "notices:check",
+  "check:dead",
+  "check:size",
+  "check:commit",
+  "typecheck:quick",
+  "typecheck:bun",
+  "build",
+  "build:site",
+  "spec:check",
+  "help:check",
+]
+  .map((script) => `run ${script}`)
+  .concat("scripts/check-knowledge-map-links.ts");
 
 function exercise(
   args: string[],
@@ -21,6 +37,7 @@ function exercise(
   incremental = false,
   ciMerge = false,
   extraEnv: Record<string, string> = {},
+  inspect?: (directory: string, output: string) => void,
 ) {
   const directory = mkdtempSync(join(tmpdir(), "gate-commands-"));
   const record = join(directory, "commands");
@@ -33,9 +50,40 @@ function exercise(
       readFileSync(join(root, "package.json")),
     );
     writeFileSync(record, "");
+    // No command can finish until every static command has started. This
+    // detects serialized execution without asserting a machine-speed limit.
+    writeFileSync(
+      join(directory, "static-probe.ts"),
+      `
+import { appendFileSync, readFileSync, watch } from "node:fs";
+const record = process.env.GATE_COMMANDS!;
+const command = process.argv.slice(2).join(" ");
+let complete = false;
+// Watch notifications may coalesce; make one final observation at the deadline.
+const deadline = setTimeout(() => {
+  finish();
+  if (!complete) process.exit(88);
+}, 2000);
+const watcher = watch(record, finish);
+appendFileSync(record, command + "\\n");
+function finish() {
+  if (complete || readFileSync(record, "utf8").trim().split("\\n").length !== 12) return;
+  complete = true;
+  watcher.close();
+  clearTimeout(deadline);
+  console.log("stdout: " + command);
+  console.error("stderr: " + command);
+  if (process.argv.slice(2).includes(process.env.GATE_FAIL_ON!)) {
+    console.error("synthetic violation: " + command);
+    process.exitCode = 37;
+  }
+}
+finish();
+`,
+    );
     writeFileSync(
       join(directory, "bun"),
-      '#!/bin/sh\nprintf "%s\\n" "$*" >> "$GATE_COMMANDS"\nif [ -n "$GATE_FAIL_ON" ] && { [ "$1" = "$GATE_FAIL_ON" ] || [ "$2" = "$GATE_FAIL_ON" ]; }; then exit 37; fi\n',
+      '#!/bin/sh\nif [ "$GATE_BARRIER" = 1 ]; then exec "$GATE_REAL_BUN" "$GATE_PROBE" "$@"; fi\nprintf "%s\\n" "$*" >> "$GATE_COMMANDS"\nif [ -n "$GATE_FAIL_ON" ] && { [ "$1" = "$GATE_FAIL_ON" ] || [ "$2" = "$GATE_FAIL_ON" ]; }; then exit 37; fi\n',
       { mode: 0o755 },
     );
     if (paths) {
@@ -126,6 +174,9 @@ function exercise(
         CI: "true",
         PATH: `${directory}:${process.env.PATH ?? ""}`,
         GATE_COMMANDS: record,
+        GATE_REAL_BUN: process.execPath,
+        GATE_PROBE: join(directory, "static-probe.ts"),
+        GITHUB_STEP_SUMMARY: join(directory, "summary.md"),
         GATE_FAIL_ON: failOn,
         ...extraEnv,
       },
@@ -136,6 +187,7 @@ function exercise(
           readFileSync(join(laneDir, `${lane}.log`), "utf8"),
         ).not.toContain("stale output");
     if (incremental) expect(result.stdout).not.toContain("tooling-only");
+    inspect?.(directory, result.stdout + result.stderr);
     return {
       status: result.status,
       commands: readFileSync(record, "utf8").trim().split("\n"),
@@ -157,37 +209,59 @@ test("repository validation delegates to the static lane before running tests", 
 });
 
 test("the static lane retains all checks and builds production assets once", () => {
-  const commands = [
-    "features:check",
-    "notices:check",
-    "check:dead",
-    "check:size",
-    "check:commit",
-    "typecheck:quick",
-    "typecheck:bun",
-    "build",
-    "build:site",
-    "spec:check",
-    "help:check",
-  ].map((script) => `run ${script}`);
-  commands.push("scripts/check-knowledge-map-links.ts");
-  expect(exercise(["scripts/check-delivery.ts", "--static"])).toEqual({
-    status: 0,
-    commands,
-  });
-  expect(
-    exercise(["scripts/check-delivery.ts", "--static"], "check:dead"),
-  ).toEqual({ status: 1, commands: commands.slice(0, 3) });
-  expect(
-    exercise(["scripts/check-delivery.ts", "--static"], "typecheck:quick"),
-  ).toEqual({ status: 1, commands: commands.slice(0, 6) });
-  expect(
-    exercise(
-      ["scripts/check-delivery.ts", "--static"],
-      "scripts/check-knowledge-map-links.ts",
-    ),
-  ).toEqual({ status: 1, commands });
+  for (const failOn of [
+    "",
+    ...staticCommands.map((command) => command.split(" ").at(-1)!),
+  ]) {
+    const result = exercise(["scripts/check-delivery.ts", "--static"], failOn);
+    expect(result.status).toBe(failOn ? 1 : 0);
+    expect(result.commands.toSorted()).toEqual(staticCommands.toSorted());
+  }
 });
+
+test.each(["", "check:dead"])(
+  "static checks overlap, retain separate logs and summarize %s",
+  (failOn) => {
+    const result = exercise(
+      ["scripts/check-delivery.ts", "--static"],
+      failOn,
+      undefined,
+      false,
+      false,
+      { GATE_BARRIER: "1" },
+      (directory, output) => {
+        const logs = join(directory, ".agents/delivery/lanes");
+        const names = readdirSync(logs).filter(
+          (name) => name.startsWith("static-") && name.endsWith(".log"),
+        );
+        expect(names).toHaveLength(staticCommands.length);
+        for (const command of staticCommands) {
+          const matches = names
+            .map((name) => readFileSync(join(logs, name), "utf8"))
+            .filter((log) => log.startsWith(`$ bun ${command}\n`));
+          expect(matches).toHaveLength(1);
+          expect(matches[0]).toContain(`stdout: ${command}\n`);
+          expect(matches[0]).toContain(`stderr: ${command}\n`);
+          expect(matches[0].match(/stdout:/g)).toHaveLength(1);
+        }
+        const summary = readFileSync(join(directory, "summary.md"), "utf8");
+        for (const command of staticCommands)
+          expect(summary).toContain(`bun ${command}`);
+        if (failOn) {
+          expect(output).toContain(
+            "First failure: static-check-dead (exit 37)",
+          );
+          expect(output).toContain("synthetic violation: run check:dead");
+          expect(summary).toContain(
+            "First failure: static-check-dead (exit 37)",
+          );
+        } else expect(summary).toContain("All 12 static checks passed");
+      },
+    );
+    expect(result.status).toBe(failOn ? 1 : 0);
+    expect(result.commands.toSorted()).toEqual(staticCommands.toSorted());
+  },
+);
 
 test.each([
   "openspec/changes/example/specs/example/spec.md",
@@ -230,12 +304,7 @@ test("a changed gate always runs CI static checks and blocks size failures befor
     "scripts/agent/example.ts",
   ]);
   expect(result.status).toBe(1);
-  expect(result.commands).toEqual([
-    "run features:check",
-    "run notices:check",
-    "run check:dead",
-    "run check:size",
-  ]);
+  expect(result.commands.toSorted()).toEqual(staticCommands.toSorted());
 });
 
 test("tooling scope runs static checks and affected units without heavy lanes", () => {
@@ -346,12 +415,7 @@ test("static failures report while all heavy check slots are held, regardless of
       },
     );
     expect(result.status).toBe(1);
-    expect(result.commands).toEqual([
-      "run features:check",
-      "run notices:check",
-      "run check:dead",
-      "run check:size",
-    ]);
+    expect(result.commands.toSorted()).toEqual(staticCommands.toSorted());
   } finally {
     release();
     rmSync(runtime, { recursive: true, force: true });

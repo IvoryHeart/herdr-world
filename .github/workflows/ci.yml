@@ -222,6 +222,14 @@ jobs:
             - name: Run static repository checks
               if: needs.validation-scope.outputs.mode != 'docs'
               run: bun run check:static
+            - name: Upload static check logs
+              if: always() && needs.validation-scope.outputs.mode != 'docs'
+              uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7
+              with:
+                  name: static-check-logs
+                  path: .agents/delivery/lanes/static-*.log
+                  include-hidden-files: true
+                  if-no-files-found: error
 
     unit-tests:
         name: Non-browser tests (${{ matrix.shard }}/2)

@@ -1,4 +1,9 @@
-import { mkdirSync, readFileSync, writeFileSync } from "node:fs";
+import {
+  appendFileSync,
+  mkdirSync,
+  readFileSync,
+  writeFileSync,
+} from "node:fs";
 import { basename, join } from "node:path";
 import { CHROME, TEST, type Affected } from "./affected";
 import { acquireCheckSlot, type CheckClass, heldEnv } from "./check-lock";
@@ -13,7 +18,8 @@ import { worldBrowserSuites } from "./world-browser-suites";
  *
  * `--full` (`check:delivery`) additionally runs every World/web browser test and
  * behavioral model. `--browser` runs the Chrome lanes; `--static` runs static
- * checks only. Heavy lanes share the machine-wide browser/verification slots;
+ * checks only, with independent commands running concurrently into separate logs.
+ * Heavy lanes share the machine-wide browser/verification slots;
  * non-browser units use a light slot. Logs are reset at the start of each run.
  */
 
@@ -202,10 +208,44 @@ if (!selection.full)
     `[gate] unit ${selection.unit.length}, browser 0, verification ${verification.length ? "yes" : "no"}`,
   );
 const results: Result[] = [];
-if (!browserOnly)
-  results.push(
-    await runLane({ name: "static", queue: null, commands: STATIC }),
+let firstStaticFailure: Result | undefined;
+if (!browserOnly) {
+  const checked = await Promise.all(
+    STATIC.map(async (command) => {
+      const result = await runLane({
+        name: `static-${basename(command.at(-1)!, ".ts").replaceAll(":", "-")}`,
+        queue: null,
+        commands: [command],
+      });
+      if (result.code !== 0) firstStaticFailure ??= result;
+      return result;
+    }),
   );
+  results.push(...checked);
+  const verdict = firstStaticFailure
+    ? `First failure: ${firstStaticFailure.name} (exit ${firstStaticFailure.code})`
+    : `All ${checked.length} static checks passed`;
+  console.info(`[gate] ${verdict}`);
+  if (process.env.GITHUB_STEP_SUMMARY) {
+    appendFileSync(
+      process.env.GITHUB_STEP_SUMMARY,
+      [
+        "## Static checks",
+        "",
+        verdict,
+        "",
+        "| Command | Result | Seconds | Log |",
+        "| --- | --- | ---: | --- |",
+        ...checked.map(
+          (result, index) =>
+            `| \`${STATIC[index]!.join(" ")}\` | ${result.code === 0 ? "passed" : `failed (exit ${result.code})`} | ${result.seconds.toFixed(1)} | \`${basename(result.log)}\` |`,
+        ),
+        "",
+        "",
+      ].join("\n"),
+    );
+  }
+}
 if (results.every((result) => result.code === 0)) {
   const ok = (list: Result[]) => list.every((result) => result.code === 0);
   const tests = (async () => {

@@ -812,3 +812,25 @@ test("release package verification extracts into a temp folder tar would unescap
     rmSync(root, { recursive: true, force: true });
   }
 });
+
+test("Static checks retain concurrent command logs even after failure", () => {
+  const job = workflow.jobs.static!;
+  expect(
+    job.steps.find((step) => step.run === "bun run check:static"),
+  ).toMatchObject({
+    if: "needs.validation-scope.outputs.mode != 'docs'",
+  });
+  expect(job.steps.filter((step) => step["continue-on-error"])).toHaveLength(0);
+  expect(
+    job.steps.find((step) => step.name === "Upload static check logs"),
+  ).toMatchObject({
+    if: "always() && needs.validation-scope.outputs.mode != 'docs'",
+    uses: "actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9",
+    with: {
+      name: "static-check-logs",
+      path: ".agents/delivery/lanes/static-*.log",
+      "include-hidden-files": true,
+      "if-no-files-found": "error",
+    },
+  });
+});

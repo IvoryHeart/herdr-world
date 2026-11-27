@@ -606,8 +606,8 @@ production frontend/server builds and OpenSpec contracts. Generated output belon
 ignored directories and must not be committed.
 
 Its static checks come from the same lane as `check:delivery` and `check:changed`.
-That lane checks source types without invoking server's asset-building
-`pretypecheck`, then builds and validates production assets once. `check:commit`
+Its independent commands concurrently check source types without invoking server's
+asset-building `pretypecheck`, and build and validate production assets once. `check:commit`
 is the read-only format/lint guard used by the Git hook; `check:source` adds the
 asset-building type check and tests for release preparation and tag validation.
 `precommit` remains a compatibility alias for `check:source`. See the

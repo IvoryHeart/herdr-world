@@ -23,7 +23,12 @@ required. The native launchd shim reports have been removed.
 `bun run typecheck:quick` checks all three TypeScript projects. Use focused
 `bun run test <path>` while iterating. `check:static` retains notices,
 size, formatting/lint, types, build, site and OpenSpec checks; CI runs that lane
-alongside non-browser shards. `check:changed` remains an explicit local affected
+alongside non-browser shards. Its independent commands run concurrently, each
+with a separate `static-*.log` in `.agents/delivery/lanes/`; any failure fails the
+lane after all commands finish. The terminal names the first completed failure,
+and CI's Static checks summary lists every command, outcome, duration and log.
+Download the `static-check-logs` artifact for complete output, including failed
+checks. Static checks never retry. `check:changed` remains an explicit local affected
 check and `check:delivery` an explicit complete local gate. Neither is a push hook.
 `check:source` is a local compatibility command, not a release gate.
 `check:pr-body <file> <base-ref>` validates the exact committed PR description in
