@@ -27,6 +27,7 @@
 - One search: `web/src/world/worldFinder.ts`, `web/src/world/WorldViewToolbar.tsx`, `web/src/world/viewSearchShortcut.ts`, `web/src/commandBoxKey.ts`, `web/src/world/town/useTownSearch.ts`, `web/src/world/board/useBoardSearch.ts`
 - Find any agent: `web/src/world/worldCommandBox.tsx`, `web/src/components/CommandCombobox.tsx`, `web/src/components/CommandActionItem.tsx`, `shared/harnessLabels.ts`
 - herdr-core terminal in Spaces and its strip (#1390): `web/src/world/SpacesCoreTerminal.tsx`, `web/src/world/SpacesCoreStrip.tsx`, `web/src/world/spacesCore.ts`, `web/src/world/useSpacesCore.ts`, `web/src/world/spacesCoreTerminal.css`, `spacesSurface.tabs`/`selectTab` in `web/src/App.tsx`, `selectOnly` in `web/src/components/WorkspaceTree.tsx`
+- Spaces rooms and tabs on every runtime (#1430): `web/src/world/spacesRooms.ts` (room and tab names from World, as Town names them; runtime mark), `rooms` in `web/src/components/WorkspaceTree.tsx` and `WorkspaceTabRow`/`rooms` in `web/src/components/WorkspaceRows.tsx`, `.workspace-runtime-mark`/`.workspace-tab-row` in `web/src/components/WorkspaceTree.css`, `TownRuntimeGlyph` in `web/src/world/town/TownRuntimeIcon.tsx`
 - `web/src/layerStack.ts`
 - `web/src/world/runtimeGrouping.ts`
 - `web/src/world/runtimeGrouping.settings.tsx`
@@ -44,6 +45,7 @@
 - `web/src/world/worldSearch.test.ts`
 - One search: `web/src/world/worldFinder.test.ts`, `web/src/world/viewSearchShortcut.dom.test.ts`, `web/src/world/worldSearchMatches.test.ts`, `web/src/world/HostsFilter.browser.tsx`, `web/src/world/WorldTerminalHandoff.browser.tsx`
 - Find: `web/src/world/spacesCore.test.ts`, `web/src/world/useSpacesCore.dom.test.ts`, `web/src/world/WorldNavigatorWorktree.browser.tsx` (core host rows), `web/src/world/worldCommandBox.test.tsx`, `web/src/commandBoxKey.dom.test.ts`, `web/src/foundTerminalReveal.dom.test.ts`
+- Spaces rooms and tabs: `web/src/world/spacesRooms.test.ts` (names equal Town's), `web/src/world/WorldNavigatorRooms.browser.tsx` with `web/src/world/WorldNavigatorRooms.test.ts` (TUI and core rooms, desktop and phone), fixture `web/src/world/spacesRooms.fixture.ts`
 - `web/src/systemBack.browser.tsx`
 - `web/src/world/runtimeGrouping.test.ts`
 - `web/src/world/navigatorGroups.test.ts`
@@ -54,6 +56,7 @@
 **Pitfalls:**
 
 - The Hosts filter is not the operational connection selector.
+- Spaces' navigator lists rooms → tabs → terminals on every runtime and ignores the saved agent layout (Compact/Nested/Separate); names come from World (`spacesRooms.ts`), never from the active connection's store.
 - Actions capture the explicit entity; hidden Spaces focus must never supply a target.
 - Retired Office/Graph/Tree routes redirect without creating a Back loop.
 - No shell-navigation CLI exists; connection CLI ownership is in runtime-federation.

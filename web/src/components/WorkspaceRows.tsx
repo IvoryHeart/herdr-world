@@ -7,6 +7,7 @@ import type { PullRequestSummary } from "../../../shared/pullRequest";
 import type { ConnectionSummary } from "../api";
 import { connectionLifecycleLabel } from "../connectionProfiles";
 import {
+  Fragment,
   useCallback,
   useContext,
   useEffect,
@@ -54,6 +55,8 @@ import {
   nestedAgentPaneIds,
 } from "./WorkspaceAgentRows";
 import { groupAgentPanesByWorkspace } from "./agentSession";
+import type { SpacesRoom, SpacesRoomTab } from "../world/spacesRooms";
+import { TownRuntimeGlyph } from "../world/town/TownRuntimeIcon";
 import {
   focusTreeItem,
   keyboardContextMenuPoint,
@@ -390,6 +393,61 @@ function WorkspaceTabChips({
   );
 }
 
+/**
+ * One tab of a World room (Spaces), named as World names it. Choosing it
+ * opens its agent, or its first terminal, as choosing that row would.
+ */
+function WorkspaceTabRow({
+  tab,
+  depth,
+  selected,
+  onSelectAgent,
+}: {
+  tab: SpacesRoomTab;
+  depth: number;
+  selected: boolean;
+  onSelectAgent?: (pane: Pane) => void;
+}) {
+  const open = () => {
+    if (tab.opens) onSelectAgent?.(tab.opens.pane);
+  };
+  return (
+    <div
+      className={`tree-row clickable-row workspace-tab-row${selected ? " is-current" : ""}`}
+      style={{ paddingLeft: 6 + depth * TREE_DEPTH_INDENT }}
+      role="treeitem"
+      tabIndex={-1}
+      aria-level={depth + 1}
+      aria-selected={selected}
+      aria-disabled={tab.opens ? undefined : true}
+      data-tab-id={tab.tab.tab_id}
+      title={tab.label}
+      onClick={open}
+      onKeyDown={(event) => {
+        if (event.target !== event.currentTarget) return;
+        const action = treeKeyboardAction(event.key, event.shiftKey);
+        if (
+          action === "next" ||
+          action === "previous" ||
+          action === "first" ||
+          action === "last"
+        ) {
+          event.preventDefault();
+          focusTreeItem(event.currentTarget, action);
+        } else if (action === "activate") {
+          event.preventDefault();
+          open();
+        }
+      }}
+    >
+      <span className="twisty" aria-hidden="true" />
+      <span className="ws-label workspace-tab-label" data-tab-label="">
+        {tab.label}
+      </span>
+    </div>
+  );
+}
+
 export function WorkspaceRow({
   w,
   source,
@@ -399,6 +457,7 @@ export function WorkspaceRow({
   agentsByWorkspace,
   tabChipsByWorkspace,
   alwaysShowTabCount = false,
+  rooms,
   activePaneId,
   pinnedWorkspaceKeys,
   collapsedWorktreeGroupKeys,
@@ -418,6 +477,8 @@ export function WorkspaceRow({
   agentsByWorkspace: ReadonlyMap<string, Pane[]>;
   tabChipsByWorkspace: ReadonlyMap<string, WorkspaceTabChip[]>;
   alwaysShowTabCount?: boolean;
+  /** World's rooms (Spaces): see WorkspaceTree's `rooms`. */
+  rooms?: ReadonlyMap<string, SpacesRoom>;
   activePaneId: string | null;
   pinnedWorkspaceKeys: ReadonlySet<string>;
   collapsedWorktreeGroupKeys: ReadonlySet<string>;
@@ -435,9 +496,11 @@ export function WorkspaceRow({
   const children = childrenByParent.get(w.workspace_id) ?? [];
   const review = workspacePullRequest(reviews[w.workspace_id]);
   const agents = agentsByWorkspace.get(w.workspace_id) ?? [];
-  const tabChips = tabChipsByWorkspace.get(w.workspace_id) ?? [];
+  const room = rooms?.get(w.workspace_id);
+  // A World room lists its tabs as rows, so it needs no chips or count.
+  const tabChips = room ? [] : (tabChipsByWorkspace.get(w.workspace_id) ?? []);
   const tabCount = tabChips.length;
-  const tabCountVisible = alwaysShowTabCount || tabCount > 1;
+  const tabCountVisible = !room && (alwaysShowTabCount || tabCount > 1);
   const tabChipsVisible = tabCount > 1;
   const s = useStoreSelector(
     (state) => ({
@@ -453,7 +516,8 @@ export function WorkspaceRow({
   const paneIdsToShow = nestedAgentPaneIds(agents, tabs);
   const isChild = depth > 0;
   const hasChildren = children.length > 0;
-  const hasNestedItems = hasChildren || agents.length > 0;
+  const hasNestedItems =
+    hasChildren || agents.length > 0 || (room?.tabs.length ?? 0) > 0;
   const hasActiveAgent =
     current &&
     agents.some(
@@ -676,13 +740,25 @@ export function WorkspaceRow({
             aria-hidden="true"
           />
         ) : null}
+        {room ? (
+          <span
+            className="workspace-runtime-mark"
+            data-runtime={room.runtime}
+            role="img"
+            aria-label={`Runtime: ${room.runtimeTag}`}
+            title={room.runtimeTag}
+          >
+            <TownRuntimeGlyph kind={room.runtime} size={12} />
+          </span>
+        ) : null}
         <strong
           // A worktree's name mostly repeats its repository's: what tells it
           // apart is its end.
           className={`ws-label${isChild ? " start-ellipsis" : ""}`}
-          title={workspaceDisplayName(w)}
+          title={room?.label ?? workspaceDisplayName(w)}
+          data-room-label={room ? "" : undefined}
         >
-          <span dir="ltr">{workspaceDisplayName(w)}</span>
+          <span dir="ltr">{room?.label ?? workspaceDisplayName(w)}</span>
         </strong>
         {tabCountVisible && !tabChipsVisible ? (
           <span
@@ -742,44 +818,81 @@ export function WorkspaceRow({
       </div>
       {!collapsed ? (
         <>
-          {agents.map((pane) => (
-            <AgentRow
-              key={pane.pane_id}
-              pane={pane}
-              depth={depth + 1}
-              showPaneId={paneIdsToShow.has(pane.pane_id)}
-              selected={
-                current &&
-                (pane.pane_id === activePaneId ||
-                  (!activePaneId && pane.focused))
-              }
-              tabLabel={
-                source
-                  ? (tabs.find(
-                      (tab) =>
-                        tab.tab_id === pane.tab_id &&
-                        tab.workspace_id === pane.workspace_id,
-                    )?.label ?? "")
-                  : undefined
-              }
-              onActivate={
-                source
-                  ? () => {
-                      void openServerSession(
-                        source,
-                        pane.workspace_id,
-                        pane.pane_id,
-                      ).then((opened) => {
-                        if (opened && current) onSelectAgent?.(pane);
-                      });
-                    }
-                  : undefined
-              }
-              focusOnSelect={focusOnSelect}
-              onSelect={onSelectAgent}
-              onOpenMenu={(x, y) => onAgentContextMenu(pane, x, y)}
-            />
+          {room?.tabs.map((tab) => (
+            <Fragment key={tab.tab.tab_id}>
+              <WorkspaceTabRow
+                tab={tab}
+                depth={depth + 1}
+                selected={
+                  current &&
+                  tab.leaves.some(
+                    (leaf) =>
+                      leaf.nativeId === activePaneId ||
+                      (!activePaneId && leaf.pane.focused),
+                  )
+                }
+                onSelectAgent={onSelectAgent}
+              />
+              {tab.leaves.map(({ pane }) => (
+                <AgentRow
+                  key={pane.pane_id}
+                  pane={pane}
+                  depth={depth + 2}
+                  showPaneId={false}
+                  selected={
+                    current &&
+                    (pane.pane_id === activePaneId ||
+                      (!activePaneId && pane.focused))
+                  }
+                  // Its tab's row above names it.
+                  tabLabel=""
+                  focusOnSelect={focusOnSelect}
+                  onSelect={onSelectAgent}
+                  onOpenMenu={(x, y) => onAgentContextMenu(pane, x, y)}
+                />
+              ))}
+            </Fragment>
           ))}
+          {(room ? room.untabbed.map(({ pane }) => pane) : agents).map(
+            (pane) => (
+              <AgentRow
+                key={pane.pane_id}
+                pane={pane}
+                depth={depth + 1}
+                showPaneId={paneIdsToShow.has(pane.pane_id)}
+                selected={
+                  current &&
+                  (pane.pane_id === activePaneId ||
+                    (!activePaneId && pane.focused))
+                }
+                tabLabel={
+                  source
+                    ? (tabs.find(
+                        (tab) =>
+                          tab.tab_id === pane.tab_id &&
+                          tab.workspace_id === pane.workspace_id,
+                      )?.label ?? "")
+                    : undefined
+                }
+                onActivate={
+                  source
+                    ? () => {
+                        void openServerSession(
+                          source,
+                          pane.workspace_id,
+                          pane.pane_id,
+                        ).then((opened) => {
+                          if (opened && current) onSelectAgent?.(pane);
+                        });
+                      }
+                    : undefined
+                }
+                focusOnSelect={focusOnSelect}
+                onSelect={onSelectAgent}
+                onOpenMenu={(x, y) => onAgentContextMenu(pane, x, y)}
+              />
+            ),
+          )}
           {children.map((child) => (
             <WorkspaceRow
               key={child.workspace_id}
@@ -791,6 +904,7 @@ export function WorkspaceRow({
               agentsByWorkspace={agentsByWorkspace}
               tabChipsByWorkspace={tabChipsByWorkspace}
               alwaysShowTabCount={alwaysShowTabCount}
+              rooms={rooms}
               activePaneId={activePaneId}
               pinnedWorkspaceKeys={pinnedWorkspaceKeys}
               collapsedWorktreeGroupKeys={collapsedWorktreeGroupKeys}

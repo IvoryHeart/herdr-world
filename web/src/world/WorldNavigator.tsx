@@ -22,6 +22,7 @@ import { useHostGroupOf } from "./useHostGroups";
 import type { ConnectionLifecycleState } from "../api";
 import { machineStatus } from "../worldHosts";
 import { navigatorHostGroups } from "./navigatorGroups";
+import { spacesRoom, type SpacesRoom } from "./spacesRooms";
 
 export function WorldNavigator({
   world,
@@ -40,6 +41,22 @@ export function WorldNavigator({
   const groups = useMemo(
     () => navigatorHostGroups(projection.hosts, groupOf),
     [projection, groupOf],
+  );
+  // Each host's rooms with their tabs, as World names them (spacesRooms.ts).
+  const roomsByHost = useMemo(
+    () =>
+      new Map(
+        projection.hosts.map((host) => [
+          host.source.id,
+          new Map<string, SpacesRoom>(
+            host.spaces.map(({ source, children }) => [
+              source.workspace.workspace_id,
+              spacesRoom(host.source, source, children),
+            ]),
+          ),
+        ]),
+      ),
+    [projection],
   );
   const [selectionError, setSelectionError] = useState<string | null>(null);
   const selectionSequence = useRef(0);
@@ -72,7 +89,8 @@ export function WorldNavigator({
   // One host's row and tree; inside a machine group the row names its runtime.
   const renderHost = (host: WorldTreeHost, runtimeTag: string | null) => {
     const spaces = host.spaces.map(({ source }) => source);
-    const leaves = host.spaces.flatMap(({ children }) => children);
+    // A tab opens its terminal even when the bounded tree leaves it out.
+    const leaves = host.spaces.flatMap(({ source }) => source.children);
     const selectWorkspace = (id: string, view?: InspectorView) => {
       const node = spaces.find((space) => space.nativeId === id);
       if (node) void selectNode(node, view);
@@ -138,6 +156,7 @@ export function WorldNavigator({
                   selectOnly={host.source.coreControl === true}
                   agentsFirst={agentsFirst}
                   focusOnSelect={false}
+                  rooms={roomsByHost.get(host.source.id)}
                   observedTopology={{
                     workspaces: host.spaces.map(
                       ({ source }) => source.workspace,

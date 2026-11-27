@@ -75,6 +75,7 @@ import {
   groupAgentPanesByWorkspace,
   paneHasAgentHistory,
 } from "./agentSession";
+import type { SpacesRoom } from "../world/spacesRooms";
 import "./WorkspaceTree.css";
 import "./WorkspaceAutoSyncDialog.css";
 import {
@@ -136,6 +137,7 @@ export function WorkspaceTree({
   includeTerminals = false,
   selectOnly = false,
   observedTopology,
+  rooms,
   onSelect,
   onBrowseFiles,
   onReviewChanges,
@@ -153,6 +155,12 @@ export function WorkspaceTree({
    */
   selectOnly?: boolean;
   observedTopology?: { workspaces: Workspace[]; tabs: Tab[]; panes: Pane[] };
+  /**
+   * World's rooms by workspace ID (Spaces, world/spacesRooms.ts): each room
+   * lists its tabs, named as World names them, with their terminals under
+   * them, and marks its runtime. The tree then has no layout of its own.
+   */
+  rooms?: ReadonlyMap<string, SpacesRoom>;
   onSelect?: (workspace: Workspace) => void;
   onBrowseFiles?: (workspace: Workspace) => void;
   onReviewChanges?: (workspace: Workspace) => void;
@@ -235,11 +243,16 @@ export function WorkspaceTree({
   const [agentPaneOrder, setAgentPaneOrder] = useState<string[]>(() =>
     parseAgentOrder(worldLocalStorage.getItem(agentOrderStorageKey)),
   );
-  const [agentLayout, setAgentLayout] = useState<WorkspaceAgentLayout>(() =>
-    parseWorkspaceAgentLayout(
-      worldLocalStorage.getItem(WORKSPACE_AGENT_LAYOUT_STORAGE_KEY),
-    ),
+  const [preferredAgentLayout, setAgentLayout] = useState<WorkspaceAgentLayout>(
+    () =>
+      parseWorkspaceAgentLayout(
+        worldLocalStorage.getItem(WORKSPACE_AGENT_LAYOUT_STORAGE_KEY),
+      ),
   );
+  // World's rooms always hold their tabs and terminals.
+  const agentLayout: WorkspaceAgentLayout = rooms
+    ? "nested"
+    : preferredAgentLayout;
   const [allServersPreferred, setAllServers] = useState(
     () => worldLocalStorage.getItem(AGENT_LIST_SCOPE_STORAGE_KEY) === "all",
   );
@@ -357,8 +370,11 @@ export function WorkspaceTree({
     setAgentDropTarget(null);
   }, [connectionClient]);
   useEffect(() => {
-    worldLocalStorage.setItem(WORKSPACE_AGENT_LAYOUT_STORAGE_KEY, agentLayout);
-  }, [agentLayout]);
+    worldLocalStorage.setItem(
+      WORKSPACE_AGENT_LAYOUT_STORAGE_KEY,
+      preferredAgentLayout,
+    );
+  }, [preferredAgentLayout]);
   useEffect(() => {
     worldLocalStorage.setItem(
       AGENT_LIST_SCOPE_STORAGE_KEY,
@@ -576,11 +592,13 @@ export function WorkspaceTree({
   const workspacePanel = (
     <div
       key="workspaces"
-      className="panel tree workspace-tree-panel"
+      className={`panel tree workspace-tree-panel${rooms ? " is-world-rooms" : ""}`}
       tabIndex={-1}
     >
-      <div className="panel-head">
-        <h2>Workspaces</h2>
+      {/* World's rooms read as one list under their runtime's row: no
+          heading, and no head at all where there is nothing to do. */}
+      <div className="panel-head" hidden={!!rooms && selectOnly}>
+        {rooms ? null : <h2>Workspaces</h2>}
         <div className="panel-actions">
           {/* Only the classic sidebar chooses a scope, and only when there
               is more than one connected server to choose. */}
@@ -707,6 +725,7 @@ export function WorkspaceTree({
               }
               tabChipsByWorkspace={tabChipsByWorkspace}
               alwaysShowTabCount={agentLayout === "compact"}
+              rooms={rooms}
               activePaneId={activePaneId}
               pinnedWorkspaceKeys={pinnedWorkspaceSet}
               collapsedWorktreeGroupKeys={collapsedWorktreeGroupSet}
@@ -738,7 +757,9 @@ export function WorkspaceTree({
             />
           ))}
       </div>
-      <AgentLayoutControl value={agentLayout} onChange={setAgentLayout} />
+      {rooms ? null : (
+        <AgentLayoutControl value={agentLayout} onChange={setAgentLayout} />
+      )}
     </div>
   );
   const agentsPanel =

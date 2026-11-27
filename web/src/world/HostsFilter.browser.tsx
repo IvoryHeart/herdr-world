@@ -1175,8 +1175,8 @@ async function operationalScenario(unmount: () => void) {
       "The host level must preserve the existing workspace tree",
     );
     check(
-      !!host.querySelector(".workspace-agent-layout-control"),
-      "The host tree lost the existing agent layout controls",
+      !host.querySelector(".workspace-agent-layout-control"),
+      "Spaces offers an agent layout switch instead of listing terminals in their rooms",
     );
     const row = host.querySelector<HTMLElement>('.tree-row[role="treeitem"]');
     if (row) {

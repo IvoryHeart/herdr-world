@@ -366,3 +366,32 @@
   color: color-mix(in srgb, var(--muted) 55%, transparent);
   font-size: 10px;
 }
+
+/* World's rooms in Spaces (world/spacesRooms.ts): the runtime's mark before
+   each room's name, then the room's tabs as rows with their terminals. */
+.workspace-tree-panel.is-world-rooms > .panel-head[hidden] {
+  display: none;
+}
+
+.workspace-runtime-mark {
+  display: inline-grid;
+  flex: 0 0 auto;
+  place-items: center;
+}
+
+.workspace-tab-row > .workspace-tab-label {
+  min-width: 0;
+  overflow: hidden;
+  color: var(--text);
+  font-size: 12px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.workspace-tab-row.is-current > .workspace-tab-label {
+  color: var(--accent);
+}
+
+.workspace-tab-row[aria-disabled="true"] {
+  opacity: 0.7;
+}

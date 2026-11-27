@@ -8,9 +8,7 @@ export type TownRuntimeKind = NonNullable<OfficeRoom["runtimeKind"]>;
 /**
  * A runtime's mark in Town's pixel style, told apart by shape as well as
  * colour: the Herdr TUI is a terminal window with a prompt, herdr-core a
- * diamond around its core.
- *
- * @internal
+ * diamond around its core. Spaces marks its rooms with it too.
  */
 export function TownRuntimeGlyph({
   kind,
