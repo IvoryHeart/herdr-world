@@ -404,7 +404,9 @@ test("all World browser shards and the web browser suites run independently and 
     "${{ fromJSON(inputs.selection).worldShards }}",
   );
   expect(world?.strategy?.["fail-fast"]).toBe(false);
-  expect(world?.strategy?.["max-parallel"]).toBe(worldBrowserShards.length);
+  expect(worldBrowserShards).toHaveLength(18);
+  expect(world?.strategy?.["max-parallel"]).toBe(6);
+  expect(world?.name).toBe("World browser tests (${{ matrix.shard }}/18)");
   expect(
     world?.steps.find(
       (step) =>

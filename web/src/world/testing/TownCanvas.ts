@@ -95,7 +95,7 @@ export function registerTownCanvasCases(group: keyof typeof townCanvasCases) {
         // Every case pins its CSS viewport over CDP: `--window-size` alone
         // gives headless Chrome a wider viewport than a 390px phone (#643),
         // and the fixture fails when the size it measures differs.
-        const fixtureUrl = `${server.url.href}?mode=test&scale=${scale}&flightFrameDelay=${flightFrameDelay}&edgeFrameDelay=${width === 390 && height === 844 && scale === "extended" ? 300 : 0}&viewport=${width}x${height}`;
+        const fixtureUrl = `${server.url.href}?mode=test&scale=${scale}&flightFrameDelay=${flightFrameDelay}&edgeFrameDelay=${width === 390 && height === 844 && (scale === "extended" || scale.startsWith("extended-")) ? 300 : 0}&viewport=${width}x${height}`;
         browser = Bun.spawn(
           [
             chrome!,

@@ -1,6 +1,9 @@
 import assert from "node:assert/strict";
 
-const WORLD_BROWSER_SHARDS = 6;
+// Three logical queues execute serially for heavy scenes. Eighteen smaller
+// shards keep recorded serial work below 150s, leaving time for runner setup;
+// the workflow still admits only six World runners at once.
+const WORLD_BROWSER_SHARDS = 18;
 const WORLD_BROWSER_WORKERS = 3;
 
 export type CaseTimings = Record<string, Record<string, number>>;
@@ -109,22 +112,61 @@ export function worldCaseTestArgs(
   ];
 }
 
+/** Keep CI's isolated scenes isolated even when cases span logical workers. */
+export function worldCaseConcurrency(args: readonly string[]): number {
+  const index = args.findIndex((arg) => /^--parallel(?:=|$)/.test(arg));
+  if (index < 0) return WORLD_BROWSER_WORKERS;
+  const count = Number(
+    args[index]!.includes("=") ? args[index]!.split("=")[1] : args[index + 1],
+  );
+  assert(
+    Number.isInteger(count) && count > 0,
+    "Invalid World case concurrency",
+  );
+  return Math.min(count, WORLD_BROWSER_WORKERS);
+}
+
 /** Finish every case group, even after a failed assertion; keep workers bounded. */
 export async function executeWorldBrowserCases(
   workers: readonly (readonly WorldCaseTask[])[],
   files: readonly string[],
   run: (task: WorldCaseTask, worker: number, index: number) => Promise<number>,
+  concurrency = WORLD_BROWSER_WORKERS,
 ): Promise<number> {
   assert(
     workers.length <= WORLD_BROWSER_WORKERS,
     "Too many World case workers",
   );
+  assert(
+    Number.isInteger(concurrency) &&
+      concurrency > 0 &&
+      concurrency <= WORLD_BROWSER_WORKERS,
+    "Invalid World case concurrency",
+  );
+  let active = 0;
+  const waiting: (() => void)[] = [];
+  const limitedRun = async (
+    task: WorldCaseTask,
+    worker: number,
+    index: number,
+  ) => {
+    if (active === concurrency)
+      await new Promise<void>((resolve) => waiting.push(resolve));
+    else active++;
+    try {
+      return await run(task, worker, index);
+    } finally {
+      const next = waiting.shift();
+      if (next) next();
+      else active--;
+    }
+  };
   const results = await Promise.allSettled(
     workers.map(async (tasks, worker) => {
       let result = 0;
       for (const [index, task] of tasks.entries()) {
         if (!files.includes(task.file)) continue;
-        const code = await run(task, worker, index);
+        const code = await limitedRun(task, worker, index);
         if (code !== 0) result = code;
         // Assertion failures report later cases; a signal/crash stops the worker.
         if (code !== 0 && code !== 1) return code;

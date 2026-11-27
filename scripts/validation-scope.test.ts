@@ -585,7 +585,7 @@ test("World CI isolates full scenes while keeping lightweight files parallel, wi
     "WorldTerminalHandoff",
   ])
     expect(isolated).toContain(`web/src/world/${file}.test.ts`);
-  for (let shard = 1; shard <= 6; shard++) {
+  for (let shard = 1; shard <= worldBrowserShards.length; shard++) {
     const actual = ciTestBatches(all, "world", String(shard));
     expect(actual.flatMap((batch) => batch.files).sort()).toEqual(
       selectedCITests(all, "world", String(shard)).sort(),

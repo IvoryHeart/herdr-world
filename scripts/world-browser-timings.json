@@ -283,9 +283,15 @@
       "the Library keeps drafts, hosts and searches to their owner": 1.607957
     },
     "web/src/world/town/TownCanvas.extended.test.ts": {
-      "the Office town renders, queues blocked agents and zooms into rooms at 1440px by 900px (extended, 0ms zoom frames)": 35.660752,
-      "the Office town renders, queues blocked agents and zooms into rooms at 390px by 844px (extended, 0ms zoom frames)": 26.626554,
-      "the Office town renders, queues blocked agents and zooms into rooms at 960px by 1080px (extended, 0ms zoom frames)": 37.212419
+      "the Office town renders, queues blocked agents and zooms into rooms at 1440px by 900px (extended-controls, 0ms zoom frames)": 21.548131,
+      "the Office town renders, queues blocked agents and zooms into rooms at 1440px by 900px (extended-moves, 0ms zoom frames)": 26.702247,
+      "the Office town renders, queues blocked agents and zooms into rooms at 1440px by 900px (extended-reflow, 0ms zoom frames)": 27.204991,
+      "the Office town renders, queues blocked agents and zooms into rooms at 390px by 844px (extended-controls, 0ms zoom frames)": 16.875518,
+      "the Office town renders, queues blocked agents and zooms into rooms at 390px by 844px (extended-moves, 0ms zoom frames)": 22.138534,
+      "the Office town renders, queues blocked agents and zooms into rooms at 390px by 844px (extended-reflow, 0ms zoom frames)": 16.875518,
+      "the Office town renders, queues blocked agents and zooms into rooms at 960px by 1080px (extended-controls, 0ms zoom frames)": 20.40414,
+      "the Office town renders, queues blocked agents and zooms into rooms at 960px by 1080px (extended-moves, 0ms zoom frames)": 31.792079,
+      "the Office town renders, queues blocked agents and zooms into rooms at 960px by 1080px (extended-reflow, 0ms zoom frames)": 21.447118
     },
     "web/src/world/town/TownCanvas.fold.test.ts": {
       "the Office town renders, queues blocked agents and zooms into rooms at 1080px by 1920px (fold, 0ms zoom frames)": 9.519149,
@@ -380,7 +386,7 @@
     "groups/GroupsWindow": 19.857446,
     "memory/MemoryLibrary.browser": 9.270601,
     "memory/MemoryLibraryLifecycle.browser": 1.607957,
-    "town/TownCanvas.extended": 99.499725,
+    "town/TownCanvas.extended": 204.988276,
     "town/TownCanvas.fold": 48.585447,
     "town/TownCanvas.navigation": 65.258218,
     "town/TownCanvas.portrait": 148.994385,
@@ -430,6 +436,17 @@
       "the Office town renders, queues blocked agents and zooms into rooms at 1080px by 1920px (extended-controls, 0ms zoom frames)",
       "the Office town renders, queues blocked agents and zooms into rooms at 1080px by 1920px (extended-moves, 0ms zoom frames)",
       "the Office town renders, queues blocked agents and zooms into rooms at 1080px by 1920px (extended-reflow, 0ms zoom frames)"
+    ],
+    "web/src/world/town/TownCanvas.extended.test.ts": [
+      "the Office town renders, queues blocked agents and zooms into rooms at 1440px by 900px (extended-controls, 0ms zoom frames)",
+      "the Office town renders, queues blocked agents and zooms into rooms at 1440px by 900px (extended-moves, 0ms zoom frames)",
+      "the Office town renders, queues blocked agents and zooms into rooms at 1440px by 900px (extended-reflow, 0ms zoom frames)",
+      "the Office town renders, queues blocked agents and zooms into rooms at 390px by 844px (extended-controls, 0ms zoom frames)",
+      "the Office town renders, queues blocked agents and zooms into rooms at 390px by 844px (extended-moves, 0ms zoom frames)",
+      "the Office town renders, queues blocked agents and zooms into rooms at 390px by 844px (extended-reflow, 0ms zoom frames)",
+      "the Office town renders, queues blocked agents and zooms into rooms at 960px by 1080px (extended-controls, 0ms zoom frames)",
+      "the Office town renders, queues blocked agents and zooms into rooms at 960px by 1080px (extended-moves, 0ms zoom frames)",
+      "the Office town renders, queues blocked agents and zooms into rooms at 960px by 1080px (extended-reflow, 0ms zoom frames)"
     ]
   }
 }

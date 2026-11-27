@@ -12,6 +12,7 @@ import {
 import timings from "./world-browser-timings.json";
 import {
   executeWorldBrowserCases,
+  worldCaseConcurrency,
   worldCaseTestArgs,
 } from "./world-browser-cases";
 
@@ -25,7 +26,9 @@ if (
   args.some((arg) => arg.startsWith("--shard") && arg !== shardArg) ||
   (shardArg && !shard)
 ) {
-  throw new Error("Use --shard=i/6 to select World browser suites");
+  throw new Error(
+    `Use --shard=i/${worldBrowserCasePlan.length} to select World browser suites`,
+  );
 }
 const shardFiles = selectWorldBrowserShard(shard);
 const files = named.length
@@ -125,8 +128,9 @@ try {
     if (testArgs.some((arg) => /^(?:-t|--test-name-pattern)(?:=|$)/.test(arg)))
       throw new Error("A case shard cannot also narrow test names");
     const workers = worldBrowserCasePlan[Number(shard.split("/")[0]) - 1]!;
+    const concurrency = worldCaseConcurrency(testArgs);
     console.info(
-      `[world-test-runner] ${label}: ${workers.length} isolated workers; recorded loads ${workers.map((tasks) => Math.round(tasks.filter((task) => files.includes(task.file)).reduce((sum, task) => sum + task.seconds, 0))).join(" / ")} seconds`,
+      `[world-test-runner] ${label}: ${workers.length} isolated workers, concurrency ${concurrency}; recorded loads ${workers.map((tasks) => Math.round(tasks.filter((task) => files.includes(task.file)).reduce((sum, task) => sum + task.seconds, 0))).join(" / ")} seconds`,
     );
     process.exitCode = await executeWorldBrowserCases(
       workers,
@@ -137,6 +141,7 @@ try {
           `-worker-${worker + 1}-file-${index + 1}`,
           worldCaseTestArgs(task, timings.cases),
         ),
+      concurrency,
     );
   } else {
     process.exitCode = await run(files, "");

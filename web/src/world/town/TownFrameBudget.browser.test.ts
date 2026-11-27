@@ -343,8 +343,20 @@ test.skipIf(!chrome).each(["home-pan", "zoom", "desk-pan", "composer"])(
         }
         typingDraws = (await draws()) - typed;
         const resumed = await draws();
-        await evaluate("new Promise((r) => setTimeout(r, 1000))");
-        resumedDraws = (await draws()) - resumed;
+        // This is a frame-count assertion, not a one-second speed budget.
+        // Shared software-rendering CPUs may present only one frame per second.
+        const afterResume = await evaluate(
+          `new Promise((resolve) => {
+            const sample = () => {
+              const frames = window.__HERDR_TOWN_RENDERER__.frames;
+              if (frames - ${resumed} > ${typingDraws}) resolve(frames);
+              else requestAnimationFrame(sample);
+            };
+            sample();
+          })`,
+          MEASURE_DEADLINE_MS,
+        );
+        resumedDraws = afterResume - resumed;
         value = await evaluate(
           "document.querySelector('.terminal-composer-input').value.length",
         );

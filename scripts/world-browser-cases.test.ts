@@ -11,6 +11,7 @@ import {
   planWorldBrowserCases,
   worldCasePattern,
   worldCaseTestArgs,
+  worldCaseConcurrency,
 } from "./world-browser-cases";
 
 test("individual cases from a heavy file occupy different workers", () => {
@@ -71,14 +72,15 @@ test("invalid timing data and worker counts fail closed", () => {
   expect(() => planWorldBrowserCases(["a", "a"], {})).toThrow();
 });
 
-test("the committed case plan leaves headroom below three minutes without adding jobs", () => {
-  expect(worldBrowserCasePlan).toHaveLength(6);
+test("the committed case plan budgets serial scenes below three minutes", () => {
+  expect(worldBrowserCasePlan).toHaveLength(18);
   for (const workers of worldBrowserCasePlan) {
     expect(workers).toHaveLength(3);
-    for (const tasks of workers)
-      expect(tasks.reduce((sum, task) => sum + task.seconds, 0)).toBeLessThan(
-        150,
-      );
+    // Heavy scenes execute serially: budget the sum of every logical queue,
+    // leaving at least 30 seconds for setup, rather than only its longest queue.
+    expect(
+      workers.flat().reduce((sum, task) => sum + task.seconds, 0),
+    ).toBeLessThan(150);
   }
   for (const cases of Object.values(timings.cases))
     for (const seconds of Object.values(cases))
@@ -229,4 +231,76 @@ test("case workers stay bounded and a failed group does not hide later violation
   expect(result).toBe(1);
   expect(peak).toBe(3);
   expect(seen.sort()).toEqual(["a1", "a2", "b1", "b2", "c1", "c2"]);
+});
+
+for (const concurrency of [1, 2])
+  test(`case workers honor scene isolation at concurrency ${concurrency}`, async () => {
+    const queues = ["a", "b", "c"].map((prefix) =>
+      [1, 2].map((index) => ({
+        file: `${prefix}${index}`,
+        names: [],
+        remaining: true,
+        seconds: 1,
+      })),
+    );
+    let active = 0,
+      peak = 0;
+    const seen: string[] = [];
+    const result = await executeWorldBrowserCases(
+      queues,
+      queues.flat().map((task) => task.file),
+      async (task, worker, index) => {
+        active++;
+        peak = Math.max(peak, active);
+        seen.push(`${worker}/${index}:${task.file}`);
+        await Promise.resolve();
+        active--;
+        return task.file === "a1" ? 1 : 0;
+      },
+      concurrency,
+    );
+    expect(peak).toBe(concurrency);
+    expect(result).toBe(1);
+    expect(seen.sort()).toEqual([
+      "0/0:a1",
+      "0/1:a2",
+      "1/0:b1",
+      "1/1:b2",
+      "2/0:c1",
+      "2/1:c2",
+    ]);
+  });
+
+test("a rejected case releases an isolated slot before reporting the error", async () => {
+  const queues = ["a", "b", "c"].map((file) => [
+    { file, names: [], remaining: true, seconds: 1 },
+  ]);
+  const seen: string[] = [];
+  await expect(
+    executeWorldBrowserCases(
+      queues,
+      ["a", "b", "c"],
+      async (task) => {
+        seen.push(task.file);
+        if (task.file === "a") throw new Error("browser launch failed");
+        return 1;
+      },
+      1,
+    ),
+  ).rejects.toThrow("browser launch failed");
+  expect(seen).toEqual(["a", "b", "c"]);
+});
+
+test("World case concurrency honors both Bun argument forms and the worker cap", () => {
+  expect(worldCaseConcurrency([])).toBe(3);
+  expect(worldCaseConcurrency(["--parallel=1"])).toBe(1);
+  expect(worldCaseConcurrency(["--parallel", "2"])).toBe(2);
+  expect(worldCaseConcurrency(["--parallel=8"])).toBe(3);
+  for (const args of [
+    ["--parallel"],
+    ["--parallel=0"],
+    ["--parallel=-1"],
+    ["--parallel=1.5"],
+  ])
+    expect(() => worldCaseConcurrency(args)).toThrow();
 });

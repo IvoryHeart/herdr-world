@@ -5,8 +5,8 @@ export type TownCanvasCase = [
   flightFrameDelay: number,
 ];
 
-// The original 22 parameter tuples, partitioned without changing fixture
-// behavior, plus the reception filter cases (#501).
+// Synthetic viewports partitioned into independent journeys, retaining
+// every interaction and the reception filter cases (#501).
 export const townCanvasCases = {
   baseline: [
     [1440, 900, "typical", 0],
@@ -20,11 +20,17 @@ export const townCanvasCases = {
     [390, 844, "reception", 0],
     [1440, 900, "reception", 0],
   ],
-  extended: [
-    [390, 844, "extended", 0],
-    [960, 1080, "extended", 0],
-    [1440, 900, "extended", 0],
-  ],
+  extended: (
+    [
+      [390, 844],
+      [960, 1080],
+      [1440, 900],
+    ] as const
+  ).flatMap(([width, height]) =>
+    ["controls", "moves", "reflow"].map(
+      (phase): TownCanvasCase => [width, height, `extended-${phase}`, 0],
+    ),
+  ),
   portrait: [
     [1080, 1920, "extended-controls", 0],
     [1080, 1920, "extended-moves", 0],

@@ -290,7 +290,7 @@ bun run test <path>           # focused Bun test
 bun run test:quick            # non-Chromium suite
 CHROME_BIN=/path/to/chromium bun run test:browser
 bun run test:world            # all World browser acceptance suites
-bun run test:world --shard=1/6 # reproduce a CI case shard, three isolated workers
+bun run test:world --shard=1/18 --parallel=1 # case shard with heavy-scene isolation
 bun run test --web-browser    # Chrome-driven suites outside World, as CI's web job runs them
 bun run build:site            # landing page/tutorial
 bun run check                 # repository checks and tests
@@ -299,8 +299,10 @@ bun run check:delivery        # full local gate, including behavioral verificati
 
 Use `bun run test <path>` for every ordinary test, including focused cases.
 
-World's six browser jobs balance individual case durations from
+World's 18 browser shards (at most six concurrent jobs) balance individual case durations from
 `scripts/world-browser-timings.json` across three process-isolated workers each.
+The runner honors `--parallel=1` for CI's heavy-scene batch and `--parallel=2`
+for its lightweight batch; three logical timing queues do not override that limit.
 Each selected file has exactly one fallback selector for new or renamed cases;
 missing timings never exclude tests. Exact-name tasks allow zero matches when
 recorded names have been renamed or deleted; the fallback still fails if it

@@ -17,9 +17,9 @@ permissions:
     contents: read
 
 jobs:
-    # Per-case timing assignment, three process-isolated workers per runner.
+    # Small case partitions; retain six runners and heavy-scene isolation.
     world-browser:
-        name: World browser tests (${{ matrix.shard }}/6)
+        name: World browser tests (${{ matrix.shard }}/18)
         if: inputs.lane == 'world' && toJSON(fromJSON(inputs.selection).world) != '[]'
         runs-on: ubuntu-latest
         timeout-minutes: ${{ inputs.stability && 45 || 15 }}
@@ -48,7 +48,7 @@ jobs:
                   WORLD_TRACE_PREFIX: .agents/delivery/world-production
                   WORLD_TIMINGS_ONLY: "1"
                   HERDR_CI_SELECTION: ${{ inputs.selection }}
-                  HERDR_WORLD_TEST_LABEL: shard-${{ matrix.shard }}-of-6
+                  HERDR_WORLD_TEST_LABEL: shard-${{ matrix.shard }}-of-18
                   HERDR_CI_WORLD_RUNS: ${{ inputs.stability && '3' || '1' }}
               run: bun scripts/ci-tests.ts world ${{ matrix.shard }}
             - name: Retain flaky test evidence

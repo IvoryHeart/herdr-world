@@ -33,12 +33,12 @@ test("World selections and unknown selectors take the browser slot", () => {
   ).toBe(true);
 });
 
-test("six case shards cover the complete World browser file inventory", async () => {
+test("case shards cover the complete World browser file inventory", async () => {
   await assertWorldBrowserInventory();
   const selected = [
     ...new Set(
       worldBrowserShards.flatMap((_, index) =>
-        selectWorldBrowserShard(`${index + 1}/6`),
+        selectWorldBrowserShard(`${index + 1}/${worldBrowserShards.length}`),
       ),
     ),
   ].sort();
@@ -63,7 +63,13 @@ test("trend and runtime suites are ordinary sharded World suites", () => {
 });
 
 test("invalid shard requests fail instead of silently skipping tests", () => {
-  for (const shard of ["0/6", "7/6", "1/8", "bad", "1/6/2"])
+  for (const shard of [
+    `0/${worldBrowserShards.length}`,
+    `${worldBrowserShards.length + 1}/${worldBrowserShards.length}`,
+    "1/8",
+    "bad",
+    "1/18/2",
+  ])
     expect(() => selectWorldBrowserShard(shard)).toThrow();
 });
 
