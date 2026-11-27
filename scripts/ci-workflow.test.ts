@@ -186,6 +186,55 @@ test("the full-mode graph uses at most sixteen jobs, including every reusable ma
     expect(fullModeJobs(event)).toBeLessThanOrEqual(16);
 });
 
+test("combined runner workloads survive unit failure but stop on cancellation", () => {
+  const steps = workflow.jobs["unit-tests"].steps;
+  const workloads = steps.filter(
+    (step) =>
+      step.run === "bun run check:static --static-group=${{ matrix.group }}" ||
+      step.run === "bun run security:check" ||
+      step.run?.startsWith("bun scripts/test-chrome.ts") ||
+      step.run?.startsWith("bun scripts/ci-tests.ts web ") ||
+      step.uses?.startsWith("actions/cache@"),
+  );
+  expect(workloads).toHaveLength(5);
+  for (const step of workloads) {
+    const evaluate = new Function(
+      "cancelled",
+      "always",
+      "matrix",
+      "needs",
+      "fromJSON",
+      "toJSON",
+      `return (${step.if!.replace(/^\$\{\{\s*|\s*\}\}$/g, "").replace(/needs\.([\w-]+)/g, 'needs["$1"]')})`,
+    );
+    for (const cancelled of [false, true]) {
+      expect(
+        evaluate(
+          () => cancelled,
+          () => true,
+          { group: "repository", web: 1 },
+          {
+            "validation-scope": {
+              outputs: { world: "true", selection: '{"web":["all"]}' },
+            },
+          },
+          JSON.parse,
+          JSON.stringify,
+        ),
+      ).toBe(!cancelled);
+    }
+    expect(step.if).toContain("cancelled()");
+  }
+});
+
+test("Delivery evidence conditions reference only declared dependencies", () => {
+  const delivery = workflow.jobs.delivery;
+  for (const step of delivery.steps) {
+    for (const match of step.if?.matchAll(/needs\.([\w-]+)\./g) ?? [])
+      expect(delivery.needs).toContain(match[1]!);
+  }
+});
+
 test("World stability label selects fresh full evidence and three consecutive passes", () => {
   const requested = `\${{ contains(github.event.pull_request.labels.*.name, '${STABILITY_LABEL}') }}`;
   expect(workflow.jobs["world-browser"].with?.stability).toBe(requested);
@@ -241,7 +290,9 @@ test("delivery checks the combined lanes, current audit and PR description", () 
     workflow.jobs["unit-tests"].steps.find(
       (step) => step.run === "bun run security:check",
     ),
-  ).toMatchObject({ if: "always() && matrix.group == 'repository'" });
+  ).toMatchObject({
+    if: "${{ !cancelled() && matrix.group == 'repository' }}",
+  });
   expect(
     workflow.jobs.static.steps.some(
       (step) => step.run === "bun run security:check",
@@ -476,16 +527,19 @@ test("no timing gates delivery: browser jobs use the pinned Chrome and delegate 
   expect(worldWorkflow.jobs["world-latency"]).toBeUndefined();
   expect(JSON.stringify(worldWorkflow)).not.toContain("--retry");
   expect(JSON.stringify(worldWorkflow)).not.toContain("latency");
-  for (const name of ["world-browser", "web-shards"]) {
-    const runs = worldWorkflow.jobs[name]!.steps.flatMap((step) =>
-      step.run ? [step.run] : [],
-    );
+  for (const job of [
+    worldWorkflow.jobs["world-browser"]!,
+    workflow.jobs["unit-tests"]!,
+  ]) {
+    const runs = job.steps.flatMap((step) => (step.run ? [step.run] : []));
     const chrome = runs.indexOf(
       'bun scripts/test-chrome.ts "$HOME/.cache/herdr-test-chrome"',
     );
     expect(chrome).toBeGreaterThan(-1);
     expect(chrome).toBeLessThan(
-      runs.findIndex((run) => run.startsWith("bun scripts/ci-tests.ts")),
+      runs.findIndex((run) =>
+        /^bun scripts\/ci-tests.ts (world|web) /.test(run),
+      ),
     );
   }
 });
@@ -548,20 +602,17 @@ test("the latency trend measures the trend suites on quiet runners and reports w
   expect(workflow.jobs["world-latency-trend"]).toBeUndefined();
 });
 
-test("all World browser shards and the web browser suites run independently and retain failure evidence", () => {
+test("World shards and packed web suites retain their partitions and failure evidence", () => {
   expect(workflow.jobs["world-browser"]).toMatchObject({
     needs: "validation-scope",
     if: "needs.validation-scope.outputs.world == 'true' && toJSON(fromJSON(needs.validation-scope.outputs.selection).world) != '[]'",
     uses: "./.github/workflows/world-browser.yml",
-    with: { lane: "world" },
   });
   expect(Object.keys(worldWorkflow.on)).toEqual(["workflow_call"]);
   expect(worldWorkflow.permissions.contents).toBe("read");
   const world = worldWorkflow.jobs["world-browser"];
   expect(world?.needs).toBeUndefined();
-  expect(world?.if).toBe(
-    "inputs.lane == 'world' && toJSON(fromJSON(inputs.selection).world) != '[]'",
-  );
+  expect(world?.if).toBe("toJSON(fromJSON(inputs.selection).world) != '[]'");
   expect(world?.["continue-on-error"] ?? false).toBe(false);
   expect(world.steps.filter((step) => step["continue-on-error"])).toHaveLength(
     0,
@@ -595,12 +646,7 @@ test("all World browser shards and the web browser suites run independently and 
       ),
     },
   });
-  const web = worldWorkflow.jobs["web-shards"];
-  expect(web?.needs).toBeUndefined();
-  expect(web?.if).toBe(
-    "inputs.lane == 'web' && toJSON(fromJSON(inputs.selection).web) != '[]'",
-  );
-  expect(web?.strategy?.matrix?.shard).toEqual([1, 2]);
+  expect(Object.keys(worldWorkflow.jobs)).toEqual(["world-browser"]);
   const packed = workflow.jobs["unit-tests"];
   const webStep = packed.steps.find(
     (step) => step.run === "bun scripts/ci-tests.ts web ${{ matrix.web }}/2",
@@ -609,7 +655,7 @@ test("all World browser shards and the web browser suites run independently and 
     packed.strategy?.matrix?.include?.map((row) => row.web).filter(Boolean),
   ).toEqual([1, 2]);
   expect(webStep.env?.HERDR_TEST_EXCLUDE_WORLD_BROWSER).toBe("0");
-  expect(webStep.if).toContain("always()");
+  expect(webStep.if).toContain("!cancelled()");
   expect(webStep.if).toContain("matrix.web != 0");
   expect(webStep.if).toContain(".web) != '[]'");
   expect(packed.steps.indexOf(webStep)).toBeGreaterThan(
@@ -617,18 +663,19 @@ test("all World browser shards and the web browser suites run independently and 
       (step) => step.name === "Run affected non-browser tests",
     ),
   );
-  expect(web.steps.filter((step) => step["continue-on-error"])).toHaveLength(0);
+  expect(packed.steps.filter((step) => step["continue-on-error"])).toHaveLength(
+    0,
+  );
   expect(
-    web?.steps.find(
-      (step) =>
-        step.run === "bun scripts/ci-tests.ts web ${{ matrix.shard }}/2",
+    packed.steps.find(
+      (step) => step.run === "bun scripts/ci-tests.ts web ${{ matrix.web }}/2",
     ),
   ).toMatchObject({
-    run: "bun scripts/ci-tests.ts web ${{ matrix.shard }}/2",
+    run: "bun scripts/ci-tests.ts web ${{ matrix.web }}/2",
     env: { HERDR_TEST_PARALLEL: "2", HERDR_TEST_MAX_CONCURRENCY: "2" },
   });
   expect(
-    web?.steps.find((step) =>
+    packed.steps.find((step) =>
       step.uses?.startsWith("actions/upload-artifact@"),
     ),
   ).toMatchObject({ if: "always()" });
@@ -1092,7 +1139,7 @@ test("Static checks retain concurrent command logs even after failure", () => {
         step.run === "bun run check:static --static-group=${{ matrix.group }}",
     ),
   ).toMatchObject({
-    if: "always() && matrix.group != ''",
+    if: "${{ !cancelled() && matrix.group != '' }}",
   });
   expect(job.steps.filter((step) => step["continue-on-error"])).toHaveLength(0);
   expect(

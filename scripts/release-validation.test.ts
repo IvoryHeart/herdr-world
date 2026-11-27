@@ -185,7 +185,7 @@ test("Linux test jobs delegate scoped recovery; models never retry and main runs
   for (const [file, name, needle] of [
     ["ci", "unit-tests", "ci-tests.ts unit"],
     ["world-browser", "world-browser", "ci-tests.ts world"],
-    ["world-browser", "web-shards", "ci-tests.ts web"],
+    ["ci", "unit-tests", "ci-tests.ts web"],
     ["behavioral-verification", "shards", "ci-model-groups.ts run"],
   ]) {
     const job = workflow(file).jobs[name];

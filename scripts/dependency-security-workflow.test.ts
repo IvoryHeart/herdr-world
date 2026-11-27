@@ -8,7 +8,7 @@ test("live audit blocks the protected delivery result, release publication and P
   const audit = ci.jobs["unit-tests"].steps.find(
     (step: any) => step.run === "bun run security:check",
   );
-  expect(audit.if).toBe("always() && matrix.group == 'repository'");
+  expect(audit.if).toBe("${{ !cancelled() && matrix.group == 'repository' }}");
   expect(audit["continue-on-error"]).toBeUndefined();
   expect(ci.jobs["unit-tests"].if).toBe(
     "needs.validation-scope.outputs.mode != 'reuse' && needs.validation-scope.outputs.mode != 'hold' && needs.validation-scope.outputs.mode != 'docs'",

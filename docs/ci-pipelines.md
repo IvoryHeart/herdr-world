@@ -33,7 +33,8 @@ three static groups remain separate: `types` follows unit shard 2, `build` follo
 unit shard 3, and `repository` plus shipped dependency security follows unit shard
 4. Web browser partitions 1 and 2 follow unit shards 1 and 2. These steps run
 sequentially on each runner, preserving the unit and Chrome concurrency limits;
-static and browser checks still run after a unit failure. Each static group
+static and browser checks still run after a unit failure but stop on cancellation.
+Evidence uploads remain unconditional. Each static group
 publishes its own summary and `static-check-logs-<group>` artifact. Documentation
 changes run `check:docs` and dependency security on one repository runner.
 Checkout retains full Git history for ratchets, filtering historical file blobs.

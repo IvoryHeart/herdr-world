@@ -268,7 +268,7 @@ jobs:
                   retention-days: 7
 
             - name: Run static repository checks
-              if: always() && matrix.group != ''
+              if: ${{ !cancelled() && matrix.group != '' }}
               run: bun run check:static --static-group=${{ matrix.group }}
             - name: Upload static check logs
               if: always() && matrix.group != ''
@@ -280,18 +280,18 @@ jobs:
                   if-no-files-found: error
 
             - name: Audit shipped dependencies
-              if: always() && matrix.group == 'repository'
+              if: ${{ !cancelled() && matrix.group == 'repository' }}
               run: bun run security:check
-            - if: always() && matrix.web != 0 && needs.validation-scope.outputs.world == 'true' && toJSON(fromJSON(needs.validation-scope.outputs.selection).web) != '[]'
+            - if: ${{ !cancelled() && matrix.web != 0 && needs.validation-scope.outputs.world == 'true' && toJSON(fromJSON(needs.validation-scope.outputs.selection).web) != '[]' }}
               uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
               with:
                   path: ~/.cache/herdr-test-chrome
                   key: test-chrome-${{ hashFiles('tools/chrome/test-chrome.json') }}
             - name: Install the pinned test Chrome
-              if: always() && matrix.web != 0 && needs.validation-scope.outputs.world == 'true' && toJSON(fromJSON(needs.validation-scope.outputs.selection).web) != '[]'
+              if: ${{ !cancelled() && matrix.web != 0 && needs.validation-scope.outputs.world == 'true' && toJSON(fromJSON(needs.validation-scope.outputs.selection).web) != '[]' }}
               run: bun scripts/test-chrome.ts "$HOME/.cache/herdr-test-chrome"
             - name: Run web browser suites
-              if: always() && matrix.web != 0 && needs.validation-scope.outputs.world == 'true' && toJSON(fromJSON(needs.validation-scope.outputs.selection).web) != '[]'
+              if: ${{ !cancelled() && matrix.web != 0 && needs.validation-scope.outputs.world == 'true' && toJSON(fromJSON(needs.validation-scope.outputs.selection).web) != '[]' }}
               env:
                   HERDR_TEST_PARALLEL: "2"
                   HERDR_TEST_EXCLUDE_WORLD_BROWSER: "0"
@@ -323,7 +323,6 @@ jobs:
         if: needs.validation-scope.outputs.world == 'true' && toJSON(fromJSON(needs.validation-scope.outputs.selection).world) != '[]'
         uses: ./.github/workflows/world-browser.yml
         with:
-            lane: world
             selection: ${{ needs.validation-scope.outputs.selection }}
             stability: ${{ contains(github.event.pull_request.labels.*.name, 'world-browser-stability') }}
 
@@ -356,7 +355,7 @@ jobs:
                   bun-version: "1.4.4"
                   no-cache: true
             - name: Download flaky test evidence
-              if: always() && (needs.unit-tests.result != 'skipped' || needs.world-browser.result != 'skipped' || needs.web-browser.result != 'skipped')
+              if: always() && (needs.unit-tests.result != 'skipped' || needs.world-browser.result != 'skipped')
               uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8
               with:
                   pattern: flaky-tests-*
