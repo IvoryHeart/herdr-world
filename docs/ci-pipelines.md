@@ -43,12 +43,37 @@ changes select full Linux validation. Packaging scope remains descriptive; every
 PR check runs on Linux. Native storage/plugin/launchd checks and running upgrades
 belong to the nightly or release candidate, never a PR matrix.
 
+Scope checks out the complete Git history with `filter: blob:none`. The PR
+description policy runs as its own leaf after scope, alongside static checks,
+units, dependency security, World and web browser shards, and model shards.
+**Delivery checks** depends directly on those leaves and requires each selected
+lane to succeed; unselected lanes must be skipped. There are no intervening
+repository, web-browser or behavioral aggregate runners in the PR graph.
+Delivery downloads the model manifests and resource receipts, applies the same
+complete source/tool/model/resource checks, and retains the canonical evidence
+artifact. This aggregation needs Bun and Git, without Node, Java, dependency
+installation or checker setup. Cache admission checks the installed pinned
+shard tools. Each bundle retains their full Node/Java/Bun and platform identity;
+aggregation recomputes the key from that receipt and the current input closure,
+then checks every case's tools and origin artifacts. It never probes Delivery's
+unrelated Node/Java installations. Missing or altered receipts fail closed.
+A direct manual **Behavioral verification** run
+still aggregates its own shards and retains the same canonical artifact.
+
 Main reports passing full or scoped PR evidence only when immutable checkout
 proof establishes an identical tree. A newer red/cancelled verdict is never
 skipped; absent proof or API errors keep a red metadata result without starting
 another suite. Nightly catches integration/platform failures as one advisory issue.
 PR reuse still requires the same scope and checkout/base/head identities.
 The stability opt-in explicitly requests fresh repeated browser passes.
+
+If only **PR description** and **Delivery checks** fail, with scope successful
+and all code leaves successful or skipped in the same run, correcting the
+body and adding an eligible label permits fresh validation. This also works after
+**Re-run failed jobs**: successful/skipped leaves may carry earlier attempts,
+while the failed description and Delivery must belong to the current attempt.
+Failed Delivery evidence is still not reusable, and an earlier code failure still holds the head
+red. Rerunning the description job alone replays its original event body.
 
 After the owner approves a PR, it joins the merge queue for `main`. GitHub
 combines it with current main and any preceding queued PRs, then sends
@@ -207,12 +232,13 @@ all four suites, paired over two quiet runners with a fresh quiet check before
 each suite. This reduces that workflow from five jobs to three; queue delays
 remain visible in health reports.
 
-`Repository validation`, `Web browser tests`, `Behavioral
-verification`, `Delivery checks` and both macOS report names remain. Leaf jobs
-report their check results immediately on completion; aggregate jobs require
-success from all applicable leaves. No crew automation or branch protection is
-changed. Actual elapsed CI times come from workflow runs, rather than from a
-claimed bound on shared hosted runners.
+PR CI reports `Validation scope`, `PR description`, the static, dependency,
+unit, World browser, web browser and model leaves, and `Delivery checks`.
+Leaf jobs report their check results immediately on completion; Delivery
+requires success from all applicable leaves. Advisory macOS reports remain in
+their own workflows. No crew automation or branch protection is changed.
+Actual elapsed CI times come from workflow runs, rather than from a claimed
+bound on shared hosted runners.
 
 The size ratchet evaluates the proposed merge into the target against main's
 ratchet policy. A branch behind main inherits main's lowered ceilings, while a

@@ -3,6 +3,9 @@ name: World browser validation
 on:
     workflow_call:
         inputs:
+            lane:
+                required: true
+                type: string
             selection:
                 required: true
                 type: string
@@ -16,7 +19,7 @@ permissions:
 jobs:
     world-browser:
         name: World browser tests (${{ matrix.shard }}/6)
-        if: toJSON(fromJSON(inputs.selection).world) != '[]'
+        if: inputs.lane == 'world' && toJSON(fromJSON(inputs.selection).world) != '[]'
         runs-on: ubuntu-latest
         timeout-minutes: ${{ inputs.stability && 45 || 15 }}
         strategy:
@@ -74,7 +77,7 @@ jobs:
     # Two isolated files per runner; each case retains its own profile and state.
     web-shards:
         name: Web browser shard (${{ matrix.shard }}/2)
-        if: toJSON(fromJSON(inputs.selection).web) != '[]'
+        if: inputs.lane == 'web' && toJSON(fromJSON(inputs.selection).web) != '[]'
         runs-on: ubuntu-latest
         timeout-minutes: 15
         strategy:
@@ -120,13 +123,3 @@ jobs:
                   include-hidden-files: true
                   if-no-files-found: warn
                   retention-days: 7
-
-    web-browser:
-        name: Web browser tests
-        needs: web-shards
-        if: always() && toJSON(fromJSON(inputs.selection).web) != '[]'
-        runs-on: ubuntu-latest
-        steps:
-            - env:
-                  RESULT: ${{ needs.web-shards.result }}
-              run: test "$RESULT" = success
