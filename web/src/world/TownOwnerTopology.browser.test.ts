@@ -488,7 +488,7 @@ test.skipIf(!chrome)(
         result = Promise.withResolvers<string[]>();
         requested = Promise.withResolvers<void>();
         await command("Page.navigate", {
-          url: `${server.url.href}?townBuildings=${mode}`,
+          url: `${server.url.href}?grouping=${mode}`,
         });
         expect(
           await waitForBrowserFixture(

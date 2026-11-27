@@ -28,6 +28,23 @@ pins) SHALL run once, on the service.
 - **WHEN** the CLI lists an agent that Town also shows
 - **THEN** both show the same name, colour, group, status and pin from one revision
 
+#### Scenario: Runtimes regroup
+- **WHEN** the "Group runtimes" setting changes, or a host joins, drops or reconnects
+- **THEN** one revision carries the setting with both levels: the hosts (machines) and,
+  within each, Town's buildings, with their members, order and labels, and the view
+  of each shared endpoint that Town shows
+- **AND** Desk, Board, Spaces, the hosts control and its filter, and `herdr-world ls`
+  list and count the published hosts under their labels, and Town draws the published
+  buildings
+- **AND** only the explicit setting change leaves a history entry, recorded before the
+  setting is written
+
+#### Scenario: A host is a machine
+- **WHEN** one machine runs a Herdr TUI and a herdr-core and a second machine runs one
+  runtime
+- **THEN** every view and `herdr-world ls` shows 2 hosts under either setting
+- **AND** Town draws 2 buildings under "One per machine" and 3 under "One per runtime"
+
 ### Requirement: Views display World
 
 A view SHALL NOT keep its own copy of World state, SHALL NOT derive a World fact in its

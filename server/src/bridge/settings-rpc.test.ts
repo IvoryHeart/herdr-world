@@ -572,11 +572,16 @@ test("server-wide interface preferences can be read, stored and cleared", async 
       key: "keyboardShortcuts",
       value,
     }),
-  ).toEqual({ key: "keyboardShortcuts", value, revision: 1 });
+  ).toEqual({ key: "keyboardShortcuts", value, before: null, revision: 1 });
   expect(settings.ui.keyboardShortcuts).toEqual(value);
   expect(
     await handler("bridge.ui_settings.update", { key: "keyboardShortcuts" }),
-  ).toEqual({ key: "keyboardShortcuts", value: null, revision: 2 });
+  ).toEqual({
+    key: "keyboardShortcuts",
+    value: null,
+    before: value,
+    revision: 2,
+  });
   expect(settings.ui).toEqual({});
   expect(await handler("bridge.ui_settings.get", {})).toEqual({
     ui: {},
@@ -607,7 +612,12 @@ test("an only-if-absent update initializes a preference and never replaces one",
       value: "runtime",
       only_if_absent: true,
     }),
-  ).toEqual({ key: "runtimeGrouping", value: "runtime", revision: 1 });
+  ).toEqual({
+    key: "runtimeGrouping",
+    value: "runtime",
+    before: null,
+    revision: 1,
+  });
   // An explicit choice replaces it; a later migration answers with it.
   await handler("bridge.ui_settings.update", {
     key: "runtimeGrouping",
@@ -619,6 +629,11 @@ test("an only-if-absent update initializes a preference and never replaces one",
       value: "runtime",
       only_if_absent: true,
     }),
-  ).toEqual({ key: "runtimeGrouping", value: "machine", revision: 3 });
+  ).toEqual({
+    key: "runtimeGrouping",
+    value: "machine",
+    before: "machine",
+    revision: 3,
+  });
   expect(settings.ui.runtimeGrouping).toBe("machine");
 });

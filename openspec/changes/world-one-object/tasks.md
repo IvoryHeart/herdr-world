@@ -14,15 +14,21 @@ Town, Desk, Board, Spaces and the CLI.
 
 ## 2. Grouping
 
-- [ ] 2.1 Run the host-group derivation (`worldHostGroups`, `hostGroupOf`,
+- [x] 2.1 Run the host-group derivation (`worldHostGroups`, `hostGroupOf`,
   `runtimeGroupKey` from `web/src/worldHosts.ts`, moved to `shared/`) on the service
   from the `ui.runtimeGrouping` setting. `world.snapshot` carries the groups and each
   host's group under the World revision.
-- [ ] 2.2 Town buildings, the hosts control, Desk, the navigator, Board and CLI `ls`
+- [x] 2.2 Town buildings, the hosts control, Desk, the navigator, Board and CLI `ls`
   read the published groups. Delete Town's own grouping
   (`web/src/world/town/townBuildings.ts`) and the `?townBuildings=` override; the hosts
   control follows the setting. A grouping change gets a history entry. Add the
   cross-view test with grouping as its first fact.
+  Delivered: `shared/hostGrouping.ts` derives `host_grouping` (groups in World's host
+  order, endpoint anchors and the view Town shows) in every `world.snapshot` reply;
+  nothing about it is stored. `townBuildings.ts` keeps only the rendering adapter.
+  An explicit change is a `world.command` on the setting, recorded in
+  `ledger_changes`; regrouping from topology records nothing. The cross-view test is
+  `server/src/world/world-cross-view.test.ts`.
 
 ## 3. Colour and look
 

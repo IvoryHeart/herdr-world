@@ -614,3 +614,16 @@ describe("typing into a watched terminal (typing family)", () => {
     replayCore(states);
   });
 });
+
+test("split core controls retain every fault exactly once and keep replay separate", async () => {
+  const { coreControlPart } = await import("./herdr-core-verification");
+  const full = coreControlPart();
+  const split = [
+    ...coreControlPart("controls-1"),
+    ...coreControlPart("controls-2"),
+  ];
+  expect([...split].sort()).toEqual([...full].sort());
+  expect(new Set(split).size).toBe(full.length);
+  expect(coreControlPart("replay")).toEqual([]);
+  expect(() => coreControlPart("foreign")).toThrow("Invalid core model part");
+});

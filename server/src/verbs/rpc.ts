@@ -570,18 +570,35 @@ export const rpcVerbs = [
     "world.command",
     "reconcilable",
     "world",
-    object({
-      id: text,
-      entity: object({
-        kind: text,
-        connection_id: text,
-        generation: Type.Integer({ minimum: 0 }),
-        room_id: text,
+    Type.Union([
+      object({
+        id: text,
+        entity: object({
+          kind: Type.Literal("room"),
+          connection_id: text,
+          generation: Type.Integer({ minimum: 0 }),
+          room_id: text,
+        }),
+        field: text,
+        expected: Type.String({ maxLength: 4096 }),
+        value: text,
       }),
-      field: text,
-      expected: Type.String({ maxLength: 4096 }),
-      value: text,
-    }),
+      // A World setting: "Group runtimes" (world-one-object step 2).
+      object({
+        id: text,
+        entity: object({
+          kind: Type.Literal("setting"),
+          key: Type.Literal("runtimeGrouping"),
+        }),
+        field: Type.Literal("value"),
+        expected: Type.Union([
+          Type.Literal("machine"),
+          Type.Literal("runtime"),
+          Type.Null(),
+        ]),
+        value: Type.Union([Type.Literal("machine"), Type.Literal("runtime")]),
+      }),
+    ]),
   ),
   rpc("world.snapshot", "read", "world"),
   rpc("world.town_master.set", "reconcilable", "world"),

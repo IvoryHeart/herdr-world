@@ -10,13 +10,8 @@ import { useRoomPins } from "./townRoomPins";
 import { DEVTOOLS } from "../devtools/flag";
 import { countWorldWork } from "../devtools/renderer";
 import type { WorldObject } from "../worldObject";
-import { useStoreSelector } from "../../store";
-import {
-  createTownBuildings,
-  townBuildingsMode,
-  townRuntimes,
-} from "./townBuildings";
-import { useRuntimeGrouping } from "../runtimeGrouping";
+import { createTownBuildings } from "./townBuildings";
+import { useHostGrouping } from "../useHostGroups";
 
 /** Town reveals the first 24 native-order tabs, then 20 more per expansion. */
 export function useTownOffice(world: WorldObject, selectedId: string | null) {
@@ -78,18 +73,15 @@ export function useTownOffice(world: WorldObject, selectedId: string | null) {
       return next;
     });
   }, []);
-  const runtimes = useStoreSelector(townRuntimes);
+  const grouping = useHostGrouping();
   // Every view of an endpoint reads its anchor's pins (useDeskPins.ts
   // `anchoredDeskPins`), so a stand-in admits them first in folded rooms.
   const pinnedTabs = useMemo(
     () => new Set(pinnedTabKeys ? pinnedTabKeys.split("\n") : []),
     [pinnedTabKeys],
   );
+  // Buildings are World's published groups (townBuildings.ts).
   const buildings = useMemo(() => createTownBuildings(), []);
-  // World's "Group runtimes" setting (runtimeGrouping.ts); the page flag,
-  // read once per mount, compares the two building layouts (townBuildings.ts).
-  const [buildingsFlag] = useState(() => globalThis.location?.search ?? "");
-  const buildingsMode = townBuildingsMode(buildingsFlag, useRuntimeGrouping());
   const observedOffice = useMemo((): HerdrOfficeProjection => {
     if (DEVTOOLS) countWorldWork("office.project");
     const office = projectOffice(
@@ -101,11 +93,10 @@ export function useTownOffice(world: WorldObject, selectedId: string | null) {
       roomFocus?.roomKey ?? null,
       expandedDeskLimits,
     );
-    return buildings(office, runtimes, buildingsMode);
+    return buildings(office, grouping);
   }, [
     buildings,
-    runtimes,
-    buildingsMode,
+    grouping,
     world,
     selectedId,
     projectOffice,

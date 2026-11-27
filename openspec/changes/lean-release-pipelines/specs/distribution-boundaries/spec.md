@@ -26,7 +26,7 @@ Release-please SHALL keep one reviewed release PR current using the simple strat
 
 #### Scenario: Main is still reporting evidence
 - **WHEN** an owner tag arrives while main's metadata result is running
-- **THEN** Release independently builds and tests the tagged bytes; main SHALL start no heavy checks and provide no release artifact
+- **THEN** Release independently builds and tests the tagged bytes; main SHALL provide no release artifact and SHALL start no heavy checks except independent model evidence warming for later PR reuse
 
 ### Requirement: Reviewed post-merge contract synchronization
 Feature PRs SHALL express contract changes in their OpenSpec change folder alongside implementation and capability notes.
@@ -71,6 +71,12 @@ A release SHALL publish only bytes that pass fresh installer starts on Linux/mac
 - **THEN** CI runs fresh Linux static, dependency, unit, browser and behavioral checks on the queue's combined commit with current main
 - **AND** the required aggregate reports exactly `Delivery checks` on that commit without reusing a passing PR result
 - **AND** GitHub merges only after the queue checks and review requirements pass; side workflows add no required queue report
+
+#### Scenario: Model evidence reuse
+- **WHEN** a PR model has unchanged model, adapter, replay, production dependency, seed and tool inputs compared with complete passing evidence saved by a main push
+- **THEN** the model lane reuses that evidence with its original source and resource receipts; a changed input, invalid receipt or cache miss runs the affected model checks afresh
+- **AND** split checks require every expected part before canonical acceptance, retaining all bounds, witnesses, negative controls, replay and sensitivity checks
+- **AND** only the model CI lane uses the owner-approved four-CPU envelope; its hard memory, no-swap, OOM and cancellation controls remain enforced
 
 #### Scenario: A channel or agent fails
 - **WHEN** a Windows archive cannot launch, a running service upgrade loses health or data, an agent fails to start or list, or the shipped security audit fails

@@ -32,8 +32,8 @@ import { sharedDeskStore, type WorldDeskStore } from "../deskStateStore";
 import { useSystemBack } from "../../systemBack";
 import { markReviewed, useReviewedWork } from "../useReviewedWork";
 import { townPaneIdentity } from "../town/townChat";
-import { townRuntimes } from "../town/townBuildings";
-import { store as worldStore } from "../../store";
+import { endpointAnchors } from "../../../../shared/hostGrouping";
+import { worldRuntimeStore } from "../runtimeStore";
 import type { WorldLeafObject } from "../worldObject";
 import type { BoardDocumentStore } from "./boardDocument";
 import {
@@ -481,14 +481,14 @@ export function useBoardHerdrActions({
   const peekedFrom =
     peeked && model.workspaceByKey.get(peeked.tab.workspaceKey);
   const handoff = peekedFrom && cardAgentAddress(peeked.tab, peekedFrom);
-  const endpoints =
-    handoff &&
-    new Map(
-      townRuntimes(worldStore.get()).map((each) => [each.id, each.endpoint]),
-    );
-  const moveTo = endpoints
-    ? otherRuntimeRooms(model.workspaces, handoff, (id) =>
-        endpoints.get(id),
+  // Views of one endpoint share its anchor, as World publishes it.
+  const anchors =
+    handoff && endpointAnchors(worldRuntimeStore.get().hostGrouping);
+  const moveTo = anchors
+    ? otherRuntimeRooms(
+        model.workspaces,
+        handoff,
+        (id) => anchors.get(id) ?? id,
       ).map((room) => ({
         key: room.key,
         label: `${room.label} · ${model.hostByKey.get(room.hostKey)?.label ?? ""}`,
@@ -498,9 +498,14 @@ export function useBoardHerdrActions({
           notify("ok", `Moving ${name} to ${room.label}…`);
           void requestAgentHandoff(handoff, workspaceRoom(room)).then(
             (outcome) =>
-              outcome.status === "moved"
-                ? notify("ok", `${name} moved to ${room.label}`)
-                : notify("error", outcome.message),
+              outcome.status !== "moved"
+                ? notify("error", outcome.message)
+                : outcome.message
+                  ? notify(
+                      "error",
+                      `${name} moved to ${room.label}. ${outcome.message}`,
+                    )
+                  : notify("ok", `${name} moved to ${room.label}`),
             (cause: unknown) => notify("error", String(cause)),
           );
         },

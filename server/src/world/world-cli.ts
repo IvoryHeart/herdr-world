@@ -65,6 +65,7 @@ export {
   type CliHost,
 } from "./world-cli-actor";
 import type { WorldSnapshotResult } from "./snapshot";
+import { worldLs } from "./world-cli-ls";
 import {
   LEDGER_LIMITS,
   RESULT_STATUSES,
@@ -674,48 +675,8 @@ export function createWorldCli(deps: WorldCliDeps) {
       }
       case "whoami":
         return actor;
-      case "ls": {
-        const snapshot = await deps.snapshot();
-        const connections = snapshot.connections.map((connection) => ({
-          connection_id: connection.connection_id,
-          connection_generation: connection.generation,
-          label: connection.label,
-          generation: connection.generation,
-          current: connection.actionable && !connection.stale,
-          workspaces: (connection.snapshot?.workspaces ?? []).map((ws) => ({
-            workspace_id: ws.workspace_id,
-            label: ws.label,
-            tabs: (connection.snapshot?.tabs ?? [])
-              .filter((tab) => tab.workspace_id === ws.workspace_id)
-              .map((tab) => ({
-                tab_id: tab.tab_id,
-                label: tab.label,
-                panes: (connection.snapshot?.panes ?? [])
-                  .filter((pane) => pane.tab_id === tab.tab_id)
-                  .map((pane) => ({
-                    pane_id: pane.pane_id,
-                    ...(pane.agent ? { agent: pane.agent } : {}),
-                    status: pane.agent_status,
-                  })),
-              })),
-          })),
-        }));
-        return snapshot.hosts
-          ? {
-              hosts: snapshot.hosts.map((host) => ({
-                ...host,
-                runtimes: host.runtimes.map((runtime) => ({
-                  ...runtime,
-                  ...connections.find(
-                    (connection) =>
-                      connection.connection_id === runtime.connection_id,
-                  ),
-                })),
-              })),
-              connections,
-            }
-          : connections;
-      }
+      case "ls":
+        return worldLs(await deps.snapshot());
       case "history": {
         const by = typeof params.actor === "string" ? params.actor : "";
         const limit = Math.min(500, Math.max(1, Number(params.limit) || 50));

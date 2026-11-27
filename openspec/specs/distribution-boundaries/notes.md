@@ -13,6 +13,9 @@
 - `scripts/coverage.ts`
 - `scripts/coverage.test.ts`
 - `quint/models.ts`
+- `scripts/ci-model-plan.ts`, `scripts/ci-model-inputs.ts`, `scripts/ci-model-cache.ts` (independent model input closures and main-only evidence reuse)
+- `scripts/ci-model-parts.ts`, `scripts/ci-verification.ts` (complete split-model evidence and canonical aggregation)
+- `tools/quint/model-resources.json`, `tools/quint/tlc-ci.json` (owner-approved four-CPU model-only CI envelope)
 - `scripts/features.ts`
 - `scripts/build-pages.ts`
 - `scripts/pages-features.ts`
@@ -59,6 +62,8 @@
 - `scripts/ci-workflow.test.ts` (required Delivery job remains independent of asynchronous flaky accounting)
 - `.github/workflows/flaky-tests.yml` (default-branch advisory tracker; source identity verified before downloading retained same-repository artifacts as data)
 - `scripts/ci-tests.ts`, `scripts/run-tests.ts`, `scripts/run-world-tests.ts` (retry opt-in and shared browser assets)
+- `scripts/ci-unit-shards.ts`, `scripts/ci-unit-timings.json`, `scripts/ci-unit-timings.ts` (four timed unit partitions, build consumers and JUnit timing refresh)
+- `scripts/ci-unit-shards.test.ts`, `scripts/ci-unit-comparison.ts`, `scripts/ci-unit-comparison.test.ts` (complete unit inventory and twenty required serial/parallel controls for scheduler changes)
 - `scripts/pipeline-retry.ts`
 - `server/src/config/service-executable.ts`
 - `server/src/cli/update-finish.ts`
@@ -67,6 +72,7 @@
 - `server/src/config/service-discovery.ts`
 - `server/src/config/service-uninstall.test.ts`
 - `scripts/`
+- `.github/workflows/behavioral-verification.yml`, `scripts/ci-workflow.test.ts` (unconditional current-tree type/notices checks alongside reusable model shards)
 - `.github/workflows/`
 - `.githooks/`
 - `site/`
@@ -114,6 +120,11 @@
   its current run. Optional **Flaky accounting** never delays a merge; the next
   completed event catches up missed retained evidence. Keep it out of the required
   checks. See [CI guidance](../../../docs/ci-pipelines.md#flaky-tests).
+
+- **Unit scheduling.** Open a PR's Checks → Non-browser tests for the four timed
+  shards. Scheduling changes must complete twenty serial/parallel pairs in each
+  shard; job summaries and `unit-evidence-*` artifacts retain counts, JUnit and
+  timings. See [unit evidence](../../../docs/ci-pipelines.md#non-browser-units).
 
 ## World update notifications
 
