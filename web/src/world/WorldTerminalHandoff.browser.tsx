@@ -4103,11 +4103,15 @@ async function run() {
         ?.getAttribute("data-view") === "terminal",
       "Board opens an agent whose harness Chat cannot read on its terminal",
     );
-    document
-      .querySelector<HTMLButtonElement>(
-        '[aria-label="Reviewer Inspector"] [aria-label="Close Inspector window"]',
-      )
-      ?.click();
+    // Commit the close before observing the replacement connector. Otherwise
+    // the old two-circle SVG can satisfy the wait just before React removes it.
+    flushSync(() =>
+      document
+        .querySelector<HTMLButtonElement>(
+          '[aria-label="Reviewer Inspector"] [aria-label="Close Inspector window"]',
+        )
+        ?.click(),
+    );
     await until(
       () =>
         document.querySelectorAll(".world-intent-connector circle").length ===

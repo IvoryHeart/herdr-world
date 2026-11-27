@@ -1,5 +1,5 @@
 import { expect, test } from "bun:test";
-import { balanceShards } from "./balance-shards";
+import { balanceShards } from "./testing/balance-shards";
 import { worldBrowserSuites } from "./world-browser-suites";
 import models from "./verification-timings.json";
 import { verificationModels } from "../quint/models";
