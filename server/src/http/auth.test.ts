@@ -905,7 +905,7 @@ describe("per-World session cookies and login return paths", () => {
       await login(handlers, "http://world.test:9000"),
     )
       .split("=")[1]!
-      .replace(/\.d\d+$/, "")}`;
+      .replace(/\.h\d+$/, "")}`;
 
   const nameOf = (cookie: string) => cookie.split("=")[0]!;
   const tokenOf = (cookie: string) =>
@@ -1009,7 +1009,7 @@ describe("per-World session cookies and login return paths", () => {
     expect(moved.every(([name]) => name === "set-cookie")).toBe(true);
     // The same token, so Web Push and open sockets keep their session.
     expect(set).toStartWith(
-      `${nameOf(own)}=${token}.d${Math.floor(Date.now() / 86_400_000)}; HttpOnly; SameSite=Lax; Path=/; Max-Age=`,
+      `${nameOf(own)}=${token}.h${Math.floor(Date.now() / 3_600_000)}; HttpOnly; SameSite=Lax; Path=/; Max-Age=`,
     );
     expect(cleared).toEqual([clear("herdr_world_auth")]);
     // A password login while signed in this way moves the same token too.
@@ -1062,51 +1062,117 @@ describe("per-World session cookies and login return paths", () => {
     );
   });
 
+  /** A browser's cookies for one host: every World's Set-Cookie lands here. */
+  const cookieJar = () => {
+    const cookies = new Map<string, string>();
+    return {
+      apply(response: Response | [string, string][]) {
+        const sets =
+          response instanceof Response
+            ? response.headers.getSetCookie()
+            : response.map(([, value]) => value);
+        for (const set of sets) {
+          const pair = set.split(";", 1)[0]!;
+          const name = nameOf(pair);
+          if (/Max-Age=0(;|$)/.test(set)) cookies.delete(name);
+          else cookies.set(name, pair);
+        }
+      },
+      get header() {
+        return [...cookies.values()].join("; ");
+      },
+      get size() {
+        return cookies.size;
+      },
+    };
+  };
+  /** An unsigned World token payload, as another World's cookie holds it. */
+  const otherToken = (iat: number, exp: number) =>
+    `${Buffer.from(JSON.stringify({ iat, exp, nonce: "0" })).toString("base64url")}.sig`;
+
+  test("a World stays logged in while many previews come and go", async () => {
+    // Log in to A, then to 24 short-lived previews with their own secrets,
+    // then to B: A and B are both still logged in.
+    const jar = cookieJar();
+    const a = world("a");
+    jar.apply(await login(a, "http://world.test:8790", jar.header));
+    for (let i = 0; i < 24; i++) {
+      const preview = createAuthHandlers({
+        sessionSecret: (i + 1).toString(16).padStart(64, "c"),
+        password,
+      });
+      jar.apply(
+        await login(preview, `http://world.test:${8800 + i}`, jar.header),
+      );
+    }
+    const b = world("b");
+    jar.apply(await login(b, "http://world.test:8791", jar.header));
+    expect(jar.size).toBe(26);
+    expect(a.isAuthed(page("http://world.test:8790", jar.header))).toBe(true);
+    expect(b.isAuthed(page("http://world.test:8791", jar.header))).toBe(true);
+  });
+
   test("other Worlds' cookies stay bounded, least recently seen go first", async () => {
     const handlers = world("a");
-    const day = Math.floor(Date.now() / 86_400_000);
-    // 30 other Worlds' cookies: stamped with the day they were last seen.
+    const now = Math.floor(Date.now() / 1000);
+    const hour = Math.floor(now / 3600);
+    // 60 other Worlds' live cookies, stamped with the hour they were last set.
     const others = Array.from(
-      { length: 30 },
+      { length: 60 },
       (_, i) =>
-        `herdr_world_auth_${i.toString(16).padStart(12, "0")}=x.y.d${day - 30 + i}`,
+        `herdr_world_auth_${i.toString(16).padStart(12, "0")}=${otherToken(now - 86_400, now + 86_400)}.h${hour - 60 + i}`,
     );
     const legacyOther = await legacyCookie(world("b"));
     const jar = [...others, legacyOther, "unrelated=1"].join("; ");
     const response = await login(handlers, "http://world.test:8790", jar);
     const [set, ...cleared] = response.headers.getSetCookie();
     expect(set).toMatch(/^herdr_world_auth_[0-9a-f]{12}=/);
-    // 31 other World cookies, 24 kept: the 7 least recently seen go. The
-    // legacy one was signed today, so it stays.
-    expect(cleared).toEqual(others.slice(0, 7).map((c) => clear(nameOf(c))));
-    // Under the bound nothing is cleared.
+    // 61 live other World cookies, 48 kept: the 13 least recently set go.
+    // The legacy one was issued this hour, so it stays.
+    expect(cleared).toEqual(others.slice(0, 13).map((c) => clear(nameOf(c))));
+    // Under the bound nothing live is cleared.
     const few = await login(
       handlers,
       "http://world.test:8790",
-      others.slice(0, 24).join("; "),
+      others.slice(0, 48).join("; "),
     );
     expect(few.headers.getSetCookie()).toEqual([
       expect.stringMatching(/^herdr_world_auth_[0-9a-f]{12}=/),
     ]);
   });
 
-  test("a page load stamps this World's cookie once a day", async () => {
+  test("cookies that can sign nobody in are cleared when a World sets its own", async () => {
+    const handlers = world("a");
+    const now = Math.floor(Date.now() / 1000);
+    const expired = `herdr_world_auth_00000000000e=${otherToken(now - 40 * 86_400, now - 10)}.h1`;
+    const garbage = "herdr_world_auth_00000000000f=x.y.h1";
+    const live = `herdr_world_auth_00000000000a=${otherToken(now, now + 86_400)}.h1`;
+    const response = await login(
+      handlers,
+      "http://world.test:8790",
+      [expired, garbage, live].join("; "),
+    );
+    const [, ...cleared] = response.headers.getSetCookie();
+    expect(cleared).toEqual([clear(nameOf(expired)), clear(nameOf(garbage))]);
+  });
+
+  test("a page load stamps this World's cookie once an hour", async () => {
     const handlers = world("a");
     const own = cookieHeader(await login(handlers, "http://world.test:8790"));
     expect(
       handlers.sessionCookieRefresh(page("http://world.test:8790", own)),
     ).toEqual([]);
-    const yesterday = own.replace(/\.d(\d+)$/, (_, d) => `.d${Number(d) - 1}`);
-    expect(yesterday).not.toBe(own);
+    const earlier = own.replace(/\.h(\d+)$/, (_, h) => `.h${Number(h) - 1}`);
+    expect(earlier).not.toBe(own);
     const [[header, value]] = handlers.sessionCookieRefresh(
-      page("http://world.test:8790", yesterday),
+      page("http://world.test:8790", earlier),
     ) as [[string, string]];
     expect(header).toBe("set-cookie");
     expect(value.split(";")[0]).toBe(own);
-    // An unsigned day stamp never makes a forged token valid.
+    // An unsigned stamp never makes a forged token valid.
     expect(
       handlers.isAuthed(
-        page("http://world.test:8790", `${nameOf(own)}=forged.sig.d1`),
+        page("http://world.test:8790", `${nameOf(own)}=forged.sig.h1`),
       ),
     ).toBe(false);
   });

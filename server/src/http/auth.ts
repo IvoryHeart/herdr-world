@@ -17,13 +17,16 @@ const LEGACY_AUTH_COOKIE = "herdr_world_auth";
 const AUTH_COOKIE_PREFIX = `${LEGACY_AUTH_COOKIE}_`;
 const AUTH_COOKIE_ID_LABEL = "herdr-world session cookie name";
 /**
- * Other Worlds' session cookies a browser keeps on one host. Every fresh
- * preview has its own secret and so its own cookie; without a bound they
- * would pile up for their lifetime until request headers outgrow the
- * server's limit (Bun answers 431 at about 16 KB, some 80 cookies).
+ * Other Worlds' live session cookies a browser keeps on one host. Every
+ * fresh preview has its own secret and so its own cookie; without a bound
+ * they would pile up for their lifetime until request headers outgrow the
+ * server's limit (Bun answers 431 at about 16 KB, some 80 cookies). One is
+ * about 210 bytes, so 48 stay near 10 KB: the bound only bites for a
+ * browser that has held dozens of Worlds within a month, never for the few
+ * a person switches between.
  */
-const OTHER_WORLD_COOKIES_KEPT = 24;
-const DAY_SECONDS = 24 * 60 * 60;
+const OTHER_WORLD_COOKIES_KEPT = 48;
+const HOUR_SECONDS = 60 * 60;
 /** Longest return path a login carries; longer ones land on `/`. */
 const RETURN_PATH_MAX_LENGTH = 2048;
 const RETURN_PATH_BASE = "http://world.invalid";
@@ -75,34 +78,44 @@ function authCookieName(sessionSecret: string): string {
   return `${AUTH_COOKIE_PREFIX}${id}`;
 }
 
-function today(): number {
-  return Math.floor(Date.now() / 1000 / DAY_SECONDS);
+function thisHour(): number {
+  return Math.floor(Date.now() / 1000 / HOUR_SECONDS);
 }
 
 /**
- * A World session cookie's value: the signed token, then the day this World
- * last set it (`<token>.d<day>`), which only orders pruning and is not
- * signed. The legacy cookie holds the bare token.
+ * A World session cookie's value: the signed token, then the hour this
+ * World last set it (`<token>.h<hour>`), which only orders pruning and is
+ * not signed. The legacy cookie holds the bare token.
  */
-function readCookieValue(value: string): { token: string; seenDay?: number } {
+function readCookieValue(value: string): { token: string; seenHour?: number } {
   const parts = value.split(".");
-  const seen = parts[2]?.match(/^d(\d{1,7})$/);
+  const seen = parts[2]?.match(/^h(\d{1,9})$/);
   return parts.length === 3 && seen
-    ? { token: `${parts[0]}.${parts[1]}`, seenDay: Number(seen[1]) }
+    ? { token: `${parts[0]}.${parts[1]}`, seenHour: Number(seen[1]) }
     : { token: value };
 }
 
-/** The day a World cookie was last set, from any World; -1 when unreadable. */
-function lastSeenDay(value: string): number {
-  const { token, seenDay } = readCookieValue(value);
-  if (seenDay !== undefined) return seenDay;
+/**
+ * Another World's cookie as pruning sees it: the hour it was last set (else
+ * its token's issue hour), and whether it can still sign anyone in. Only
+ * the unsigned payload is readable here, so a cookie whose payload is not
+ * a World token's, or whose expiry has passed, is dead for every World.
+ */
+function otherWorldCookie(value: string): { seenHour: number; live: boolean } {
+  const { token, seenHour } = readCookieValue(value);
   try {
-    const { iat } = JSON.parse(base64UrlDecode(token.split(".")[0]!)) as {
+    const { iat, exp } = JSON.parse(base64UrlDecode(token.split(".")[0]!)) as {
       iat?: unknown;
+      exp?: unknown;
     };
-    return typeof iat === "number" ? Math.floor(iat / DAY_SECONDS) : -1;
+    if (typeof iat !== "number" || typeof exp !== "number")
+      return { seenHour: -1, live: false };
+    return {
+      seenHour: seenHour ?? Math.floor(iat / HOUR_SECONDS),
+      live: exp > Date.now() / 1000,
+    };
   } catch {
-    return -1;
+    return { seenHour: -1, live: false };
   }
 }
 
@@ -342,11 +355,12 @@ export function createAuthHandlers(args: {
   }
 
   /**
-   * This World's cookie set to `token`, stamped with today, for the time the
-   * token has left. Moving a legacy session keeps its token, so Web Push and
-   * open sockets keep their session; the legacy name is then cleared. Other
-   * Worlds' cookies beyond the kept number go, least recently seen first:
-   * they are other Worlds' logins, so only a bound, never all of them.
+   * This World's cookie set to `token`, stamped with this hour, for the
+   * time the token has left. Moving a legacy session keeps its token, so Web
+   * Push and open sockets keep their session; the legacy name is then
+   * cleared. Other Worlds' cookies that can no longer sign anyone in go;
+   * live ones beyond the kept number go least recently seen first: they are
+   * other Worlds' logins, so only a bound, never all of them.
    */
   function sessionCookieHeaders(
     req: Request,
@@ -356,20 +370,23 @@ export function createAuthHandlers(args: {
     const headers: [string, string][] = [
       [
         "set-cookie",
-        `${cookieName}=${token}.d${today()}; ${cookieAttributes(remainingSeconds(token))}`,
+        `${cookieName}=${token}.h${thisHour()}; ${cookieAttributes(remainingSeconds(token))}`,
       ],
     ];
-    const others = [...worldCookies(req.headers.get("cookie"))].filter(
-      ([name]) =>
-        name !== cookieName && !(fromLegacy && name === LEGACY_AUTH_COOKIE),
-    );
     if (fromLegacy)
       headers.push(["set-cookie", clearCookie(LEGACY_AUTH_COOKIE)]);
-    const excess = others.length - OTHER_WORLD_COOKIES_KEPT;
+    const live: { name: string; seenHour: number }[] = [];
+    for (const [name, value] of worldCookies(req.headers.get("cookie"))) {
+      if (name === cookieName || (fromLegacy && name === LEGACY_AUTH_COOKIE))
+        continue;
+      const other = otherWorldCookie(value);
+      if (other.live) live.push({ name, seenHour: other.seenHour });
+      else headers.push(["set-cookie", clearCookie(name)]);
+    }
+    const excess = live.length - OTHER_WORLD_COOKIES_KEPT;
     if (excess > 0)
-      for (const [name] of others
-        .map(([name, value]) => [name, lastSeenDay(value)] as const)
-        .sort((left, right) => left[1] - right[1])
+      for (const { name } of live
+        .sort((left, right) => left.seenHour - right.seenHour)
         .slice(0, excess))
         headers.push(["set-cookie", clearCookie(name)]);
     return headers;
@@ -420,13 +437,13 @@ export function createAuthHandlers(args: {
    */
   function authedSession(
     req: Request,
-  ): { token: string; legacy: boolean; seenDay?: number } | null {
+  ): { token: string; legacy: boolean; seenHour?: number } | null {
     if (!authRequired) return null;
     const header = req.headers.get("cookie");
     const own = parseCookie(header, cookieName);
     if (own !== null) {
-      const { token, seenDay } = readCookieValue(own);
-      if (isValidSignedToken(token)) return { token, legacy: false, seenDay };
+      const { token, seenHour } = readCookieValue(own);
+      if (isValidSignedToken(token)) return { token, legacy: false, seenHour };
     }
     const legacy = parseCookie(header, LEGACY_AUTH_COOKIE);
     if (legacy !== null && isValidSignedToken(legacy))
@@ -455,7 +472,7 @@ export function createAuthHandlers(args: {
 
   /**
    * Cookie headers for a signed-in page load: the legacy session moves to
-   * this World's name, and this World's cookie is stamped once a day so
+   * this World's name, and this World's cookie is stamped once an hour so
    * pruning keeps the Worlds in use. They go on the page itself, never a
    * redirect, so a browser that refuses the cookie cannot loop.
    */
@@ -466,9 +483,12 @@ export function createAuthHandlers(args: {
     return sessionCookieHeaders(req, session.token);
   }
 
-  /** This World's own cookie, set today, with no legacy session left. */
-  function currentCookie(req: Request, session: { seenDay?: number }): boolean {
-    return session.seenDay === today() && !ownLegacySession(req);
+  /** This World's own cookie, set this hour, with no legacy session left. */
+  function currentCookie(
+    req: Request,
+    session: { seenHour?: number },
+  ): boolean {
+    return session.seenHour === thisHour() && !ownLegacySession(req);
   }
 
   /** Failed agent CLI tokens, kept apart so they never lock out a login. */

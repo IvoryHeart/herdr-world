@@ -448,11 +448,11 @@ test("instances with their own data folders on one home preserve independent ses
         const jar = `${firstCookie}; ${secondCookie}`;
         expect(await status(firstBase, jar)).toBe(200);
         expect(await status(secondBase, jar)).toBe(200);
-        // A page load re-stamps a cookie set on an earlier day, on the page
+        // A page load re-stamps a cookie set in an earlier hour, on the page
         // itself, and leaves the other World's cookie alone.
         const stale = firstCookie.replace(
-          /\.d(\d+)$/,
-          (_, day) => `.d${Number(day) - 1}`,
+          /\.h(\d+)$/,
+          (_, hour) => `.h${Number(hour) - 1}`,
         );
         const restamped = await fetch(`${firstBase}/town`, {
           headers: { cookie: `${stale}; ${secondCookie}`, accept: "text/html" },

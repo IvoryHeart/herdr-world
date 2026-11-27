@@ -9,10 +9,11 @@ or, once, under the legacy shared name when it signed that session, and SHALL mo
 to its own name with the same token. Logout SHALL clear every cookie a later request could be
 admitted with.
 
-A World SHALL record in its cookie the day it last set it and set it again on the first page load
-of a day. Whenever it sets its cookie and the request carries more than 24 other World cookies, it
-SHALL clear the least recently seen of them down to 24, so a host's cookies stay below request
-header limits.
+A World SHALL record in its cookie the hour it last set it and set it again on the first page load
+of an hour. Whenever it sets its cookie, it SHALL clear other World cookies that can sign nobody
+in (expired or not a World session), and, when more than 48 live ones remain, the least recently
+set of them down to 48, so a host's cookies stay below request header limits. It SHALL NOT clear
+a live World's cookie while 48 or fewer remain.
 
 An unauthenticated page load SHALL redirect to the login page with its same-origin path and query
 as a relative return path, and a successful login SHALL land there. A return path SHALL start with
@@ -33,8 +34,14 @@ login page, and never carry a `token` parameter; anything else SHALL land on `/`
 - **THEN** no cookie the browser still holds admits it to that World
 
 #### Scenario: Many previews
-- **WHEN** a browser holding more than 24 other World cookies logs in to a World
-- **THEN** the least recently seen of them are cleared down to 24
+- **WHEN** a browser logs in to World A, then to 24 previews with their own secrets on the same
+  host, then to World B
+- **THEN** A and B are both still logged in
+
+#### Scenario: Cookie bound
+- **WHEN** a browser holding more than 48 other live World cookies, or any expired one, logs in to
+  a World
+- **THEN** the expired ones and the least recently set live ones beyond 48 are cleared
 
 #### Scenario: Legacy session
 - **WHEN** a browser presents a valid session this World signed under the legacy shared name
