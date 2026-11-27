@@ -21,6 +21,7 @@ import { sendWorldSnapshotReply } from "../bridge/world-snapshot-reply";
 import { BoardConflictError, clientBoardOps } from "../world/board-store";
 import type { BridgeRpcContext } from "./context";
 import { worldRuntimeLease } from "../world/runtime-lease";
+import { parseWorldCommand } from "../world/commands";
 
 /** Aggregate World methods: snapshot, board document, profiles, watchlist (world.*). */
 export function handleWorldRpc(
@@ -98,6 +99,19 @@ async function dispatchWorldRpc(rpc: BridgeRpcContext): Promise<false | void> {
   if (method.startsWith("world.core.")) return handleCoreRpc(rpc);
   if (method.startsWith("world.float.")) return handleFloatRpc(rpc);
   if (method.startsWith("world.ide.")) return handleIdeRpc(rpc);
+  if (method === "world.command") {
+    try {
+      const commands = rpc.services.worldCommands;
+      if (!commands) throw new Error("World commands are unavailable");
+      sendReply(
+        { id, result: await commands.submit(parseWorldCommand(params)) },
+        method,
+      );
+    } catch (error) {
+      sendError("world-command-error", error);
+    }
+    return;
+  }
   if (method === "world.snapshot") {
     const runtimeFor = (connectionId: string, generation: number) =>
       worldRuntimeLease(rpc.services, connectionId, generation);
