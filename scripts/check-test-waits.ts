@@ -16,6 +16,11 @@
  *
  * `bun scripts/check-test-waits.ts --update` lowers the allowlist to the
  * current counts; it never raises one.
+ *
+ * The check guards against accidental fixed waits in honest test code; it
+ * does not try to defeat deliberately contrived loops. Known limits:
+ * - a `try` exit after token work passes: `for (;;) { try { await Promise.resolve(); await Bun.sleep(5); break } catch {} }`.
+ * - an observed exit gated by a counter passes: `if (i === 99) { if (ready) break }`.
  */
 import { existsSync, readFileSync, writeFileSync } from "node:fs";
 import { dirname, join, normalize, resolve } from "node:path";
