@@ -16,7 +16,7 @@ abort "usage: check-homebrew-runtime.rb WORLD FIXTURE_HOME" unless world && fixt
 world = File.expand_path(world)
 fixture_home = File.expand_path(fixture_home)
 FileUtils.mkdir_p(fixture_home)
-CORE_VERSION = "0.1.21"
+CORE_VERSION = "0.1.22"
 macos = RUBY_PLATFORM.include?("darwin")
 runtime_dir = File.join(fixture_home, ".local", "bin")
 fake_bin = File.join(fixture_home, "fake-bin")

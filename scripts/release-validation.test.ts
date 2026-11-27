@@ -176,7 +176,7 @@ test("retained-artifact reruns continue every publisher despite the skipped cand
   }
 });
 
-test("PR test steps retry once inside their Linux job; main runs no heavy jobs", () => {
+test("Linux test jobs delegate scoped recovery; models never retry and main runs no heavy jobs", () => {
   const ci = workflow("ci");
   for (const name of ["static", "unit-tests", "dependency-security"])
     expect(ci.jobs[name].if).toContain("'hold'");
@@ -188,11 +188,24 @@ test("PR test steps retry once inside their Linux job; main runs no heavy jobs",
   ]) {
     const job = workflow(file).jobs[name];
     expect(job["runs-on"]).toMatch(/^ubuntu-/);
-    const steps = job.steps.filter((s: any) => s.run?.includes(needle));
-    expect(steps).toHaveLength(2);
-    expect(steps[0]["continue-on-error"]).toBe(true);
-    expect(steps[1].if).toContain(".outcome == 'failure'");
+    const steps = job.steps.filter(
+      (s: any) => s.run?.includes(needle) && !s.run.includes("--plan"),
+    );
+    expect(steps).toHaveLength(1);
+    expect(steps[0]["continue-on-error"]).toBeUndefined();
+    expect(
+      job.steps.some((step: any) => step.name === "Retry failed test once"),
+    ).toBe(false);
   }
+  const unit = ci.jobs["unit-tests"];
+  expect(
+    unit.steps.filter((step: any) => step.run?.includes("--plan")),
+  ).toHaveLength(1);
+  const comparisons = unit.steps.filter((step: any) =>
+    step.run?.includes("ci-unit-comparison.ts run"),
+  );
+  expect(comparisons).toHaveLength(1);
+  expect(comparisons[0]["continue-on-error"]).toBeUndefined();
 });
 
 test("channel upgrades exercise a running previous release and verify persisted stable path", () => {

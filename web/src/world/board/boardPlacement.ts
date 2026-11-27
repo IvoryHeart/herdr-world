@@ -242,8 +242,8 @@ export function placeNew(
   const besideNext = new Map<string, Point>();
   for (const host of model.hosts) {
     if (layout.anchors.has(host.key)) continue;
-    // A runtime joining a zone already on the board ("Group runtimes": one
-    // per machine) goes beside its zone mates, across the hosts' flow, so
+    // A runtime joining a zone (its machine) already on the board goes
+    // beside its zone mates, across the hosts' flow, so
     // the zone's one frame never spans another zone.
     const zone = model.zones.find((each) =>
       each.hosts.some((member) => member.key === host.key),

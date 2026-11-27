@@ -21,10 +21,8 @@ import { BoardDocumentStore } from "../../board/boardDocument";
 import type { TownQuietMarks } from "../../town/TownBoard";
 import { TownCanvas, type TownRoomActions } from "../../town/TownCanvas";
 import type { TownCenterAction } from "../../town/TownCenterMenu";
-import {
-  createTownBuildings,
-  type TownRuntime,
-} from "../../town/townBuildings";
+import { createTownBuildings } from "../../town/townBuildings";
+import { deriveHostGrouping } from "../../../../../shared/hostGrouping";
 import { TownStepStore } from "../../town/townStepStore";
 import { useTownStepReads } from "../../town/useTownStepReads";
 import { townCalls } from "../../town/TownRail";
@@ -104,25 +102,32 @@ export function installSiteBridge(
 }
 
 /**
- * The scene's two hosts as one machine's two runtimes: studio's Herdr TUI and
- * buildbox's rooms as herdr-core beside it, in one building (townBuildings.ts).
+ * The scene's two hosts as one machine's two runtimes, as World publishes
+ * them: studio's Herdr TUI and buildbox's rooms as herdr-core beside it, in
+ * one building (townBuildings.ts).
  */
-const SITE_RUNTIMES: readonly TownRuntime[] = [
-  {
-    id: "site-host-0",
-    runtime: "herdr",
-    machine: "local",
-    endpoint: "site-host-0",
-    writable: true,
-  },
-  {
-    id: "site-host-1",
-    runtime: "herdr-core",
-    machine: "local",
-    endpoint: "site-host-1",
-    writable: true,
-  },
-];
+const SITE_GROUPING = deriveHostGrouping(
+  [
+    {
+      id: "site-host-0",
+      label: "studio",
+      runtime: "herdr",
+      machine: "local",
+      endpoint: "site-host-0",
+      writable: true,
+    },
+    {
+      id: "site-host-1",
+      label: "buildbox",
+      runtime: "herdr-core",
+      machine: "local",
+      endpoint: "site-host-1",
+      writable: true,
+    },
+  ],
+  "machine",
+  () => false,
+);
 
 /**
  * Town's projection and summary, as after a morning away. With `runtimes`,
@@ -136,7 +141,7 @@ export function siteTownScene(now = Date.now(), { runtimes = false } = {}) {
   const world = buildWorldObject(connections, "site-host-0");
   const office = projectWorldOffice(world, now, null, TOWN_PRESENTATION_BOUNDS);
   const projection = runtimes
-    ? createTownBuildings()(office, SITE_RUNTIMES, "machine")
+    ? createTownBuildings()(office, SITE_GROUPING)
     : office;
   // Finished agents are unreviewed, as after a morning away: they wait at
   // reception and the town board counts them done.

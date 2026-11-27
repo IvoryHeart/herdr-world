@@ -95,7 +95,8 @@ export function townMoveActions({
   ) => {
     if (DEVTOOLS) trace.record("move", { label, status: outcome.status });
     toast(
-      outcome.status === "moved" ? "ok" : "error",
+      // A move that left something behind reads as a problem to look at.
+      outcome.status === "moved" && !outcome.message ? "ok" : "error",
       townMoveNotice(label, outcome, sourceTab),
     );
     return townMoveResult(outcome);

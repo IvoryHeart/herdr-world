@@ -24,7 +24,7 @@ const connection = (
       observation: {
         state: "live",
         reason: null,
-        core: { id: "c0ffee", name: "example-host", version: "0.1.21", pid: 7 },
+        core: { id: "c0ffee", name: "example-host", version: "0.1.22", pid: 7 },
         observed_ms: 1,
         terminals: [],
         counts: { live: 0, finished: 0, remote: 0 },

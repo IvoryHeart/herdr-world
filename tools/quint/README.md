@@ -66,8 +66,11 @@ not substitute for this aggregate. Worker count is CPU-capped and recorded with
 case timings/resource observations. Retain conservative concurrency for the
 JVM-backed phases; per-case max RSS is not a combined-memory measurement.
 
-Linux required CI uses `resources.json` to enforce a 4 GiB no-swap cgroup and two
-CPUs of quota over the complete pool and descendants. Its actual aggregate peak,
+Linux model CI uses `model-resources.json` to enforce a 4 GiB no-swap cgroup and
+four CPUs of quota over the model job and descendants, with `tlc-ci.json` selecting
+four TLC workers (owner approval, 2026-11-26). The local resource command retains
+`resources.json`'s two-CPU quota and `tlc.json`'s one worker. Other CI lanes keep
+their existing CPU limits. Its actual aggregate peak,
 OOM events and canonical manifest link are retained. A 64 MiB OOM control verifies
 enforcement; actual cancellation must reject success and drain its descendants. Local `verification:resources` requires a systemd user manager;
 required CI uses its system manager. Missing accounting fails the check.

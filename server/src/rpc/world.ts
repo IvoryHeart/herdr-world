@@ -22,6 +22,7 @@ import { BoardConflictError, clientBoardOps } from "../world/board-store";
 import type { BridgeRpcContext } from "./context";
 import { worldRuntimeLease } from "../world/runtime-lease";
 import { parseWorldCommand } from "../world/commands";
+import { parseSettingCommand } from "../world/setting-commands";
 
 /** Aggregate World methods: snapshot, board document, profiles, watchlist (world.*). */
 export function handleWorldRpc(
@@ -101,6 +102,13 @@ async function dispatchWorldRpc(rpc: BridgeRpcContext): Promise<false | void> {
   if (method.startsWith("world.ide.")) return handleIdeRpc(rpc);
   if (method === "world.command") {
     try {
+      const setting = parseSettingCommand(params);
+      if (setting) {
+        const settings = rpc.services.settingCommands;
+        if (!settings) throw new Error("World commands are unavailable");
+        sendReply({ id, result: await settings.submit(setting) }, method);
+        return;
+      }
       const commands = rpc.services.worldCommands;
       if (!commands) throw new Error("World commands are unavailable");
       sendReply(

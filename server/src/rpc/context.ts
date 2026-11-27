@@ -117,6 +117,8 @@ export type RpcServices = {
   publishWorld?(): void;
   /** World commands (world.command); absent in narrow test services. */
   worldCommands?: import("../world/commands").WorldCommands;
+  /** World's own settings changed by command (world.command, setting). */
+  settingCommands?: import("../world/setting-commands").SettingCommands;
   boardElements?: import("../world/board-element-service").BoardElementService;
   /** Installed web IDEs and their World-owned servers (world.ide.*). */
   ide?: import("../ide/service").IdeService;

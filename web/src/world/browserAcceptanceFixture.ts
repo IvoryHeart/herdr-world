@@ -1,3 +1,4 @@
+import { publishedHostGrouping } from "../../../shared/hostGrouping";
 import { herdrRuntimeFixture } from "../../../server/src/adapters/testing/runtime";
 import { parseObservationBase } from "../../../server/src/world/observation-v1";
 import { WorldSnapshotService } from "../../../server/src/world/snapshot";
@@ -107,6 +108,17 @@ export function createDenseSnapshotFixture({
           },
         }),
       },
+    }),
+  });
+  // The service publishes the grouping of the hosts it holds.
+  service.publishWith({
+    values: () => ({}),
+    derive: (_published, connections) => ({
+      host_grouping: publishedHostGrouping(
+        { connections: ids.map((id) => ({ id, label: id })), core: [] },
+        "machine",
+        connections,
+      ),
     }),
   });
   return {

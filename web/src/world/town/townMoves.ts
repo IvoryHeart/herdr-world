@@ -20,7 +20,13 @@ import type {
 } from "../herdrOfficeProjection";
 
 export type TownMoveOutcome =
-  | { status: "moved"; tab_id: string; workspace_id: string }
+  | {
+      status: "moved";
+      tab_id: string;
+      workspace_id: string;
+      /** It moved, but this stayed behind (world.agent.move). */
+      message?: string;
+    }
   | { status: "refused"; reason: string; message: string }
   | {
       status: "failed";
@@ -52,7 +58,10 @@ export function townMoveNotice(
   outcome: TownMoveOutcome,
   sourceTab: string,
 ): string {
-  if (outcome.status === "moved") return `${label} moved`;
+  if (outcome.status === "moved")
+    return outcome.message
+      ? `${label} moved. ${outcome.message}`
+      : `${label} moved`;
   if (outcome.status === "refused" || outcome.rolled_back)
     return `${label} not moved: ${outcome.message}`;
   if (outcome.topology_known === false || !outcome.topology?.length)

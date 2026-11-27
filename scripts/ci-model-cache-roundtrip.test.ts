@@ -1,3 +1,4 @@
+import { verificationJobs, modelPartScope } from "./ci-model-plan";
 import { expect, test } from "bun:test";
 import { execFileSync } from "node:child_process";
 import {
@@ -27,7 +28,7 @@ import {
   fingerprintInputs,
   type VerificationManifest,
 } from "./verification-evidence";
-import limits from "../tools/quint/resources.json";
+import limits from "../tools/quint/model-resources.json";
 import checker from "../tools/quint/checker.json";
 
 test("cached groups survive unrelated revisions and aggregate with origin receipts; substituted artifacts fail", async () => {
@@ -53,16 +54,16 @@ test("cached groups survive unrelated revisions and aggregate with origin receip
     git("config", "user.email", "example@example.invalid");
     await write(".gitignore", ".agents/\noutputs\n");
     await write("package.json", "{}");
-    await write("quint/model.qnt", "model");
+    await write("quint/run.ts", "export {}; ");
+    for (const model of verificationModels)
+      await write(`quint/${model}.qnt`, "model");
     await write("web/unrelated.ts", "before");
     git("add", ".");
     git("commit", "-qm", "source");
-    const sourceInputs = await fingerprintInputs(root, [
-      ".gitignore",
-      "package.json",
-      "quint/model.qnt",
-      "web/unrelated.ts",
-    ]);
+    const sourceInputs = await fingerprintInputs(
+      root,
+      git("ls-files").split("\n"),
+    );
     // A real constrained run leaves a cancellation-control readiness directory
     // alongside the supervisor's resource reports. It is not shard evidence.
     await write(
@@ -70,15 +71,15 @@ test("cached groups survive unrelated revisions and aggregate with origin receip
       [123],
     );
     const sourceRevision = git("rev-parse", "HEAD");
-    for (const index of [1, 2, 3]) {
+    for (const index of verificationJobs.map((_, index) => index + 1)) {
       const key = await modelCacheKey(root, index);
       const path = `.agents/verification/runs/ci-shard-${index}-original/manifest.json`;
       const records: Shard["records"] = [];
       for (const model of verificationShard(index)) {
-        const casePath = `.agents/verification/runs/case-${model}/manifest.json`;
+        const casePath = `.agents/verification/runs/case-${model}-${index}/manifest.json`;
         const manifest: VerificationManifest = {
           schemaVersion: 1,
-          scope: { kind: "focused", models: [model] },
+          scope: modelPartScope(index),
           sourceRevision,
           sourceInputs,
           tools: {
@@ -103,7 +104,7 @@ test("cached groups survive unrelated revisions and aggregate with origin receip
               log: "synthetic.log",
             },
           ],
-          results: [{ name: model }],
+          results: [{ name: model, controls: [] }],
           complete: true,
         };
         await write(casePath, manifest);
@@ -112,7 +113,7 @@ test("cached groups survive unrelated revisions and aggregate with origin receip
       await write(path, {
         kind: "ci-shard",
         index,
-        total: 3,
+        total: verificationJobs.length,
         attempt: 1,
         run: "old-run",
         complete: true,
@@ -158,7 +159,8 @@ test("cached groups survive unrelated revisions and aggregate with origin receip
     await write("web/unrelated.ts", "after");
     git("add", ".");
     git("commit", "-qm", "unrelated revision");
-    for (const index of [1, 2, 3]) await modelCache(root, "restore", index);
+    for (const index of verificationJobs.map((_, index) => index + 1))
+      await modelCache(root, "restore", index);
     await aggregateCIShards(
       root,
       new AbortController().signal,
@@ -167,7 +169,7 @@ test("cached groups survive unrelated revisions and aggregate with origin receip
         expect(aggregate.sourceRevision).toBe(git("rev-parse", "HEAD"));
         expect(
           aggregate.ciShards.map((group: { mode: string }) => group.mode),
-        ).toEqual(["reused", "reused", "reused"]);
+        ).toEqual(verificationJobs.map(() => "reused"));
         expect(
           aggregate.ciShards.every(
             (group: { hash: string; originRevision: string }) =>
@@ -252,7 +254,7 @@ test("cached groups survive unrelated revisions and aggregate with origin receip
       await expect(readReusedBundle(root, reusedShard)).rejects.toThrow();
     }
     await write(receiptPath, receipt);
-    const casePath = `.agents/verification/runs/case-${verificationShard(1)[0]}/manifest.json`;
+    const casePath = `.agents/verification/runs/case-${verificationShard(1)[0]}-1/manifest.json`;
     const original = JSON.parse(
       await readFile(resolve(root, casePath), "utf8"),
     );
@@ -264,7 +266,7 @@ test("cached groups survive unrelated revisions and aggregate with origin receip
       aggregateCIShards(root, new AbortController().signal),
     ).rejects.toThrow("artifact differs from origin");
     await write(casePath, original);
-    await write("quint/model.qnt", "changed model");
+    await write(`quint/${verificationShard(1)[0]}.qnt`, "changed model");
     await expect(
       aggregateCIShards(root, new AbortController().signal),
     ).rejects.toThrow("Model cache key changed");
@@ -284,4 +286,4 @@ test("cached groups survive unrelated revisions and aggregate with origin receip
     }
     await rm(root, { recursive: true, force: true });
   }
-});
+}, 30000);

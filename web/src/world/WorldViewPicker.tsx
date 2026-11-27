@@ -17,6 +17,7 @@ import {
   useConnectionManager,
 } from "./HostsControl";
 import type { WorldView } from "./worldViewRouting";
+import { useHostGrouping } from "./useHostGroups";
 import { WORLD_VIEW_DESTINATIONS, worldViewLabel } from "./WorldMobileNav";
 import "./WorldViewPicker.css";
 
@@ -121,6 +122,7 @@ function PhoneViewPicker({
   const open = panel !== null;
   const setOpen = (value: boolean) => setPanel(value ? "views" : null);
   const manager = useConnectionManager();
+  const grouping = useHostGrouping();
   const trigger = useRef<HTMLButtonElement>(null);
   const menu = useRef<HTMLDivElement>(null);
   useLayer(open, () => setPanel(null), {
@@ -239,7 +241,7 @@ function PhoneViewPicker({
               <Server size={18} aria-hidden />
               Hosts
               <span className="world-view-picker-detail">
-                {hostsSelectionLabel(hosts.connections, hosts.ids)}
+                {hostsSelectionLabel(hosts.connections, hosts.ids, grouping)}
               </span>
             </button>
           ) : null}

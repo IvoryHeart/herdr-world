@@ -456,7 +456,7 @@ export async function replayMove(
     source: from,
     destination: { connection_id: targetId, generation: 1, workspace_id: "c1" },
   });
-  const message = "message" in result ? result.message : "";
+  const message = ("message" in result && result.message) || "";
   const before = effects.length;
   const firstResolved = [...resolved];
   // A second move once this one landed: refused inside the settle window;

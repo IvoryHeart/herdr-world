@@ -510,12 +510,12 @@ export function createSettingsRpcHandler(args: {
  *
  * Every committed update carries a `revision`, increasing in commit order
  * for the life of this service, and `get` answers with a revision no newer
- * than the values it returns. A browser orders its own acknowledgements and
- * other browsers' pushes by it, so the last commit wins on every browser
- * (web/src/world/runtimeGrouping.ts). `only_if_absent: true` stores the value
+ * than the values it returns. Browsers follow the values through the World
+ * publication (service/world-commands.ts), which carries them under its own
+ * revision. `only_if_absent: true` stores the value
  * only while the key has none, decided inside the serialized writer, so a
  * browser's one-time migration never replaces a value another browser saved;
- * the answer is the key's value either way.
+ * the answer is the key's value either way, with the value it held before.
  */
 export function createUiSettingsRpcHandler(args: {
   readSettings: () => Promise<GuiSettings>;
@@ -542,8 +542,10 @@ export function createUiSettingsRpcHandler(args: {
     if (valueError) throw new Error(valueError);
     const onlyIfAbsent = params.only_if_absent === true;
     let revision = 0;
+    let before: unknown = null;
     const settings = await updateSettings((current) => {
       revision = ++issued;
+      before = current.ui[key] ?? null;
       if (onlyIfAbsent && current.ui[key] !== undefined) return current;
       const ui = { ...current.ui };
       if (params.value === undefined) delete ui[key];
@@ -551,6 +553,6 @@ export function createUiSettingsRpcHandler(args: {
       return { ...current, ui };
     });
     committed = Math.max(committed, revision);
-    return { key, value: settings.ui[key] ?? null, revision };
+    return { key, value: settings.ui[key] ?? null, before, revision };
   };
 }

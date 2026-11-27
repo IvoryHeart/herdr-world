@@ -179,7 +179,7 @@ describe("optional PIN authentication boundaries", () => {
       );
       expect(handlers.isAuthed(authenticatedRequest(cookie))).toBe(true);
       const [payload, signature] = cookie
-        .slice("herdr_world_auth=".length)
+        .slice(cookie.indexOf("=") + 1)
         .split(".");
       expect(signature).toBe(
         createHmac("sha256", Buffer.from(SESSION_SECRET, "hex"))
@@ -211,7 +211,7 @@ describe("optional PIN authentication boundaries", () => {
       sessionSecret: "d".repeat(64),
     });
     expect(changedSecret.isAuthed(authenticatedRequest(cookie))).toBe(false);
-    const [payload] = cookie.slice("herdr_world_auth=".length).split(".");
+    const [payload] = cookie.slice(cookie.indexOf("=") + 1).split(".");
     for (const key of [PIN, PASSWORD, URL_TOKEN]) {
       const forgedSignature = createHmac("sha256", key)
         .update(payload!)

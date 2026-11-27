@@ -17,6 +17,7 @@ import {
   runtimeDataRoot,
 } from "./service-context";
 import { WORLD_SKILL } from "./world-skill";
+import { lsHuman, type LsResult } from "./world-ls";
 import { GROUP_ACTIONS, groupHuman, parseGroupArgs } from "./world-groups";
 import { MEMORY_ACTIONS } from "../../../shared/memory";
 import { MEMORY_HELP, parseMemoryArgs } from "./memory";
@@ -656,34 +657,8 @@ function human(command: string, reply: Reply): string {
   if (Array.isArray(result))
     return result.map((entry) => JSON.stringify(entry)).join("\n") || "(none)";
   const entry = (result ?? {}) as Record<string, unknown>;
-  if (command === "ls" && Array.isArray(entry.hosts)) {
-    return entry.hosts
-      .map((host) => {
-        const runtimeLines = host.runtimes.flatMap(
-          (runtime: {
-            kind: string;
-            version: string | null;
-            state: string;
-            workspaces?: { label?: string; workspace_id: string }[];
-          }) => [
-            `  ${runtime.kind} ${runtime.version ?? "(version unknown)"} — ${runtime.state}`,
-            ...(runtime.workspaces ?? []).map(
-              (room) => `    ${room.label ?? room.workspace_id}`,
-            ),
-          ],
-        );
-        return [
-          `${host.label} — ${host.state}`,
-          ...runtimeLines,
-          ...(host.state === "empty"
-            ? [
-                `  No runtime installed. Install ${host.installable_runtimes.map((runtime: { label: string }) => runtime.label).join(" or ")}.`,
-              ]
-            : []),
-        ].join("\n");
-      })
-      .join("\n");
-  }
+  if (command === "ls" && Array.isArray(entry.hosts))
+    return lsHuman(entry as unknown as LsResult);
   if (command.startsWith("ask")) {
     const answer = entry.answer as { text?: string } | undefined;
     if (command === "ask withdraw" || entry.withdrawn)

@@ -301,7 +301,7 @@ export function createCoreInstall(deps: CoreInstallDeps) {
           dir: "~/.local/bin",
           login: "systemd",
         } satisfies CoreHostProbe,
-        version: "0.1.21",
+        version: "0.1.22",
       };
     let stdout = "";
     const [result, version] = await Promise.all([
