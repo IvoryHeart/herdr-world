@@ -37,7 +37,15 @@ CI SHALL maintain one open issue labelled flaky per recovered file/case from sam
 - **WHEN** a later completed event processes retained same-repository CI evidence
 - **THEN** the trusted tracker SHALL reconcile previously unaccounted completed runs within artifact retention, including their retained attempts
 - **AND** it SHALL record each run once in flaky history and acknowledge each accounted attempt only after durable issue updates
-- **AND** an error for one run SHALL not prevent accounting for other completed runs
+- **AND** an error for one run SHALL not prevent accounting for other completed runs within the bounded batch
+
+#### Scenario: Retained history exceeds a single accounting batch
+- **WHEN** retained CI history contains many already accounted runs or an unaccounted backlog
+- **THEN** the tracker SHALL use run-list metadata and a trusted receipt cache without fetching each settled run or its commit statuses
+- **AND** short nonterminal run-list pages SHALL not end discovery
+- **AND** each event SHALL account at most eight runs, prioritizing its triggering run and then the oldest missed evidence, with at most 80 API requests including artifact downloads
+- **AND** failed batches SHALL advance a durable scan cursor so unavailable evidence cannot starve later missed runs
+- **AND** subsequent completions SHALL continue the backlog, while a lost cache reply or cache rebuild SHALL not duplicate flaky occurrences
 
 #### Scenario: Explicit owner resolution
 - **WHEN** the owner closes a fixed cause or labels its open issue flaky-quarantined

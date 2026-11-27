@@ -7,7 +7,7 @@
 
 - [x] 2.1 Add Delivery summary, issue-ledger tracking and seven-day enforcement with deduplication, boundary and quarantine tests.
 - [x] 2.2 Add trusted serialized tracker workflow and test its authority boundary, including fork/missing source identity rejection before downloads and repository writes.
-- [x] 2.3 Separate optional Flaky accounting from required Delivery checks and reconcile missed/interrupted retained runs using durable attempt receipts (#1454).
+- [x] 2.3 Separate optional Flaky accounting from required Delivery checks and reconcile missed/interrupted retained runs using durable attempt receipts (#1454); bound API work using a rebuildable issue receipt cache and short-page regressions.
 
 ## 3. Delivery
 

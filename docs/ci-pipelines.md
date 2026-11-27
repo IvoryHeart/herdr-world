@@ -127,14 +127,37 @@ merge or changes a completed Delivery verdict. Retry and frequency verdicts live
 inside the source run's Delivery checks job. Concurrent runs can pass before
 their combined history is recorded; subsequent Delivery jobs enforce that history.
 
-Each completed event reconciles completed same-repository CI runs from the last
-seven days, while their evidence is retained. Final Flaky accounting statuses
-acknowledge each run attempt only after its issue writes finish. A missed event
-or interrupted update has no final receipt, so the next event catches it up;
-reruns count once in the issue ledger. Artifact/API errors leave that run for the
-next completion while other runs continue. Evidence older than its retention
-cannot be recovered automatically. The tracker becomes active on the default
-branch; a preview exercises the read-only gate and synthetic tracking regressions.
+Each completed event discovers completed same-repository CI runs from the last
+seven days using the list response's source identity, SHA, conclusion and attempt.
+Run listing ends on an empty page: GitHub can return short intermediate pages.
+Final Flaky accounting statuses acknowledge each attempt after durable issue
+updates. A single issue labelled `flaky-accounting` caches those receipts, so
+settled runs need no individual run or commit-status reads. This internal cache
+preserves owner prose; only entries outside retained evidence are dropped.
+Closing/removing the cache rebuilds it from durable status receipts, replaying
+only unreceipted evidence so closed causes stay closed. Existing flaky occurrence
+ledgers and commit-status receipts are never trimmed.
+
+Each event accounts at most eight runs: its own run first, then the oldest missed
+runs after the saved batch cursor, wrapping back for retries. Failed batches
+advance that cursor too, so unavailable artifacts cannot starve later misses. Cold
+backlogs drain across later completions rather than exhausting the repository
+token shared with Delivery. Discovery, history, status and artifact archive
+requests share a ceiling of 80 per event. Archives are decoded as JSON data
+without extracting candidate paths. A settled backlog costs one request per
+run-list page plus two setup reads,
+with further work proportional to new evidence. A missed event or interrupted
+write is retried on a later completion, and reruns count once in flaky history.
+Artifact/API errors leave that run for retry while other runs continue within the
+batch. Evidence older than retention cannot be recovered automatically.
+The tracker becomes active on the default branch; previews exercise the read-only
+gate and synthetic tracking regressions.
+
+During rollout, old tracker statuses already attached to a PR's head SHA remain.
+If **Delivery checks** is green but an old **Delivery checks** commit status is
+pending or failed, push a new commit to the PR branch. Rerunning CI keeps the same
+SHA and cannot clear that legacy status. The replacement head gets only the new
+optional accounting context after this change reaches the default branch.
 
 To inspect it in GitHub, open a PR's **Checks**, select **Delivery checks**, then
 read **Flaky tests** in its summary. Open **Actions → Flaky test tracking** for

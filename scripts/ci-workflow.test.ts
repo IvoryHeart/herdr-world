@@ -88,10 +88,14 @@ test("flaky accounting is asynchronous and never owns the required Delivery stat
   const tracker = Bun.YAML.parse(
     await Bun.file(".github/workflows/flaky-tests.yml").text(),
   ) as {
-    on: { workflow_run: { workflows: string[] } };
+    on: { workflow_run: { workflows: string[]; types: string[] } };
+    concurrency: { group: string };
     jobs: Record<string, WorkflowJob>;
   };
   expect(tracker.on.workflow_run.workflows).toEqual(["CI"]);
+  expect(tracker.on.workflow_run.types).toEqual(["requested", "completed"]);
+  expect(tracker.concurrency.group).toBe("flaky-test-tracking");
+  expect(tracker.jobs.track["timeout-minutes"]).toBe(10);
   expect(
     Object.values(tracker.jobs).some((job) => job.name === "Delivery checks"),
   ).toBe(false);

@@ -1,6 +1,5 @@
 import { expect, test } from "bun:test";
 import {
-  chmodSync,
   existsSync,
   readFileSync,
   mkdirSync,
@@ -9,7 +8,7 @@ import {
   writeFileSync,
 } from "node:fs";
 import { tmpdir } from "node:os";
-import { delimiter, join } from "node:path";
+import { join } from "node:path";
 import {
   publishTracking,
   catchUpTracking,
@@ -24,6 +23,8 @@ const report = { files: [flaky.file], flaky: [flaky] };
 
 function fakeAPI() {
   const issues: FlakyIssue[] = [];
+  const indexes: FlakyIssue[] = [];
+  let pages: number[][] | undefined;
   const statuses: Array<{
     context: string;
     description: string;
@@ -50,9 +51,10 @@ function fakeAPI() {
     if (path.startsWith("actions/workflows/")) {
       const page = Number(new URLSearchParams(path.split("?")[1]).get("page"));
       return {
-        workflow_runs: completed
-          .slice((page - 1) * 100, page * 100)
-          .map(source),
+        workflow_runs: (pages
+          ? pages[page - 1] || []
+          : completed.slice((page - 1) * 100, page * 100)
+        ).map(source),
       };
     }
     if (path.startsWith("actions/runs/"))
@@ -66,22 +68,28 @@ function fakeAPI() {
       return {};
     }
     if (path.startsWith("issues?"))
-      return issues.map((issue) => structuredClone(issue));
+      return (path.includes("labels=flaky-accounting") ? indexes : issues).map(
+        (issue) => structuredClone(issue),
+      );
     if (path === "labels") return {};
     if (path === "issues") {
+      const cache = body.labels.includes("flaky-accounting");
+      const collection = cache ? indexes : issues;
       const issue = {
-        number: issues.length + 1,
+        number: cache ? 10000 : issues.length + 1,
         body: body.body,
         labels: [{ name: "flaky" }],
       };
-      issues.push(issue);
-      if (failCreateReply) {
+      collection.push(issue);
+      if (failCreateReply && !cache) {
         failCreateReply = false;
         throw new Error("reply lost");
       }
       return issue;
     }
-    const issue = issues.find((issue) => path === `issues/${issue.number}`)!;
+    const issue = [...issues, ...indexes].find(
+      (issue) => path === `issues/${issue.number}`,
+    )!;
     if (!issue) throw new Error(`unexpected path ${path}`);
     issue.body = body.body;
     return issue;
@@ -93,6 +101,10 @@ function fakeAPI() {
     calls,
     sources,
     completed,
+    indexes,
+    pages: (value: number[][]) => {
+      pages = value;
+    },
     repository: (value: unknown) => {
       sourceRepository = value;
     },
@@ -224,9 +236,14 @@ test("completed events catch up missed runs once, independent of delivery order"
       };
       await catchUpTracking(mock.api, "example/repo", trigger, load, at);
       await catchUpTracking(mock.api, "example/repo", trigger, load, at);
-      expect(loaded).toEqual([1, 2, 3]);
+      expect(loaded).toEqual([
+        trigger,
+        ...[1, 2, 3].filter((id) => id !== trigger),
+      ]);
       expect(
-        ledgerOf(mock.issues[0]!.body)?.occurrences.map((item) => item.run),
+        ledgerOf(mock.issues[0]!.body)
+          ?.occurrences.map((item) => item.run)
+          .sort(),
       ).toEqual([1, 2, 3]);
       expect(mock.statuses).toHaveLength(3);
       expect(
@@ -244,7 +261,7 @@ test("catch-up resumes interrupted writes, continues other runs and records reru
     catchUpTracking(mock.api, "example/repo", 2, async () => [report], at),
   ).rejects.toThrow("needs attention");
   expect(mock.statuses.map((status) => status.description)).toEqual([
-    "Flaky history run 2 attempt 1: recorded",
+    "Flaky history run 1 attempt 1: recorded",
   ]);
   const loaded: number[] = [];
   await catchUpTracking(
@@ -257,7 +274,7 @@ test("catch-up resumes interrupted writes, continues other runs and records reru
     },
     at,
   );
-  expect(loaded).toEqual([1]);
+  expect(loaded).toEqual([2]);
   mock.sources.set(1, { run_attempt: 2 });
   await catchUpTracking(
     mock.api,
@@ -269,9 +286,11 @@ test("catch-up resumes interrupted writes, continues other runs and records reru
     },
     at,
   );
-  expect(loaded).toEqual([1, 1]);
+  expect(loaded).toEqual([2, 1]);
   expect(
-    ledgerOf(mock.issues[0]!.body)?.occurrences.map((item) => item.run),
+    ledgerOf(mock.issues[0]!.body)
+      ?.occurrences.map((item) => item.run)
+      .sort(),
   ).toEqual([1, 2]);
   expect(mock.statuses[0]!.description).toBe(
     "Flaky history run 1 attempt 2: recorded",
@@ -314,12 +333,196 @@ test("missing evidence is retried later and frequency breaches do not starve fol
   expect(mock.statuses).toHaveLength(5);
 });
 
-test("catch-up pages through retained runs and receipts without reading foreign artifacts", async () => {
+test("short nonterminal run pages reach old misses with bounded API requests", async () => {
   const mock = fakeAPI();
-  mock.completed.push(...Array.from({ length: 101 }, (_, i) => i + 1));
-  for (const run of mock.completed)
-    mock.sources.set(run, { head_repository: { full_name: "foreign/fork" } });
-  mock.sources.set(101, { head_repository: { full_name: "example/repo" } });
+  const runs = Array.from({ length: 1283 }, (_, i) => 1283 - i);
+  for (const id of runs)
+    mock.sources.set(id, { head_sha: id.toString(16).padStart(40, "0") });
+  mock.indexes.push({
+    number: 10000,
+    labels: [{ name: "flaky-accounting" }],
+    body: `<!-- flaky-accounting-v1: ${JSON.stringify({ receipts: runs.filter((id) => id !== 1 && id !== 1283).map((id) => [id, 1]), after: 0 })} -->`,
+  });
+  const pages = [runs.slice(0, 87), runs.slice(87, 170)];
+  for (let i = 170; i < runs.length; i += 100)
+    pages.push(runs.slice(i, i + 100));
+  mock.pages(pages);
+  const loaded: number[] = [];
+  await catchUpTracking(
+    mock.api,
+    "example/repo",
+    1283,
+    async (id) => {
+      loaded.push(id);
+      return [report];
+    },
+    at,
+  );
+  expect(loaded).toEqual([1283, 1]);
+  expect(
+    ledgerOf(mock.issues[0]!.body)
+      ?.occurrences.map((item) => item.run)
+      .sort((a, b) => a - b),
+  ).toEqual([1, 1283]);
+  expect(mock.calls.length).toBeLessThan(30);
+  expect(
+    mock.calls
+      .filter((call) => /^actions\/runs\/\d+$/.test(call.path))
+      .map((call) => call.path),
+  ).toEqual(["actions/runs/1283"]);
+  expect(
+    mock.calls.filter((call) => call.path.startsWith("commits/")),
+  ).toHaveLength(2);
+  const previous = mock.calls.length;
+  await catchUpTracking(
+    mock.api,
+    "example/repo",
+    1283,
+    async () => {
+      throw new Error("already accounted");
+    },
+    at,
+  );
+  expect(mock.calls.length - previous).toBe(2 + pages.length + 1);
+});
+
+test("listed source metadata is validated without refetching runs or foreign artifacts", async () => {
+  const mock = fakeAPI();
+  mock.completed.push(1, 2, 3);
+  mock.sources.set(1, { head_repository: { full_name: "foreign/fork" } });
+  mock.sources.set(2, { head_sha: "invalid" });
+  const loaded: number[] = [];
+  await expect(
+    catchUpTracking(
+      mock.api,
+      "example/repo",
+      3,
+      async (id) => {
+        loaded.push(id);
+        return [];
+      },
+      at,
+    ),
+  ).rejects.toThrow("needs attention");
+  expect(loaded).toEqual([3]);
+  expect(
+    mock.calls
+      .filter((call) => /^actions\/runs\/\d+$/.test(call.path))
+      .map((call) => call.path),
+  ).toEqual(["actions/runs/3"]);
+});
+
+test("cold backlog drains bounded batches while prioritizing the triggering run", async () => {
+  const mock = fakeAPI();
+  mock.completed.push(...Array.from({ length: 1282 }, (_, i) => 1282 - i));
+  const loaded: number[] = [];
+  const load = async (id: number) => {
+    loaded.push(id);
+    return [];
+  };
+  await catchUpTracking(mock.api, "example/repo", 1282, load, at);
+  expect(loaded).toEqual([1282, 1, 2, 3, 4, 5, 6, 7]);
+  expect(mock.calls.length).toBeLessThan(50);
+  const previous = mock.calls.length;
+  await catchUpTracking(mock.api, "example/repo", 1281, load, at);
+  expect(loaded.slice(8)).toEqual([1281, 8, 9, 10, 11, 12, 13, 14]);
+  expect(mock.calls.length - previous).toBeLessThan(50);
+});
+
+test("every failed subset of a full batch leaves later missed runs reachable", async () => {
+  for (let failures = 0; failures < 256; failures++) {
+    const mock = fakeAPI();
+    mock.completed.push(...Array.from({ length: 9 }, (_, i) => i + 1));
+    const loaded: number[] = [];
+    const load = async (id: number) => {
+      loaded.push(id);
+      if (id < 9 && failures & (1 << (id - 1)))
+        throw new Error("unavailable artifact");
+      return [];
+    };
+    await catchUpTracking(mock.api, "example/repo", 9, load, at).catch(
+      () => {},
+    );
+    await catchUpTracking(mock.api, "example/repo", 9, load, at).catch(
+      () => {},
+    );
+    // Even seven permanently unavailable older runs cannot starve run eight.
+    expect(loaded).toContain(8);
+    for (const id of mock.completed)
+      if (id === 9 || !(failures & (1 << (id - 1))))
+        expect(
+          mock.statuses.some((status) =>
+            status.description.startsWith(`Flaky history run ${id} attempt 1:`),
+          ),
+        ).toBe(true);
+  }
+});
+
+test("the request ceiling also covers artifact discovery and oversized metadata scans", async () => {
+  const mock = fakeAPI();
+  await expect(
+    catchUpTracking(
+      mock.api,
+      "example/repo",
+      1,
+      async (_id, api) => {
+        for (let i = 0; i < 100; i++) await api("labels", {});
+        return [];
+      },
+      at,
+    ),
+  ).rejects.toThrow("request budget reached");
+  expect(mock.calls).toHaveLength(80);
+  expect(mock.statuses).toHaveLength(0);
+});
+
+test("lost cache replies and a rebuilt index replay durable history idempotently", async () => {
+  const mock = fakeAPI();
+  mock.completed.push(1, 2);
+  let loseReply = true;
+  const api: GitHubAPI = async (path, body) => {
+    const response = await mock.api(path, body);
+    if (loseReply && path === "issues/10000") {
+      loseReply = false;
+      throw new Error("cache reply lost");
+    }
+    return response;
+  };
+  await expect(
+    catchUpTracking(api, "example/repo", 2, async () => [report], at),
+  ).rejects.toThrow("needs attention");
+  await catchUpTracking(api, "example/repo", 2, async () => [report], at);
+  mock.indexes.splice(0);
+  await catchUpTracking(api, "example/repo", 2, async () => [report], at);
+  expect(
+    ledgerOf(mock.issues[0]!.body)
+      ?.occurrences.map((item) => item.run)
+      .sort(),
+  ).toEqual([1, 2]);
+});
+
+test("cache rebuild honors existing receipts without reopening owner-closed causes", async () => {
+  const mock = fakeAPI();
+  mock.completed.push(1);
+  await catchUpTracking(mock.api, "example/repo", 1, async () => [report], at);
+  mock.issues.splice(0); // Owner closed the fixed cause.
+  mock.indexes.splice(0); // Owner also closed the disposable index.
+  await catchUpTracking(
+    mock.api,
+    "example/repo",
+    1,
+    async () => {
+      throw new Error("a durable receipt needs no artifact replay");
+    },
+    at,
+  );
+  expect(mock.issues).toHaveLength(0);
+  expect(mock.statuses).toHaveLength(1);
+});
+
+test("requested status pagination still finds receipts after a full page", async () => {
+  const mock = fakeAPI();
+  mock.conclusion(null);
   mock.statuses.push(
     ...Array.from({ length: 100 }, () => ({
       context: "Delivery checks",
@@ -327,39 +530,17 @@ test("catch-up pages through retained runs and receipts without reading foreign 
       state: "pending",
     })),
   );
-  const loaded: number[] = [];
-  await catchUpTracking(
-    mock.api,
-    "example/repo",
-    101,
-    async (id) => {
-      loaded.push(id);
-      return [report];
-    },
-    at,
-  );
-  mock.statuses.push(mock.statuses.shift()!); // Receipt is beyond the first page.
-  await catchUpTracking(
-    mock.api,
-    "example/repo",
-    101,
-    async () => {
-      throw new Error("already recorded");
-    },
-    at,
-  );
-  expect(loaded).toEqual([101]);
+  mock.statuses.push({
+    context: "Flaky accounting",
+    description: "Flaky history run 2 attempt 1: recorded",
+    state: "success",
+  });
+  await publishTracking(mock.api, "example/repo", [], 1, 1, true, at);
+  expect(mock.statuses).toHaveLength(101);
   expect(
-    mock.calls.some(
-      (call) =>
-        call.path.startsWith("actions/workflows/") &&
-        call.path.includes("page=2"),
+    mock.calls.some((call) =>
+      call.path.includes("statuses?per_page=100&page=2"),
     ),
-  ).toBe(true);
-  expect(
-    mock.calls
-      .filter((call) => call.body && call.path.startsWith("statuses/"))
-      .every((call) => call.body.context === "Flaky accounting"),
   ).toBe(true);
 });
 
@@ -369,23 +550,14 @@ test.each(["success", "expired", "download-fails", "invalid", "no-artifacts"])(
     const root = mkdtempSync(join(tmpdir(), "flake-tracker-"));
     try {
       const calls = join(root, "calls.jsonl");
-      const downloaded = join(root, "downloaded.json");
-      const shim = join(root, "gh");
-      writeFileSync(
-        shim,
-        `#!${process.execPath}
-import { mkdirSync, writeFileSync } from "node:fs";
-import { join } from "node:path";
-const args = process.argv.slice(2);
-if (JSON.stringify(args.slice(0, 8)) !== JSON.stringify(["run", "download", "1", "--repo", "example/repo", "--pattern", "flaky-tests-*", "--dir"])) process.exit(9);
-writeFileSync(${JSON.stringify(downloaded)}, JSON.stringify(args));
-if (${JSON.stringify(mode)} === "download-fails") process.exit(1);
-const directory = join(args[8], "flaky-tests-unit-1");
-mkdirSync(directory);
-writeFileSync(join(directory, "unit.json"), ${JSON.stringify(mode === "invalid" ? "{}" : JSON.stringify(report))});
-`,
-      );
-      chmodSync(shim, 0o755);
+      const zip = Bun.spawnSync([
+        "python3",
+        "-c",
+        "import sys, zipfile; archive = zipfile.ZipFile(sys.stdout.buffer, 'w'); archive.writestr('../../unit.json', sys.argv[1]); archive.close()",
+        mode === "invalid" ? "{}" : JSON.stringify(report),
+      ]);
+      expect(zip.exitCode).toBe(0);
+      const archive = Buffer.from(zip.stdout).toString("base64");
       const preload = join(root, "api.ts");
       writeFileSync(
         preload,
@@ -393,16 +565,18 @@ writeFileSync(join(directory, "unit.json"), ${JSON.stringify(mode === "invalid" 
 import { appendFileSync } from "node:fs";
 const source = { id: 1, path: ".github/workflows/ci.yml", head_sha: "a".repeat(40), head_repository: { full_name: "example/repo" }, created_at: new Date().toISOString(), conclusion: "success", run_attempt: 1 };
 globalThis.fetch = async (url, options) => {
-  const path = new URL(url).pathname.split("/repos/example/repo/")[1];
+  const parsed = new URL(url);
+  const path = parsed.pathname.split("/repos/example/repo/")[1];
   const body = options.body ? JSON.parse(options.body) : undefined;
   appendFileSync(${JSON.stringify(calls)}, JSON.stringify({ path, body }) + "\\n");
   let result;
   if (path === "actions/runs/1") result = source;
-  else if (path === "actions/workflows/ci.yml/runs") result = { workflow_runs: [source] };
-  else if (path === "actions/runs/1/artifacts") result = { artifacts: ${JSON.stringify(mode === "no-artifacts" ? [] : [{ name: "flaky-tests-unit-1", expired: mode === "expired" }])} };
+  else if (path === "actions/workflows/ci.yml/runs") result = { workflow_runs: parsed.searchParams.get("page") === "1" ? [source] : [] };
+  else if (path === "actions/runs/1/artifacts") result = { artifacts: ${JSON.stringify(mode === "no-artifacts" ? [] : [{ id: 1, name: "flaky-tests-unit-1", expired: mode === "expired" }])} };
+  else if (path === "actions/artifacts/1/zip") return ${JSON.stringify(mode)} === "download-fails" ? new Response("interrupted", { status: 503 }) : new Response(Buffer.from(${JSON.stringify(archive)}, "base64"));
   else if (path === "issues" && body) result = { number: 1, body: body.body, labels: [{ name: "flaky" }] };
   else if (path === "issues" || path.startsWith("commits/")) result = [];
-  else if (path === "labels" || path.startsWith("statuses/")) result = {};
+  else if (path === "issues/1" || path === "labels" || path.startsWith("statuses/")) result = {};
   else throw new Error("Unexpected API path " + path);
   return Response.json(result);
 };
@@ -422,7 +596,6 @@ globalThis.fetch = async (url, options) => {
           stderr: "pipe",
           env: {
             ...process.env,
-            PATH: `${root}${delimiter}${process.env.PATH}`,
             GH_TOKEN: "synthetic-test-token",
             GITHUB_REPOSITORY: "example/repo",
             SOURCE_RUN: "1",
@@ -451,15 +624,15 @@ globalThis.fetch = async (url, options) => {
       expect(
         statuses.every((call) => call.body.context === "Flaky accounting"),
       ).toBe(true);
-      expect(existsSync(downloaded)).toBe(
-        !["expired", "no-artifacts"].includes(mode),
-      );
-      if (existsSync(downloaded))
-        expect(
-          existsSync(JSON.parse(readFileSync(downloaded, "utf8"))[8]),
-        ).toBe(false);
       expect(
-        recorded.filter((call) => call.path === "issues" && call.body),
+        recorded.some((call) => call.path === "actions/artifacts/1/zip"),
+      ).toBe(!["expired", "no-artifacts"].includes(mode));
+      expect(existsSync(join(root, "unit.json"))).toBe(false);
+      expect(
+        recorded.filter(
+          (call) =>
+            call.path === "issues" && call.body?.labels?.includes("flaky"),
+        ),
       ).toHaveLength(mode === "success" ? 1 : 0);
     } finally {
       rmSync(root, { recursive: true, force: true });

@@ -55,7 +55,7 @@
 - `scripts/release-npm-smoke.ts`
 - `scripts/test-retry.ts` and `scripts/test-retry.test.ts` (CI-only scoped file/case recovery and JUnit proof)
 - `scripts/flaky-test-policy.ts` and `scripts/flaky-test-policy.test.ts` (file/case identity, distinct-run ledger, seven-day limit and explicit quarantine)
-- `scripts/flaky-tests.ts` and `scripts/flaky-tests.test.ts` (Delivery summary/read-only gate; same-repository source admission, serialized issue updates, optional Flaky accounting receipts and retained-run catch-up)
+- `scripts/flaky-tests.ts` and `scripts/flaky-tests.test.ts` (Delivery summary/read-only gate; same-repository source admission, serialized issue updates, optional Flaky accounting receipts, bounded retained-run catch-up and the rebuildable GitHub issue receipt cache)
 - `scripts/ci-workflow.test.ts` (required Delivery job remains independent of asynchronous flaky accounting)
 - `.github/workflows/flaky-tests.yml` (default-branch advisory tracker; source identity verified before downloading retained same-repository artifacts as data)
 - `scripts/ci-tests.ts`, `scripts/run-tests.ts`, `scripts/run-world-tests.ts` (retry opt-in and shared browser assets)
