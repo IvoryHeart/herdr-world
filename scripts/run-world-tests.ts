@@ -12,7 +12,7 @@ import {
 import timings from "./world-browser-timings.json";
 import {
   executeWorldBrowserCases,
-  worldCasePattern,
+  worldCaseTestArgs,
 } from "./world-browser-cases";
 
 // Named suites narrow the shard, or select whole files without --shard.
@@ -68,13 +68,17 @@ try {
     await buildWorldBrowserBundle("town/TownCanvas", directory);
   if (files.some((path) => path.includes("/SharedViewCreation")))
     await buildWorldBrowserBundle("SharedViewCreation", directory);
-  const run = async (paths: string[], suffix: string, pattern?: string) => {
+  const run = async (
+    paths: string[],
+    suffix: string,
+    selection: string[] = [],
+  ) => {
     const child = Bun.spawn(
       [
         process.execPath,
         "scripts/run-tests.ts",
         ...paths,
-        ...(pattern ? [`--test-name-pattern=${pattern}`] : []),
+        ...selection,
         ...(!testArgs.some((arg) => /^--parallel(?:=|$)/.test(arg))
           ? [
               `--parallel=${shard ? 1 : Bun.env.HERDR_TEST_PARALLEL || Math.min(availableParallelism(), 4)}`,
@@ -131,7 +135,7 @@ try {
         run(
           [`./${task.file}`],
           `-worker-${worker + 1}-file-${index + 1}`,
-          worldCasePattern(task, timings.cases),
+          worldCaseTestArgs(task, timings.cases),
         ),
     );
   } else {

@@ -302,8 +302,10 @@ Use `bun run test <path>` for every ordinary test, including focused cases.
 World's six browser jobs balance individual case durations from
 `scripts/world-browser-timings.json` across three process-isolated workers each.
 Each selected file has exactly one fallback selector for new or renamed cases;
-missing timings never exclude tests. To refresh the committed weights from a
-complete CI run (keep its artifacts outside tracked paths):
+missing timings never exclude tests. Exact-name tasks allow zero matches when
+recorded names have been renamed or deleted; the fallback still fails if it
+matches no tests, and assertion failures still fail the shard. To refresh the
+committed weights from a complete CI run (keep its artifacts outside tracked paths):
 
 ```bash
 gh run download RUN_ID --pattern 'world-browser-*-attempt-*' --dir .agents/browser-timings

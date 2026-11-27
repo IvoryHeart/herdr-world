@@ -95,6 +95,20 @@ export function worldCasePattern(
   return `^(?:${names.join("|")})${end}`;
 }
 
+/** Bun arguments shared by the runner and executable selector regressions. */
+export function worldCaseTestArgs(
+  task: WorldCaseTask,
+  timings: CaseTimings,
+): string[] {
+  const pattern = worldCasePattern(task, timings);
+  return [
+    ...(pattern ? [`--test-name-pattern=${pattern}`] : []),
+    // Timing rows can outlive a rename/deletion. The complement still owns
+    // every current case and must retain Bun's missing-test failure.
+    ...(!task.remaining ? ["--pass-with-no-tests"] : []),
+  ];
+}
+
 /** Finish every case group, even after a failed assertion; keep workers bounded. */
 export async function executeWorldBrowserCases(
   workers: readonly (readonly WorldCaseTask[])[],

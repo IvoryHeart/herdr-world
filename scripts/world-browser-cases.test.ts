@@ -1,6 +1,7 @@
 import { mkdtemp, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
+import { fileURLToPath } from "node:url";
 import { parseJUnit } from "./test-retry";
 import { worldBrowserCasePlan } from "./world-browser-suites";
 import timings from "./world-browser-timings.json";
@@ -9,6 +10,7 @@ import {
   executeWorldBrowserCases,
   planWorldBrowserCases,
   worldCasePattern,
+  worldCaseTestArgs,
 } from "./world-browser-cases";
 
 test("individual cases from a heavy file occupy different workers", () => {
@@ -83,60 +85,118 @@ test("the committed case plan leaves headroom below three minutes without adding
       expect(seconds).toBeLessThanOrEqual(50);
 });
 
-test("Bun runs each case once and an unmeasured negative control still fails its worker", async () => {
-  const directory = await mkdtemp(join(tmpdir(), "world-case-selectors-"));
+for (const negativeControl of [false, true])
+  test(`Bun accepts stale timing rows and runs renamed cases once${negativeControl ? " while retaining an unmeasured violation" : ""}`, async () => {
+    const directory = await mkdtemp(join(tmpdir(), "world-case-selectors-"));
+    try {
+      const files = ["a.test.ts", "b.test.ts"];
+      await Bun.write(
+        join(directory, files[0]!),
+        'import {test} from "bun:test"; test("shared",()=>{}); test("escaped [$]",()=>{}); test("renamed",()=>{});' +
+          (negativeControl
+            ? 'test("unmeasured negative control",()=>{throw new Error("retained violation")});'
+            : ""),
+      );
+      await Bun.write(
+        join(directory, files[1]!),
+        'import {test} from "bun:test"; test("shared",()=>{});',
+      );
+      const weights = {
+        "a.test.ts": {
+          "old name": 40,
+          deleted: 30,
+          shared: 20,
+          "escaped [$]": 10,
+        },
+        "b.test.ts": { shared: 5 },
+      };
+      const observed: ReturnType<typeof parseJUnit> = [];
+      let failures = 0;
+      let emptyExactTasks = 0;
+      for (const [index, task] of planWorldBrowserCases(files, weights, 1, 3)
+        .flat(2)
+        .entries()) {
+        const output = join(directory, `${index}.xml`);
+        const child = Bun.spawn(
+          [
+            process.execPath,
+            fileURLToPath(new URL("./run-tests.ts", import.meta.url)),
+            `./${task.file}`,
+            ...worldCaseTestArgs(task, weights),
+            "--retry-flaky=browser",
+            `--flake-report=${join(directory, `${index}.flakes.json`)}`,
+            "--reporter=junit",
+            `--reporter-outfile=${output}`,
+          ],
+          { cwd: directory, stdout: "ignore", stderr: "ignore" },
+        );
+        const code = await child.exited;
+        if (
+          !task.remaining &&
+          task.names.every((name) => ["old name", "deleted"].includes(name))
+        ) {
+          emptyExactTasks++;
+          expect(code).toBe(0);
+        }
+        failures += code === 1 ? 1 : 0;
+        expect([0, 1]).toContain(code);
+        observed.push(
+          ...parseJUnit(await Bun.file(output).text()).filter(
+            (item) => item.status !== "skip",
+          ),
+        );
+      }
+      expect(emptyExactTasks).toBe(2);
+      expect(
+        observed.map((item) => `${item.file}#${item.name}`).sort(),
+      ).toEqual([
+        "a.test.ts#escaped [$]",
+        "a.test.ts#renamed",
+        "a.test.ts#shared",
+        ...(negativeControl ? ["a.test.ts#unmeasured negative control"] : []),
+        "b.test.ts#shared",
+      ]);
+      expect(failures).toBe(negativeControl ? 1 : 0);
+      expect(
+        observed
+          .filter((item) => item.status === "fail")
+          .map((item) => item.name),
+      ).toEqual(negativeControl ? ["unmeasured negative control"] : []);
+    } finally {
+      await rm(directory, { recursive: true, force: true });
+    }
+  });
+
+test("Bun still rejects a complement task that matches no current cases", async () => {
+  const directory = await mkdtemp(join(tmpdir(), "world-case-missing-"));
   try {
-    const files = ["a.test.ts", "b.test.ts"];
+    const file = "missing.test.ts";
     await Bun.write(
-      join(directory, files[0]!),
-      'import {test} from "bun:test"; test("shared",()=>{}); test("escaped [$]",()=>{}); test("unmeasured negative control",()=>{throw new Error("retained violation")});',
-    );
-    await Bun.write(
-      join(directory, files[1]!),
+      join(directory, file),
       'import {test} from "bun:test"; test("shared",()=>{});',
     );
-    const weights = {
-      "a.test.ts": { shared: 20, "escaped [$]": 10 },
-      "b.test.ts": { shared: 5 },
-    };
-    const observed: ReturnType<typeof parseJUnit> = [];
-    let failures = 0;
-    for (const [index, task] of planWorldBrowserCases(files, weights, 1, 2)
+    const weights = { [file]: { shared: 40, deleted: 30 } };
+    const task = planWorldBrowserCases([file], weights, 1, 2)
       .flat(2)
-      .entries()) {
-      const output = join(directory, `${index}.xml`);
-      const child = Bun.spawn(
-        [
-          process.execPath,
-          "test",
-          `./${task.file}`,
-          `--test-name-pattern=${worldCasePattern(task, weights)}`,
-          "--reporter=junit",
-          `--reporter-outfile=${output}`,
-        ],
-        { cwd: directory, stdout: "ignore", stderr: "ignore" },
-      );
-      const code = await child.exited;
-      failures += code === 1 ? 1 : 0;
-      expect([0, 1]).toContain(code);
-      observed.push(
-        ...parseJUnit(await Bun.file(output).text()).filter(
-          (item) => item.status !== "skip",
-        ),
-      );
-    }
-    expect(observed.map((item) => `${item.file}#${item.name}`).sort()).toEqual([
-      "a.test.ts#escaped [$]",
-      "a.test.ts#shared",
-      "a.test.ts#unmeasured negative control",
-      "b.test.ts#shared",
-    ]);
-    expect(failures).toBe(1);
-    expect(
-      observed
-        .filter((item) => item.status === "fail")
-        .map((item) => item.name),
-    ).toEqual(["unmeasured negative control"]);
+      .find((task) => task.remaining)!;
+    const selection = worldCaseTestArgs(task, weights);
+    expect(selection).not.toContain("--pass-with-no-tests");
+    const child = Bun.spawn(
+      [
+        process.execPath,
+        fileURLToPath(new URL("./run-tests.ts", import.meta.url)),
+        `./${file}`,
+        ...selection,
+        "--retry-flaky=browser",
+        `--flake-report=${join(directory, "flakes.json")}`,
+        "--reporter=junit",
+        `--reporter-outfile=${join(directory, "missing.xml")}`,
+      ],
+      { cwd: directory, stdout: "ignore", stderr: "pipe" },
+    );
+    const stderr = new Response(child.stderr).text();
+    expect(await child.exited).toBe(1);
+    expect(await stderr).toContain("matched 0 tests");
   } finally {
     await rm(directory, { recursive: true, force: true });
   }
