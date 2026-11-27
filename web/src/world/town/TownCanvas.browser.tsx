@@ -2368,7 +2368,9 @@ async function run() {
         // The reflow hold and its explicit Fold/Expand bypass are scene rules,
         // checked headless in scene/townScene.test.ts.
         root.unmount();
-        await settle();
+        await new Promise<void>((resolve) =>
+          requestAnimationFrame(() => resolve()),
+        );
         return true;
       }
     }
