@@ -70,7 +70,7 @@ function harness(
     }),
     fixture: { start: async () => ({}) },
     platform: options.platform ?? "linux",
-    latestVersion: async () => "0.1.21",
+    latestVersion: async () => "0.1.22",
     sleep: async () => {},
     run: async (argv, input, _timeout, onLine) => {
       calls.push({ argv, input });
@@ -79,7 +79,7 @@ function harness(
         return { code: 0, stderr: "" };
       }
       onLine(
-        "Installed herdr-core 0.1.21 into /example/.local/bin/herdr-core.",
+        "Installed herdr-core 0.1.22 into /example/.local/bin/herdr-core.",
       );
       await setupDone;
       return {
@@ -106,8 +106,8 @@ async function settle(
 
 describe("herdr-core install from World", () => {
   test("the script call is appended with a checked version and closed stdin", () => {
-    expect(coreInstallInput("setup", "0.1.21")).toEndWith(
-      "\nherdr_core_setup '0.1.21' </dev/null\n",
+    expect(coreInstallInput("setup", "0.1.22")).toEndWith(
+      "\nherdr_core_setup '0.1.22' </dev/null\n",
     );
     expect(coreInstallInput("setup", null, "work")).toEndWith(
       "\nherdr_core_setup '' 'work' </dev/null\n",
@@ -124,9 +124,9 @@ describe("herdr-core install from World", () => {
   });
 
   test("Windows gets the PowerShell steps with the same calls, quoted", () => {
-    const setup = coreInstallInput("setup", "0.1.21", "work", "win32");
+    const setup = coreInstallInput("setup", "0.1.22", "work", "win32");
     expect(setup).toContain("function herdr_core_setup($requested, $session)");
-    expect(setup).toEndWith("\nherdr_core_setup '0.1.21' 'work'\n");
+    expect(setup).toEndWith("\nherdr_core_setup '0.1.22' 'work'\n");
     expect(coreInstallInput("setup", null, "default", "win32")).toEndWith(
       "\nherdr_core_setup '' 'default'\n",
     );
@@ -225,16 +225,16 @@ describe("herdr-core install from World", () => {
       type: "ssh",
       destination: "dev.example.com",
     });
-    expect(probed.version).toBe("0.1.21");
+    expect(probed.version).toBe("0.1.22");
     expect(calls[0]!.argv).toContain("dev.example.com");
     expect(calls[0]!.argv.at(-1)).toBe("sh -s");
   });
 
   test("a confirmed install runs setup, then adds and connects a core profile", async () => {
     const h = harness();
-    const started = h.install.install({ type: "local" }, "0.1.21");
+    const started = h.install.install({ type: "local" }, "0.1.22");
     expect(started.phase).toBe("installing");
-    expect(() => h.install.install({ type: "local" }, "0.1.21")).toThrow(
+    expect(() => h.install.install({ type: "local" }, "0.1.22")).toThrow(
       "already being installed there",
     );
     h.finishSetup();
@@ -242,10 +242,10 @@ describe("herdr-core install from World", () => {
     expect(status.phase).toBe("done");
     expect(status.connection_id).toBe("core-local");
     expect(status.lines).toContain(
-      "Installed herdr-core 0.1.21 into /example/.local/bin/herdr-core.",
+      "Installed herdr-core 0.1.22 into /example/.local/bin/herdr-core.",
     );
     expect(h.calls[0]!.argv).toEqual(["sh", "-s"]);
-    expect(h.calls[0]!.input).toContain("herdr_core_setup '0.1.21'");
+    expect(h.calls[0]!.input).toContain("herdr_core_setup '0.1.22'");
     expect(h.created).toEqual([
       {
         id: "core-local",
@@ -271,11 +271,11 @@ describe("herdr-core install from World", () => {
     await h.install.probe({ type: "ssh", destination: "dev.example.com" });
     expect(h.calls[1]!.argv.at(-1)).toBe("sh -s");
     expect(h.calls[1]!.input).toEndWith("\nherdr_core_probe </dev/null\n");
-    h.install.install({ type: "local" }, "0.1.21");
+    h.install.install({ type: "local" }, "0.1.22");
     h.finishSetup();
     expect((await settle(h.install, { type: "local" })).phase).toBe("done");
     expect(h.calls[2]!.input).toEndWith(
-      "\nherdr_core_setup '0.1.21' 'default'\n",
+      "\nherdr_core_setup '0.1.22' 'default'\n",
     );
     expect(h.created).toMatchObject([{ id: "core-local", type: "local" }]);
   });
@@ -321,13 +321,13 @@ describe("herdr-core install from World", () => {
     expect((await h.install.probe({ type: "local" }, true)).probe.core).toBe(
       null,
     );
-    h.install.install({ type: "local" }, "0.1.21", "ok");
+    h.install.install({ type: "local" }, "0.1.22", "ok");
     const ok = await settle(h.install, { type: "local" });
     expect(ok).toMatchObject({ phase: "done", connection_id: "core-fixture" });
     // Every simulated line and failure says so (#931).
     expect(ok.lines.length).toBeGreaterThan(0);
     for (const line of ok.lines) expect(line).toStartWith("Simulated: ");
-    h.install.install({ type: "local" }, "0.1.21", "error");
+    h.install.install({ type: "local" }, "0.1.22", "error");
     const failed = await settle(h.install, { type: "local" });
     expect(failed.error).toStartWith("Simulated: ");
     expect(failed.error).toContain("checksum mismatch");
