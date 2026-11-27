@@ -52,7 +52,12 @@ repository, web-browser or behavioral aggregate runners in the PR graph.
 Delivery downloads the model manifests and resource receipts, applies the same
 complete source/tool/model/resource checks, and retains the canonical evidence
 artifact. This aggregation needs Bun and Git, without Node, Java, dependency
-installation or checker setup. A direct manual **Behavioral verification** run
+installation or checker setup. Cache admission checks the installed pinned
+shard tools. Each bundle retains their full Node/Java/Bun and platform identity;
+aggregation recomputes the key from that receipt and the current input closure,
+then checks every case's tools and origin artifacts. It never probes Delivery's
+unrelated Node/Java installations. Missing or altered receipts fail closed.
+A direct manual **Behavioral verification** run
 still aggregates its own shards and retains the same canonical artifact.
 
 Main reports passing full or scoped PR evidence only when immutable checkout
@@ -63,9 +68,11 @@ PR reuse still requires the same scope and checkout/base/head identities.
 The stability opt-in explicitly requests fresh repeated browser passes.
 
 If only **PR description** and **Delivery checks** fail, with scope successful
-and all code leaves successful or skipped in the same attempt, correcting the
-body and adding an eligible label permits fresh validation. Failed Delivery
-evidence is still not reusable, and an earlier code failure still holds the head
+and all code leaves successful or skipped in the same run, correcting the
+body and adding an eligible label permits fresh validation. This also works after
+**Re-run failed jobs**: successful/skipped leaves may carry earlier attempts,
+while the failed description and Delivery must belong to the current attempt.
+Failed Delivery evidence is still not reusable, and an earlier code failure still holds the head
 red. Rerunning the description job alone replays its original event body.
 
 After the owner approves a PR, it joins the merge queue for `main`. GitHub

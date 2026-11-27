@@ -106,14 +106,20 @@ function testedNothing(run: Run, jobs: Job[]): boolean {
 /**
  * A failed description leaf must be checked with the corrected event payload,
  * not held for a rerun of the old payload. All code leaves must have succeeded
- * or been skipped. This permits fresh validation only: failed Delivery evidence
+ * or been skipped, possibly carried over from an earlier failed-jobs attempt.
+ * The failed description and Delivery must belong to the current attempt.
+ * This permits fresh validation only: failed Delivery evidence
  * remains a barrier to reuse, including failures while aggregating manifests.
  */
 function descriptionLeafOnlyFailure(run: Run, jobs: Job[]): boolean {
   if (
     run.conclusion !== "failure" ||
     jobs.some(
-      (job) => job.run_id !== run.id || job.run_attempt !== run.run_attempt,
+      (job) =>
+        job.run_id !== run.id ||
+        !Number.isSafeInteger(job.run_attempt) ||
+        job.run_attempt < 1 ||
+        job.run_attempt > run.run_attempt,
     )
   )
     return false;
@@ -122,6 +128,8 @@ function descriptionLeafOnlyFailure(run: Run, jobs: Job[]): boolean {
     return (
       matching.length === 1 &&
       matching[0].conclusion === conclusion &&
+      (conclusion !== "failure" ||
+        matching[0].run_attempt === run.run_attempt) &&
       (!step ||
         matching[0].steps.find((entry) => entry.name === step)?.conclusion ===
           conclusion)

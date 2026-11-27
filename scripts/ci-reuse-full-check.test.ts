@@ -1155,6 +1155,63 @@ test("a corrected description can validate after only the description leaf faile
   ).toBeUndefined();
 });
 
+test("failed-jobs reruns still permit corrected-description fresh validation", async () => {
+  for (const attempt of [2, 3]) {
+    const runs = [run(4), { ...run(3, base, "failure"), run_attempt: attempt }];
+    const carried = descriptionLeafFailure().map((entry) => ({
+      ...entry,
+      run_attempt:
+        entry.name === "PR description" || entry.name === "Delivery checks"
+          ? attempt
+          : 1,
+    }));
+    const jobs = { 3: carried };
+    expect(await red(runs, jobs)).toBeUndefined();
+    for (const action of ["labeled", "edited"])
+      expect(
+        await selectValidationMode(
+          action,
+          false,
+          () => verify(runs, jobs),
+          false,
+          true,
+          false,
+          false,
+          false,
+          undefined,
+          async () => (await red(runs, jobs)) !== undefined,
+        ),
+      ).toBe("scoped");
+    // Recovery must never convert failed Delivery into reusable evidence.
+    expect(
+      await verify([...runs, run(2)], { ...jobs, 2: [job("success")] }),
+    ).toBe(false);
+    for (const [index, entry] of carried.entries()) {
+      for (const invalid of [
+        0,
+        -1,
+        1.5,
+        attempt + 1,
+        ...(entry.conclusion === "failure" ? [attempt - 1] : []),
+      ])
+        expect(
+          await red(runs, {
+            3: carried.map((job, i) =>
+              i === index ? { ...job, run_attempt: invalid } : job,
+            ),
+          }),
+        ).toBe(3);
+      expect(
+        await red(runs, {
+          3: carried.map((job, i) =>
+            i === index ? { ...job, run_id: 2 } : job,
+          ),
+        }),
+      ).toBe(3);
+    }
+  }
+});
+
 test("a description-only leaf failure does not hide an older red head", async () => {
   const runs = [run(4), run(3, base, "failure"), run(2, base, "failure")];
   const jobs = {
