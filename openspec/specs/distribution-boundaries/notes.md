@@ -69,6 +69,7 @@
 - `server/src/config/service-discovery.ts`
 - `server/src/config/service-uninstall.test.ts`
 - `scripts/`
+- `.github/workflows/behavioral-verification.yml`, `scripts/ci-workflow.test.ts` (unconditional current-tree type/notices checks alongside reusable model shards)
 - `.github/workflows/`
 - `.githooks/`
 - `site/`

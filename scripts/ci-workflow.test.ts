@@ -529,6 +529,59 @@ test("a metadata event on a red head fails the scope job by name and starts no c
   expect(workflow.jobs.validation).toBeUndefined();
 });
 
+test("maintained tooling checks run once even when every model reuses evidence", async () => {
+  const candidate = Bun.YAML.parse(
+    await Bun.file(
+      new URL(
+        "../.github/workflows/behavioral-verification.yml",
+        import.meta.url,
+      ),
+    ).text(),
+  ) as { jobs: Record<string, WorkflowJob> };
+  const tooling = candidate.jobs.tooling;
+  expect(tooling).toBeDefined();
+  // A cache hit in every shard must still typecheck Quint test files and
+  // validate notices. Neither job scheduling nor its steps may depend on reuse.
+  expect(tooling.if).toBeUndefined();
+  expect(tooling.needs).toBeUndefined();
+  expect(tooling.strategy).toBeUndefined();
+  expect(tooling["continue-on-error"]).toBeUndefined();
+  for (const step of tooling.steps) {
+    expect(step.if).toBeUndefined();
+    expect(step["continue-on-error"]).toBeUndefined();
+  }
+  const install = tooling.steps.findIndex(
+    (step) => step.run === "bun install --frozen-lockfile",
+  );
+  const lockedTools = tooling.steps.findIndex(
+    (step) =>
+      step.run ===
+      "npm ci --prefix tools/quint --ignore-scripts --no-audit --no-fund",
+  );
+  expect(install).toBeGreaterThan(-1);
+  expect(lockedTools).toBeGreaterThan(-1);
+  for (const command of [
+    "verification:typecheck",
+    "verification:notices:check",
+  ]) {
+    const checks = Object.values(candidate.jobs).flatMap((job) =>
+      job.steps.filter((step) => step.run?.includes(`bun run ${command}`)),
+    );
+    expect(checks).toHaveLength(1);
+    const check = tooling.steps.indexOf(checks[0]);
+    expect(check).toBeGreaterThan(install);
+    expect(check).toBeGreaterThan(lockedTools);
+  }
+  expect(
+    tooling.steps.some((step) => step.run?.includes("verification:setup")),
+  ).toBe(false);
+  expect(candidate.jobs.candidate.needs).toContain("tooling");
+  expect(workflow.jobs.behavioral.uses).toBe(
+    "./.github/workflows/behavioral-verification.yml",
+  );
+  expect(workflow.jobs.delivery.needs).toContain("behavioral");
+});
+
 test("accepted behavioral evidence stays unfiltered whenever its protected dependency runs", async () => {
   const candidate = Bun.YAML.parse(
     await Bun.file(
@@ -556,7 +609,7 @@ test("accepted behavioral evidence stays unfiltered whenever its protected depen
     verificationJobs.map((_, index) => index + 1),
   );
   expect(job.strategy?.["fail-fast"]).toBe(false);
-  expect(candidate.jobs.candidate.needs).toBe("shards");
+  expect(candidate.jobs.candidate.needs).toEqual(["tooling", "shards"]);
   expect(candidate.jobs.candidate.name).toBe("Behavioral verification");
   expect(candidate.jobs.candidate.if).toBe(
     "github.event_name == 'workflow_dispatch' && github.workflow == 'Behavioral verification'",

@@ -16,6 +16,31 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
+  # Test-only inputs intentionally do not invalidate model evidence. These
+  # current-tree checks therefore run once even when every shard reuses it.
+  tooling:
+    name: Verification types and tooling notices
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          persist-credentials: false
+      - uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2
+        with:
+          bun-version: "1.4.4"
+          no-cache: true
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version: "24.19.0"
+      - run: bun install --frozen-lockfile
+      - name: Install locked development tooling
+        run: npm ci --prefix tools/quint --ignore-scripts --no-audit --no-fund
+      - name: Validate maintained types and tooling notices
+        run: |
+          bun run verification:typecheck
+          bun run verification:notices:check
+
   shards:
     name: Behavioral models (${{ matrix.shard }}/26)
     strategy:
@@ -63,11 +88,6 @@ jobs:
       - name: Install locked development tooling and verified checker
         if: steps.reuse.outputs.reused != 'true'
         run: bun run verification:setup
-      - name: Validate maintained types and tooling notices
-        if: steps.reuse.outputs.reused != 'true'
-        run: |
-          bun run verification:typecheck
-          bun run verification:notices:check
       - name: Run all accepted models within enforced resource limits
         if: steps.reuse.outputs.reused != 'true'
         run: bun run verification:resources --system --shard=${{ matrix.shard }}/26
@@ -104,7 +124,7 @@ jobs:
   candidate:
     name: Behavioral verification
     if: github.event_name == 'workflow_dispatch' && github.workflow == 'Behavioral verification'
-    needs: shards
+    needs: [tooling, shards]
     runs-on: ubuntu-24.04
     timeout-minutes: 5
     steps:

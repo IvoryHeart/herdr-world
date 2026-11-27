@@ -65,8 +65,12 @@ proof establishes an identical tree. A newer red/cancelled verdict is never
 skipped; absent proof or API errors keep a red metadata result without starting
 another suite in that aggregate. An independent **Main model evidence** job runs
 the model lane fresh and saves successful per-model evidence in main's cache scope.
-PRs restore exact keys before dependency/checker installation; only a validated
-receipt skips execution. Merge groups, manual runs and nightly/release checks
+Model shards restore exact keys before dependency/checker installation; only a
+validated receipt skips model execution. A separate unconditional job installs
+the locked development tooling and runs `verification:typecheck` and
+`verification:notices:check` once on the current tree, including Quint tests
+that do not invalidate model keys. Its failure blocks Delivery even when every
+model reuses evidence; it needs no Java or checker installation. Merge groups, manual runs and nightly/release checks
 stay fresh. Nightly catches integration/platform failures as one advisory issue.
 PR reuse still requires the same scope and checkout/base/head identities.
 The stability opt-in explicitly requests fresh repeated browser passes.
