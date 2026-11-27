@@ -12,23 +12,28 @@ Maintain the browser command and access boundary. See
 
 Browser RPC methods, agent CLI commands and browser pull-request actions SHALL
 use a service-owned static registry with typed input/result schemas, required
-capabilities, preconditions, recovery class and policy for each actor. Policies
-SHALL be allow, acknowledge, confirm or deny. Adapters SHALL NOT grant themselves
-actor policy. Existing effective permissions and acknowledgement flags SHALL be
-preserved. Unregistered browser and CLI methods SHALL be refused before native
-dispatch; invalid declared inputs and missing unconditional acknowledgements SHALL
-be refused before runtime acquisition. Conditional target policy SHALL use the
-resolved target owner and retain existing preview and witness checks.
+capabilities, preconditions, recovery class and policy for each actor.
 
-The service SHALL recheck current socket/command authority and captured runtime
-currency before dispatch. Native browser forwarding SHALL recheck immediately
-before sending. The actors SHALL distinguish the user's browser, verified and
-unverified agent CLI, assistant, reconcilers and automation; this registry SHALL
-NOT create an automation grant or widen internal assistant authority.
-Revocation SHALL prevent a new effect but SHALL NOT discard the outcome record
-of an effect already started. An already-applied Board change or undo SHALL
-finish its history record or, on a rejected write, restore only its unchanged
-revision. Uncertain writes SHALL NOT trigger rollback.
+#### Scenario: Registry permissions and dispatch rechecks
+
+- **WHEN** World admits or dispatches browser or agent operations
+- **THEN** Policies
+  SHALL be allow, acknowledge, confirm or deny. Adapters SHALL NOT grant themselves
+  actor policy. Existing effective permissions and acknowledgement flags SHALL be
+  preserved. Unregistered browser and CLI methods SHALL be refused before native
+  dispatch; invalid declared inputs and missing unconditional acknowledgements SHALL
+  be refused before runtime acquisition. Conditional target policy SHALL use the
+  resolved target owner and retain existing preview and witness checks.
+
+  The service SHALL recheck current socket/command authority and captured runtime
+  currency before dispatch. Native browser forwarding SHALL recheck immediately
+  before sending. The actors SHALL distinguish the user's browser, verified and
+  unverified agent CLI, assistant, reconcilers and automation; this registry SHALL
+  NOT create an automation grant or widen internal assistant authority.
+  Revocation SHALL prevent a new effect but SHALL NOT discard the outcome record
+  of an effect already started. An already-applied Board change or undo SHALL
+  finish its history record or, on a rejected write, restore only its unchanged
+  revision. Uncertain writes SHALL NOT trigger rollback.
 
 #### Scenario: Unregistered method
 - **WHEN** the browser or agent CLI submits an unregistered method
@@ -62,13 +67,18 @@ revision. Uncertain writes SHALL NOT trigger rollback.
 ### Requirement: Staged command evidence
 
 Command evidence SHALL distinguish accepted, stored, sent, observed, refused,
-failed and uncertain. Memory admission SHALL report accepted; stored SHALL
-require a durable commit receipt; sent SHALL require native acknowledgement and
-name its owning connection and runtime generation. Observed SHALL require an
-explicit observation identifier and SHALL NOT be inferred from successful dispatch.
-Legacy handlers MAY conservatively report accepted rather than claim an
-unproven stronger stage. Uncertain native input SHALL name its owning runtime
-and SHALL NOT be automatically retried.
+failed and uncertain.
+
+#### Scenario: Command stage receipts and uncertainty
+
+- **WHEN** World reports command evidence
+- **THEN** Memory admission SHALL report accepted; stored SHALL
+  require a durable commit receipt; sent SHALL require native acknowledgement and
+  name its owning connection and runtime generation. Observed SHALL require an
+  explicit observation identifier and SHALL NOT be inferred from successful dispatch.
+  Legacy handlers MAY conservatively report accepted rather than claim an
+  unproven stronger stage. Uncertain native input SHALL name its owning runtime
+  and SHALL NOT be automatically retried.
 
 #### Scenario: Memory-only acceptance
 - **WHEN** a command completes against an in-memory store without a durable receipt
@@ -94,17 +104,22 @@ forwarding an operation or publishing its result.
 
 ### Requirement: Explicit access policy
 World SHALL default to a loopback listener and SHALL use the Roamgate-derived trusted-single-user
-boundary. All listeners, including loopback, SHALL require a generated persistent
-login token or configured password. Configured passwords SHALL contain 8–1024
-Unicode characters. World SHALL warn at startup when a configured password is
-shorter than the recommended 15 characters for access beyond a trusted private network. Repeated failed login attempts SHALL receive a bounded cooldown. World SHALL not require users to
-configure bridge Host allow-lists, browser Origin allow-lists or cross-origin connection CSP entries.
-Before processing privileged browser HTTP or WebSocket traffic, World SHALL automatically require
-the browser Origin authority to equal the request Host authority. A loopback listener SHALL reject a
-non-loopback Host authority unless it equals the authority of one explicitly configured public
-HTTP(S) origin and the browser Origin equals that exact origin. Originless native clients MAY
-connect subject to the listener and authentication policy. World's authenticated session cookie
-SHALL use a World-owned name that does not replace Roamgate's cookie on the same hostname.
+boundary.
+
+#### Scenario: Authentication and origin admission
+
+- **WHEN** World starts a listener or admits a client request
+- **THEN** All listeners, including loopback, SHALL require a generated persistent
+  login token or configured password. Configured passwords SHALL contain 8–1024
+  Unicode characters. World SHALL warn at startup when a configured password is
+  shorter than the recommended 15 characters for access beyond a trusted private network. Repeated failed login attempts SHALL receive a bounded cooldown. World SHALL not require users to
+  configure bridge Host allow-lists, browser Origin allow-lists or cross-origin connection CSP entries.
+  Before processing privileged browser HTTP or WebSocket traffic, World SHALL automatically require
+  the browser Origin authority to equal the request Host authority. A loopback listener SHALL reject a
+  non-loopback Host authority unless it equals the authority of one explicitly configured public
+  HTTP(S) origin and the browser Origin equals that exact origin. Originless native clients MAY
+  connect subject to the listener and authentication policy. World's authenticated session cookie
+  SHALL use a World-owned name that does not replace Roamgate's cookie on the same hostname.
 
 #### Scenario: Local application
 - **WHEN** World runs with its default loopback listener
@@ -166,15 +181,20 @@ per-client throttling plus a bounded global failure cooldown.
 
 ### Requirement: One listener per data folder
 Each running World listener SHALL own its data folder exclusively: the default
-platform folder, or `HERDR_WORLD_DATA_DIR` when set. Its signing key SHALL be the
-folder's single `session-secret.json`. A listener started on a folder another
-running listener holds SHALL stop before loading signing state, naming the
-holder's process and port. A folder whose holder no longer runs SHALL be taken
-over. Management commands and the agent CLI SHALL NOT take the folder. Tests
-SHALL NOT use the user's data folder. After binding, the holder SHALL atomically
-record its actual host, port and TLS setting in the instance lock, including the
-chosen port for an ephemeral bind. Local connection management MAY read that
-address without taking the folder's lock or changing its signing state.
+platform folder, or `HERDR_WORLD_DATA_DIR` when set.
+
+#### Scenario: Listener lock and management access
+
+- **WHEN** World starts or manages a listener for a data folder
+- **THEN** Its signing key SHALL be the
+  folder's single `session-secret.json`. A listener started on a folder another
+  running listener holds SHALL stop before loading signing state, naming the
+  holder's process and port. A folder whose holder no longer runs SHALL be taken
+  over. Management commands and the agent CLI SHALL NOT take the folder. Tests
+  SHALL NOT use the user's data folder. After binding, the holder SHALL atomically
+  record its actual host, port and TLS setting in the instance lock, including the
+  chosen port for an ephemeral bind. Local connection management MAY read that
+  address without taking the folder's lock or changing its signing state.
 
 #### Scenario: A second instance shares a folder
 - **WHEN** a World listener starts on a data folder a running World holds
@@ -189,15 +209,20 @@ The World service SHALL accept agent CLI calls at `/api/world/cli` only from a
 loopback peer without an Origin header, authenticated with a bearer token
 derived from the session signing secret that no other route accepts; failed
 bearer attempts SHALL receive the login cooldown, counted apart from logins so
-they never block the user's login. The service SHALL attribute a call to the
-Herdr pane it names only when the calling process, found from its connection,
-or one of its ancestors is that pane's shell or foreground process on a local
-Herdr; otherwise it SHALL label the call unverified, as a terminal with no
-pane when none is named, and SHALL refuse a claim that is not a Herdr pane ID. Calls SHALL never merge, delete Herdr objects or reach
-outside World; a change to Herdr's layout SHALL require explicit confirmation
-(display-only spawn metadata excepted), every change SHALL be recorded with
-its actor and time, and an undo SHALL be refused once what it would restore
-has changed since.
+they never block the user's login.
+
+#### Scenario: CLI caller attribution and mutation policy
+
+- **WHEN** the World service admits an agent CLI call
+- **THEN** The service SHALL attribute a call to the
+  Herdr pane it names only when the calling process, found from its connection,
+  or one of its ancestors is that pane's shell or foreground process on a local
+  Herdr; otherwise it SHALL label the call unverified, as a terminal with no
+  pane when none is named, and SHALL refuse a claim that is not a Herdr pane ID. Calls SHALL never merge, delete Herdr objects or reach
+  outside World; a change to Herdr's layout SHALL require explicit confirmation
+  (display-only spawn metadata excepted), every change SHALL be recorded with
+  its actor and time, and an undo SHALL be refused once what it would restore
+  has changed since.
 
 #### Scenario: Spoofed pane
 - **WHEN** a process in one pane calls with another pane's `HERDR_PANE_ID`

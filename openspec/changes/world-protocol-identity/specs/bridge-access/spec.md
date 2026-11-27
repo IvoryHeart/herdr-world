@@ -3,46 +3,51 @@
 ### Requirement: Registered verbs with actor policy
 
 Every browser RPC method, resource operation, agent CLI command and assistant action
-SHALL be a registered verb. A read-only operation SHALL be a verb with the `read`
-recovery class. Each verb SHALL declare:
-- a typed parameter schema;
-- a typed result schema;
-- the adapter capabilities it requires;
-- a policy for each actor;
-- its preconditions;
-- a recovery class.
+SHALL be a registered verb.
 
-The actors SHALL be:
-- The user's browser;
-- the agent CLI with a verified pane;
-- the agent CLI unverified;
-- the assistant;
-- World's own reconcilers;
-- automation under an owner grant.
+#### Scenario: Verb schemas, actors and admission
 
-Each policy SHALL be one of:
-- **allow**;
-- **acknowledge:** the caller passes an explicit flag that names the effect;
-- **confirm:** a fresh confirmation by the user in a browser;
-- **deny**.
+- **WHEN** World registers or invokes a verb
+- **THEN** A read-only operation SHALL be a verb with the `read`
+  recovery class. Each verb SHALL declare:
+  - a typed parameter schema;
+  - a typed result schema;
+  - the adapter capabilities it requires;
+  - a policy for each actor;
+  - its preconditions;
+  - a recovery class.
 
-The recovery class SHALL be one of:
-- **read**;
-- **keyed:** the receiver honours a stable idempotency key;
-- **reconcilable:** a decisive read shows whether the effect happened;
-- **reattachable:** an external run handle can be found;
-- **repeatable:** a duplicate is harmless. It SHALL NOT be used for terminal input,
-  Chat sends or pane answers;
-- **opaque**.
+  The actors SHALL be:
+  - The user's browser;
+  - the agent CLI with a verified pane;
+  - the agent CLI unverified;
+  - the assistant;
+  - World's own reconcilers;
+  - automation under an owner grant.
 
-Admission and checks:
-- The service SHALL refuse an unregistered verb, invalid parameters, a denied actor or a
-  missing acknowledgement before any acquisition or dispatch.
-- It SHALL recheck capabilities, preconditions and the actor's current authorization
-  immediately before dispatch.
-- An adapter SHALL NOT grant itself an actor policy.
-- Moving existing operations into the registry SHALL preserve each operation's current
-  effective policy. Widening a policy SHALL be an explicit, reviewed registry change.
+  Each policy SHALL be one of:
+  - **allow**;
+  - **acknowledge:** the caller passes an explicit flag that names the effect;
+  - **confirm:** a fresh confirmation by the user in a browser;
+  - **deny**.
+
+  The recovery class SHALL be one of:
+  - **read**;
+  - **keyed:** the receiver honours a stable idempotency key;
+  - **reconcilable:** a decisive read shows whether the effect happened;
+  - **reattachable:** an external run handle can be found;
+  - **repeatable:** a duplicate is harmless. It SHALL NOT be used for terminal input,
+    Chat sends or pane answers;
+  - **opaque**.
+
+  Admission and checks:
+  - The service SHALL refuse an unregistered verb, invalid parameters, a denied actor or a
+    missing acknowledgement before any acquisition or dispatch.
+  - It SHALL recheck capabilities, preconditions and the actor's current authorization
+    immediately before dispatch.
+  - An adapter SHALL NOT grant itself an actor policy.
+  - Moving existing operations into the registry SHALL preserve each operation's current
+    effective policy. Widening a policy SHALL be an explicit, reviewed registry change.
 
 #### Scenario: An agent asks to merge a pull request
 - **WHEN** the agent CLI, verified or not, requests a pull request merge, close or ready
@@ -77,13 +82,18 @@ Admission and checks:
 ### Requirement: Staged command evidence
 
 Command evidence SHALL distinguish accepted, stored, sent, observed, refused,
-failed and uncertain. Memory admission SHALL report accepted; stored SHALL
-require a durable commit receipt; sent SHALL require native acknowledgement and
-name its owning connection and runtime generation. Observed SHALL require an
-explicit observation identifier and SHALL NOT be inferred from successful dispatch.
-Legacy handlers MAY conservatively report accepted rather than claim an
-unproven stronger stage. Uncertain native input SHALL name its owning runtime
-and SHALL NOT be automatically retried.
+failed and uncertain.
+
+#### Scenario: Command stage receipts and uncertainty
+
+- **WHEN** World reports command evidence
+- **THEN** Memory admission SHALL report accepted; stored SHALL
+  require a durable commit receipt; sent SHALL require native acknowledgement and
+  name its owning connection and runtime generation. Observed SHALL require an
+  explicit observation identifier and SHALL NOT be inferred from successful dispatch.
+  Legacy handlers MAY conservatively report accepted rather than claim an
+  unproven stronger stage. Uncertain native input SHALL name its owning runtime
+  and SHALL NOT be automatically retried.
 
 #### Scenario: Memory-only acceptance
 - **WHEN** a command completes against an in-memory store without a durable receipt

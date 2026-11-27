@@ -11,10 +11,15 @@ and operational details.
 ### Requirement: Minimal compatibility source
 The repository SHALL derive its application foundation from an exact Roamgate synchronization
 point and SHALL retain only Herdr World source, required upstream-derived source and generated legal
-notices. Herdr SHALL remain a separately installed external runtime: no World artifact bundles it.
-World installers and the Homebrew launcher MAY set up a missing herdr-core separately.
-Explicit Herdr TUI updates MAY upgrade the TUI to the release that World version
-verified, in Herdr's own default location; an installed core SHALL stay unchanged.
+notices.
+
+#### Scenario: External runtime distribution and updates
+
+- **WHEN** World distributes or updates its application and runtime support
+- **THEN** Herdr SHALL remain a separately installed external runtime: no World artifact bundles it.
+  World installers and the Homebrew launcher MAY set up a missing herdr-core separately.
+  Explicit Herdr TUI updates MAY upgrade the TUI to the release that World version
+  verified, in Herdr's own default location; an installed core SHALL stay unchanged.
 
 #### Scenario: Desktop archive
 - **WHEN** a release archive is built
@@ -152,12 +157,17 @@ products. The embedded frontend and compiled service SHALL expose the same revie
 ### Requirement: Computed capability feature map
 
 The repository SHALL compute feature discovery from OpenSpec capability names, Purpose,
-requirement names and adjacent notes, including surfaces, code and pitfalls. Text and
-JSON lookup SHALL expose matching spec paths, notes paths and owning Code paths without
-a committed index. Added or modified source files SHALL match at least one capability
-Code path; the existing source tree SHALL have owners before enforcement.
-Usage prose SHALL live in capability notes or the tutorial; FEATURES.md SHALL be generated
-at site build and SHALL NOT be committed or edited by feature PRs.
+requirement names and adjacent notes, including surfaces, code and pitfalls.
+
+#### Scenario: Feature discovery and source ownership
+
+- **WHEN** contributors discover or update a feature
+- **THEN** Text and
+  JSON lookup SHALL expose matching spec paths, notes paths and owning Code paths without
+  a committed index. Added or modified source files SHALL match at least one capability
+  Code path; the existing source tree SHALL have owners before enforcement.
+  Usage prose SHALL live in capability notes or the tutorial; FEATURES.md SHALL be generated
+  at site build and SHALL NOT be committed or edited by feature PRs.
 
 #### Scenario: Core desks cannot be dragged in Town
 
@@ -172,12 +182,17 @@ at site build and SHALL NOT be committed or edited by feature PRs.
 ### Requirement: Reviewed post-merge contract synchronization
 
 Feature PRs SHALL express contract changes only in their OpenSpec change folder, alongside
-implementation and capability notes. A main push SHALL queue a single bot PR that applies
-and archives completed merged changes in merge date order. Incomplete tasks SHALL remain
-active. A conflict SHALL restore that change's partial writes and stop the batch, preserving
-earlier successful archives for review. A stopped batch SHALL fail visibly even with no
-archives; successful prefixes SHALL still be published. Bot branch repairs SHALL survive
-subsequent main pushes. Automation SHALL never push to main or merge the PR.
+implementation and capability notes.
+
+#### Scenario: Synchronization ordering and failure
+
+- **WHEN** completed merged changes are synchronized and archived
+- **THEN** A main push SHALL queue a single bot PR that applies
+  and archives completed merged changes in merge date order. Incomplete tasks SHALL remain
+  active. A conflict SHALL restore that change's partial writes and stop the batch, preserving
+  earlier successful archives for review. A stopped batch SHALL fail visibly even with no
+  archives; successful prefixes SHALL still be published. Bot branch repairs SHALL survive
+  subsequent main pushes. Automation SHALL never push to main or merge the PR.
 
 #### Scenario: One feature changes
 

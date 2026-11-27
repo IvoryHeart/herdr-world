@@ -116,6 +116,35 @@ test("feature contracts stay in deltas; an archive-only batch can synchronize sp
   ).toHaveLength(1);
 });
 
+test("current specs allow only lossless shortening into one additional scenario", () => {
+  const path = "openspec/specs/example/spec.md";
+  const prefix =
+    "# Example\n\n## Purpose\n\nA contract.\n\n## Requirements\n\n";
+  const summary = "World SHALL retain its identity.";
+  const detail = `Every record SHALL ${"keep its original binding ".repeat(24)}.`;
+  const scenario =
+    "#### Scenario: Existing\n- **WHEN** read\n- **THEN** identity is stable\n";
+  const before = `${prefix}### Requirement: Identity\n\n${summary} ${detail}\n\n${scenario}`;
+  const after = `${prefix}### Requirement: Identity\n\n${summary}\n\n#### Scenario: Binding details\n\n- **WHEN** World handles a record\n- **THEN** ${detail}\n\n${scenario}`;
+  const assess = (old: string, next: string) =>
+    assessSpecEdits([path], () => [old, next]);
+  expect(assess(before, after)).toEqual([]);
+  for (const changed of [
+    after.replace("Every record SHALL", "Some records MAY"),
+    after.replace("identity is stable", "identity may change"),
+    after.replace("Requirement: Identity", "Requirement: Replacement"),
+    after.replace("A contract.", "A different contract."),
+    after.replace(`${summary}\n`, `${summary} ${detail}\n`),
+    `${after}\n### Requirement: Extra\nWorld SHALL change.\n`,
+  ])
+    expect(assess(before, changed)).toHaveLength(1);
+  expect(assess(before, "")).toHaveLength(1);
+  expect(assessSpecEdits([path], () => undefined)).toHaveLength(1);
+  expect(
+    assess(before.replace(detail, "Short."), after.replace(detail, "Short.")),
+  ).toHaveLength(1);
+});
+
 test("a moved source checks its destination rather than its deleted owner", () => {
   const root = mkdtempSync(join(tmpdir(), "knowledge-map-check-"));
   temporaryRepos.push(root);
