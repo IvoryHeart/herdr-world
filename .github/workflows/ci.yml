@@ -371,6 +371,11 @@ jobs:
                   WEB_RESULT: ${{ needs.web-browser.result }}
                   BEHAVIORAL_RESULT: ${{ needs.behavioral.result }}
               run: bun scripts/ci-delivery-result.ts
+            - name: Report run timings
+              if: always()
+              env:
+                  GH_TOKEN: ${{ github.token }}
+              run: bun scripts/ci-run-timing.ts
 
     # A title or description edit rebuilds no preview; a new commit, a new base
     # or adding a label still does.

@@ -294,6 +294,22 @@ test("CI exposes the protected delivery gate and runs the complete repository ch
   expect(workflow.jobs.validate).toBeUndefined();
 });
 
+test("Delivery reports timings after every verdict without making timing a gate", () => {
+  const steps = workflow.jobs.delivery.steps;
+  expect(steps.at(-1)).toEqual({
+    name: "Report run timings",
+    if: "always()",
+    env: { GH_TOKEN: "${{ github.token }}" },
+    run: "bun scripts/ci-run-timing.ts",
+  });
+  expect(workflow.permissions.actions).toBe("read");
+  expect(
+    steps.findIndex(
+      (step) => step.name === "Verify applicable or reused results",
+    ),
+  ).toBeLessThan(steps.length - 1);
+});
+
 test("no timing gates delivery: browser jobs use the pinned Chrome and delegate scoped recovery", () => {
   expect(worldWorkflow.jobs["latency-shards"]).toBeUndefined();
   expect(worldWorkflow.jobs["world-latency"]).toBeUndefined();

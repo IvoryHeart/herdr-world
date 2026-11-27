@@ -11,6 +11,15 @@ const files: Record<string, string> = {
   "web/src/world/Board.tsx": 'import { util } from "../util";\n',
   "web/src/util.ts": "export const util = 1;\n",
   "web/src/util.test.ts": 'import { util } from "./util";\n',
+  "web/src/__snapshots__/util.test.ts.snap": "snapshot\n",
+  "web/src/world/__snapshots__/Board.test.ts.snap": "snapshot\n",
+  "web/src/__snapshots__/missing.test.ts.snap": "orphan snapshot\n",
+  "scripts/town-golden.browser.test.ts": "export {};\n",
+  "web/src/world/testing/town-golden/images/phone.png": "golden\n",
+  "scripts/help-check.ts": "export {};\n",
+  "scripts/help-check.test.ts": 'import "./help-check";\n',
+  "web/public/help/world.help.phone.light.webp": "picture\n",
+  "web/src/help/pictures.json": "{}\n",
   "web/src/world/Board.browser.tsx": 'import "./Board";\n',
   "web/src/world/Board.test.ts":
     'const entry = join(import.meta.dir, "Board.browser.tsx");\n',
@@ -63,6 +72,78 @@ const run = (changed: string[], owns?: (path: string) => boolean) =>
   affected(graph, changed, suites, owns);
 
 describe("scoped pre-push selection", () => {
+  test("external snapshots select their exact unit or browser owner", () => {
+    expect(run(["web/src/__snapshots__/util.test.ts.snap"])).toEqual({
+      full: false,
+      unit: ["web/src/util.test.ts"],
+      browser: [],
+      verification: false,
+    });
+    expect(run(["web/src/world/__snapshots__/Board.test.ts.snap"])).toEqual({
+      full: false,
+      unit: [],
+      browser: ["web/src/world/Board.test.ts"],
+      verification: false,
+    });
+    expect(run(["web/src/__snapshots__/missing.test.ts.snap"])).toMatchObject({
+      full: true,
+    });
+  });
+
+  test("golden images stay with their advisory comparison; help pictures use the static checker", () => {
+    expect(run(["web/src/world/testing/town-golden/images/phone.png"])).toEqual(
+      {
+        full: false,
+        unit: [],
+        browser: [],
+        verification: false,
+      },
+    );
+    for (const path of [
+      "web/public/help/world.help.phone.light.webp",
+      "web/src/help/pictures.json",
+    ])
+      expect(run([path])).toEqual({
+        full: false,
+        unit: ["scripts/help-check.test.ts"],
+        browser: [],
+        verification: false,
+      });
+    expect(
+      run([
+        "web/src/world/testing/town-golden/images/phone.png",
+        "scripts/orphan.ts",
+      ]),
+    ).toMatchObject({ full: true });
+  });
+
+  test("removed snapshots keep their live consumer and missing asset authorities fail closed", () => {
+    const snapshot = "web/src/__snapshots__/util.test.ts.snap";
+    const after = buildGraph(
+      root,
+      Object.keys(files).filter((path) => path !== snapshot),
+      [snapshot],
+    );
+    expect(affected(after, [snapshot], suites)).toMatchObject({
+      full: false,
+      unit: ["web/src/util.test.ts"],
+    });
+    for (const [asset, owner] of [
+      ["web/public/help/world.help.phone.light.webp", "scripts/help-check.ts"],
+      [
+        "web/src/world/testing/town-golden/images/phone.png",
+        "scripts/town-golden.browser.test.ts",
+      ],
+    ]) {
+      const missing = buildGraph(
+        root,
+        Object.keys(files).filter((path) => path !== owner),
+        [owner!],
+      );
+      expect(affected(missing, [asset!], suites)).toMatchObject({ full: true });
+    }
+  });
+
   test("a view change runs the suites nearest to it, not app-wide acceptance", () => {
     expect(run(["web/src/world/Board.tsx"])).toEqual({
       full: false,
