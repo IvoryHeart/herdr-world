@@ -5,15 +5,20 @@
 World SHALL start agents in core with an absolute host executable, no caller,
 no parent, no notes and an explicit keep; plain shells SHALL start unplaced and
 not kept. Agent launches SHALL use machine-local app space/tab IDs and initial
-unseen `herdr.seen`. Shared placement SHALL be committed in the core's
-`herdr-app` document; `herdr.space`/`herdr.tab` SHALL be compatibility adoption
-hints and `where` an output caption only. Joining existing app spaces/tabs
-SHALL preserve their IDs and unrelated content. Core rooms, tab membership,
-names and order SHALL have no competing authoritative World layout. Before
-any native kill, room close or bin close, World SHALL name every terminal
-core will end with it, bind each to the program it saw (core, address, pid and
-argv) and send the kill only while its current observation ends no more than
-that confirmed set.
+unseen `herdr.seen`.
+
+#### Scenario: Core launch placement and confirmed teardown
+
+- **WHEN** World starts or ends core terminals
+- **THEN** shared placement SHALL be committed in the core's
+  `herdr-app` document; `herdr.space`/`herdr.tab` SHALL be compatibility adoption
+  hints and `where` an output caption only. Joining existing app spaces/tabs
+  SHALL preserve their IDs and unrelated content. Core rooms, tab membership,
+  names and order SHALL have no competing authoritative World layout. Before
+  any native kill, room close or bin close, World SHALL name every terminal
+  core will end with it, bind each to the program it saw (core, address, pid and
+  argv) and send the kill only while its current observation ends no more than
+  that confirmed set.
 
 #### Scenario: Agent launch
 
@@ -49,18 +54,23 @@ World SHALL own asks/results, review receipts and view geometry; core room
 membership, names and tab order SHALL come from the shared `herdr-app`
 document, replacing M1/M2's independent core arrangement. Other
 [M1–M11 ownership decisions](../../../archive/2026-11-17-herdr-core-runtime/design.md)
-SHALL remain applicable. World SHALL share seen and the pin. A core tab's desk and
-card SHALL be pinned exactly while one of its terminals carries
-`herdr.pinned`; Herdr (TUI) tabs keep World's own pin. Pinned SHALL mean
-pinned goes first, as in Herdr's apps: World derives a pinned card's place
-from the pin and tab order and saves none; a Town room's pinned desks keep
-the order the person gave them on its rug as World's own view layout (Herdr's
-apps have no order for pins), else tab order. World SHALL read
-agent status from core and SHALL NOT write it, including for integrations World
-installed. Native destructive actions SHALL confirm all dying descendants,
-including ending a room shell, and a confirmation SHALL name each terminal's
-occupant incarnation (the mirror's occupancy token), so a replacement that
-reuses the pid and argv is refused.
+SHALL remain applicable.
+
+#### Scenario: Core placement, pins and destructive authority
+
+- **WHEN** World shares app state or manages core terminals
+- **THEN** World SHALL share seen and the pin. A core tab's desk and
+  card SHALL be pinned exactly while one of its terminals carries
+  `herdr.pinned`; Herdr (TUI) tabs keep World's own pin. Pinned SHALL mean
+  pinned goes first, as in Herdr's apps: World derives a pinned card's place
+  from the pin and tab order and saves none; a Town room's pinned desks keep
+  the order the person gave them on its rug as World's own view layout (Herdr's
+  apps have no order for pins), else tab order. World SHALL read
+  agent status from core and SHALL NOT write it, including for integrations World
+  installed. Native destructive actions SHALL confirm all dying descendants,
+  including ending a room shell, and a confirmation SHALL name each terminal's
+  occupant incarnation (the mirror's occupancy token), so a replacement that
+  reuses the pid and argv is refused.
 
 #### Scenario: Town moves core agents and desks by placement
 
@@ -173,6 +183,16 @@ first terminal's folder or document folder, else tab or agent evidence. That
 fallback SHALL NOT create a second placement authority or write a derived name
 into the document. Without evidence its name SHALL be `Herdr space`.
 
+#### Scenario: Unnamed space display continuity
+
+- **WHEN** World names an unnamed app-created core space
+- **THEN** World SHALL keep that name
+  while the space lasts, so agents coming and going, in that room or another,
+  never change it. The row SHALL say the name is derived and views SHALL mark it.
+  A derived name another room of the same core already shows SHALL get a number,
+  kept when other rooms leave. World SHALL NOT write the derived name to core and
+  SHALL NOT change the space's owner.
+
 #### Scenario: Unnamed app space
 
 - **WHEN** an app space has no explicit document name
@@ -198,12 +218,16 @@ into the document. Without evidence its name SHALL be `Herdr space`.
 World SHALL observe the machine-local `herdr-app` document on its original
 immutable connection and runtime generation. Its spaces, order, tabs and
 terminal membership SHALL feed the unified World object used by every view.
-Document membership SHALL precede labels, legacy World placement and parent
-relations. Uncovered terminals, including on a core with no document, SHALL
-group by working folder and display its folder name. Local app `doc` events,
-recovery cuts and reconnects SHALL refresh observation; overtaken or retired
-replies SHALL NOT restore older layout. An unavailable or invalid document
-SHALL NOT be treated as absent or authorize edits.
+
+#### Scenario: Placement precedence and refresh
+
+- **WHEN** World observes core placement
+- **THEN** document membership SHALL precede labels, legacy World placement
+  and parent relations. Uncovered terminals, including on a core with no document, SHALL
+  group by working folder and display its folder name. Local app `doc` events,
+  recovery cuts and reconnects SHALL refresh observation; overtaken or retired
+  replies SHALL NOT restore older layout. An unavailable or invalid document
+  SHALL NOT be treated as absent or authorize edits.
 
 #### Scenario: App layout disagrees with labels
 
@@ -229,20 +253,27 @@ SHALL NOT be treated as absent or authorize edits.
 
 World SHALL create missing requested spaces and apply explicit moves/renames
 in the exact app document schema, preserving unknown fields and unrelated
-content at every level. Every write SHALL supply the version just read. On a
-definite version conflict World SHALL reread and reapply its intent, preserving
-concurrent edits; it SHALL NOT blindly overwrite or replay an ambiguous write.
-World SHALL set `keep:true` on adopted terminals as the app does. World SHALL
-NOT delete or rename a space/tab it did not create unless the owner requests
-that specific change in World. Unknown provenance SHALL count as foreign.
+content at every level. Every write SHALL supply the version just read.
 
-Migration SHALL preserve existing app membership/names, import missing legacy
-World rooms and unadopted labelled terminals idempotently, and publish the
-requested Crew space with its desk tabs. Migration SHALL NOT recover names
-from `where`, restart terminals, or maintain another arrangement above the
-document. Acknowledged migration SHALL NOT resurrect app-deleted rooms from
-stale legacy data. Labels alone SHALL NOT count as proof of phone rendering;
-Q8 SHALL remain open until desktop and phone acceptance is observed.
+#### Scenario: Cooperative edit safeguards
+
+- **WHEN** World edits the shared app layout
+- **THEN** on a definite version conflict World SHALL reread and reapply its intent, preserving
+  concurrent edits; it SHALL NOT blindly overwrite or replay an ambiguous write.
+  World SHALL set `keep:true` on adopted terminals as the app does. World SHALL
+  NOT delete or rename a space/tab it did not create unless the owner requests
+  that specific change in World. Unknown provenance SHALL count as foreign.
+
+#### Scenario: Migration preserves existing layout
+
+- **WHEN** World migrates legacy placement into the shared app layout
+- **THEN** migration SHALL preserve existing app membership/names, import
+  missing legacy World rooms and unadopted labelled terminals idempotently, and publish the
+  requested Crew space with its desk tabs. Migration SHALL NOT recover names
+  from `where`, restart terminals, or maintain another arrangement above the
+  document. Acknowledged migration SHALL NOT resurrect app-deleted rooms from
+  stale legacy data. Labels alone SHALL NOT count as proof of phone rendering;
+  Q8 SHALL remain open until desktop and phone acceptance is observed.
 
 #### Scenario: Desktop edits during a World move
 
