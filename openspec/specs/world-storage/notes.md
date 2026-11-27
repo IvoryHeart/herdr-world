@@ -48,10 +48,10 @@ Current limits describe existing behavior, including existing expiry; this step 
 | Store / location | Product meaning | Feature | Identity | Role | Current limit | Owning code |
 | --- | --- | --- | --- | --- | --- | --- |
 | world.sqlite: ledger_meta | Question/result revision and replay floor | questions | singleton | source | 1 | server/src/storage/world-schema.ts |
-| world.sqlite: asks | Questions and saved answers; recipient.input_foreground binds original TUI process | questions | id; recipient connection/session/foreground | source | 500 open; 20 per verified terminal; one 64-character SHA-256 foreground witness per recipient | server/src/storage/world-schema.ts server/src/world/ask-recipient.ts |
+| world.sqlite: asks | Questions and saved answers | questions | id | source | 500 open; 20 per verified terminal | server/src/storage/world-schema.ts |
 | world.sqlite: results | Agent task results | results | id | source | 1000 | server/src/storage/world-schema.ts |
 | world.sqlite: ledger_changes | Ledger change records, including World command records | questions | id | source | 2000 | server/src/storage/world-schema.ts |
-| world.sqlite: outbox | Durable external-effect intents and recovery evidence; answer recipient retains input_foreground | effects | id; unique kind + record_id | source | record lifetime; bounded admission; one 64-character foreground witness per answer recipient | server/src/storage/world-schema.ts |
+| world.sqlite: outbox | Durable external-effect intents and recovery evidence | effects | id; unique kind + record_id | source | record lifetime; bounded admission | server/src/storage/world-schema.ts |
 | world.sqlite: answer_attempts | Answer delivery attempts | effects | intent_id + attempt | source | intent lifetime | server/src/storage/world-schema.ts |
 | world.sqlite: effect_decisions | Owner effect decisions | effects | seq | source | intent lifetime | server/src/storage/world-schema.ts |
 | world.sqlite: replay_changes | Ordered reconnect replay window | effects | seq | derived | 10000 rows / 24 hours (existing) | server/src/storage/world-schema.ts |

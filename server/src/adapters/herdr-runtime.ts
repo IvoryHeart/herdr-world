@@ -127,7 +127,6 @@ export function createTuiPassThrough(
           method === "pane.send_input",
         );
         const native = { ...params };
-        delete native.world_foreground;
         return client.call(
           method,
           method === "agent.prompt" ? { ...native, target: paneId } : native,

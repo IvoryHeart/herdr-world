@@ -8,7 +8,6 @@
 
 **Code:**
 
-- `quint/herdr-core-runtime.ts` (recognized foreground in the production replay)
 - `server/src/herdr-core/delivery.ts`, `server/src/herdr-core/delivery.test.ts`
 - `server/src/herdr-core/native-send.test.ts`
 - `server/src/herdr-core/recipient.ts`

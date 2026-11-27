@@ -1,6 +1,6 @@
 import { expect, test } from "bun:test";
 import { createTuiPassThrough } from "./herdr-runtime";
-import { agentForegroundWitness, withAgentInput } from "./agent-input";
+import { foregroundInputRefusal, withAgentInput } from "./agent-input";
 
 function fixture(name: string | null = "claude") {
   let session = "original";
@@ -49,7 +49,7 @@ function fixture(name: string | null = "claude") {
 }
 
 for (const method of ["agent.prompt", "pane.send_input"])
-  for (const name of ["bash", "vim", "codex", "unknown", null])
+  for (const name of ["bash", "vim", "python", "node", "ssh", "sudo", "psql"])
     test(`${method} refuses ${name ?? "unknown"} foreground with stale Claude metadata`, async () => {
       const f = fixture(name);
       await expect(
@@ -60,21 +60,18 @@ for (const method of ["agent.prompt", "pane.send_input"])
             text: "printf unsafe",
           }),
         ),
-      ).rejects.toThrow("not attached");
+      ).rejects.toThrow("agent_not_ready:");
       expect(f.writes).toEqual([]);
     });
 
-test("input checks the same agent session around the foreground read", async () => {
+test("a resumed agent is admitted without original-session matching", async () => {
   const f = fixture();
-  const call = f.client.call.bind(f.client);
-  f.client.call = async (method) => {
-    if (method === "pane.process_info") f.changeSession();
-    return call(method);
-  };
-  await expect(
+  const info = (await f.client.call("agent.get")).agent!;
+  f.changeSession();
+  await withAgentInput(info, () =>
     f.tui.call("agent.prompt", { target: "w1:p1", text: "hello" }),
-  ).rejects.toThrow("not attached");
-  expect(f.writes).toEqual([]);
+  );
+  expect(f.writes).toEqual(["agent.prompt"]);
 });
 
 test("matching foreground sends once and preserves the final dispatch guard", async () => {
@@ -98,49 +95,6 @@ test("matching foreground sends once and preserves the final dispatch guard", as
   expect(guarded).toBe(true);
   expect(f.writes).toEqual(["agent.prompt"]);
 });
-
-test("the caller's original session survives transport preparation", async () => {
-  const f = fixture();
-  const info = (await f.client.call("agent.get")).agent!;
-  f.changeSession();
-  await expect(
-    withAgentInput(info, () =>
-      f.tui.call("agent.prompt", { target: "w1:p1", text: "hello" }),
-    ),
-  ).rejects.toThrow("not attached");
-  expect(f.writes).toEqual([]);
-});
-
-for (const method of ["agent.prompt", "pane.send_input"])
-  for (const name of ["bash", "vim", "codex"])
-    test(`${method} refuses a ${name} foreground group containing an old Claude child`, async () => {
-      const f = fixture();
-      const call = f.client.call.bind(f.client);
-      f.client.call = async (method) =>
-        method === "pane.process_info"
-          ? {
-              process_info: {
-                pane_id: "w1:p1",
-                shell_pid: 10,
-                foreground_process_group_id: 20,
-                foreground_processes: [
-                  { pid: 20, name },
-                  { pid: 21, name: "claude" },
-                ],
-              },
-            }
-          : call(method);
-      await expect(
-        withAgentInput(null, () =>
-          f.tui.call(method, {
-            target: "w1:p1",
-            pane_id: "w1:p1",
-            text: "printf unsafe",
-          }),
-        ),
-      ).rejects.toThrow("not attached");
-      expect(f.writes).toEqual([]);
-    });
 
 for (const name of ["bash", "vim", "less"])
   for (const method of ["agent.prompt", "pane.send_input"])
@@ -169,37 +123,40 @@ for (const name of ["bash", "vim", "less"])
             text: "printf unsafe",
           }),
         ),
-      ).rejects.toThrow("not attached");
+      ).rejects.toThrow("agent_not_ready:");
       expect(f.writes).toEqual([]);
     });
 
-test("foreground evidence includes every member PID and name, independent of order", async () => {
-  const members = [
-    { pid: 20, name: "claude" },
-    { pid: 21, name: "worker" },
-  ];
-  const witness = () =>
-    agentForegroundWitness(
-      async () => ({
-        process_info: {
-          pane_id: "w1:p1",
-          shell_pid: 10,
-          foreground_process_group_id: 20,
-          foreground_processes: members,
-        },
-      }),
-      "w1:p1",
-      "claude",
-    );
-  const original = await witness();
-  expect(original).toBeString();
-  members.reverse();
-  expect(await witness()).toBe(original);
-  members[0] = { pid: 22, name: "worker" };
-  expect(await witness()).not.toBe(original);
-  members[0] = { pid: 21, name: "other-worker" };
-  expect(await witness()).not.toBe(original);
-});
+for (const [name, argv] of [
+  ["codex", ["codex"]],
+  ["new-agent", ["new-agent"]],
+  ["node", ["node", "/opt/agent/cli.js"]],
+  ["node", ["node", "/opt/agent/cli.js", "--interactive"]],
+  ["python", ["python", "/opt/agent/cli.py", "-i"]],
+  ["bash", ["bash", "run-agent.sh", "-i"]],
+  ["bash", ["bash", "run-agent.sh"]],
+  ["sh", ["sh", "-c", "mcp-server"]],
+] as const)
+  test(`admits ${argv.join(" ")} without a harness allowlist`, async () => {
+    const f = fixture();
+    const call = f.client.call.bind(f.client);
+    f.client.call = async (method) =>
+      method === "pane.process_info"
+        ? {
+            process_info: {
+              pane_id: "w1:p1",
+              shell_pid: 10,
+              foreground_process_group_id: 20,
+              foreground_processes: [
+                { pid: 20, name, argv: [...argv] },
+                { pid: 21, name: "new-agent" },
+              ],
+            },
+          }
+        : call(method);
+    await f.tui.call("agent.prompt", { target: "w1:p1", text: "hello" });
+    expect(f.writes).toEqual(["agent.prompt"]);
+  });
 
 test("working titles, state changes and revisions do not replace an agent session", async () => {
   const f = fixture();
@@ -222,7 +179,7 @@ test("working titles, state changes and revisions do not replace an agent sessio
   expect(f.writes).toEqual(["agent.prompt"]);
 });
 
-for (const failureAt of [1, 2, 3])
+for (const failureAt of [1, 2])
   test(`admission read failure ${failureAt} is unavailable and permits a fresh retry`, async () => {
     const f = fixture();
     const call = f.client.call.bind(f.client);
@@ -239,31 +196,6 @@ for (const failureAt of [1, 2, 3])
     expect(f.writes).toEqual(["agent.prompt"]);
   });
 
-test("a wrapper leader explains how to launch the harness without widening admission", async () => {
-  const f = fixture();
-  const call = f.client.call.bind(f.client);
-  f.client.call = async (method) =>
-    method === "pane.process_info"
-      ? {
-          process_info: {
-            pane_id: "w1:p1",
-            shell_pid: 10,
-            foreground_process_group_id: 20,
-            foreground_processes: [
-              { pid: 20, name: "bash" },
-              { pid: 21, name: "claude" },
-            ],
-          },
-        }
-      : call(method);
-  await expect(
-    f.tui.call("agent.prompt", { target: "w1:p1", text: "hello" }),
-  ).rejects.toThrow(
-    "started through a wrapper script; use `exec` in the script",
-  );
-  expect(f.writes).toEqual([]);
-});
-
 for (const malformed of ["agent.get", "pane.process_info"])
   test(`malformed ${malformed} reply is unavailable, not a changed agent`, async () => {
     const f = fixture();
@@ -276,3 +208,24 @@ for (const malformed of ["agent.get", "pane.process_info"])
     ).rejects.toThrow("agent_input_unavailable:");
     expect(f.writes).toEqual([]);
   });
+
+for (const argv of [
+  ["python3", "-i", "agent.py"],
+  ["python3.13"],
+  ["node", "--title", "agent"],
+  ["node", "-i", "agent.js"],
+  ["node", "-e", "expression", "-i"],
+  ["bash", "-s", "argument"],
+  ["irb"],
+  ["less"],
+  ["su"],
+  ["mysql"],
+  ["sqlite3", "example.db"],
+])
+  test(`refuses interactive ${argv.join(" ")}`, () => {
+    expect(foregroundInputRefusal([{ name: argv[0], argv }])).toBeString();
+  });
+
+test("empty foreground evidence is temporary, never a permanent refusal", () => {
+  expect(() => foregroundInputRefusal([])).toThrow("agent_input_unavailable:");
+});

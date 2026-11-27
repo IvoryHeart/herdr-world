@@ -115,13 +115,13 @@ describe("one message reaches the agent once", () => {
     expect(w.fake.deliveredInput.map((t) => t.foreground)).toEqual(names);
   });
 
-  test("a status report cannot authorize input to an unknown foreground program", async () => {
+  test("a status report cannot authorize input to an interactive REPL", async () => {
     const w = await world();
     const t = w.fake.create({
       argv: ["/opt/example/bin/helper"],
       reported: true,
       status: { state: "idle", app: "helper" },
-      foreground: { pid: 1234, name: "helper", argv: ["helper"], cwd: "/" },
+      foreground: { pid: 1234, name: "python", argv: ["python"], cwd: "/" },
     });
     expect(
       await deliverCore(w.lease(), t, await recipientOf(w, t), message("hi")),

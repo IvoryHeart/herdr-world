@@ -247,9 +247,6 @@ export async function submitPrompt(
         call("agent.prompt", {
           target: target.pane_id,
           text: target.text,
-          ...(target.foreground_witness
-            ? { world_foreground: target.foreground_witness }
-            : {}),
         }),
       ),
     };

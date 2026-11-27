@@ -11,6 +11,7 @@ import {
  * that terminal mounts, and expires after a while.
  */
 
+/** @internal Test seam for the shared composer request subscription. */
 export const TERMINAL_COMPOSER_REQUEST_EVENT =
   "herdr-world:terminal-composer-request";
 
@@ -23,7 +24,7 @@ export type TerminalComposerTarget = {
 const REQUEST_TTL_MS = 15_000;
 const pending = new Map<string, { at: number; text?: string }>();
 
-/** The request key: the same owner-qualified identity as the composer draft. */
+/** @internal The request key used by draft and subscription conformance tests. */
 export const terminalComposerRequestKey = (target: TerminalComposerTarget) =>
   JSON.stringify([target.connectionId, target.generation, target.paneId]);
 
@@ -39,7 +40,7 @@ export function requestTerminalComposer(
   );
 }
 
-/** Consume a pending request for this exact terminal, if one is still fresh. */
+/** @internal Consume a pending request; exported for qualified recovery tests. */
 export function takeTerminalComposerRequest(target: TerminalComposerTarget) {
   const key = terminalComposerRequestKey(target);
   const request = pending.get(key);

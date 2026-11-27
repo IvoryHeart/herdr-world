@@ -1,20 +1,21 @@
 ## Why
 
-Issue #1437 demonstrated that a kept terminal and stale agent report can admit an ask answer into bash. Owner and agent text must never gain shell command authority.
+Issue #1437 demonstrated an ask answer being typed into bash after its agent exited. Owner and agent text must never become shell commands. The owner replaced original-session matching with a send-time program check on 2026-11-27.
 
 ## What Changes
 
-- Require fresh recognized foreground harness evidence before World types agent input on either runtime, including asks, Chat, notification replies, prompt answers, menu text and launch/Board prompts.
-- Capture the original TUI asker's foreground process witness in the existing recipient and recheck it at dispatch and the final input boundary. Refuse changed or unknown foregrounds, preserve ask retrieval, and expose not-attached evidence in Reception.
-- Cancel native core sends when an observed foreground or runtime changes; keep uncertain sends non-replayable.
+- Share one foreground program check across answers, Chat, notification replies, prompts, menu text and launch/Board prompts on both runtimes.
+- Refuse shells, interactive REPLs, editors/pagers, ssh, sudo/su and database clients, including foreground children. Noninteractive script launchers wait for their children rather than reading commands; check those children too.
+- Admit all other programs, including arbitrary agents, resumed/restarted agents, wrappers and npm entrypoints. Remove the per-session foreground witness and PID hashing introduced by this change.
+- Treat failed reads as temporary. Preserve qualified terminal/runtime authority and no-replay handling for refused or uncertain sends. Show plain Not sent reasons and answer recovery.
 
 ## Capabilities
 
 ### Modified Capabilities
 
-- `ask-answer-delivery`: original agent foreground authority and retrieval-only refusals.
-- `world-surfaces/chat`: shared send-time foreground checks for agent text and prompt input.
+- `ask-answer-delivery`: current foreground program admission and saved-answer recovery.
+- `world-surfaces/chat`: shared send-time program checks for World agent input.
 
 ## Impact
 
-Shared TUI transport, core recipient/native-send guards, durable ask recipients, existing SQLite recipient JSON, Chat and prompt callers. No new store or view-owned state. Unrecognized harnesses and shell wrappers without direct agent foreground evidence now refuse input. Current runtimes do not offer an atomic foreground-and-session compare-and-send; these checks bound World admission, and cannot prove the absence of an OS process switch after the last native observation.
+Shared TUI transport, core native/Chat sends and durable answer dispatch. No new store or persisted field. Explicit owner Terminal input retains its existing authority. Current runtimes lack atomic OS foreground-and-send; a process switch after the last observation remains an upstream limit.

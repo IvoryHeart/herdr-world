@@ -2,14 +2,18 @@ import {
   coreAskBinding,
   type CoreAnswerConnections,
 } from "../herdr-core/ask-recipient";
-import { coreRecipientChange } from "../herdr-core/recipient";
-import { foregroundHarness } from "../herdr-core/harness";
-import { agentForegroundWitness } from "../adapters/agent-input";
+import {
+  coreRecipientChange,
+  coreRecipientToken,
+} from "../herdr-core/recipient";
+import {
+  foregroundInputRefusal,
+  checkTuiForeground,
+} from "../adapters/agent-input";
 import type { ReadyRuntimeLease } from "../connections/manager";
 import type { CoreConnectionRuntime } from "../herdr-core/runtime";
 import type { Conversation, ConversationSource } from "../agent/conversation";
 import {
-  askSessionFingerprint,
   paneActor,
   type CoreCallerSource,
   type CoreCliHost,
@@ -52,6 +56,7 @@ export type RecipientResolution =
       state: "attached";
       kind?: "core-token";
       core: true;
+      token: string;
       lease: ReadyRuntimeLease<CoreConnectionRuntime>;
     }
   | {
@@ -123,7 +128,7 @@ export function createAskRecipients(deps: {
     if (
       !occupant ||
       !occupant.foreground ||
-      !foregroundHarness(occupant.foreground.name, occupant.foreground.argv) ||
+      foregroundInputRefusal([occupant.foreground]) ||
       actor.terminal_id !== actor.pane_id ||
       occupant.fingerprint !== actor.agent_session_fingerprint
     )
@@ -182,16 +187,18 @@ export function createAskRecipients(deps: {
         state: "ended",
         reason: "The original terminal ended; use ask get",
       };
-    if (occupant.fingerprint !== recipient.reported.fingerprint)
+    if (!occupant.foreground)
       return {
-        state: "unconfirmed",
-        reason:
-          "Original agent is not attached; answer not delivered, use ask get",
+        state: "unresolved",
+        reason: "The terminal could not be checked; try again shortly",
       };
+    const reason = foregroundInputRefusal([occupant.foreground]);
+    if (reason)
+      return { state: "unconfirmed", reason: `Agent not attached. ${reason}` };
     const delivery = host.delivery?.(
       recipient.pane_id,
-      recipient.reported.fingerprint,
-      recipient.foreground,
+      occupant.fingerprint,
+      occupant.foreground,
     );
     return delivery
       ? { state: "attached", kind: "core", lease: delivery }
@@ -232,12 +239,6 @@ export function createAskRecipients(deps: {
     }
     const scheme = chatScheme(conversation);
     if (!scheme || !conversation.session_fingerprint) return;
-    const inputForeground = await agentForegroundWitness(
-      host(lease).call,
-      actor.pane_id,
-      conversation.agent,
-    ).catch(() => null);
-    if (!inputForeground) return;
     const native = await paneActor(host(lease), actor.pane_id);
     const recipient: AnswerRecipient = {
       adapter: "herdr",
@@ -249,7 +250,6 @@ export function createAskRecipients(deps: {
         fingerprint: actor.agent_session_fingerprint,
       },
       conversation: { scheme, fingerprint: conversation.session_fingerprint },
-      input_foreground: inputForeground,
       captured_at: deps.clock.now(),
       service_incarnation: deps.incarnation,
       connection_generation: lease.generation,
@@ -306,19 +306,37 @@ export function createAskRecipients(deps: {
           state: "unresolved",
           reason: "Core observation is not current",
         };
-      const change = coreRecipientChange(
-        recipient.conversation.fingerprint,
+      const token = coreRecipientToken(
         view.epoch.coreId,
         view.terminal(recipient.pane_id),
         view.occupancy(recipient.pane_id),
       );
+      if (!token)
+        return {
+          state: "unresolved",
+          reason: "The terminal could not be checked; try again shortly",
+        };
+      let change;
+      try {
+        change = coreRecipientChange(
+          token,
+          view.epoch.coreId,
+          view.terminal(recipient.pane_id),
+          view.occupancy(recipient.pane_id),
+        );
+      } catch {
+        return {
+          state: "unresolved",
+          reason: "The terminal could not be checked; try again shortly",
+        };
+      }
       return change
         ? {
             state: "unconfirmed",
             reason:
-              "Original agent is not attached; answer not delivered, use ask get",
+              "Agent not attached. The agent isn't running in that terminal any more; use ask get",
           }
-        : { state: "attached", core: true, lease };
+        : { state: "attached", core: true, lease, token };
     }
     const lease = deps.connections().readyRuntimeLease(recipient.connection_id);
     if (!lease?.isCurrent())
@@ -335,7 +353,7 @@ export function createAskRecipients(deps: {
       };
     if (native.state === "absent")
       return { state: "ended", reason: "The original pane ended; use ask get" };
-    if (!originalAsker(recipient, native.actor))
+    if (native.actor.terminal_id !== recipient.terminal_id)
       return {
         state: "unconfirmed",
         reason: "The asking session changed; answer not sent, use ask get",
@@ -374,50 +392,29 @@ export function createAskRecipients(deps: {
         state: "unresolved",
         reason: "The original conversation is not readable yet",
       };
-    if (
-      chatScheme(conversation) !== recipient.conversation.scheme ||
-      conversation.session_fingerprint !== recipient.conversation.fingerprint
-    )
-      return {
-        state: "unconfirmed",
-        reason:
-          "The conversation binding changed or is unverified; use ask get",
-      };
-    let inputForeground: string | null;
     try {
-      inputForeground = await agentForegroundWitness(
-        host(lease).call,
-        recipient.pane_id,
-        conversation.agent,
-      );
+      await checkTuiForeground(host(lease).call, recipient.pane_id);
     } catch (error) {
       return error instanceof Error && /^agent_not_ready:/.test(error.message)
         ? {
             state: "unconfirmed",
-            reason: error.message.replace(/^agent_not_ready:\s*/, ""),
+            reason: `Agent not attached. ${error.message.replace(/^agent_not_ready:\s*/, "")}`,
           }
         : {
             state: "unresolved",
-            reason:
-              "The original terminal could not be checked; waiting to retry",
+            reason: "The terminal could not be checked; try again shortly",
           };
     }
-    if (
-      !recipient.input_foreground ||
-      inputForeground !== recipient.input_foreground
-    )
-      return {
-        state: "unconfirmed",
-        reason:
-          "Original agent is not attached to the terminal foreground; answer not delivered, use ask get",
-      };
     const after = await paneActor(host(lease), recipient.pane_id);
     if (!lease.isCurrent() || after.state === "unknown")
       return {
         state: "unresolved",
         reason: "The original host became unavailable during checks",
       };
-    if (after.state !== "present" || !originalAsker(recipient, after.actor))
+    if (
+      after.state !== "present" ||
+      after.actor.terminal_id !== recipient.terminal_id
+    )
       return {
         state: "unconfirmed",
         reason: "The asking session changed during checks; use ask get",
@@ -511,12 +508,11 @@ export function createAskRecipients(deps: {
       info: Record<string, unknown>,
     ) {
       return (
+        recipient.adapter === "herdr" &&
         recipient.service_incarnation === deps.incarnation &&
         lease.isCurrent() &&
         info.pane_id === recipient.pane_id &&
-        info.terminal_id === recipient.terminal_id &&
-        askSessionFingerprint(info.agent_session) ===
-          recipient.reported.fingerprint
+        info.terminal_id === recipient.terminal_id
       );
     },
   };

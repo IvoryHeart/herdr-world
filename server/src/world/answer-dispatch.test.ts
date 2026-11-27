@@ -343,14 +343,14 @@ test("offline answers remain pending and attach to the original session after a 
   expect((await f.entry()).evidence?.fence?.generation).toBe(20);
 });
 
-test("a changed session or fingerprint scheme refuses delivery and leaves ask get readable", async () => {
+test("a changed agent session or fingerprint scheme can receive a saved answer", async () => {
   const changed = await fixture();
   await changed.answer();
   changed.state.session = session("replacement");
   changed.time(4000);
   await changed.dispatcher.wake();
-  expect((await changed.entry()).state).toBe("refused");
-  expect(changed.prompts).toEqual([]);
+  expect((await changed.entry()).state).toBe("delivered");
+  expect(changed.prompts).toHaveLength(1);
   expect(changed.storage.ledger.ask("q-fixture")?.answer?.text).toBe("Proceed");
   const scheme = await fixture();
   await scheme.answer();
@@ -358,8 +358,8 @@ test("a changed session or fingerprint scheme refuses delivery and leaves ask ge
   scheme.state.agent = "codex";
   scheme.time(4000);
   await scheme.dispatcher.wake();
-  expect((await scheme.entry()).state).toBe("refused");
-  expect(scheme.prompts).toEqual([]);
+  expect((await scheme.entry()).state).toBe("delivered");
+  expect(scheme.prompts).toHaveLength(1);
 });
 
 test("legacy asks are not rebound when answered and generate final not-sent evidence", async () => {

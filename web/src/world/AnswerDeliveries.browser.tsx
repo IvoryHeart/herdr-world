@@ -59,7 +59,7 @@ const notice = (
       state === "uncertain"
         ? "Service restarted before a submission receipt."
         : state === "refused"
-          ? "Original agent is not attached to the terminal foreground; use ask get"
+          ? "The agent isn't running in that terminal any more; it's a shell now. Nothing was sent."
           : "Waiting for Studio to reconnect.",
   },
   can_resend: state === "uncertain",
@@ -370,7 +370,7 @@ Object.assign(window, {
     )!;
     check(
       refused.textContent!.includes(
-        "The agent that asked isn't running in that terminal any more",
+        "The agent isn't running in that terminal any more; it's a shell now",
       ),
       "Not sent hides why delivery stopped",
     );

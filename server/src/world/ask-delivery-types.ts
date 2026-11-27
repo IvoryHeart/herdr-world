@@ -22,8 +22,6 @@ export type ChatAnswerRecipient = {
     scheme: "reported-v1" | "codex-title-v1" | "core-recipient-v1";
     fingerprint: string;
   };
-  /** Original TUI foreground process group and harness, hashed; absent on old asks. */
-  input_foreground?: string;
   captured_at: number;
   service_incarnation: string;
   connection_generation: number;
@@ -33,8 +31,8 @@ export type ChatAnswerRecipient = {
  * `reported` holds the occupant fingerprint the verified caller had
  * (`coreOccupantFingerprint`: core, address, pid, argv, template and occupancy), so a kept
  * terminal's replacement shell, even one reusing the pid, is another asker.
- * World sends saved answers only to this original program and foreground;
- * `ask get`/`--wait` remain available when delivery cannot be established.
+ * Saved answers address this terminal's current admitted foreground program;
+ * original caller identity still owns ask get/--wait and acknowledgements.
  */
 export type CoreAnswerRecipient = {
   adapter: "herdr-core";
@@ -134,9 +132,6 @@ export function herdrRecipient(
           : "herdr-reported-v1") &&
       typeof value.reported.fingerprint === "string" &&
       /^[a-f0-9]{64}$/.test(value.reported.fingerprint) &&
-      (value.input_foreground === undefined ||
-        (typeof value.input_foreground === "string" &&
-          HEX64.test(value.input_foreground))) &&
       (value.adapter === "herdr-core"
         ? value.conversation?.scheme === "core-recipient-v1"
         : ["reported-v1", "codex-title-v1"].includes(
@@ -168,7 +163,6 @@ export function sameRecipient(
       left.reported.fingerprint === right.reported.fingerprint &&
       ("conversation" in left && "conversation" in right
         ? left.conversation.scheme === right.conversation.scheme &&
-          left.input_foreground === right.input_foreground &&
           left.conversation.fingerprint === right.conversation.fingerprint
         : "core_id" in left &&
           "core_id" in right &&
@@ -297,7 +291,6 @@ export function isAnswerIntent(value: unknown): value is AnswerIntent {
       "terminal_id",
       "reported",
       "conversation",
-      "input_foreground",
       "captured_at",
       "service_incarnation",
       "connection_generation",

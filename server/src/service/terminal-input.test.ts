@@ -13,7 +13,7 @@ import type { LegacyConnectionRuntime } from "../connections/runtime";
 import type { RpcServices } from "../rpc/context";
 import { createRpcDispatcher } from "./rpc-dispatch";
 
-for (const foreground of ["bash", "vim", "unknown"])
+for (const foreground of ["bash", "vim", "ssh"])
   for (const hasAgent of [false, true])
     test(`Terminal composer and paste reach ${foreground} with ${hasAgent ? "stale" : "no"} agent metadata`, async () => {
       const manager = new ConnectionManager<LegacyConnectionRuntime>("alpha");
@@ -103,7 +103,7 @@ for (const foreground of ["bash", "vim", "unknown"])
           withAgentInput(hasAgent ? agent : null, () =>
             tui.call(requests[0].method, requests[0].params),
           ),
-        ).rejects.toThrow("not attached");
+        ).rejects.toThrow("agent_not_ready:");
         expect(writes).toEqual([]);
         for (const [index, request] of requests.entries()) {
           await dispatch(

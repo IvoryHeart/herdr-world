@@ -1,74 +1,65 @@
 ## ADDED Requirements
 
-### Requirement: Only the original agent foreground receives an answer
+### Requirement: Answer delivery checks the current foreground program
 
-World SHALL type an ask's question or answer only while fresh native foreground evidence identifies the original asking harness and session at its captured terminal, connection and generation. A shell, editor, different harness, replacement agent process or unknown foreground SHALL be treated as not attached, even if an old agent/session report remains. Historical recipients lacking original foreground evidence SHALL keep saved answers readable through the CLI without automatic delivery.
+Immediately before typing an ask question or answer, World SHALL check the current foreground program and foreground children. Shells, interactive REPLs, editors/pagers, ssh, sudo/su and database clients SHALL receive no input. Other programs SHALL be admitted without original harness/session or PID matching. Failed reads SHALL leave delivery pending for a fresh check.
 
 #### Scenario: Agent exits to its shell
 
-- **WHEN** the original agent exits to bash before answer recording, dispatch or the final native input check
-- **THEN** World types nothing, records not-attached/not-delivered evidence visible in Reception, and `herdr-world ask get` returns the saved answer
-- **AND** a later agent in the terminal does not revive that refused delivery
+- **WHEN** the agent exits to bash before answer recording, dispatch or the final native input check
+- **THEN** World types nothing, records Not sent with a plain shell reason in Reception, and `herdr-world ask get <id>` returns the saved answer
+- **AND** a later program does not revive that refused delivery
 
-#### Scenario: Session report survives foreground replacement
+#### Scenario: A foreground child reads the terminal
 
-- **WHEN** the terminal retains the original session report but its foreground is an editor, another harness, unknown, or another process of the same harness
-- **THEN** original-recipient validation refuses delivery and preserves the answer for retrieval
+- **WHEN** an agent leader has an interactive shell, REPL, editor/pager or ssh child in its foreground group
+- **THEN** no answer is typed, even when stale agent/session reports remain
 
-#### Scenario: Core holds input while the foreground changes
+#### Scenario: Agent restarts or runs through a launcher
 
-- **WHEN** core holds a native answer send and World observes a foreground or qualified-runtime change
-- **THEN** World cancels the held send and never automatically retries a possible send into another session
-- **AND** a lost or ambiguous send reply remains uncertain rather than authorizing replay
+- **WHEN** a resumed, restarted, different or unknown agent, wrapper script or npm entrypoint now runs at the same qualified terminal
+- **THEN** the current program check allows input unless a refused interactive program is reading the terminal
+- **AND** it does not require original-session evidence or hash foreground PIDs
 
-#### Scenario: A harness opens a shell or editor child
+#### Scenario: Temporary foreground read failure
 
-- **WHEN** the foreground group still has the original harness leader but also contains a shell, editor or pager
-- **THEN** no answer is typed and Reception records Not sent while preserving the saved answer
-- **AND** original foreground evidence covers every member PID and name
-
-#### Scenario: Temporary read failure and changing titles
-
-- **WHEN** World cannot read foreground or agent information due to a temporary RPC/read failure
-- **THEN** delivery remains waiting and retries only after rechecking the original binding
-- **AND** title, status sequence and observation revision changes alone do not count as a different session
-
-#### Scenario: Restart, resume and upgrade
-
-- **WHEN** the agent restarts or resumes as a new process, or a question was open when World restarted or upgraded
-- **THEN** automatic delivery does not reattach, Reception shows Not sent when answered, and `herdr-world ask get <id>` returns the saved answer
+- **WHEN** the current program cannot be read
+- **THEN** World types nothing and says to try again shortly; a saved answer remains pending and a fresh attempt rechecks the terminal
 
 #### Scenario: Owner recovers an undelivered answer
 
 - **WHEN** an owner opens an undelivered answer in Reception > Outbox
-- **THEN** Not sent explains that the agent that asked is no longer running there and names `herdr-world ask get <id>`
-- **AND** Copy answer copies the saved owner answer; Put in Terminal composer appends it to that terminal's qualified draft and opens its composer on desktop or phone without typing or sending input
-- **AND** a missing or replaced terminal cannot receive that draft through the saved placement
+- **THEN** Not sent explains the refused foreground in plain words, offers Copy answer and shows the full `herdr-world ask get <id>` command
+- **AND** Put in Terminal composer opens its qualified draft on desktop or phone without sending input, preserving existing draft text
+
+#### Scenario: Foreground changes while core holds a send
+
+- **WHEN** World observes a foreground or qualified-runtime change while core holds input
+- **THEN** World cancels the held send and never automatically replays a possible send
 
 ## MODIFIED Requirements
 
 ### Requirement: Capture and recheck the original bound state
 
-At answer recording World SHALL capture the original verified binding's session
-fingerprint and that the ask still awaits delivery, not withdrawn or delivered.
+World SHALL retain the original qualified terminal and answering authority, and check that the ask still awaits delivery. Foreground admission SHALL use the current program rather than the original asking agent/session.
 
 #### Scenario: Answer delivery qualification
 
 - **WHEN** World records or attempts answer delivery
-- **THEN** An offline/unobserved host SHALL keep that binding unresolved and delivery pending
-  until it can be checked while this World service keeps running; an outage SHALL NOT count as a changed session. After claiming, World SHALL recheck the answering
-  actor's current ask policy, target binding, preconditions and operation version.
-  Unverifiable or changed state SHALL record not sent and preserve ask retrieval.
+- **THEN** an offline/unobserved host keeps delivery pending until the qualified runtime can be checked; an outage is not a permanent refusal
+- **AND** World rechecks answering authority, terminal identity, preconditions and operation version before dispatch
 
 #### Scenario: Answer recorded during an outage
-- **WHEN** the user answers a previously bound ask while its original host is offline
-- **THEN** the intent remains pending without expiry while the World service and original agent process keep running
-- **AND** it sends only after that same session is verified on return
+
+- **WHEN** the owner answers an ask while its host is offline
+- **THEN** the answer remains pending and retrievable, and sends only after the qualified host returns and its current foreground passes admission
 
 #### Scenario: Reused pane or generation after restart
-- **WHEN** World restarts or upgrades, the harness restarts/resumes as a new process, or the native handle exists but the original source/session cannot be verified
-- **THEN** nothing is sent and the answer remains available through ask get
+
+- **WHEN** the original terminal ended or its qualified runtime was replaced
+- **THEN** no fallback or replay targets another terminal or connection, and ask get retains the answer
 
 #### Scenario: Owner-only authority remains owner-only
-- **WHEN** the captured answering actor no longer satisfies the ask's current policy
-- **THEN** no dispatch begins even if an old intent or attempt was committed
+
+- **WHEN** the answering actor no longer satisfies the ask policy
+- **THEN** dispatch does not begin

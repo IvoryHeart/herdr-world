@@ -80,7 +80,7 @@ test("a replacement, changed foreground or retired lease sends nothing", async (
   }
 });
 
-test.each(["bash", "vim", "unknown"])(
+test.each(["bash", "vim", "node", "python", "ssh", "sudo", "psql"])(
   "a captured %s foreground never admits owner text despite a stale agent report",
   async (name) => {
     const { w, address, lease } = await setup();
@@ -98,7 +98,7 @@ test.each(["bash", "vim", "unknown"])(
         "Question: unsafe\nprintf unsafe",
         async () => true,
       ),
-    ).rejects.toThrow("foreground-changed");
+    ).rejects.toThrow("agent_not_ready:");
     expect(w.fake.deliveredInput).toEqual([]);
   },
 );

@@ -89,7 +89,7 @@ describe("launching in herdr-core (M2, M3)", () => {
   });
 
   test("an idle report from a shell wrapper cannot admit an automatic brief", async () => {
-    const w = await world({ runStatus: "idle" });
+    const w = await world({ runStatus: "idle", runForeground: "bash" });
     const outcome = await launchCore(
       w.lease(),
       {

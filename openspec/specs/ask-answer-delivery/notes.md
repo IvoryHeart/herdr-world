@@ -28,8 +28,8 @@
 - `web/src/components/TerminalComposer.css` (shared editor styles for explicit desktop recovery)
 - `web/src/world/AnswerDeliveries.browser.tsx`, `web/src/world/AnswerDeliveries.browser.test.ts`
 - `server/src/herdr-core/runtime.ts`
+- `server/src/herdr-core/connections.ts`, `server/src/herdr-core/testing/core-world.ts`
 - `server/src/herdr-core/recipient.ts`
-- `server/src/storage/catalog.ts`
 
 - `shared/askCommands.ts`
 - `shared/questionAsker.ts`
@@ -62,4 +62,6 @@
 
 ## Foreground admission
 
-World sends answers, Chat messages, notifications and prompts only while the original agent is running in front in that terminal. A shell, editor, pager, different agent or unknown program stops delivery, including a shell or editor opened by the agent. Temporary failures to check the terminal leave the answer waiting. Changing a working title does not stop delivery. If the agent exits, restarts or resumes as a new process, World shows **Not sent** and keeps the answer readable with `herdr-world ask get <id>`; starting another agent never sends it again. Questions left open across a World restart or upgrade also show **Not sent** when answered and remain readable with that command. Agents started through a wrapper script cannot receive this input while the script stays in front; use `exec` in the script to let the agent take its place. In Reception > Outbox, **Copy answer** copies the saved owner answer, and **Put in Terminal composer** opens that terminal with the answer in its draft, preserving any existing draft. The owner reviews and sends it explicitly; putting it there sends nothing. Neither runtime can make the last foreground check and typing one indivisible operation.
+Right before World types answers, Chat messages, notifications or prompts, it checks what is reading that terminal, including foreground children. A shell, interactive REPL, editor/pager, ssh, sudo/su or database client stops input. Other programs are allowed, including agents resumed or restarted, arbitrary agents, wrappers and npm installations. Noninteractive script/-c launchers wait for their children; those children are checked too. World does not match the original agent session or hash its process IDs. A failed check says to try again shortly and leaves saved answers waiting. Runtime/terminal qualification and no replay of refused or uncertain sends still apply.
+
+In Reception > Outbox, **Not sent** names the current program category in plain words. **Copy answer** copies the saved owner answer; the full `herdr-world ask get <id>` command reads it later. **Put in Terminal composer** opens that terminal's draft on desktop or phone and preserves existing text. It sends nothing; the owner reviews and sends explicitly. Neither runtime makes the final OS foreground check and typing one indivisible operation. Core's local child checks require a readable host process namespace; remote child evidence is limited to what core reports.

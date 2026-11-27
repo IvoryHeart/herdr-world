@@ -203,17 +203,9 @@ export function AnswerDeliveryCard({
     reason
       .replace(/^agent_not_ready:\s*/, "")
       .replace(/\buse ask get\b/gi, `use herdr-world ask get ${ask.id}`);
-  const refusedMessage = /wrapper script/i.test(delivery.reason ?? "")
-    ? "The agent was started through a wrapper script; use `exec` in the script. World didn't send your answer."
-    : /not attached|foreground|no verified original|after a World restart/i.test(
-          delivery.reason ?? "",
-        )
-      ? "The agent that asked isn't running in that terminal any more. World didn't send your answer."
-      : /session changed|binding changed/i.test(delivery.reason ?? "")
-        ? `${name}'s session changed after it asked, so World didn't send your answer.`
-        : /ended|removed/i.test(delivery.reason ?? "")
-          ? `${name}'s original session is no longer available. World didn't send your answer.`
-          : "World didn't send your answer. It stays saved.";
+  const refusedMessage = delivery.reason
+    ? plainReason(delivery.reason).replace(/^Agent not attached\.\s*/i, "")
+    : "World didn't send your answer. It stays saved.";
   const message = active
     ? "Wait for the result."
     : delivery.state === "uncertain"

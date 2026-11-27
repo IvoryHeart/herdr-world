@@ -97,7 +97,7 @@ test("Not sent explains an exited asker and offers safe owner recovery with the 
               state: "refused",
               attempt: 1,
               reason:
-                "agent_not_ready: Original agent is not attached; use ask get",
+                "agent_not_ready: The agent isn't running in that terminal any more; it's a shell now. Nothing was sent.",
             },
           },
         ],
@@ -120,7 +120,7 @@ test("Not sent explains an exited asker and offers safe owner recovery with the 
     }),
   );
   expect(html).toContain(
-    "The agent that asked isn&#x27;t running in that terminal any more",
+    "The agent isn&#x27;t running in that terminal any more; it&#x27;s a shell now",
   );
   expect(html).toContain("herdr-world ask get q-fixture");
   expect(html).toContain(">Copy answer</button>");
