@@ -9,6 +9,10 @@ import { ColorSwatches } from "./ColorSwatch";
 import { WorkspaceColorContext } from "./workspaceColor";
 import type { Workspace } from "../types";
 import { useOperationalStore, useStoreSelector } from "../store";
+import {
+  renameRoom,
+  type RoomRenameCloseTarget,
+} from "../world/roomRenameClose";
 import type { PullRequestSummary } from "../../../shared/pullRequest";
 import {
   clearTerminalComposerDrafts,
@@ -64,7 +68,7 @@ type DialogState =
     }
   | {
       type: "rename-workspace";
-      workspaceId: string;
+      room: RoomRenameCloseTarget;
       label: string;
     }
   | {
@@ -199,9 +203,7 @@ export function ContextMenu({
         onSubmit={(label) => {
           const value = label.trim();
           if (dialog?.type === "rename-workspace" && value) {
-            if (value !== dialog.label) {
-              store.renameWorkspace(dialog.workspaceId, value);
-            }
+            void renameRoom(dialog.room, dialog.label, value);
             setDialog(null);
           }
         }}
@@ -345,7 +347,7 @@ export function ContextMenu({
       action: () => {
         setDialog({
           type: "rename-workspace",
-          workspaceId: w.workspace_id,
+          room: store.room(w.workspace_id),
           label: w.label,
         });
       },

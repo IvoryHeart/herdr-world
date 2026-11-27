@@ -3,13 +3,30 @@ import { validateModelBundle, type ModelBundle } from "./ci-model-cache";
 import { verificationShard } from "./ci-verification";
 import type { VerificationManifest } from "./verification-evidence";
 import limits from "../tools/quint/resources.json";
+import checker from "../tools/quint/checker.json";
+import tooling from "../tools/quint/package.json";
 
 const input = {
   path: "quint/model.qnt",
   sha256: "a".repeat(64),
   kind: "file" as const,
 };
-const key = { hash: "b".repeat(64), inputs: [input] };
+const runtime = {
+  node: "synthetic-node",
+  java: "synthetic-java",
+  bun: "synthetic-bun",
+};
+const key = {
+  hash: "b".repeat(64),
+  inputs: [input],
+  runtime,
+  toolIdentity: {
+    runtime,
+    java: runtime.java,
+    platform: process.platform,
+    arch: process.arch,
+  },
+};
 function fixture(): ModelBundle {
   const records = verificationShard(1).map((model) => ({
     model,
@@ -40,6 +57,12 @@ function fixture(): ModelBundle {
       path: record.path,
       manifest: {
         schemaVersion: 1,
+        tools: {
+          ...runtime,
+          quint: tooling.dependencies["@informalsystems/quint"],
+          checker: checker.version,
+          jarSha256: checker.jarSha256,
+        },
         sourceRevision: "c".repeat(40),
         sourceInputs: [input],
         scope: { kind: "focused", models: [record.model] },
@@ -66,6 +89,12 @@ test("invalidated, incomplete, cancelled, foreign and unbounded evidence cannot 
   const corruptions: Array<(bundle: ModelBundle) => void> = [
     (b) => {
       b.hash = "d".repeat(64);
+    },
+    (b) => {
+      b.toolIdentity.runtime.node = "foreign";
+    },
+    (b) => {
+      b.cases[0]!.manifest.tools.java = "foreign";
     },
     (b) => {
       b.inputs = [];

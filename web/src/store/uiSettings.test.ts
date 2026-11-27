@@ -1,0 +1,96 @@
+import { afterAll, expect, spyOn, test } from "bun:test";
+import { bridge, type ConnectionStatus } from "../api";
+import {
+  RUNTIME_GROUPING_SETTING_KEY,
+  runtimeGrouping,
+  saveRuntimeGrouping,
+} from "../world/runtimeGrouping";
+import { followPublishedUiSettings, installUiSettings } from "./uiSettings";
+
+type Published = { ui: Record<string, unknown>; revision: number };
+
+let onStatus: (status: ConnectionStatus) => void = () => {};
+/** Answers a delayed save with its commit revision. */
+const acks: Array<(revision: number) => void> = [];
+const spies = [
+  spyOn(bridge, "onHello").mockImplementation(() => () => true),
+  spyOn(bridge, "onStatus").mockImplementation((callback) => {
+    onStatus = callback;
+    return () => true;
+  }),
+  spyOn(bridge, "call").mockImplementation((async (
+    method: string,
+    params?: Record<string, unknown>,
+  ) => {
+    if (method === "bridge.ui_settings.get") return { ui: {}, revision: 0 };
+    // Every save waits until the test answers it with its commit revision.
+    const revision = await new Promise<number>((resolve) => acks.push(resolve));
+    return { key: params?.key, value: params?.value, revision };
+  }) as typeof bridge.call),
+];
+afterAll(() => {
+  for (const spy of spies) spy.mockRestore();
+});
+
+/** The shared browser replica, reduced to its published settings. */
+function replica() {
+  let current: Published | undefined;
+  const listeners = new Set<() => void>();
+  return {
+    get: () => ({ uiSettings: current }),
+    subscribe(listener: () => void) {
+      listeners.add(listener);
+      return () => listeners.delete(listener);
+    },
+    publish(next: Published) {
+      current = next;
+      for (const listener of listeners) listener();
+    },
+  };
+}
+
+const settle = () => new Promise((resolve) => setTimeout(resolve, 0));
+
+test("a newer publication skipped during this browser's save is applied when the save ends", async () => {
+  installUiSettings();
+  onStatus("connected");
+  await settle();
+  const world = replica();
+  followPublishedUiSettings(world);
+  world.publish({ ui: {}, revision: 0 });
+
+  // This browser saves runtime (commit 1); its answer is delayed.
+  const saving = saveRuntimeGrouping("runtime");
+  await settle();
+  expect(runtimeGrouping()).toBe("runtime");
+  // Another browser's later commit (2) is published first.
+  world.publish({
+    ui: { [RUNTIME_GROUPING_SETTING_KEY]: "machine" },
+    revision: 2,
+  });
+  expect(runtimeGrouping()).toBe("runtime");
+  acks.shift()!(1);
+  await saving;
+  expect(runtimeGrouping()).toBe("machine");
+  // An unchanged publication keeps it.
+  world.publish({
+    ui: { [RUNTIME_GROUPING_SETTING_KEY]: "machine" },
+    revision: 2,
+  });
+  expect(runtimeGrouping()).toBe("machine");
+
+  // A save (commit 3), then another browser restores the value shown before
+  // it (commit 4): the restored value is applied, not suppressed as the
+  // value this browser last adopted.
+  const again = saveRuntimeGrouping("runtime");
+  await settle();
+  acks.shift()!(3);
+  await again;
+  expect(runtimeGrouping()).toBe("runtime");
+  // The browser next reads commit 4, never commit 3.
+  world.publish({
+    ui: { [RUNTIME_GROUPING_SETTING_KEY]: "machine" },
+    revision: 4,
+  });
+  expect(runtimeGrouping()).toBe("machine");
+});

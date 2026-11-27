@@ -54,6 +54,11 @@ Q57 models runtime moves in both directions against source changes, dropped or
 reconnected hosts and lost replies, and replays them through the real controller;
 the model found two faults, fixed and kept as witnesses
 ([audit](contracts/agent-move-audit.md)).
+The `world-write-path` area models World's one publication and its commands
+(room rename first): one revision for every published value, the per-host epoch
+fence, compare-and-set, settling only on a read after the acknowledgement, and
+browser replicas that hold pending values
+([contract](contracts/world-write-path.md)).
 
 The audit also found a **real counterexample**: Q55's stale tap owner can publish
 after its ownership check was superseded (#1086). The repaired canonical case requires

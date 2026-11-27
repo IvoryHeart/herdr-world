@@ -14,14 +14,17 @@
 - `shared/terminalColor.ts`
 - `web/src/world/TerminalAppearanceEditor.tsx`
 - `web/src/world/terminalColor.ts`
-- `server/src/rpc/appearance.ts`
+- `server/src/features/appearance/register.ts` (construction, RPCs and lifecycle)
+- `server/src/features/appearance/verbs.ts`
+- `server/src/features/appearance/rpc.ts`
 - `server/src/agent/terminal-settings.ts`
-- `server/src/agent/profile-service.ts`
+- `server/src/features/appearance/service.ts`
 
 **Tests:**
 
 - `server/src/rpc/appearance.test.ts`
 - `web/src/world/terminalColor.test.ts`
+- `web/src/world/appearance.test.ts` (page convergence and Town/Board colour projections)
 - `server/src/agent/terminal-settings.test.ts`
 - `web/src/world/TerminalAppearanceEditor.test.tsx`
 
@@ -30,6 +33,9 @@
 - Native tab names are not World shadow names; split avatars are per pane.
 - Tab colour inherits spawn/workspace defaults, never host colour or runtime status.
 - Saved terminal choices require continuity evidence; reused IDs cannot inherit them.
+- Appearance remains connection-scoped: duplicate connections to one TUI endpoint can
+  hold different choices. Town shows its endpoint anchor (or a live stand-in), while Board shows each
+  connection; compare the same connection when checking colour propagation.
 - Herdr assignments have no TTL and end with terminals; World profiles/chimes persist separately.
 - CLI colour commands affect shared appearance; task-summary is session-scoped metadata, not status text.
 

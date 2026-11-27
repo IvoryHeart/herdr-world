@@ -23,6 +23,7 @@ import {
 import type { CommandExtension } from "../components/CommandCombobox";
 import { shortcutMatches } from "../shortcutPreferences";
 import { store, useStoreSelector } from "../store";
+import { followPublishedUiSettings } from "../store/uiSettings";
 import {
   type InspectorView,
   resourceScopeForWorkspace,
@@ -257,12 +258,15 @@ export default function WorldFoundationApp() {
       () => store.get().activeConnectionId,
     );
     worldRuntimeStore.start();
+    // Preferences arrive in the same publication as topology.
+    const offSettings = followPublishedUiSettings(worldRuntimeStore);
     // Open again in a core float shell takes authority from this read model.
     const offFloat = provideFloatShellAuthority(
       coreAuthorityFrom(worldRuntimeStore),
     );
     return () => {
       offFloat();
+      offSettings();
       worldRuntimeStore.stop();
     };
   }, []);

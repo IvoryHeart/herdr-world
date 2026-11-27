@@ -19,19 +19,24 @@ pending test.
 
 Every source of observations or effects SHALL be an adapter with a descriptor that
 declares:
-- the adapter kind and contract version;
-- **capabilities**, including whether its listings are complete, whether it emits
-  events, supports get-by-ID or reports source revisions;
-- **kinds**, with payload schemas, key derivation and continuity evidence;
-- **verbs**, with schemas and the protocol recovery classes: `read`, `keyed`,
-  `reconcilable`, `reattachable`, `repeatable` or `opaque`;
-- a configuration schema;
-- **limits** on concurrency, page size, rate, entities and bytes.
 
-World SHALL use only declared capabilities. It SHALL refuse an undeclared verb before
-dispatch and SHALL keep every acquisition within the declared limits. Secrets an adapter
-needs SHALL stay in private files and SHALL NOT appear in descriptors, observations or
-change feeds.
+#### Scenario: Adapter descriptor contents and bounds
+
+- **WHEN** World registers or uses an adapter
+- **THEN**
+  - the adapter kind and contract version;
+  - **capabilities**, including whether its listings are complete, whether it emits
+    events, supports get-by-ID or reports source revisions;
+  - **kinds**, with payload schemas, key derivation and continuity evidence;
+  - **verbs**, with schemas and the protocol recovery classes: `read`, `keyed`,
+    `reconcilable`, `reattachable`, `repeatable` or `opaque`;
+  - a configuration schema;
+  - **limits** on concurrency, page size, rate, entities and bytes.
+
+  World SHALL use only declared capabilities. It SHALL refuse an undeclared verb before
+  dispatch and SHALL keep every acquisition within the declared limits. Secrets an adapter
+  needs SHALL stay in private files and SHALL NOT appear in descriptors, observations or
+  change feeds.
 
 #### Scenario: Undeclared verb
 - **WHEN** a caller requests a verb that an adapter does not declare
@@ -56,16 +61,21 @@ per-kind presentation code only when that kind is shown.
 
 ### Requirement: Shared conformance suite
 
-Every adapter SHALL pass one shared conformance suite. It SHALL establish that:
-- the same native ID on two source instances never aliases;
-- absence counts only from a complete listing;
-- a source reset or ID reuse never attaches old records without verified evidence;
-- out-of-order, duplicate and missing events are repaired by reading again;
-- unknown kinds and fields are ignored and counted;
-- unsupported verbs are refused before dispatch;
-- declared limits hold;
-- results arriving after their owner retired are never published;
-- a disabled adapter costs nothing.
+Every adapter SHALL pass one shared conformance suite.
+
+#### Scenario: Adapter conformance cases
+
+- **WHEN** an adapter runs the shared conformance suite
+- **THEN** It SHALL establish that:
+  - the same native ID on two source instances never aliases;
+  - absence counts only from a complete listing;
+  - a source reset or ID reuse never attaches old records without verified evidence;
+  - out-of-order, duplicate and missing events are repaired by reading again;
+  - unknown kinds and fields are ignored and counted;
+  - unsupported verbs are refused before dispatch;
+  - declared limits hold;
+  - results arriving after their owner retired are never published;
+  - a disabled adapter costs nothing.
 
 #### Scenario: Out-of-order events
 - **WHEN** an adapter delivers a delete before the matching create, or an event for an
@@ -80,23 +90,28 @@ Every adapter SHALL pass one shared conformance suite. It SHALL establish that:
 
 ### Requirement: Synthetic test source
 
-The repository SHALL include a synthetic test source adapter. It SHALL be registered
-only by test composition, never in a production build, and SHALL be seeded and
-deterministic. It SHALL behave unlike Herdr:
-- opaque, case-sensitive IDs containing separators;
-- entities with no panes or terminals;
-- paginated listings that can be marked incomplete;
-- resets that reuse IDs;
-- events that arrive before their listing, out of order or duplicated;
-- events without full payloads.
+The repository SHALL include a synthetic test source adapter.
 
-The conformance suite, binding resolution, per-field claims and verb refusal SHALL be
-exercised against it. Before any consumer moves to World subscriptions, its entities
-SHALL also be served through a World subscription query. That run SHALL cover:
-- terminal-less rows;
-- a reset that ends lifetimes;
-- ID reuse as a new lifetime;
-- a partial listing that emits no deletes.
+#### Scenario: Synthetic source composition and cases
+
+- **WHEN** tests exercise the synthetic source adapter
+- **THEN** It SHALL be registered
+  only by test composition, never in a production build, and SHALL be seeded and
+  deterministic. It SHALL behave unlike Herdr:
+  - opaque, case-sensitive IDs containing separators;
+  - entities with no panes or terminals;
+  - paginated listings that can be marked incomplete;
+  - resets that reuse IDs;
+  - events that arrive before their listing, out of order or duplicated;
+  - events without full payloads.
+
+  The conformance suite, binding resolution, per-field claims and verb refusal SHALL be
+  exercised against it. Before any consumer moves to World subscriptions, its entities
+  SHALL also be served through a World subscription query. That run SHALL cover:
+  - terminal-less rows;
+  - a reset that ends lifetimes;
+  - ID reuse as a new lifetime;
+  - a partial listing that emits no deletes.
 
 #### Scenario: Production build
 - **WHEN** World is built for release

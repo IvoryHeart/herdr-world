@@ -148,18 +148,6 @@ export async function createCoreRoom(
   )) as { workspace_id: string; label: string };
 }
 
-export async function renameCoreRoom(
-  target: CoreTarget,
-  workspaceId: string,
-  label: string,
-) {
-  await bridge.call(
-    "world.core.room.rename",
-    { ...fenced(target), workspace_id: workspaceId, label },
-    30_000,
-  );
-}
-
 export async function coreCatalog(target: CoreTarget) {
   return bridge.call("world.core.catalog", fenced(target), 30_000);
 }

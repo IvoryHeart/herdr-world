@@ -12,7 +12,7 @@ import { PersistentTerminalMarks } from "./persistent-terminal-marks";
 import { WorldDeskRegistry } from "./desk-state";
 import { WorldWatchlistRegistry } from "./watchlist";
 import { deskSessionFingerprint } from "./desk-observation";
-import { handleDeskRpc } from "../rpc/desk";
+import { handleDeskRpc } from "../features/desk/rpc";
 import { handleWorldRpc } from "../rpc/world";
 import { WorldDeskStore } from "../../../web/src/world/deskStateStore";
 import { WorldWatchlistStore } from "../../../web/src/world/watchlistStore";

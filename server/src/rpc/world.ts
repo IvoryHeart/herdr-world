@@ -8,14 +8,11 @@ import {
   legacyAppearanceObservations,
   legacyAppearanceObservationOps,
 } from "../world/appearance-observation";
-import { handleAppearanceRpc } from "./appearance";
-import { handleDeskRpc } from "./desk";
 import { handleCoreWatchRpc } from "./core-watch";
 import { handleBinRpc } from "./bin";
 import { handleCoreRpc } from "./core";
 import { handleFloatRpc } from "./float";
 import { handleIdeRpc } from "./ide";
-import { handleWorldIntegrationRpc } from "./integration";
 import { handleCoreSharedRpc } from "./core-shared";
 import { profileWrite } from "../agent/profile-store";
 import { recordSpawnClaims } from "../world/relations";
@@ -24,6 +21,7 @@ import { sendWorldSnapshotReply } from "../bridge/world-snapshot-reply";
 import { BoardConflictError, clientBoardOps } from "../world/board-store";
 import type { BridgeRpcContext } from "./context";
 import { worldRuntimeLease } from "../world/runtime-lease";
+import { parseWorldCommand } from "../world/commands";
 
 /** Aggregate World methods: snapshot, board document, profiles, watchlist (world.*). */
 export function handleWorldRpc(
@@ -90,8 +88,6 @@ async function dispatchWorldRpc(rpc: BridgeRpcContext): Promise<false | void> {
   }
   if (method === "world.core.seen" || method === "world.core.favourite")
     return handleCoreSharedRpc(rpc);
-  if (method.startsWith("world.appearance.")) return handleAppearanceRpc(rpc);
-  if (method.startsWith("world.desk.")) return handleDeskRpc(rpc);
   if (
     method === "world.core.watch" ||
     method === "world.core.unwatch" ||
@@ -102,9 +98,20 @@ async function dispatchWorldRpc(rpc: BridgeRpcContext): Promise<false | void> {
   if (method.startsWith("world.bin.")) return handleBinRpc(rpc);
   if (method.startsWith("world.core.")) return handleCoreRpc(rpc);
   if (method.startsWith("world.float.")) return handleFloatRpc(rpc);
-  if (method.startsWith("world.integration."))
-    return handleWorldIntegrationRpc(rpc);
   if (method.startsWith("world.ide.")) return handleIdeRpc(rpc);
+  if (method === "world.command") {
+    try {
+      const commands = rpc.services.worldCommands;
+      if (!commands) throw new Error("World commands are unavailable");
+      sendReply(
+        { id, result: await commands.submit(parseWorldCommand(params)) },
+        method,
+      );
+    } catch (error) {
+      sendError("world-command-error", error);
+    }
+    return;
+  }
   if (method === "world.snapshot") {
     const runtimeFor = (connectionId: string, generation: number) =>
       worldRuntimeLease(rpc.services, connectionId, generation);

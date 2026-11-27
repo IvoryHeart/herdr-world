@@ -82,13 +82,18 @@ Task deletion SHALL require prior cancellation and drain its private run resourc
 
 ### Requirement: Ordered messages during a running turn
 World SHALL admit at most eight pending Ranger messages, deduplicate request IDs,
-and process steering, removal and follow-up admission in queue order. A steer
-SHALL remain within the running turn's captured scope and runtime generation;
-unavailable or wider steering SHALL become a follow-up. Follow-ups SHALL capture omitted scopes at enqueue time and retain
-their selected runtime generations and model/effort selection through persistence and SHALL NOT recapture
-a replacement runtime automatically. Stop, failure, restart or chat switching
-SHALL hold waiting messages until explicit user continuation. Pending action or
-task previews SHALL block automatic follow-up admission.
+and process steering, removal and follow-up admission in queue order.
+
+#### Scenario: Ranger message ordering and continuation
+
+- **WHEN** World queues or steers Ranger messages
+- **THEN** A steer
+  SHALL remain within the running turn's captured scope and runtime generation;
+  unavailable or wider steering SHALL become a follow-up. Follow-ups SHALL capture omitted scopes at enqueue time and retain
+  their selected runtime generations and model/effort selection through persistence and SHALL NOT recapture
+  a replacement runtime automatically. Stop, failure, restart or chat switching
+  SHALL hold waiting messages until explicit user continuation. Pending action or
+  task previews SHALL block automatic follow-up admission.
 
 #### Scenario: Runtime replaced while a question waits
 - **WHEN** the runtime selected by a queued question is replaced before admission
@@ -126,14 +131,19 @@ task previews SHALL block automatic follow-up admission.
 
 Ranger MAY use the service account's Claude Code CLI or the configured Pi-backed
 provider. Both engines SHALL retain the same captured workspace permissions and
-confirmation policy. Engine checkpoints SHALL NOT be resumed by another engine.
-An interrupted Claude turn SHALL fail closed and retain queued-message controls.
+confirmation policy.
 
-A show request SHALL carry its originating question and captured connection/runtime
-owner. Only the asking browser SHALL follow it through shared Inspector admission.
-A service-instance change SHALL retire earlier navigation requests. Stale or
-unavailable targets SHALL report refusal without selecting another runtime.
-Scheduled runs SHALL NOT publish browser navigation requests.
+#### Scenario: Ranger engines and navigation ownership
+
+- **WHEN** Ranger runs a turn or requests navigation
+- **THEN** Engine checkpoints SHALL NOT be resumed by another engine.
+  An interrupted Claude turn SHALL fail closed and retain queued-message controls.
+
+  A show request SHALL carry its originating question and captured connection/runtime
+  owner. Only the asking browser SHALL follow it through shared Inspector admission.
+  A service-instance change SHALL retire earlier navigation requests. Stale or
+  unavailable targets SHALL report refusal without selecting another runtime.
+  Scheduled runs SHALL NOT publish browser navigation requests.
 
 #### Scenario: Another browser receives a show reply
 
