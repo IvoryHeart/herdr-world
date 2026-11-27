@@ -11,7 +11,7 @@ required. The native launchd shim reports have been removed.
 | PR CI | Linux static, affected units, browser shards and behavioral verification; description policy remains in CI |
 | Merge queue | Fresh Linux validation of the queue's combined commit; the same required Delivery checks aggregate |
 | Native checks | Tags and nightly only, including packaging changes |
-| Main CI | Report the merged PR's successful identical tree; missing evidence raises the main issue, without running suites |
+| Main CI | Report the merged PR's successful identical tree; missing evidence raises the main issue; independent model jobs warm PR evidence caches |
 | Release tag | Build each native package once, test installed channels and agents, audit shipped dependencies, then seal |
 | Nightly native | Full native/platform and running-service channel upgrade signal; maintain one issue on failure |
 | Main gate | Keep one red-main issue, retry infrastructure once, close on a later green main; never open revert PRs |
@@ -84,7 +84,15 @@ still aggregates its own shards and retains the same canonical artifact.
 Main reports passing full or scoped PR evidence only when immutable checkout
 proof establishes an identical tree. A newer red/cancelled verdict is never
 skipped; absent proof or API errors keep a red metadata result without starting
-another suite. Nightly catches integration/platform failures as one advisory issue.
+another suite in that aggregate. An independent **Main model evidence** job runs
+the model lane fresh and saves successful per-model evidence in main's cache scope.
+Model shards restore exact keys before dependency/checker installation; only a
+validated receipt skips model execution. A separate unconditional job installs
+the locked development tooling and runs `verification:typecheck` and
+`verification:notices:check` once on the current tree, including Quint tests
+that do not invalidate model keys. Its failure blocks Delivery even when every
+model reuses evidence; it needs no Java or checker installation. Merge groups, manual runs and nightly/release checks
+stay fresh. Nightly catches integration/platform failures as one advisory issue.
 PR reuse still requires the same scope and checkout/base/head identities.
 The stability opt-in explicitly requests fresh repeated browser passes.
 
@@ -211,29 +219,26 @@ inventories are disjoint; browser shards retain the pinned Chrome and existing
 isolation rules. Only failed unit files or browser cases retry once; models never retry and timing gates remain separate. See the nightly
 latency signal for measured input delays.
 
-Three verification runners partition the complete accepted model inventory by
-longest-first measured work (`scripts/verification-timings.json`). Both tables
-name their source CI run; update weights from retained JUnit/manifest durations
-when rebalancing, with each original case/model retained exactly once. Weights
-are planning estimates, not timing assertions; new model inputs require a weight.
-Changes to the shared assignment algorithm or model weights run verification. Each
-runs the maintained focused workers inside the enforced 4 GiB/no-swap/two-CPU
-envelope with the existing OOM/cancellation and diagnostic controls. The
+The maintained plan (`scripts/ci-model-plan.ts`) gives each model its own job;
+IDE lifecycle has four jobs and core runtime has three. Every original check,
+replay, witness, production control and sensitivity case remains required.
+Each model CI job uses four TLC workers inside an enforced 4 GiB/no-swap/four-CPU
+envelope, with the existing OOM/cancellation and diagnostic controls. The
 payload and supervisor occupy separate delegated cgroups: the memory limit and
 peak cover the whole payload, while the surviving supervisor retains accounting
 after payload-wide OOM kills. The service-wide CPU quota covers both siblings.
 Shard artifacts cannot establish canonical success. The aggregate downloads all group
 artifacts, selects each newest attempt, requires complete model coverage and
 current source/tool identity, and verifies every group's retained accounting.
-It publishes one canonical manifest including the three resource records. The
+It publishes one canonical manifest including every resource record and requires
+every expected part before combining a split model. The
 single-machine canonical gate is unchanged and still rejects filters.
-The long core runtime and IDE lifecycle models each own a dedicated shard; the
-third shard runs every other model, two at a time. Their independent exhaustive
-checks (core fault controls; the IDE default, deep and eight flag checks) run
-two at a time within that shard's existing resource envelope. Run one at a time,
-the IDE checks alone took about 565 seconds on a fast hosted runner and passed
-the 930-second shard deadline on one about 1.55 times slower (#1346). Each worker
-reuses its owned checker sequentially, avoiding a JVM startup for each check.
+IDE lifecycle separates replay from three exhaustive groups containing the default,
+deep and eight flag checks. Core runtime separates positive replay/sensitivity
+from two exhaustive fault-control groups. Observation base and space admission
+each own a job; space admission runs independent exhaustive verification alongside
+sampling. Each control worker reuses its owned checker sequentially, avoiding a
+JVM startup for each check.
 Each command retains its 240-second deadline; the session shares the existing
 outer worker deadline, memory cap and cancellation/drain. A checker failure
 ends the worker instead of relaunching a failed check. Every model fault, trace
@@ -346,17 +351,17 @@ run before push; affected browser suites and applicable complete model groups
 run in CI. Gate/configuration and unknown inputs still select everything. The
 budgets are targets: two minutes before push, eight minutes median PR feedback
 and about ten jobs for web-only work. Native-sensitive changes retain their full
-platform assertions and can exceed that target. Main executes everything fresh.
+platform assertions and can exceed that target. Main model warming executes fresh checks.
 
-`scripts/ci-content-key.ts` walks the maintained import graph from the runner or
-compiled application entries, including the standalone storage worker. Explicit
-inventories bind models, adapters, seeds, tooling/locks, workflow commands,
-packaged public assets and notices. Newly imported production dependencies and
-new inventory files enter the hash automatically. Unresolved relative imports
-widen to every tracked byte. The shared model runner imports all adapters, so its
-closure is deliberately conservative; this is not a manually maintained list of
-production owners. Group membership, actual Bun/Node/Java identities, OS and
-architecture also enter each model key.
+Model keys (`scripts/ci-model-inputs.ts`, `scripts/ci-model-cache.ts`) follow the
+selected model, its Quint imports, adapters, shared runners/helpers, transitive
+production replay inputs, seeds and locked tools. Runtime dispatch selects that
+model's adapter branches; another model's source and unrelated workflows do not
+enter its key. Missing imports refuse reusable evidence. Actual Bun/Node/Java
+identities, OS, architecture and check-part identity enter each model key.
+Installer keys retain `scripts/ci-content-key.ts`'s production entry/worker,
+workflow, packaged asset and notice closure, widening unresolved imports to
+every tracked byte. Neither key omits newly imported production dependencies.
 
 On a PR, an exact model-cache hit is validated against current fingerprints,
 canonical group membership, complete original manifests, current tools and the
@@ -371,7 +376,7 @@ content hash and origin run/revision for each group. Reuse does not claim a new
 execution at the current revision. The checker cache is separate. Main, nightly
 and release events never restore model results. GitHub cache visibility still
 applies: default-branch evidence is available to PRs; unrelated branch-local
-caches are not a global trusted store. A miss always executes.
+caches are not a global trusted store. Only successful main-push model jobs save reusable evidence. A miss always executes.
 
 Installer package keys bind the same production input graph plus platform,
 runner-image version and frozen stable baseline. The synthetic RC build number

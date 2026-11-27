@@ -1,3 +1,4 @@
+import { verificationJobs } from "./ci-model-plan";
 import { expect, test } from "bun:test";
 import {
   mkdirSync,
@@ -545,6 +546,59 @@ test("a metadata event on a red head fails the scope job by name and starts no c
   expect(workflow.jobs.validation).toBeUndefined();
 });
 
+test("maintained tooling checks run once even when every model reuses evidence", async () => {
+  const candidate = Bun.YAML.parse(
+    await Bun.file(
+      new URL(
+        "../.github/workflows/behavioral-verification.yml",
+        import.meta.url,
+      ),
+    ).text(),
+  ) as { jobs: Record<string, WorkflowJob> };
+  const tooling = candidate.jobs.tooling;
+  expect(tooling).toBeDefined();
+  // A cache hit in every shard must still typecheck Quint test files and
+  // validate notices. Neither job scheduling nor its steps may depend on reuse.
+  expect(tooling.if).toBeUndefined();
+  expect(tooling.needs).toBeUndefined();
+  expect(tooling.strategy).toBeUndefined();
+  expect(tooling["continue-on-error"]).toBeUndefined();
+  for (const step of tooling.steps) {
+    expect(step.if).toBeUndefined();
+    expect(step["continue-on-error"]).toBeUndefined();
+  }
+  const install = tooling.steps.findIndex(
+    (step) => step.run === "bun install --frozen-lockfile",
+  );
+  const lockedTools = tooling.steps.findIndex(
+    (step) =>
+      step.run ===
+      "npm ci --prefix tools/quint --ignore-scripts --no-audit --no-fund",
+  );
+  expect(install).toBeGreaterThan(-1);
+  expect(lockedTools).toBeGreaterThan(-1);
+  for (const command of [
+    "verification:typecheck",
+    "verification:notices:check",
+  ]) {
+    const checks = Object.values(candidate.jobs).flatMap((job) =>
+      job.steps.filter((step) => step.run?.includes(`bun run ${command}`)),
+    );
+    expect(checks).toHaveLength(1);
+    const check = tooling.steps.indexOf(checks[0]);
+    expect(check).toBeGreaterThan(install);
+    expect(check).toBeGreaterThan(lockedTools);
+  }
+  expect(
+    tooling.steps.some((step) => step.run?.includes("verification:setup")),
+  ).toBe(false);
+  expect(candidate.jobs.candidate.needs).toContain("tooling");
+  expect(workflow.jobs.behavioral.uses).toBe(
+    "./.github/workflows/behavioral-verification.yml",
+  );
+  expect(workflow.jobs.delivery.needs).toContain("behavioral");
+});
+
 test("accepted behavioral evidence stays unfiltered whenever its protected dependency runs", async () => {
   const candidate = Bun.YAML.parse(
     await Bun.file(
@@ -558,12 +612,21 @@ test("accepted behavioral evidence stays unfiltered whenever its protected depen
     permissions: Record<string, string>;
     jobs: Record<string, WorkflowJob & { "timeout-minutes": number }>;
   };
+  expect(workflow.jobs["model-evidence"].if).toBe(
+    "github.event_name == 'push' && github.ref == 'refs/heads/main'",
+  );
+  expect(workflow.jobs["model-evidence"].uses).toBe(
+    "./.github/workflows/behavioral-verification.yml",
+  );
+  expect(workflow.jobs.delivery.needs).not.toContain("model-evidence");
   expect(candidate.on.workflow_call).toBeNull();
   expect(candidate.permissions).toEqual({ contents: "read" });
   const job = candidate.jobs.shards;
-  expect(job.strategy?.matrix?.shard).toEqual([1, 2, 3]);
+  expect(job.strategy?.matrix?.shard).toEqual(
+    verificationJobs.map((_, index) => index + 1),
+  );
   expect(job.strategy?.["fail-fast"]).toBe(false);
-  expect(candidate.jobs.candidate.needs).toBe("shards");
+  expect(candidate.jobs.candidate.needs).toEqual(["tooling", "shards"]);
   expect(candidate.jobs.candidate.name).toBe("Behavioral verification");
   expect(candidate.jobs.candidate.if).toBe(
     "github.event_name == 'workflow_dispatch' && github.workflow == 'Behavioral verification'",
@@ -616,13 +679,44 @@ test("accepted behavioral evidence stays unfiltered whenever its protected depen
       (step) => step.run === "bun scripts/ci-verification.ts aggregate",
     ),
   ).toBe(true);
+  const keyStep = job.steps.findIndex((step) => step.id === "content");
+  const restoreStep = job.steps.findIndex((step) => step.id === "reuse");
+  const setupStep = job.steps.findIndex(
+    (step) => step.run === "bun run verification:setup",
+  );
+  expect(keyStep).toBeLessThan(restoreStep);
+  expect(restoreStep).toBeLessThan(setupStep);
+  expect(job.steps[setupStep].if).toBe("steps.reuse.outputs.reused != 'true'");
+  const save = job.steps.find((step) =>
+    step.uses?.startsWith("actions/cache/save@"),
+  )!;
+  expect(save.if).toBe(
+    "success() && github.event_name == 'push' && github.ref == 'refs/heads/main'",
+  );
+  const restore = job.steps.find((step) =>
+    step.uses?.startsWith("actions/cache/restore@"),
+  )!;
+  expect(restore.if).toBe("github.event_name == 'pull_request'");
+  const localLimits = JSON.parse(
+    await Bun.file("tools/quint/resources.json").text(),
+  );
+  const modelLimits = JSON.parse(
+    await Bun.file("tools/quint/model-resources.json").text(),
+  );
+  expect(localLimits.cpuQuotaPercent).toBe(200);
+  expect(modelLimits).toEqual({ ...localLimits, cpuQuotaPercent: 400 });
+  const localTlc = JSON.parse(await Bun.file("tools/quint/tlc.json").text());
+  expect(JSON.parse(await Bun.file("tools/quint/tlc-ci.json").text())).toEqual({
+    ...localTlc,
+    workers: 4,
+  });
   expect(job.if).toBeUndefined();
   expect(job["continue-on-error"]).toBeUndefined();
   expect(job["timeout-minutes"]).toBe(20);
   const verify = job.steps.find(
     (step) =>
       step.run ===
-      "bun run verification:resources --system --shard=${{ matrix.shard }}/3",
+      "bun run verification:resources --system --shard=${{ matrix.shard }}/26",
   )!;
   expect(verify).toBeDefined();
   expect(verify.if).toBe("steps.reuse.outputs.reused != 'true'");

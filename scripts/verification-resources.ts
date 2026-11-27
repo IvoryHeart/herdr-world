@@ -4,6 +4,8 @@ import { resolve } from "node:path";
 import { randomUUID } from "node:crypto";
 import { runVerificationProcess } from "./verification-process";
 import limits from "../tools/quint/resources.json";
+import modelLimits from "../tools/quint/model-resources.json";
+import { verificationJobs, verificationJob } from "./ci-model-plan";
 import { sanitizeDiagnostic } from "./verification-diagnostics";
 
 /** Read actual reports; cancellation controls also leave readiness-only directories. */
@@ -521,15 +523,22 @@ if (import.meta.main) {
   assert(
     process.argv
       .slice(2)
-      .every((arg) => arg === "--system" || /^--shard=[123]\/3$/.test(arg)) &&
+      .every(
+        (arg) =>
+          arg === "--system" ||
+          new RegExp(`^--shard=[1-9][0-9]*/${verificationJobs.length}$`).test(
+            arg,
+          ),
+      ) &&
       new Set(process.argv.slice(2)).size === process.argv.length - 2 &&
       process.argv.filter((arg) => arg.startsWith("--shard=")).length <= 1,
-    "Resource gate accepts only --system and a maintained --shard=i/3",
+    "Resource gate accepts only --system and a maintained model shard",
   );
   const root = resolve(import.meta.dir, "..");
   const shard = process.argv
     .find((arg) => arg.startsWith("--shard="))
     ?.slice(8);
+  if (shard) verificationJob(Number(shard.split("/")[0]));
   const system = process.argv.includes("--system");
   const cancellation = new AbortController();
   const stop = () =>
@@ -555,7 +564,7 @@ if (import.meta.main) {
       shard
         ? [process.execPath, "scripts/ci-verification.ts", shard]
         : [process.execPath, "run", "verification:check"],
-      limits,
+      shard ? modelLimits : limits,
       cancellation.signal,
     );
     if (result.failure) throw result.failure;

@@ -303,6 +303,12 @@ jobs:
         if: needs.validation-scope.outputs.verification == 'true'
         uses: ./.github/workflows/behavioral-verification.yml
 
+    model-evidence:
+        name: Main model evidence
+        needs: validation-scope
+        if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+        uses: ./.github/workflows/behavioral-verification.yml
+
     delivery:
         name: Delivery checks
         needs: [validation-scope, pr-description, static, unit-tests, world-browser, web-browser, behavioral, dependency-security]

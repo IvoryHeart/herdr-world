@@ -21,8 +21,9 @@ type Harness = {
   ): Promise<string>;
   mutate(fault: "ide-queue" | "ide-start-epoch"): Promise<string>;
   signal?: AbortSignal;
-  /** Exhaustive checks run at once; CI gives this model a whole two-CPU shard. */
+  /** Independent exhaustive checks; CI assigns each part its own runner. */
   controlWorkers?: number;
+  part?: string;
   withControlWorker?: (
     work: (signal?: AbortSignal) => Promise<void>,
     signal: AbortSignal,
@@ -112,10 +113,8 @@ export async function runIdeLifecycleVerification(h: Harness) {
     );
   await h.command("ide-lifecycle-types", ["typecheck", MODEL]);
 
-  // Every exhaustive TLC check is independent and single-threaded. CI runs
-  // them two at a time on this model's own shard, longest first, so the
-  // model fits its shard deadline on slower runners (#1346); local pools
-  // keep one at a time. Each design decision turned back must break the
+  // Every exhaustive TLC check is independent. CI splits them across three
+  // jobs with four TLC workers each; local pools keep one check at a time. Each design decision turned back must break the
   // model; the default and deep variants must not.
   const deep = await write("ide-lifecycle-deep.qnt", variant(source, DEEP));
   const deepSource = variant(source, CONTROL);
@@ -134,8 +133,20 @@ export async function runIdeLifecycleVerification(h: Harness) {
       ),
       broken: true,
     });
+  const part = h.part ?? "full";
+  assert(
+    ["full", "replay", "checks-1", "checks-2", "checks-3"].includes(part),
+    "Invalid IDE model part",
+  );
+  const selected = checks.filter((_, index) => {
+    if (part === "full") return true;
+    if (part === "replay") return false;
+    // Balance positive exploration and the two longest fault searches.
+    const groups = [1, 1, 2, 3, 1, 1, 2, 3, 3, 3];
+    return part === `checks-${groups[index]}`;
+  });
   await runVerificationPool(
-    checks,
+    selected,
     h.controlWorkers ?? 1,
     h.signal ?? new AbortController().signal,
     async ({ label, path, broken }, signal) => {
@@ -144,7 +155,10 @@ export async function runIdeLifecycleVerification(h: Harness) {
     },
     h.withControlWorker,
   );
-  const controls = FLAGS.map((flag) => `model-${flag}`);
+  const controls = selected
+    .filter((check) => check.broken)
+    .map((check) => `model-${check.label.slice("ide-lifecycle-".length)}`);
+  if (part.startsWith("checks-")) return { name: "ide-lifecycle", controls };
 
   const sampled = await write(
     "ide-lifecycle-sampled.qnt",

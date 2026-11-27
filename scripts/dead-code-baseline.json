@@ -501,7 +501,6 @@
       "server/src/http/terminal-upload.ts#remoteTerminalUploadScript",
       "server/src/http/terminal-upload.ts#sanitizeTerminalUploadName",
       "server/src/http/terminal-upload.ts#terminalUploadMaxBytes",
-      "server/src/http/update.ts#isSupervisorManagedEnvironment",
       "server/src/http/update.ts#parseUpdateManifest",
       "server/src/ide/host.ts#HOST_EXIT",
       "server/src/ide/host.ts#REMOTE_IDE_ROOT",

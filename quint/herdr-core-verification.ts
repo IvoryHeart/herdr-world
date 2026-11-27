@@ -42,6 +42,7 @@ type Harness = {
   ): Promise<string>;
   signal: AbortSignal;
   controlWorkers?: number;
+  part?: string;
   withControlWorker?: (
     work: (signal?: AbortSignal) => Promise<void>,
     signal: AbortSignal,
@@ -63,6 +64,20 @@ export function coreReplayWitness(source: string, fault: string) {
     step: "publicationReplay",
   };
 }
+/** @internal Disjoint fault partitions retain the complete maintained inventory. */
+export function coreControlPart(part = "full") {
+  assert(
+    ["full", "replay", "controls-1", "controls-2"].includes(part),
+    "Invalid core model part",
+  );
+  return coreFaults.filter(
+    (_, index) =>
+      part === "full" ||
+      (part.startsWith("controls-") &&
+        index % 2 === Number(part.slice(-1)) - 1),
+  );
+}
+
 export async function runCoreVerification(h: Harness) {
   const model = "quint/herdr-core-runtime.qnt";
   const source = await readFile(resolve(h.root, model), "utf8");
@@ -83,23 +98,31 @@ export async function runCoreVerification(h: Harness) {
     resolve(h.root, quotient),
     materialize(source.replace("CHECKING = false", "CHECKING = true")),
   );
-  const verification = await h.command("herdr-core-runtime-verification", [
-    "verify",
-    quotient,
-    "--main",
-    "herdr_core_runtime",
-    "--backend",
-    "tlc",
-    "--invariant",
-    "safety",
-    "--verbosity",
-    "3",
-  ]);
-  assert.match(
-    verification,
-    /No violation found/,
-    "core exploration did not complete",
+  const part = h.part ?? "full";
+  assert(
+    ["full", "replay", "controls-1", "controls-2"].includes(part),
+    "Invalid core model part",
   );
+  const controlsOnly = part.startsWith("controls-");
+  if (!controlsOnly) {
+    const verification = await h.command("herdr-core-runtime-verification", [
+      "verify",
+      quotient,
+      "--main",
+      "herdr_core_runtime",
+      "--backend",
+      "tlc",
+      "--invariant",
+      "safety",
+      "--verbosity",
+      "3",
+    ]);
+    assert.match(
+      verification,
+      /No violation found/,
+      "core exploration did not complete",
+    );
+  }
   const replayWitnessesBySeed: Record<string, Record<string, number>> = {};
   const allStates: CoreTraceState[][] = [];
   // The observe family is sampled on its own, so adding it leaves the other
@@ -108,7 +131,7 @@ export async function runCoreVerification(h: Harness) {
   assert.notEqual(observeSource, source, "observe switch missing");
   const observeModel = `${h.artifacts}/core-observe.qnt`;
   await writeFile(resolve(h.root, observeModel), materialize(observeSource));
-  for (const seed of [42, 73, 103]) {
+  for (const seed of controlsOnly ? [] : [42, 73, 103]) {
     const counts: Record<string, number> = {};
     for (const [prefix, path, traces] of [
       [`herdr-core-runtime-seed${seed}`, model, 500],
@@ -157,11 +180,10 @@ export async function runCoreVerification(h: Harness) {
     replayWitnessesBySeed[seed] = counts;
   }
   // Each fault owns its model and trace. Each worker owns a reusable checker.
-  // CI gives this model a whole
-  // shard, so two controls can use its two CPUs without another model competing
-  // for the enforced 4 GiB budget. Local model pools retain one control at a time.
+  // CI splits these controls across two jobs, independently of positive replay.
+  // Each TLC command gets four CPUs within the enforced 4 GiB model budget.
   const controls = await runVerificationPool(
-    coreFaults,
+    coreControlPart(part),
     h.controlWorkers ?? 1,
     h.signal,
     async (fault, signal) => {
@@ -239,6 +261,7 @@ export async function runCoreVerification(h: Harness) {
     },
     h.withControlWorker,
   );
+  if (controlsOnly) return { name: "herdr-core-runtime", controls };
   const sensitivityModel = `${h.artifacts}/core-larger.qnt`;
   await writeFile(
     resolve(h.root, sensitivityModel),
