@@ -1,55 +1,87 @@
-<svg xmlns="http://www.w3.org/2000/svg" width="1360" height="720" viewBox="0 0 1360 720">
-<rect x="0" y="0" width="1360" height="720" fill="#1a1b26" />
-<text x="32" y="40" font-family="Inter, 'Segoe UI', system-ui, sans-serif" font-size="15" fill="#ffffff" font-weight="600">Wide town: the civic row gains its last building</text>
-<text x="32" y="60" font-family="Inter, 'Segoe UI', system-ui, sans-serif" font-size="12" fill="#737aa2" font-weight="400">Post office, town center, library, observatory, University. Nothing that stands moves.</text>
-<rect x="32" y="70" width="900" height="600" fill="#6fae5a" />
-<rect x="52" y="100" width="110" height="110" rx="4" fill="#a4553f" stroke="#1c1722" stroke-width="2"/>
-<text x="107" y="160" font-family="Inter, 'Segoe UI', system-ui, sans-serif" font-size="13" fill="#1c1722" font-weight="600" text-anchor="middle">Post office</text>
-<rect x="178" y="100" width="150" height="110" rx="4" fill="#ece2c8" stroke="#1c1722" stroke-width="2"/>
-<text x="253" y="160" font-family="Inter, 'Segoe UI', system-ui, sans-serif" font-size="13" fill="#1c1722" font-weight="600" text-anchor="middle">Town center</text>
-<rect x="344" y="100" width="130" height="110" rx="4" fill="#d9cfb8" stroke="#1c1722" stroke-width="2"/>
-<text x="409" y="160" font-family="Inter, 'Segoe UI', system-ui, sans-serif" font-size="13" fill="#1c1722" font-weight="600" text-anchor="middle">Library</text>
-<rect x="490" y="100" width="110" height="110" rx="4" fill="#4f5a80" stroke="#1c1722" stroke-width="2"/>
-<text x="545" y="160" font-family="Inter, 'Segoe UI', system-ui, sans-serif" font-size="13" fill="#1c1722" font-weight="600" text-anchor="middle">Observatory</text>
-<rect x="616" y="100" width="200" height="110" rx="4" fill="#d9b27a" stroke="#7aa2f7" stroke-width="3"/>
-<text x="716" y="160" font-family="Inter, 'Segoe UI', system-ui, sans-serif" font-size="13" fill="#1c1722" font-weight="600" text-anchor="middle">University</text>
-<text x="716" y="232" font-family="Inter, 'Segoe UI', system-ui, sans-serif" font-size="12" fill="#ffffff" font-weight="400" text-anchor="middle">new lot: TOWN_UNIVERSITY_ROOM</text>
-<rect x="32" y="250" width="900" height="40" fill="#d9cfb8" />
-<text x="48" y="276" font-family="Inter, 'Segoe UI', system-ui, sans-serif" font-size="12" fill="#1c1722" font-weight="400">first street</text>
-<rect x="60" y="320" width="250" height="130" rx="4" fill="#c9b48e" stroke="#1c1722" stroke-width="2"/>
-<text x="185" y="390" font-family="Inter, 'Segoe UI', system-ui, sans-serif" font-size="13" fill="#1c1722" font-weight="400" text-anchor="middle">room 1</text>
-<rect x="60" y="490" width="250" height="130" rx="4" fill="#c9b48e" stroke="#1c1722" stroke-width="2"/>
-<text x="185" y="560" font-family="Inter, 'Segoe UI', system-ui, sans-serif" font-size="13" fill="#1c1722" font-weight="400" text-anchor="middle">room 4</text>
-<rect x="350" y="320" width="250" height="130" rx="4" fill="#c9b48e" stroke="#1c1722" stroke-width="2"/>
-<text x="475" y="390" font-family="Inter, 'Segoe UI', system-ui, sans-serif" font-size="13" fill="#1c1722" font-weight="400" text-anchor="middle">room 2</text>
-<rect x="350" y="490" width="250" height="130" rx="4" fill="#c9b48e" stroke="#1c1722" stroke-width="2"/>
-<text x="475" y="560" font-family="Inter, 'Segoe UI', system-ui, sans-serif" font-size="13" fill="#1c1722" font-weight="400" text-anchor="middle">room 5</text>
-<rect x="640" y="320" width="250" height="130" rx="4" fill="#c9b48e" stroke="#1c1722" stroke-width="2"/>
-<text x="765" y="390" font-family="Inter, 'Segoe UI', system-ui, sans-serif" font-size="13" fill="#1c1722" font-weight="400" text-anchor="middle">room 3</text>
-<rect x="640" y="490" width="250" height="130" rx="4" fill="#c9b48e" stroke="#1c1722" stroke-width="2"/>
-<text x="765" y="560" font-family="Inter, 'Segoe UI', system-ui, sans-serif" font-size="13" fill="#1c1722" font-weight="400" text-anchor="middle">room 6</text>
-<rect x="32" y="460" width="900" height="20" fill="#d9cfb8" />
-<path d="M 840 210 L 840 270 L 440 270 L 440 320" fill="none" stroke="#7aa2f7" stroke-width="3" stroke-dasharray="8 6"/>
-<text x="600" y="300" font-family="Inter, 'Segoe UI', system-ui, sans-serif" font-size="12" fill="#10131f" font-weight="600">a hire walks out of the gate to its room</text>
-<text x="970" y="40" font-family="Inter, 'Segoe UI', system-ui, sans-serif" font-size="15" fill="#ffffff" font-weight="600">Narrow (phone) town</text>
-<text x="970" y="60" font-family="Inter, 'Segoe UI', system-ui, sans-serif" font-size="12" fill="#737aa2" font-weight="400">Civic row right of the rooms (#1351); University last.</text>
-<rect x="970" y="70" width="360" height="600" fill="#6fae5a" />
-<rect x="986" y="90" width="140" height="120" rx="4" fill="#c9b48e" stroke="#1c1722" stroke-width="2"/>
-<text x="1056" y="155" font-family="Inter, 'Segoe UI', system-ui, sans-serif" font-size="12" fill="#1c1722" font-weight="400" text-anchor="middle">room 1</text>
-<rect x="986" y="230" width="140" height="120" rx="4" fill="#c9b48e" stroke="#1c1722" stroke-width="2"/>
-<text x="1056" y="295" font-family="Inter, 'Segoe UI', system-ui, sans-serif" font-size="12" fill="#1c1722" font-weight="400" text-anchor="middle">room 2</text>
-<rect x="986" y="370" width="140" height="120" rx="4" fill="#c9b48e" stroke="#1c1722" stroke-width="2"/>
-<text x="1056" y="435" font-family="Inter, 'Segoe UI', system-ui, sans-serif" font-size="12" fill="#1c1722" font-weight="400" text-anchor="middle">room 3</text>
-<rect x="986" y="510" width="140" height="120" rx="4" fill="#c9b48e" stroke="#1c1722" stroke-width="2"/>
-<text x="1056" y="575" font-family="Inter, 'Segoe UI', system-ui, sans-serif" font-size="12" fill="#1c1722" font-weight="400" text-anchor="middle">room 4</text>
-<rect x="1150" y="90" width="164" height="96" rx="4" fill="#a4553f" stroke="#1c1722" stroke-width="2"/>
-<text x="1232" y="143" font-family="Inter, 'Segoe UI', system-ui, sans-serif" font-size="12" fill="#1c1722" font-weight="600" text-anchor="middle">Post office</text>
-<rect x="1150" y="202" width="164" height="96" rx="4" fill="#ece2c8" stroke="#1c1722" stroke-width="2"/>
-<text x="1232" y="255" font-family="Inter, 'Segoe UI', system-ui, sans-serif" font-size="12" fill="#1c1722" font-weight="600" text-anchor="middle">Town center</text>
-<rect x="1150" y="314" width="164" height="96" rx="4" fill="#d9cfb8" stroke="#1c1722" stroke-width="2"/>
-<text x="1232" y="367" font-family="Inter, 'Segoe UI', system-ui, sans-serif" font-size="12" fill="#1c1722" font-weight="600" text-anchor="middle">Library</text>
-<rect x="1150" y="426" width="164" height="96" rx="4" fill="#4f5a80" stroke="#1c1722" stroke-width="2"/>
-<text x="1232" y="479" font-family="Inter, 'Segoe UI', system-ui, sans-serif" font-size="12" fill="#1c1722" font-weight="600" text-anchor="middle">Observatory</text>
-<rect x="1150" y="538" width="164" height="96" rx="4" fill="#d9b27a" stroke="#7aa2f7" stroke-width="3"/>
-<text x="1232" y="591" font-family="Inter, 'Segoe UI', system-ui, sans-serif" font-size="12" fill="#1c1722" font-weight="600" text-anchor="middle">University</text>
+<svg xmlns="http://www.w3.org/2000/svg" width="1360" height="800" viewBox="0 0 1360 800">
+<rect x="0" y="0" width="1360" height="800" fill="#1a1b26"/>
+<defs><marker id="arr" markerWidth="8" markerHeight="8" refX="6" refY="4" orient="auto"><path d="M0,0 L8,4 L0,8 z" fill="#e0af68"/></marker></defs>
+<text x="32" y="36" font-family="Inter, 'Segoe UI', system-ui, sans-serif" font-size="15" fill="#ffffff" font-weight="600">Wide town: the University stands between the town center and the library</text>
+<text x="32" y="56" font-family="Inter, 'Segoe UI', system-ui, sans-serif" font-size="12" fill="#737aa2" font-weight="400">Drawn to scale, 8 px per 16-px tile. Post office, town center, University, library, observatory.</text>
+<text x="32" y="82" font-family="Inter, 'Segoe UI', system-ui, sans-serif" font-size="12" fill="#c0caf5" font-weight="600">Today</text>
+<rect x="32" y="90" width="740" height="100" fill="#6fae5a"/>
+<rect x="32" y="176" width="740" height="14" fill="#d9cfb8"/>
+<text x="40" y="187" font-family="Inter, 'Segoe UI', system-ui, sans-serif" font-size="10" fill="#1c1722" font-weight="400">first street</text>
+<rect x="52" y="110" width="96" height="60" rx="4" fill="#a4553f" stroke="#1c1722" stroke-width="2"/>
+<text x="100.0" y="144.0" font-family="Inter, 'Segoe UI', system-ui, sans-serif" font-size="11" fill="#fff7e6" font-weight="600" text-anchor="middle">Post office</text>
+<rect x="164" y="104" width="176" height="66" rx="4" fill="#ece2c8" stroke="#1c1722" stroke-width="2"/>
+<text x="252.0" y="141.0" font-family="Inter, 'Segoe UI', system-ui, sans-serif" font-size="12" fill="#1c1722" font-weight="600" text-anchor="middle">Town center</text>
+<rect x="356" y="112" width="96" height="58" rx="4" fill="#d9cfb8" stroke="#1c1722" stroke-width="2"/>
+<text x="404.0" y="145.0" font-family="Inter, 'Segoe UI', system-ui, sans-serif" font-size="11" fill="#1c1722" font-weight="600" text-anchor="middle">Library</text>
+<rect x="468" y="106" width="80" height="64" rx="4" fill="#4f5a80" stroke="#1c1722" stroke-width="2"/>
+<text x="508.0" y="142.0" font-family="Inter, 'Segoe UI', system-ui, sans-serif" font-size="10" fill="#ffffff" font-weight="600" text-anchor="middle">Observatory</text>
+<rect x="636" y="114" width="96" height="56" rx="4" fill="#6b5a4a" stroke="#1c1722" stroke-width="2"/>
+<text x="684.0" y="146.0" font-family="Inter, 'Segoe UI', system-ui, sans-serif" font-size="10" fill="#ffffff" font-weight="600" text-anchor="middle">Warehouse</text>
+<rect x="740" y="90" width="32" height="100" fill="#3b6fb6"/>
+<text x="756" y="144" font-family="Inter, 'Segoe UI', system-ui, sans-serif" font-size="9" fill="#ffffff" font-weight="400" text-anchor="middle">shore</text>
+<text x="32" y="232" font-family="Inter, 'Segoe UI', system-ui, sans-serif" font-size="12" fill="#c0caf5" font-weight="600">With the University (the town grows 20 tiles wider)</text>
+<rect x="32" y="240" width="900" height="100" fill="#6fae5a"/>
+<rect x="32" y="326" width="900" height="14" fill="#d9cfb8"/>
+<text x="40" y="337" font-family="Inter, 'Segoe UI', system-ui, sans-serif" font-size="10" fill="#1c1722" font-weight="400">first street</text>
+<rect x="52" y="260" width="96" height="60" rx="4" fill="#a4553f" stroke="#1c1722" stroke-width="2"/>
+<text x="100.0" y="294.0" font-family="Inter, 'Segoe UI', system-ui, sans-serif" font-size="11" fill="#fff7e6" font-weight="600" text-anchor="middle">Post office</text>
+<rect x="164" y="254" width="176" height="66" rx="4" fill="#ece2c8" stroke="#1c1722" stroke-width="2"/>
+<text x="252.0" y="291.0" font-family="Inter, 'Segoe UI', system-ui, sans-serif" font-size="12" fill="#1c1722" font-weight="600" text-anchor="middle">Town center</text>
+<rect x="356" y="250" width="144" height="70" rx="4" fill="#e8c75a" stroke="#7aa2f7" stroke-width="3"/>
+<text x="428.0" y="289.0" font-family="Inter, 'Segoe UI', system-ui, sans-serif" font-size="12" fill="#1c1722" font-weight="600" text-anchor="middle">University</text>
+<rect x="516" y="262" width="96" height="58" rx="4" fill="#d9cfb8" stroke="#1c1722" stroke-width="2"/>
+<text x="564.0" y="295.0" font-family="Inter, 'Segoe UI', system-ui, sans-serif" font-size="11" fill="#1c1722" font-weight="600" text-anchor="middle">Library</text>
+<rect x="628" y="256" width="80" height="64" rx="4" fill="#4f5a80" stroke="#1c1722" stroke-width="2"/>
+<text x="668.0" y="292.0" font-family="Inter, 'Segoe UI', system-ui, sans-serif" font-size="10" fill="#ffffff" font-weight="600" text-anchor="middle">Observatory</text>
+<rect x="796" y="264" width="96" height="56" rx="4" fill="#6b5a4a" stroke="#1c1722" stroke-width="2"/>
+<text x="844.0" y="296.0" font-family="Inter, 'Segoe UI', system-ui, sans-serif" font-size="10" fill="#ffffff" font-weight="600" text-anchor="middle">Warehouse</text>
+<rect x="900" y="240" width="32" height="100" fill="#3b6fb6"/>
+<text x="916" y="294" font-family="Inter, 'Segoe UI', system-ui, sans-serif" font-size="9" fill="#ffffff" font-weight="400" text-anchor="middle">shore</text>
+<path d="M 404 192 L 564 248" stroke="#e0af68" stroke-width="2" fill="none" marker-end="url(#arr)"/>
+<path d="M 516 192 L 676 248" stroke="#e0af68" stroke-width="2" fill="none" marker-end="url(#arr)"/>
+<path d="M 684 192 L 844 248" stroke="#e0af68" stroke-width="2" fill="none" marker-end="url(#arr)"/>
+<text x="618" y="218" font-family="Inter, 'Segoe UI', system-ui, sans-serif" font-size="11" fill="#e0af68" font-weight="600">+20 tiles right, once</text>
+<rect x="60" y="362" width="250" height="96" rx="4" fill="#c9b48e" stroke="#1c1722" stroke-width="2"/>
+<text x="185" y="414" font-family="Inter, 'Segoe UI', system-ui, sans-serif" font-size="12" fill="#1c1722" font-weight="400" text-anchor="middle">room 1</text>
+<rect x="350" y="362" width="250" height="96" rx="4" fill="#c9b48e" stroke="#1c1722" stroke-width="2"/>
+<text x="475" y="414" font-family="Inter, 'Segoe UI', system-ui, sans-serif" font-size="12" fill="#1c1722" font-weight="400" text-anchor="middle">room 2</text>
+<rect x="640" y="362" width="250" height="96" rx="4" fill="#c9b48e" stroke="#1c1722" stroke-width="2"/>
+<text x="765" y="414" font-family="Inter, 'Segoe UI', system-ui, sans-serif" font-size="12" fill="#1c1722" font-weight="400" text-anchor="middle">room 3</text>
+<rect x="32" y="340" width="900" height="0" fill="#000"/>
+<path d="M 428 320 L 428 352 L 475 352 L 475 362" fill="none" stroke="#7aa2f7" stroke-width="3" stroke-dasharray="8 6"/>
+<text x="500" y="354" font-family="Inter, 'Segoe UI', system-ui, sans-serif" font-size="11" fill="#ffffff" font-weight="600">a hire walks out of the University gate to its room</text>
+<text x="32" y="500" font-family="Inter, 'Segoe UI', system-ui, sans-serif" font-size="12" fill="#e0af68" font-weight="600">Moves, once, when the University ships:</text>
+<text x="32" y="520" font-family="Inter, 'Segoe UI', system-ui, sans-serif" font-size="12" fill="#c0caf5" font-weight="400">  the library and observatory, 20 tiles right (18-tile lot + 2-tile gap);</text>
+<text x="32" y="540" font-family="Inter, 'Segoe UI', system-ui, sans-serif" font-size="12" fill="#c0caf5" font-weight="400">  the shore (warehouse, harbour, shipyard), because the town grows 20 tiles wider.</text>
+<text x="32" y="560" font-family="Inter, 'Segoe UI', system-ui, sans-serif" font-size="12" fill="#c0caf5" font-weight="400">Stays: post office, town center, every room, street, desk and agent.</text>
+<text x="32" y="580" font-family="Inter, 'Segoe UI', system-ui, sans-serif" font-size="12" fill="#c0caf5" font-weight="400">After that nothing moves: a wing appearing for a new harness stays inside the University lot.</text>
+<text x="32" y="620" font-family="Inter, 'Segoe UI', system-ui, sans-serif" font-size="12" fill="#737aa2" font-weight="400">See direction-*-laptop.png for the real Town with the University in place.</text>
+<text x="970" y="36" font-family="Inter, 'Segoe UI', system-ui, sans-serif" font-size="15" fill="#ffffff" font-weight="600">Narrow (phone) town</text>
+<text x="970" y="56" font-family="Inter, 'Segoe UI', system-ui, sans-serif" font-size="12" fill="#737aa2" font-weight="400">Civic row along the top, right of the rooms (#1351).</text>
+<rect x="970" y="70" width="370" height="700" fill="#6fae5a"/>
+<rect x="970" y="168" width="370" height="10" fill="#d9cfb8"/>
+<rect x="980" y="122" width="48" height="46" rx="4" fill="#a4553f" stroke="#1c1722" stroke-width="2"/>
+<text x="1004.0" y="149.0" font-family="Inter, 'Segoe UI', system-ui, sans-serif" font-size="9" fill="#fff7e6" font-weight="600" text-anchor="middle">Post</text>
+<rect x="1036" y="114" width="88" height="54" rx="4" fill="#ece2c8" stroke="#1c1722" stroke-width="2"/>
+<text x="1080.0" y="145.0" font-family="Inter, 'Segoe UI', system-ui, sans-serif" font-size="9" fill="#1c1722" font-weight="600" text-anchor="middle">Center</text>
+<rect x="1132" y="110" width="72" height="58" rx="4" fill="#e8c75a" stroke="#7aa2f7" stroke-width="3"/>
+<text x="1168.0" y="143.0" font-family="Inter, 'Segoe UI', system-ui, sans-serif" font-size="9" fill="#1c1722" font-weight="600" text-anchor="middle">Univ.</text>
+<rect x="1212" y="124" width="48" height="44" rx="4" fill="#d9cfb8" stroke="#1c1722" stroke-width="2"/>
+<text x="1236.0" y="150.0" font-family="Inter, 'Segoe UI', system-ui, sans-serif" font-size="9" fill="#1c1722" font-weight="600" text-anchor="middle">Library</text>
+<rect x="1268" y="120" width="40" height="48" rx="4" fill="#4f5a80" stroke="#1c1722" stroke-width="2"/>
+<text x="1288.0" y="148.0" font-family="Inter, 'Segoe UI', system-ui, sans-serif" font-size="9" fill="#ffffff" font-weight="600" text-anchor="middle">Obs.</text>
+<rect x="974" y="84" width="150" height="620" rx="8" fill="none" stroke="#ffffff" stroke-width="2" stroke-dasharray="6 5"/>
+<text x="1049" y="722" font-family="Inter, 'Segoe UI', system-ui, sans-serif" font-size="11" fill="#ffffff" font-weight="600" text-anchor="middle">phone screen at home</text>
+<rect x="986" y="196" width="126" height="140" rx="4" fill="#c9b48e" stroke="#1c1722" stroke-width="2"/>
+<text x="1049" y="270" font-family="Inter, 'Segoe UI', system-ui, sans-serif" font-size="11" fill="#1c1722" font-weight="400" text-anchor="middle">room 1</text>
+<rect x="986" y="356" width="126" height="140" rx="4" fill="#c9b48e" stroke="#1c1722" stroke-width="2"/>
+<text x="1049" y="430" font-family="Inter, 'Segoe UI', system-ui, sans-serif" font-size="11" fill="#1c1722" font-weight="400" text-anchor="middle">room 2</text>
+<rect x="986" y="516" width="126" height="140" rx="4" fill="#c9b48e" stroke="#1c1722" stroke-width="2"/>
+<text x="1049" y="590" font-family="Inter, 'Segoe UI', system-ui, sans-serif" font-size="11" fill="#1c1722" font-weight="400" text-anchor="middle">room 3</text>
+<text x="1140" y="230" font-family="Inter, 'Segoe UI', system-ui, sans-serif" font-size="11" fill="#ffffff" font-weight="400">The University is the first</text>
+<text x="1140" y="248" font-family="Inter, 'Segoe UI', system-ui, sans-serif" font-size="11" fill="#ffffff" font-weight="400">building right of the screen,</text>
+<text x="1140" y="266" font-family="Inter, 'Segoe UI', system-ui, sans-serif" font-size="11" fill="#ffffff" font-weight="400">where the library is today:</text>
+<text x="1140" y="284" font-family="Inter, 'Segoe UI', system-ui, sans-serif" font-size="11" fill="#ffffff" font-weight="400">one drag right of the center.</text>
+<text x="1140" y="302" font-family="Inter, 'Segoe UI', system-ui, sans-serif" font-size="11" fill="#ffffff" font-weight="400">The library and observatory</text>
+<text x="1140" y="320" font-family="Inter, 'Segoe UI', system-ui, sans-serif" font-size="11" fill="#ffffff" font-weight="400">move one University further.</text>
 </svg>

@@ -2,14 +2,17 @@
 
 ### Requirement: The University
 
-Town SHALL show a University, the home of agent profiles, as the last civic
-building right of the observatory, with one wing per college.
+Town SHALL show a University, the home of agent profiles, as a civic building
+between the town center and the library, with one wing per college.
 
 #### Scenario: The University acceptance rules
 
 - **WHEN** Town presents the University
-- **THEN** its lot SHALL extend the civic row without moving any room or other
-  building, on wide and narrow towns alike; it SHALL draw at most four college
+- **THEN** its lot SHALL stand right of the town center, with the library, the
+  observatory and the shore moved right by exactly its lot and no room, desk
+  or other building moved, on wide and narrow towns alike; its paint SHALL
+  follow Town's style system (palette families, light from the upper left,
+  one-pixel Town ink outline, 16-pixel tile scale); it SHALL draw at most four college
   wings in World's college order, with an annex for the rest; a wing SHALL look
   open when its harness is installed and logged in on a host the Hosts filter
   shows, shut when it is logged out on all of them, under scaffolding when it is

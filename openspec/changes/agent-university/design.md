@@ -47,55 +47,153 @@ need a secret (see § 6); changing any table, column or data file.
 
 ## 1. The building and its colleges
 
-![The University in Town's pixel style: day, a logged-out wing, a missing wing](screens/university-art.svg)
+### Art directions (pick one)
 
-### Art
+The first pass (`screens/university-art.svg`) drew the University plainer than
+Town's agents and desks. It is superseded. Three directions are painted with
+Town's own canvas helpers at 16-pixel tiles and shown in the real Town (the
+golden fixture, clear day). One is picked, and then the University window,
+college page, editor, diploma and phone screens are finished in it (task 1.4).
+Each capture shows the same four wings, left to right: Claude Code open, Codex
+open, Kimi Code logged out, and Pi not installed. Captures are at laptop size
+(1512 × 982) at home zoom, as a laptop close-up, and at phone size (390 × 844)
+dragged to the University.
 
-The University is a collegiate hall of honey-coloured stone (`#d9b27a`, shade
-`#b48a52`) under slate roofs (`#4f5a80`), with ivy (`#3f7a3a`) climbing its
-corners, in Town's 16-pixel tile style and outlined in Town's ink (`#1c1722`)
-like the town center, library and post office. It is deliberately different
-from its neighbours: the town center is pale stone with a copper dome, the
-library sand with verdigris, the post office brick.
+**A. Collegiate Gothic.** A honey-stone gatehouse with battlements, corner
+turrets with slate caps, and a clock over a lit arched gate with three college
+shields. Steep gabled wings have lancet windows, a crest in the gable, a
+pennant in the college colour and ivy on the piers. It reads as "old
+university" at a glance. It shares stone with the town center and library, so
+its tower and tall windows are what set it apart.
 
-- **The gatehouse** in the middle: a square tower with a clock face, a slate
-  spire and a gold mortarboard weather vane, an arched gate and a stone plaque
-  above it. The gate is where hires come out (§ 4).
-- **Wings, one per college,** either side of the gatehouse, each four tiles wide
-  with three tall lit windows, a door and a pennant in the college's colour
-  with its crest. Claude Code's college is terracotta (`#d9775a`), Codex's ink
-  blue (`#3f6fb4`), others take a neutral slate pennant with the harness's
-  initial. Order: Claude Code, Codex, then other kinds alphabetically.
-- **The quad** in front: a lawn crossed by two gravel paths meeting at the gate,
-  with two benches and a lamp. Freshly hired agents cross it.
-- Four wings are drawn at most, two each side. A fifth or later college shares
-  an annex wing whose pennant reads `+N`; the window lists every college.
+![A at laptop size, home zoom](screens/direction-a-laptop.png)
+![A, laptop close-up](screens/direction-a-close.png)
+![A at phone size](screens/direction-a-phone.png)
 
-Counts and states that change are on the University's DOM sign (as the library
-and warehouse do), not in the paint. The paint has only three variants per
-wing, chosen from the college's state across the hosts the Hosts filter shows:
+**B. Tudor brick.** A red diapered-brick gate tower with ogee-capped turrets,
+an oriel window and arms over the gate. Its wings have half-timbered gables
+whose bargeboards take the college colour, and twisted chimneys. It is the
+warmest and busiest of the three, and the only one with a pattern in the wall.
+It shares brick with the post office.
+
+![B at laptop size, home zoom](screens/direction-b-laptop.png)
+![B, laptop close-up](screens/direction-b-close.png)
+![B at phone size](screens/direction-b-phone.png)
+
+**C. Glasshouse campus.** A central glass hall with a rotunda, a tree inside
+and a clock. Each college is an octagonal glass pavilion on a brick base, with
+ribs in the college colour and plants inside. It looks unlike every other
+building in Town, and it shows the wing states most strongly: lit glass, dark
+glass, or a bare iron frame with a ladder and a crate of panes.
+
+![C at laptop size, home zoom](screens/direction-c-laptop.png)
+![C, laptop close-up](screens/direction-c-close.png)
+![C at phone size](screens/direction-c-phone.png)
+
+All three share the lot (18 × 8 tiles plus a 3-row quad), the quad (lawn,
+gravel path to the gate, hedges, benches, two lamps), the gate in the middle
+where hires come out (§ 4), and the wing order: Claude Code, Codex, then other
+kinds alphabetically. Claude Code's college is terracotta (`#d9775a`), Codex's
+ink blue (`#3f6fb4`), and other harnesses take a muted colour from the style
+system with the harness's initial on the crest. At most four wings are drawn,
+two on each side. A fifth or later college shares an annex wing whose crest
+reads `+N`, and the window lists every college.
+
+### Town style system
+
+Every Town building, the University included and every one after it, follows
+these rules. They are read from the shipped paint (`townSprites.ts`, the
+center, post office, library and observatory painters, and the agent and desk
+sprites), except detail density, which sets the bar at the agents' and desks'
+level, above the plainer buildings:
+
+- **Scale.** One art pixel is one world pixel on a 16-pixel tile
+  (`TOWN_TILE`). A building is sized against its neighbours. A storey is about
+  one tile, a door about one tile wide and a tile and a half tall, and a person
+  is about one tile high. No building is drawn at another resolution and
+  scaled.
+- **Outline.** Every painted layer is outlined with `townOutline()`: one pixel
+  of Town ink (`TOWN_OUTLINE`, `#1c1722`) stamped from the silhouette. Ground
+  shadows and lawn are painted on their own layer outside the outline.
+- **Light from the upper left.** Roofs are lightest at the ridge and darken
+  toward the eaves (`townShade`). Walls carry a darker strip on their right
+  edge and under every sill, cornice and eave. Bevels are lit on the top and
+  left and shaded on the bottom and right. Ground shadows are `rgba(0,0,0,.2)`,
+  under and to the right.
+- **Palette.** Every colour is a family in Town's palette, used with
+  `townShade` steps rather than new hex values. The families are stone and
+  sand (`#ece2c8`, `#d9cfb8`, `#d9b27a`), brick (`#a4553f`), slate
+  (`#4f5a80`), copper and verdigris (`#4f9a86`), wood (`#9b6a3f`, `#6e4a2e`),
+  gold (`#e8c75a`, highlight `#fff0b0`, shade `#a8862e`), lit glass
+  (`#ffe39a`/`#ffe0a0`, deep `#f0b860`), dark glass (slate shaded), lawn
+  (`#6fae5a`) and gravel (`#d9cfb8`). A new building takes a family no
+  neighbour uses as its main material, so the row stays readable.
+- **Detail density.** A building has the detail of the agents and desks
+  beside it: at least one textured material (coursed stone, brick bond,
+  shingles, panes), a lit opening, and one landmark feature that reads at home
+  zoom (a dome, clock, tower or sign board). No flat fills over two tiles.
+- **State in paint, numbers on the sign.** Paint shows only a few fixed
+  variants (open, shut, missing). Counts, names and changing text sit on the
+  building's DOM sign, which keeps a readable size at every zoom.
+- **Glass and light.** Lit windows use the lit-glass family; unlit or
+  logged-out windows use dark glass. Town's lighting and weather passes tint
+  the whole sprite, so the paint has no time of day.
+- **Placement.** A building stands on its own lot from a lot file, with its
+  sign in `townCivicSigns` or its own sign component. It never paints into a
+  neighbour's lot or onto a street.
+
+### Wing states
+
+The paint has only three variants per wing, chosen from the college's state
+across the hosts the Hosts filter shows. The exact drawing follows the picked
+direction, as in the captures:
 
 | College state (over shown hosts) | Wing art | Sign chip |
 | --- | --- | --- |
-| Installed and logged in on at least one host | Warm lit windows, open door, pennant up | `Claude Code · 2 hosts` |
-| Installed everywhere it is found, logged out everywhere | Dark windows, shut door with a small key plaque | `Codex · Log in` |
-| Not installed on any shown host | Scaffolding and a dust sheet over the wing, pennant furled | `Pi · Not installed` |
+| Installed and logged in on at least one host | Lit windows, open door, pennant or ribs in the college colour | `Claude Code · 2 hosts` |
+| Installed everywhere it is found, logged out everywhere | Dark glass, shut door with a small key plaque, pennant furled | `Codex · Log in` |
+| Not installed on any shown host | Under construction (A, B: scaffolding with a dust sheet; C: a bare frame with a ladder) | `Pi · Not installed` |
 | Unknown (probe failed, Windows, not yet read) | Normal art, no lights change | `Kimi · ?` |
 
-Unknown is never drawn as missing (the same honesty rule as harness readiness).
+Unknown is never drawn as missing (the same honesty rule as harness
+readiness).
 
 ### Placement
 
 ![Where the University stands, wide and phone towns](screens/town-placement.svg)
 
-The University stands right of the observatory, on the same lawn above the
-first street, at the end of the civic row: post office, town center, library,
-observatory, University. `townPlaceLots` already grows a town to hold the
-library and observatory without moving anything that stands; the University
-lot extends that rule (`TOWN_UNIVERSITY_ROOM`), so adding it, and a wing
-appearing when a new harness is found, moves no room and no other building. On
-a narrow (phone) town the civic row already runs right of the stacked column
-(#1351); the University is its last building there too.
+The University stands **between the town center and the library**, on the lawn
+above the first street. The civic row reads: post office, town center,
+University, library, observatory. Its lot is 18 tiles wide, plus the usual
+2-tile gap, and stands at the town center's right edge
+(`townUniversityLot`, `TOWN_UNIVERSITY_ROOM` = 20 tiles).
+
+What moves to make room, once, when the University ships:
+
+- **The library and the observatory** move 20 tiles right.
+  `townLibraryLotBeside` starts after `TOWN_UNIVERSITY_ROOM`, and
+  `TOWN_LIBRARY_ROOM` includes it. The observatory, the civic signs
+  (`townCivicSigns`), `townPlaceLots` and the camera's town width
+  (`townHostsWidth`) already measure from the library, so they follow without
+  further changes.
+- **The shore** (warehouse, harbour and shipyard) moves 20 tiles right,
+  because the town grows 20 tiles wider to hold the extra lot.
+- **The home view** fits the wider town. At laptop size (1512 × 982) it opens
+  about 13% further out than today, as the captures show.
+- **Nothing else moves.** The post office, town center, rooms, streets, desks,
+  agents and Apartments stay where they are. After this, a wing appearing for
+  a new harness stays inside the University lot and moves nothing.
+
+On a narrow (phone) town the civic row runs along the top, right of the stacked
+rooms (#1351). The University is the first building right of the screen at
+home, where the library is today: one drag right of the town center. On a
+phone the library's hanging sign stays below the observatory's, and the
+University's sign stands on its gatehouse the way the observatory's stands on
+its dome.
+
+Notes that name the library's place (the town and memory notes, and the
+shipyard notes' "drag to reach") are updated when this ships. Every Town
+golden image is regenerated in the same change, because the civic row moves.
 
 It is a `TownPlaceKey` (`"university"`) with the usual parts: a lot file
 (`townUniversityLot.ts`), a paint file (`townUniversityPaint.ts`), a sprite in
@@ -674,9 +772,11 @@ profile, and every change goes through World to its store.
   These are support gates, not follow-ups: a row ships as supported only when
   its check passes, and otherwise ships as planned with the failure as its
   reason.
-- Browser: University window, editor sections and phone sheet; Town lot keeps
-  every existing building's position (golden lot tests); arrival starts at the
-  gate.
+- Browser: University window, editor sections and phone sheet. Town lot
+  tests check that the University stands between the town center and the
+  library, that the library, observatory and shore move by exactly
+  `TOWN_UNIVERSITY_ROOM`, and that nothing else moves, on wide and narrow
+  towns. Town golden images are regenerated. Arrival starts at the gate.
 - Ordering: check-then-launch is a single request on one connection and
   generation; a vanish after the check becomes a reported harness exit, never a
   relaunch. No new durable ordering beyond the diploma's record-at-confirmed

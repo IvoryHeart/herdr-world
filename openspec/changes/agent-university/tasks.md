@@ -6,8 +6,11 @@
 - [ ] 1.2 Review of the design and screens; record its decisions here.
 - [ ] 1.3 The storage design (World as one object) takes in the profile fields,
   the diploma record and the per-launch host files (design § 5).
+- [ ] 1.4 Pick one University art direction (design § 1, A, B or C), then
+  finish `university-art.svg`, the window, college page, editor, diploma and
+  phone screens in it, following the Town style system.
 
-## 2. Build (after 1.2 and 1.3)
+## 2. Build (after 1.2, 1.3 and 1.4)
 
 - [ ] 2.1 Support gate, with each harness in isolation (scratch configuration
   folders, named Herdr session, throwaway MCP stdio server and skills): every
@@ -33,9 +36,12 @@
 - [ ] 2.7 University window (Profiles, Colleges, editor, college page, Retired
   shelf) in the place window frame; `openProfileEditor` opens it; Settings,
   Actions, launcher and Board entries; phone sheet.
-- [ ] 2.8 Town: University lot, paint (three wing variants), sign, place key,
-  Buildings ring entry; remove Profiles from the town center's ring; profile
-  hires arrive from the gate.
+- [ ] 2.8 Town: University lot between the town center and the library (the
+  library, observatory and shore move by `TOWN_UNIVERSITY_ROOM`), paint in the
+  picked direction (three wing variants), sign, place key, Buildings ring
+  entry; remove Profiles from the town center's ring; profile hires arrive
+  from the gate; regenerate Town golden images; update the town, memory and
+  shipyard notes that name the library's place.
 - [ ] 2.9 CLI `herdr-world profile list|show|hire` (replaces `agent-profiles`
   task 3.1).
 - [ ] 2.10 Docs: creation-profiles and town notes, tutorial step for hiring

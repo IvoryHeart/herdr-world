@@ -21,11 +21,11 @@ comes fresh out of the University to work.
 
 ## What Changes
 
-- **A University in Town.** A new civic landmark at the end of the civic row,
-  right of the observatory. Its window is where profiles are created, edited,
-  copied, retired, restored and deleted. The town center keeps New agent and
-  the Town master; its ring loses Profiles and its Buildings ring gains the
-  University.
+- **A University in Town.** A new civic landmark between the town center and
+  the library; the library, observatory and shore move once to make room. Its
+  window is where profiles are created, edited, copied, retired, restored and
+  deleted. The town center keeps New agent and the Town master; its ring loses
+  Profiles and its Buildings ring gains the University.
 - **One college per harness.** Every harness World supports today has a
   college: the eight it reads conversations from (Claude Code, Codex, Kimi
   Code, Grok, Pi, omp, Muse, Antigravity) and the others in its integration
