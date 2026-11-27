@@ -1,3 +1,4 @@
+import { flushSync } from "react-dom";
 import { createRoot } from "react-dom/client";
 import { bridge, type BridgeControlMsg } from "../api";
 import type { Pane } from "../types";
@@ -1968,19 +1969,21 @@ async function run() {
         host.style.cssText = "display:flex;height:400px;width:600px";
         document.body.append(host);
         const redrawRoot = createRoot(host);
+        // Each update renders and commits before the next line reads it.
         const show = (list: HistoryEntry[], failed: string | null) =>
-          redrawRoot.render(
-            <AgentHistoryChat
-              items={groupHistoryChatItems(list)}
-              listRef={listRef}
-              contentRef={contentRef}
-              onOpen={onOpen}
-              decorate={decorate}
-              decorationTokens={tokens(list, failed)}
-            />,
+          flushSync(() =>
+            redrawRoot.render(
+              <AgentHistoryChat
+                items={groupHistoryChatItems(list)}
+                listRef={listRef}
+                contentRef={contentRef}
+                onOpen={onOpen}
+                decorate={decorate}
+                decorationTokens={tokens(list, failed)}
+              />,
+            ),
           );
         show(entries, null);
-        await settle();
         const firstAsks = asked.length;
         asked.length = 0;
         const next = [
@@ -2005,7 +2008,6 @@ async function run() {
           } as HistoryEntry,
         ];
         show(next, "redraw-3-call-0");
-        await settle();
         check(
           firstAsks === 80,
           `The redraw fixture should ask about 80 steps at first, asked ${firstAsks}`,
