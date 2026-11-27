@@ -76,7 +76,7 @@ export function planWorldBrowserCases(
 
 const escaped = (name: string) => name.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
 
-/** Exact names, plus the complement on one worker. Never filter across files. */
+/** Exact names, plus the complement on one worker. Never filter across files. @internal */
 export function worldCasePattern(
   task: WorldCaseTask,
   timings: CaseTimings,

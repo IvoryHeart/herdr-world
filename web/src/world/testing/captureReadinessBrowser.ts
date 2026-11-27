@@ -3,6 +3,7 @@ import { mkdtemp, rm, readFile, mkdir, readdir } from "node:fs/promises";
 import { tmpdir, loadavg } from "node:os";
 import { join, basename } from "node:path";
 import {
+  BROWSER_STARTUP_TIMEOUT_MS,
   stopChrome,
   waitForChromePort,
   withBrowserDeadline,
@@ -160,6 +161,8 @@ export function registerCaptureReadinessTests() {
           };
           const slow = captureScene(tracked, {
             view: "town",
+            // The first capture includes cold renderer setup on shared CI CPUs.
+            timeoutMs: BROWSER_STARTUP_TIMEOUT_MS,
             width: 1512,
             height: 982,
             content: { selector: "canvas[data-office-canvas]" },
@@ -218,6 +221,8 @@ export function registerCaptureReadinessTests() {
         } else {
           current = await captureScene(command, {
             view: "town",
+            // The first capture includes cold renderer setup on shared CI CPUs.
+            timeoutMs: BROWSER_STARTUP_TIMEOUT_MS,
             width: 1512,
             height: 982,
             content: { selector: "canvas[data-office-canvas]" },
