@@ -17,7 +17,9 @@
 - `scripts/build-pages.ts`
 - `scripts/pages-features.ts`
 - `scripts/openspec-notes.ts`
+- `scripts/openspec-check.test.ts` (strict requirement lengths and archived-task gate)
 - `scripts/check-knowledge-map.ts`
+- `scripts/check-pr-body.ts` (permits only lossless current-spec length repairs)
 - `web/src/features/FeatureHosts.tsx`
 - `quint/`
 - `docs/design/`
@@ -92,6 +94,9 @@
   and author must be `dependabot[bot]` with type `Bot`. The usual test selection
   remains authoritative. Exact bot metadata identities and unchanged license
   attribution rules are documented in [contributor guidance](../../../CONTRIBUTING.md#privacy-before-publication).
+- OpenSpec 2.1.1 uses project-scoped skills; keep the adapted `world-openspec-*`
+  files unchanged when refreshing ignored stock workflows. `spec:check` validates
+  current/active contracts strictly and checks archived task completion.
 
 ## Usage reference
 

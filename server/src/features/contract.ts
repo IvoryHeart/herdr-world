@@ -17,13 +17,26 @@ type Connections<T extends ConnectionRuntime> = Pick<
 /** Ports only: no listener, shutdown, authentication or default runtime authority. */
 export type FeatureKernel = Readonly<
   Pick<WorldServiceDeps, "clock" | "scheduler"> & {
+    desk: ReturnType<typeof import("./desk/service").createDesk>;
+    send: RpcServices["safeSend"];
+    deskMarks(): Pick<RpcServices, "persistentMarks">;
+    appearanceRpc: Pick<
+      RpcServices,
+      | "board"
+      | "publishBoardChanged"
+      | "publishWorldInvalidation"
+      | "coreControl"
+    >;
+    createAppearance: typeof import("./appearance/service").createProfileServices;
+    createIntegrations: typeof import("./integrations/service").createIntegrations;
     createUsage: typeof import("../service/usage-analytics").composeWorldUsage;
     createApartments: typeof import("./apartments/service").createApartmentsService;
     createArtefactShelf: typeof import("../world/artefact-shelf").createArtefactShelf;
-    paths: Pick<WorldServiceDeps["paths"], "root">;
+    paths: Pick<WorldServiceDeps["paths"], "root" | "sourceSecrets">;
     config: Pick<WorldServiceDeps["config"], "sshHost">;
     serviceIncarnation: string;
-    profiles: Pick<RpcServices["connectionProfiles"], "list">;
+    profiles: Pick<RpcServices["connectionProfiles"], "list" | "coreList"> &
+      Partial<Pick<RpcServices["connectionProfiles"], "hosts">>;
     coreHost: import("../rpc/core").CoreRpcServices["host"];
     observations: {
       observedConnections: {
@@ -32,11 +45,11 @@ export type FeatureKernel = Readonly<
       worldSnapshots: NonNullable<RpcServices["worldSnapshots"]>;
       officeObservability: Pick<
         import("../world/observability").OfficeObservabilityService,
-        "snapshot"
+        "snapshot" | "configuration"
       >;
     };
     logger: RpcServices["logger"];
-    clients: Pick<RpcServices["clients"], "has">;
+    clients: Pick<RpcServices["clients"], "has" | typeof Symbol.iterator>;
     settings: WorldStorage["settings"];
     storage: Readonly<
       Omit<
@@ -72,9 +85,23 @@ export function featureKernel(
   observations: FeatureKernel["observations"],
   createUsage: FeatureKernel["createUsage"],
   createApartments: FeatureKernel["createApartments"],
+  desk: FeatureKernel["desk"],
+  createAppearance: FeatureKernel["createAppearance"],
   createArtefactShelf: FeatureKernel["createArtefactShelf"],
+  createIntegrations: FeatureKernel["createIntegrations"],
 ): FeatureKernel {
   return Object.freeze({
+    createIntegrations,
+    createAppearance,
+    desk,
+    send: rpc.safeSend,
+    deskMarks: () => ({ persistentMarks: rpc.persistentMarks }),
+    appearanceRpc: {
+      coreControl: rpc.coreControl,
+      board: rpc.board,
+      publishBoardChanged: rpc.publishBoardChanged,
+      publishWorldInvalidation: rpc.publishWorldInvalidation,
+    },
     createUsage,
     createApartments,
     createArtefactShelf,
@@ -111,6 +138,10 @@ export type StopPhase = "quiesce" | "drain" | "close";
 export type FeatureInstance<T = unknown> = {
   api: T;
   rpc: Readonly<Record<string, FeatureRpcHandler>>;
+  acquisition?: import("../service/clients").SocketOwner & {
+    reconcile(): void;
+    stop(): void;
+  };
   connectionStatus?(status: ConnectionStatus): void;
   listening?(port: number): void;
   stop?: Partial<Record<StopPhase, () => void | Promise<void>>>;

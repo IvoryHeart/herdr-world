@@ -15,11 +15,16 @@ consumers. No Herdr exactly-once delivery or downstream deduplication is claimed
 
 An owner MAY attach files or screenshots to an answer. The answer SHALL carry
 their temporary stored paths as plain text under `Attached files:`, identically
-for saved retrieval and automatic delivery. Uploads SHALL use the placed asker's
-qualified connection, or that same saved connection's current ready runtime
-when unplaced. Only an asker with no connection placement MAY use a ready local
-World connection. A known unavailable remote host SHALL NOT fall back locally.
-Existing upload limits, retention and answer-length limits SHALL apply.
+for saved retrieval and automatic delivery.
+
+#### Scenario: Attachment placement and limits
+
+- **WHEN** an owner attaches files or screenshots to an answer
+- **THEN** Uploads SHALL use the placed asker's
+  qualified connection, or that same saved connection's current ready runtime
+  when unplaced. Only an asker with no connection placement MAY use a ready local
+  World connection. A known unavailable remote host SHALL NOT fall back locally.
+  Existing upload limits, retention and answer-length limits SHALL apply.
 
 #### Scenario: Attachment upload or answer validation fails
 
@@ -47,10 +52,14 @@ terminal input SHALL remain direct and non-queueable.
 
 At answer recording World SHALL capture the original verified binding's session
 fingerprint and that the ask still awaits delivery, not withdrawn or delivered.
-An offline/unobserved host SHALL keep that binding unresolved and delivery pending
-until it can be checked; an outage SHALL NOT count as a changed session. After claiming, World SHALL recheck the answering
-actor's current ask policy, target binding, preconditions and operation version.
-Unverifiable or changed state SHALL record not sent and preserve ask retrieval.
+
+#### Scenario: Answer delivery qualification
+
+- **WHEN** World records or attempts answer delivery
+- **THEN** An offline/unobserved host SHALL keep that binding unresolved and delivery pending
+  until it can be checked; an outage SHALL NOT count as a changed session. After claiming, World SHALL recheck the answering
+  actor's current ask policy, target binding, preconditions and operation version.
+  Unverifiable or changed state SHALL record not sent and preserve ask retrieval.
 
 #### Scenario: Answer recorded during an outage
 - **WHEN** the user answers a previously bound ask while its original host is offline
@@ -114,37 +123,41 @@ SHALL retain retrieval semantics without being sent as invented answers.
 The World instance that records an ask (its home) SHALL remain its only
 authority: its ledger accepts at most one answer or dismissal, and answer
 delivery SHALL use only the home's own qualified connection and generation.
-A herdr-core or Herdr runtime SHALL NOT hold the ask record.
 
-World instances running as the same user on the same machine SHALL share a
-private per-user instance registry by default, independently of their data
-folders. `HERDR_WORLD_INSTANCE_REGISTRY_DIR` SHALL override that location;
-question storage SHALL remain in each World's own data folder. Registry
-directories and reports SHALL be user-only (0700 and 0600 on Unix).
-Other World instances that share the home's registry and at least one runtime
-(the same connection target) SHALL show the
-home's open asks for that runtime in Needs you, with the home's name. An ask's
-runtimes SHALL be captured when it is recorded (the asker's connection target,
-and the default Herdr target that alerts for a herdr-core or unplaced asker)
-and SHALL NOT follow later edits of saved connections; the home's report SHALL
-list the runtimes of its open asks as well as the ones it connects to. An ask
-recorded before this capture existed stays in its home only. Each
-registry report SHALL carry a per-run peer token; the home SHALL serve its asks
-only over loopback, without a browser Origin, to that token, and only for the
-runtimes the requester names and shares. Shared asks SHALL NOT carry connection,
-pane, terminal or session identifiers, attachments or delivery evidence. An
-answer or dismissal from another instance SHALL be forwarded to the home, which
-applies it as the owner's; a refusal (already closed) SHALL be shown, not
-retried elsewhere.
+#### Scenario: Home authority and shared instance visibility
 
-The owner alert SHALL name the home (`<question> (<id>, asked in <World>)`)
-within Herdr's 400-character notification body: a long question is shortened
-with an ellipsis, never the ID or home, and any World name Settings accepts,
-parentheses included, SHALL be read back from the alert. An
-instance that receives an alert whose ask it cannot read SHALL show an
-alert-only entry naming the home, with a link when its registry reports that
-World, and SHALL NOT offer an answer there. Such entries are bounded, held in
-memory and closed by hiding them or once the home shares the ask.
+- **WHEN** World records, shares or resolves an ask across instances
+- **THEN** A herdr-core or Herdr runtime SHALL NOT hold the ask record.
+
+  World instances running as the same user on the same machine SHALL share a
+  private per-user instance registry by default, independently of their data
+  folders. `HERDR_WORLD_INSTANCE_REGISTRY_DIR` SHALL override that location;
+  question storage SHALL remain in each World's own data folder. Registry
+  directories and reports SHALL be user-only (0700 and 0600 on Unix).
+  Other World instances that share the home's registry and at least one runtime
+  (the same connection target) SHALL show the
+  home's open asks for that runtime in Needs you, with the home's name. An ask's
+  runtimes SHALL be captured when it is recorded (the asker's connection target,
+  and the default Herdr target that alerts for a herdr-core or unplaced asker)
+  and SHALL NOT follow later edits of saved connections; the home's report SHALL
+  list the runtimes of its open asks as well as the ones it connects to. An ask
+  recorded before this capture existed stays in its home only. Each
+  registry report SHALL carry a per-run peer token; the home SHALL serve its asks
+  only over loopback, without a browser Origin, to that token, and only for the
+  runtimes the requester names and shares. Shared asks SHALL NOT carry connection,
+  pane, terminal or session identifiers, attachments or delivery evidence. An
+  answer or dismissal from another instance SHALL be forwarded to the home, which
+  applies it as the owner's; a refusal (already closed) SHALL be shown, not
+  retried elsewhere.
+
+  The owner alert SHALL name the home (`<question> (<id>, asked in <World>)`)
+  within Herdr's 400-character notification body: a long question is shortened
+  with an ellipsis, never the ID or home, and any World name Settings accepts,
+  parentheses included, SHALL be read back from the alert. An
+  instance that receives an alert whose ask it cannot read SHALL show an
+  alert-only entry naming the home, with a link when its registry reports that
+  World, and SHALL NOT offer an answer there. Such entries are bounded, held in
+  memory and closed by hiding them or once the home shares the ask.
 
 #### Scenario: Answered from another World
 
@@ -181,12 +194,17 @@ memory and closed by hiding them or once the home shares the ask.
 herdr-core has no owner notifications, so an owner alert for a question from a
 herdr-core terminal or from an unplaced asker SHALL go through a Herdr
 connection: the default connection when it is a Herdr connection, otherwise
-the first saved Herdr connection on this computer. It SHALL NOT target a
-herdr-core connection. The connection SHALL be captured when the question is
-recorded and SHALL also be the ask's alert runtime; dispatch SHALL use only that
-connection's current lease and SHALL NOT fall back to another connection. With
-no such connection, World SHALL record the alert as not sent, and Needs you and
-Town SHALL say under the question that the owner was not alerted.
+the first saved Herdr connection on this computer.
+
+#### Scenario: Captured Herdr alert routing
+
+- **WHEN** a core or unplaced asker records a question
+- **THEN** It SHALL NOT target a
+  herdr-core connection. The connection SHALL be captured when the question is
+  recorded and SHALL also be the ask's alert runtime; dispatch SHALL use only that
+  connection's current lease and SHALL NOT fall back to another connection. With
+  no such connection, World SHALL record the alert as not sent, and Needs you and
+  Town SHALL say under the question that the owner was not alerted.
 
 #### Scenario: herdr-core default host
 - **WHEN** the default host is a herdr-core connection, this computer has a saved Herdr connection, and a verified herdr-core agent asks the owner

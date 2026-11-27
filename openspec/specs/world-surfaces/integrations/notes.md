@@ -11,6 +11,8 @@
 
 **Code:**
 
+- `server/src/features/integrations/`
+- `server/src/integrations/http.ts`
 - `server/src/integrations/registry.ts`
 - `server/src/integrations/vault.ts`
 - `web/src/components/IntegrationsSettings.tsx`
@@ -18,6 +20,8 @@
 
 **Tests:**
 
+- `server/src/features/integrations/register.test.ts`
+- `server/src/features/integrations/rpc.test.ts`
 - `server/src/integrations/registry.test.ts`
 - `web/src/configuration.browser.tsx`
 - `server/src/cli/integration.test.ts`

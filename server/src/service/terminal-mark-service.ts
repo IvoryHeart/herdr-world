@@ -1,6 +1,6 @@
 import { sanitizeConnectionError } from "../connections/manager";
 import type { Logger } from "../utils/logger";
-import { createWorldDeskService } from "../world/desk-service";
+import type { createWorldDeskService } from "../world/desk-service";
 import { createTerminalMarks } from "../world/terminal-marks";
 import { PersistentTerminalMarks } from "../world/persistent-terminal-marks";
 import type { createRevisionPublisher } from "../world/revision-publisher";
@@ -11,7 +11,7 @@ type PersistentOptions = ConstructorParameters<
 type Options = Pick<PersistentOptions, "incarnation" | "lease" | "now"> & {
   storage?: PersistentOptions["storage"];
   publisher: ReturnType<typeof createRevisionPublisher>;
-  broadcast(line: string): void;
+  desk: ReturnType<typeof createWorldDeskService>;
   invalidate(connectionId: string, generation: number): void;
   stop(): Promise<void>;
   logger: Logger;
@@ -19,7 +19,7 @@ type Options = Pick<PersistentOptions, "incarnation" | "lease" | "now"> & {
 };
 /** The root owns one set of registries, projections and committed notices. */
 export function createSharedTerminalMarks(options: Options) {
-  const desk = createWorldDeskService(options.broadcast);
+  const { desk } = options;
   const { observe, retire, ...marks } = createTerminalMarks(
     options.publisher,
     desk.observe,

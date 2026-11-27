@@ -9,7 +9,9 @@ import { createSharedTerminalMarks } from "./terminal-mark-service";
 import { randomUUID } from "node:crypto";
 import { rmSync } from "node:fs";
 import type { Server, ServerWebSocket } from "bun";
-import { createProfileServices } from "../agent/profile-service";
+import { appearanceKey } from "../features/appearance/register";
+import { createProfileServices } from "../features/appearance/service";
+import { createDesk } from "../features/desk/service";
 import { createRuntimeAssistantContext } from "./assistant-context";
 import { HerdrClient } from "../bridge/herdr-client";
 import { createServiceForwards } from "./forward-service";
@@ -54,7 +56,8 @@ import type { ObservedSnapshots, RpcServices } from "../rpc/context";
 import { composeSources, runSourceProcess } from "../sources/composition";
 import { composeShipyard } from "../shipyard/composition";
 import { profileCheckoutHost, ShipyardProjects } from "../shipyard/projects";
-import { withIntegrations } from "../integrations/http";
+import { integrationsKey } from "../features/integrations/register";
+import { createIntegrations } from "../features/integrations/service";
 import { herdrEventName } from "../utils/herdr-events";
 import { serverLogger } from "../utils/logger";
 import { afterHerdrClose } from "../world/board-closing";
@@ -82,8 +85,6 @@ import { memoryKey } from "../features/memory/register";
 import { FocusedAcquisition } from "../world/focused-acquisition";
 import { readFocusedLists } from "../world/focused-lists";
 import { AgentActivityCache } from "../world/agent-activity-cache";
-import { DeskWatches } from "../world/desk-watches";
-import { readDeskWatch } from "../world/desk-watch-read";
 import { createBrowserClients, summarizeHerdrEvent } from "./clients";
 import { createServiceHttpHandlers } from "./http-handlers";
 import { listen } from "./listener";
@@ -180,7 +181,11 @@ async function compose(
     logger,
     clock,
     forEachRuntime: (visit) => connectionManager.forEachCurrentRuntime(visit),
-    sockets: () => [focusedAcquisition, deskWatches, core.pages],
+    sockets: () => [
+      focusedAcquisition,
+      ...(features?.acquisitions ?? []),
+      core.pages,
+    ],
     countChanged: publishConnectionsChanged,
   });
   const { clients, safeSend, broadcast, clientLabel, markRpcError } = browsers;
@@ -228,18 +233,7 @@ async function compose(
   const board = () => storage.board();
   const revisionPublisher = createRevisionPublisher(clients, safeSend);
   publishFocusChanged = revisionPublisher("world_focus_changed", "world-focus");
-  // Profiles stay World's; per-terminal settings live in Herdr pane metadata.
-  const {
-    profiles,
-    terminalSettings,
-    publishProfilesChanged,
-    observeTerminalSettings,
-  } = createProfileServices(
-    revisionPublisher,
-    () => connectionManager,
-    () => storage.profiles(),
-    () => clock.now(),
-  );
+  const appearance = () => features!.get(appearanceKey);
 
   const publishBoardChanged = revisionPublisher(
     "world_board_changed",
@@ -330,6 +324,13 @@ async function compose(
   binCore.generation = (connectionId, generation) =>
     bin.registry.retireConnectionGeneration(connectionId, generation);
   void bin.start();
+  // Shared mark recovery needs Desk before connection profiles emit status.
+  const desk = createDesk({
+    scheduler,
+    clients,
+    send: safeSend,
+    connections: () => connectionManager,
+  });
   const {
     observe: observeHost,
     retire: retireTerminalMarks,
@@ -340,7 +341,7 @@ async function compose(
     storage: storage.terminalMarks,
     incarnation: serviceIncarnation,
     publisher: revisionPublisher,
-    broadcast: (line) => broadcast(line, "world-desk"),
+    desk: desk.service,
     lease: (connectionId) => connectionManager.readyRuntimeLease(connectionId),
     now: () => clock.now(),
     invalidate: publishWorldInvalidation,
@@ -374,7 +375,8 @@ async function compose(
     (status) => {
       features?.connectionStatus(status);
       focusedAcquisition.reconcile();
-      deskWatches.reconcile();
+      for (const acquisition of features?.acquisitions ?? [])
+        acquisition.reconcile();
       publishConnectionsChanged();
       retireTerminalMarks(
         status.id,
@@ -463,25 +465,6 @@ async function compose(
     send: (socket, control) =>
       safeSend(socket, JSON.stringify({ control }), "world-focused-changed"),
   });
-  const deskWatches = new DeskWatches<ServerWebSocket<unknown>>({
-    scheduler,
-    lease(target) {
-      const lease = connectionManager.readyRuntimeLease(target.connection_id);
-      if (
-        !lease ||
-        lease.generation !== target.connection_generation ||
-        !lease.isCurrent()
-      )
-        return null;
-      return {
-        isCurrent: lease.isCurrent,
-        read: (kind, target) =>
-          readDeskWatch(lease.runtime, kind, target, lease.isCurrent),
-      };
-    },
-    send: (socket, control) =>
-      safeSend(socket, JSON.stringify({ control }), "world-desk-reads"),
-  });
   worldSnapshots = new WorldSnapshotService(
     observedConnections,
     () => clock.now(),
@@ -502,7 +485,11 @@ async function compose(
       bin.registry.observeComplete(...args);
       features!
         .get(apartmentsKey)
-        .complete(ownedBy(connectionManager, observeTerminalSettings))(...args);
+        .complete(
+          ownedBy(connectionManager, (id, generation, panes) =>
+            appearance().observeTerminalSettings(id, generation, panes),
+          ),
+        )(...args);
     },
     serviceIncarnation,
   );
@@ -715,12 +702,6 @@ async function compose(
     },
     now: () => clock.now(),
   });
-  const handleWorldSources = withIntegrations(worldSources, {
-    profiles: connectionProfiles,
-    metrics: officeObservability,
-    vaultPath: paths.sourceSecrets,
-    now: () => clock.now(),
-  });
   // Shipyard's lanes are the projects open in the runtimes (#1226).
   const shipyardProjects = new ShipyardProjects({
     run: runSourceProcess,
@@ -767,15 +748,16 @@ async function compose(
     }),
     focusedAcquisition,
     agentActivity,
-    deskWatches,
+    deskWatches: desk.watches,
     conversationWatchers: browsers.conversationWatchers,
     getAssistantService: assistant.get,
     logger,
     markRpcError,
-    profiles,
-    terminalSettings,
+    profiles: () => appearance().profiles(),
+    terminalSettings: () => appearance().terminalSettings(),
     publishBoardChanged,
-    publishProfilesChanged,
+    publishProfilesChanged: (revision) =>
+      appearance().publishProfilesChanged(revision),
     publishWorldInvalidation,
     safeSend,
     snapshotAdmission,
@@ -803,9 +785,13 @@ async function compose(
       { observedConnections, worldSnapshots, officeObservability },
       composeWorldUsage,
       createApartmentsService,
+      desk,
+      createProfileServices,
       createArtefactShelf,
+      createIntegrations,
     ),
   );
+  const handleWorldSources = features.get(integrationsKey).http;
   worldUsage = features.get(usageKey);
   rpcServices.apartments = features.get(apartmentsKey);
   rpcServices.featureRpc = features.rpc;
@@ -956,7 +942,7 @@ async function compose(
     askPeers.stop();
     const featuresStopped = features!.stop("quiesce");
     focusedAcquisition.stop();
-    deskWatches.stop();
+    for (const acquisition of features!.acquisitions) acquisition.stop();
     connectionProfiles.stopSupervision();
     webPush.stop();
     focus.stop();
