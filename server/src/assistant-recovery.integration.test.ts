@@ -386,7 +386,15 @@ async function fixture(
   async function startBridge() {
     const binary = process.env.HERDR_WORLD_RECOVERY_TEST_BINARY;
     const child = Bun.spawn(
-      binary ? [binary] : [process.execPath, "server/src/index.ts"],
+      binary
+        ? [binary]
+        : [
+            process.execPath,
+            // The bridge's product timers run on the test set (#1419).
+            "--preload",
+            "./shared/testing/timings-preload.ts",
+            "server/src/index.ts",
+          ],
       {
         cwd: join(import.meta.dir, "../.."),
         env: {

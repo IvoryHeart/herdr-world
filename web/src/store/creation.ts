@@ -1,3 +1,4 @@
+import { timing } from "../../../shared/timings";
 import {
   type BrowserNavigation,
   selectBrowserTarget,
@@ -215,7 +216,7 @@ async function prepareQualifiedCreation(
               "Source terminal preparation timed out; nothing was created.",
             ),
           ),
-        20_000,
+        timing("creationPreparationMs"),
       );
       function finish(error?: Error) {
         clearTimeout(timer);

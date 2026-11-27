@@ -16,6 +16,7 @@ import {
 } from "node:fs";
 import { dirname, join, resolve } from "node:path";
 import { lock } from "proper-lockfile";
+import { timing } from "../../../shared/timings";
 import { assertSafeDataPath } from "../config/data-paths";
 
 function privateFile(path: string): boolean {
@@ -123,7 +124,7 @@ export async function openPrivateDurableStorage(
   }
   const lockPath = `${directory}.lock`;
   const ownership = new AbortController();
-  const deadline = Date.now() + 12_000;
+  const deadline = Date.now() + timing("durableLockWaitMs");
   let release!: () => Promise<void>;
   while (true) {
     context.abortSignal?.throwIfAborted();
@@ -137,8 +138,10 @@ export async function openPrivateDurableStorage(
     try {
       release = await lock(directory, {
         realpath: false,
-        stale: 10_000,
-        update: 2000,
+        // A crashed owner's lock is stale after this long; a live one
+        // renews it well within.
+        stale: timing("durableLockStaleMs"),
+        update: timing("durableLockRenewMs"),
         retries: 0,
         onCompromised: () =>
           ownership.abort(new Error("Durable owner changed")),
@@ -153,7 +156,9 @@ export async function openPrivateDurableStorage(
           cause: error,
         });
       await awaitWithContext(
-        new Promise<void>((resolveWait) => setTimeout(resolveWait, 100)),
+        new Promise<void>((resolveWait) =>
+          setTimeout(resolveWait, timing("durableLockRetryMs")),
+        ),
         context,
       );
     }
