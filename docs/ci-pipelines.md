@@ -62,6 +62,12 @@ another suite. Nightly catches integration/platform failures as one advisory iss
 PR reuse still requires the same scope and checkout/base/head identities.
 The stability opt-in explicitly requests fresh repeated browser passes.
 
+If only **PR description** and **Delivery checks** fail, with scope successful
+and all code leaves successful or skipped in the same attempt, correcting the
+body and adding an eligible label permits fresh validation. Failed Delivery
+evidence is still not reusable, and an earlier code failure still holds the head
+red. Rerunning the description job alone replays its original event body.
+
 After the owner approves a PR, it joins the merge queue for `main`. GitHub
 combines it with current main and any preceding queued PRs, then sends
 [`merge_group: checks_requested`](https://docs.github.com/en/actions/reference/workflows-and-actions/events-that-trigger-workflows#merge_group).
@@ -219,12 +225,13 @@ all four suites, paired over two quiet runners with a fresh quiet check before
 each suite. This reduces that workflow from five jobs to three; queue delays
 remain visible in health reports.
 
-`Repository validation`, `Web browser tests`, `Behavioral
-verification`, `Delivery checks` and both macOS report names remain. Leaf jobs
-report their check results immediately on completion; aggregate jobs require
-success from all applicable leaves. No crew automation or branch protection is
-changed. Actual elapsed CI times come from workflow runs, rather than from a
-claimed bound on shared hosted runners.
+PR CI reports `Validation scope`, `PR description`, the static, dependency,
+unit, World browser, web browser and model leaves, and `Delivery checks`.
+Leaf jobs report their check results immediately on completion; Delivery
+requires success from all applicable leaves. Advisory macOS reports remain in
+their own workflows. No crew automation or branch protection is changed.
+Actual elapsed CI times come from workflow runs, rather than from a claimed
+bound on shared hosted runners.
 
 The size ratchet evaluates the proposed merge into the target against main's
 ratchet policy. A branch behind main inherits main's lowered ceilings, while a

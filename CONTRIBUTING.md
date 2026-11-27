@@ -268,7 +268,7 @@ full unit inventory locally and full CI gate, even when that input is absent fro
 | Non-browser tests | Tests reaching changed inputs | All tests, across two CI runners |
 | Behavioral verification | Model/tooling/OpenSpec inputs or model-backed coverage owners; model-free owners run the cheap coverage inventory check | All accepted models, across three CI groups balanced by measured work |
 | World browser tests | Nearest consumer suites in the import graph; World runtime paths add the dense end-to-end suites (production and concurrent contexts, terminal handoff) | All six World shards |
-| Web browser tests | Affected registered browser suites | All suites, across two runners |
+| Web browser shards | Affected registered browser suites | All suites, across two runners |
 | Native installation | None; PRs run Linux checks | Tags and advisory nightly |
 | Release walk | None; runs with release acceptance | Exact tagged/nightly package, real TUI/core and signed-out Claude/Codex on Linux/macOS |
 

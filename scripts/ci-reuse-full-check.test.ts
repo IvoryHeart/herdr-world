@@ -1100,6 +1100,146 @@ const red = (
       (jobs[id] ?? []).map((job) => ({ run_id: id, ...job })) as never,
   );
 
+const descriptionLeafFailure = () => [
+  {
+    ...treeScopeJob(3),
+    steps: [{ name: "Determine validation scope", conclusion: "success" }],
+  },
+  {
+    ...treeDeliveryJob(3),
+    id: 32,
+    name: "PR description",
+    conclusion: "failure",
+    steps: [{ name: "Check PR description", conclusion: "failure" }],
+  },
+  { ...treeDeliveryJob(3), conclusion: "failure" },
+  { ...treeDeliveryJob(3), id: 33, name: "Static checks" },
+  {
+    ...treeDeliveryJob(3),
+    id: 34,
+    name: "World browser shard 1",
+    conclusion: "skipped",
+  },
+];
+
+test("a corrected description can validate after only the description leaf failed", async () => {
+  const runs = [run(4), run(3, base, "failure")];
+  const jobs = { 3: descriptionLeafFailure() };
+  expect(await red(runs, jobs)).toBeUndefined();
+  for (const action of ["labeled", "edited"])
+    for (const scoped of [true, false])
+      expect(
+        await selectValidationMode(
+          action,
+          false,
+          () => verify(runs, jobs),
+          false,
+          scoped,
+          false,
+          false,
+          false,
+          undefined,
+          async () => (await red(runs, jobs)) !== undefined,
+        ),
+      ).toBe(scoped ? "scoped" : "full");
+  // Failed Delivery is still no reusable evidence, even with an older pass.
+  expect(
+    await verify([...runs, run(2)], { ...jobs, 2: [job("success")] }),
+  ).toBe(false);
+  expect(
+    await sameTree(
+      [finished(3, "failure"), finished(2)],
+      { ...jobs, 2: [treeScopeJob(2), treeDeliveryJob(2)] },
+      { 3: tree, 2: tree },
+    ),
+  ).toBeUndefined();
+});
+
+test("a description-only leaf failure does not hide an older red head", async () => {
+  const runs = [run(4), run(3, base, "failure"), run(2, base, "failure")];
+  const jobs = {
+    3: descriptionLeafFailure(),
+    2: [scopeJob("success", "success", "success")],
+  };
+  expect(await red(runs, jobs)).toBe(2);
+  expect(
+    await selectValidationMode(
+      "labeled",
+      false,
+      () => verify(runs, jobs),
+      false,
+      true,
+      false,
+      false,
+      false,
+      undefined,
+      async () => (await red(runs, jobs)) !== undefined,
+    ),
+  ).toBe("hold");
+});
+
+test("description recovery keeps code failures and incomplete job evidence red", async () => {
+  const runs = [run(4), run(3, base, "failure")];
+  const original = descriptionLeafFailure();
+  for (const [index, candidate] of original.entries()) {
+    for (const conclusion of [
+      "failure",
+      "cancelled",
+      "timed_out",
+      "success",
+      "skipped",
+      null,
+    ]) {
+      const allowed =
+        index === 0
+          ? conclusion === "success"
+          : index <= 2
+            ? conclusion === "failure"
+            : conclusion === "success" || conclusion === "skipped";
+      expect(
+        await red(runs, {
+          3: original.map((entry, i) =>
+            i === index ? { ...entry, conclusion } : entry,
+          ),
+        }),
+      ).toBe(allowed ? undefined : 3);
+    }
+    for (const stale of [{ run_id: 2 }, { run_attempt: 2 }])
+      expect(
+        await red(runs, {
+          3: original.map((entry, i) =>
+            i === index ? { ...entry, ...stale } : entry,
+          ),
+        }),
+      ).toBe(3);
+    if (index > 2) continue;
+    expect(await red(runs, { 3: original.filter((_, i) => i !== index) })).toBe(
+      3,
+    );
+    expect(await red(runs, { 3: [...original, candidate] })).toBe(3);
+    if (index === 2) continue;
+    for (const conclusion of ["failure", "skipped", "success", null]) {
+      const expected = index === 0 ? "success" : "failure";
+      expect(
+        await red(runs, {
+          3: original.map((entry, i) =>
+            i === index
+              ? { ...entry, steps: [{ ...entry.steps[0], conclusion }] }
+              : entry,
+          ),
+        }),
+      ).toBe(conclusion === expected ? undefined : 3);
+    }
+    expect(
+      await red(runs, {
+        3: original.map((entry, i) =>
+          i === index ? { ...entry, steps: [] } : entry,
+        ),
+      }),
+    ).toBe(3);
+  }
+});
+
 test("a metadata event on a red head holds that result instead of retesting", async () => {
   // #1373: the push run went red when GitHub cancelled a macOS job that got no
   // runner; the description edit queued behind it ran every job again.

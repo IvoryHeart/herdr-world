@@ -104,12 +104,52 @@ function testedNothing(run: Run, jobs: Job[]): boolean {
 }
 
 /**
+ * A failed description leaf must be checked with the corrected event payload,
+ * not held for a rerun of the old payload. All code leaves must have succeeded
+ * or been skipped. This permits fresh validation only: failed Delivery evidence
+ * remains a barrier to reuse, including failures while aggregating manifests.
+ */
+function descriptionLeafOnlyFailure(run: Run, jobs: Job[]): boolean {
+  if (
+    run.conclusion !== "failure" ||
+    jobs.some(
+      (job) => job.run_id !== run.id || job.run_attempt !== run.run_attempt,
+    )
+  )
+    return false;
+  const matches = (name: string, conclusion: string, step?: string) => {
+    const matching = jobs.filter((job) => job.name === name);
+    return (
+      matching.length === 1 &&
+      matching[0].conclusion === conclusion &&
+      (!step ||
+        matching[0].steps.find((entry) => entry.name === step)?.conclusion ===
+          conclusion)
+    );
+  };
+  return (
+    matches(SCOPE_JOB, "success", SCOPE_STEP) &&
+    matches("PR description", "failure", DESCRIPTION_STEP) &&
+    matches("Delivery checks", "failure") &&
+    jobs.every(
+      ({ name, conclusion }) =>
+        name === "PR description" ||
+        name === "Delivery checks" ||
+        conclusion === "success" ||
+        conclusion === "skipped",
+    )
+  );
+}
+
+/**
  * The head's latest result on this PR is red. A title, description or label
  * change retests nothing, so it holds that red result instead of running the
  * code jobs again (#1373: an edit after an infrastructure failure doubled the
  * PR's macOS demand). Returns the red run's ID. The newest finished run that
  * tested code decides, on any base; a pass, a cancelled run or an unfinished
  * one is no red result to hold, and the event validates as before.
+ * A description-leaf-only failure also permits fresh validation with the new
+ * body; it remains failed evidence for reuse.
  *
  * @internal
  */
@@ -130,7 +170,9 @@ export async function redHeadResult(
     )
       continue;
     if (run.conclusion === "failure" || run.conclusion === "timed_out") {
-      if (testedNothing(run, await jobsForRun(run.id))) continue;
+      const jobs = await jobsForRun(run.id);
+      if (testedNothing(run, jobs) || descriptionLeafOnlyFailure(run, jobs))
+        continue;
       return run.id;
     }
     return undefined;
