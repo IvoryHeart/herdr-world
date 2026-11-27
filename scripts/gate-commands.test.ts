@@ -19,6 +19,7 @@ const staticCommands = [
   "notices:check",
   "check:dead",
   "check:size",
+  "check:test-waits",
   "check:commit",
   "typecheck:quick",
   "typecheck:bun",
@@ -78,7 +79,7 @@ const deadline = setTimeout(() => {
 const watcher = watch(record, finish);
 appendFileSync(record, command + "\\n");
 function finish() {
-  if (complete || readFileSync(record, "utf8").trim().split("\\n").length !== 12) return;
+  if (complete || readFileSync(record, "utf8").trim().split("\\n").length !== ${staticCommands.length}) return;
   complete = true;
   watcher.close();
   clearTimeout(deadline);
@@ -325,7 +326,10 @@ test.each(["", "check:dead"])(
           expect(summary).toContain(
             "First failure: static-check-dead (exit 37)",
           );
-        } else expect(summary).toContain("All 12 static checks passed");
+        } else
+          expect(summary).toContain(
+            `All ${staticCommands.length} static checks passed`,
+          );
       },
     );
     expect(result.status).toBe(failOn ? 1 : 0);

@@ -29,8 +29,8 @@ lane after all commands finish. The terminal names the first completed failure,
 and CI's Static checks summary lists every command, outcome, duration and log.
 CI splits the same commands across three Static checks matrix runners: `build`
 runs the production build, `types` runs both type commands, and `repository` runs
-the other nine checks. This avoids CPU contention on a single hosted runner;
-local `check:static` still runs all twelve concurrently. Each runner publishes
+the other ten checks. This avoids CPU contention on a single hosted runner;
+local `check:static` still runs all thirteen concurrently. Each runner publishes
 its own summary and `static-check-logs-<group>` artifact, including failed checks.
 Every matrix runner must pass; failure never cancels another group. Documentation
 changes retain their existing `check:docs` command on one repository runner.
