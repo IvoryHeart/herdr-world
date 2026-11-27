@@ -1,5 +1,6 @@
 import { createRoot } from "react-dom/client";
 import { bridge } from "../api";
+import { publishedHostGrouping } from "../../../shared/hostGrouping";
 import type { BoardDocument } from "./board/boardDocument";
 import "../styles/tokens.css";
 import "../styles/base.css";
@@ -8,7 +9,8 @@ import "./world.css";
 // The whole World on a synthetic copy of one real machine's topology (#1198):
 // two Herdr TUI connections on one socket (a startup default and a saved
 // profile), a herdr-core and an unreachable SSH remote, from the server's
-// read model. `?townBuildings=machine|runtime` picks the layout. The page
+// read model. `?grouping=machine|runtime` is the Group runtimes setting the
+// service publishes, with the grouping it derives (host_grouping). The page
 // only renders and records; the runner drives it with real pointer input
 // (TownOwnerTopology.browser.test.ts). Nothing reaches a runtime.
 
@@ -146,14 +148,12 @@ const socket = {
 };
 
 async function run() {
-  const mode = new URLSearchParams(location.search).get("townBuildings");
+  const mode = new URLSearchParams(location.search).get("grouping");
   const [before, started] = await Promise.all(
     ["/snapshot", "/snapshot?started=t9"].map(async (path) =>
       (await fetch(path)).json(),
     ),
   );
-  observed.snapshot = before;
-  observed.started = started;
   const [
     { __storeTesting, emptyServerSessionState, store },
     { worldRuntimeStore },
@@ -171,7 +171,7 @@ async function run() {
   ]);
   // The Town Master's greeting would sit over what the runner presses.
   quietGreetingForTest();
-  history.replaceState(null, "", `/?townBuildings=${mode}`);
+  history.replaceState(null, "", "/");
   initializeLayoutPreferences();
   initializeShortcutPreferences();
   store.init = () => {};
@@ -224,6 +224,18 @@ async function run() {
       },
     ],
   });
+  // The service derives the grouping into each reply (shared/hostGrouping.ts).
+  const { connections, coreConnections } = store.get();
+  const publish = (snapshot: { connections: [] }) => ({
+    ...snapshot,
+    host_grouping: publishedHostGrouping(
+      { connections, core: coreConnections ?? [] },
+      mode,
+      snapshot.connections,
+    ),
+  });
+  observed.snapshot = publish(before);
+  observed.started = publish(started);
   await worldRuntimeStore.refresh();
   const root = document.createElement("div");
   document.body.append(root);

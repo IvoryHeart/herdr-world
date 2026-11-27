@@ -97,8 +97,13 @@ export async function browserSocket(base: string, cookie: string) {
     ws.onerror = () => reject(new Error("WebSocket failed"));
     ws.onmessage = (event) => {
       const message = JSON.parse(String(event.data));
-      if (message.hello) resolve(message);
-      if (typeof message.id === "string") replies.get(message.id)?.(message);
+      // Reply continuations can publish host events and send another RPC to
+      // this same process. Let Bun finish its native socket read first: doing
+      // that work inside the read can corrupt parsing of batched frames.
+      setImmediate(() => {
+        if (message.hello) resolve(message);
+        if (typeof message.id === "string") replies.get(message.id)?.(message);
+      });
     };
   });
   let sequence = 0;

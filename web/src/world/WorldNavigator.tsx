@@ -33,8 +33,8 @@ export function WorldNavigator({
   // Every shell render reaches here; project only when the World changes.
   const projection = useMemo(() => projectWorldTree(world), [world]);
   const [collapsed, setCollapsed] = useState<Set<string>>(new Set());
-  // Hosts as World's "Group runtimes" setting groups them (worldHosts.ts):
-  // a machine's runtimes under one heading, each runtime row naming its
+  // Hosts as World publishes them, machines (worldHosts.ts), whatever
+  // "Group runtimes" says: a machine's runtimes under one heading, each runtime row naming its
   // runtime; a lone runtime keeps its own row.
   const groupOf = useHostGroupOf();
   const groups = useMemo(

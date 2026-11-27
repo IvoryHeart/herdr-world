@@ -8,7 +8,7 @@ import {
   otherHostSummaries,
   partitionDesk,
 } from "./DeskView";
-import { deskHostLabel } from "./DeskOtherHosts";
+import { deskHostLabel } from "./deskOtherHostsModel";
 import { agentThreadTitle } from "./worldObject";
 import {
   deskClient,

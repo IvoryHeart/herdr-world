@@ -10,10 +10,10 @@ import {
   adoptTownReceptionFilter,
   connectTownReceptionFilter,
 } from "../world/town/townReceptionSetting";
+import { RUNTIME_GROUPING_SETTING_KEY } from "../../../shared/hostGrouping";
 import {
-  RUNTIME_GROUPING_SETTING_KEY,
-  adoptRuntimeGrouping,
-  connectRuntimeGrouping,
+  adoptRuntimeGroupingSetting,
+  connectRuntimeGroupingMigration,
 } from "../world/runtimeGrouping";
 
 /**
@@ -48,9 +48,9 @@ const ADOPTERS: ReadonlyArray<
 > = [
   [SHORTCUT_SETTING_KEY, (value) => adoptShortcutPreferences(value)],
   [TOWN_RECEPTION_SETTING_KEY, (value) => adoptTownReceptionFilter(value)],
-  // Ordered by the service's revision and its own pending saves
-  // (world/runtimeGrouping.ts).
-  [RUNTIME_GROUPING_SETTING_KEY, adoptRuntimeGrouping],
+  // Views read the grouping from the replica; this only offers a missing
+  // value from the browser's older Town choice (world/runtimeGrouping.ts).
+  [RUNTIME_GROUPING_SETTING_KEY, (value) => adoptRuntimeGroupingSetting(value)],
 ];
 
 /** Hand one key's published value to its view, unless its own write holds it. */
@@ -142,18 +142,12 @@ async function hydrateUiSettings() {
     connectTownReceptionFilter(async (value) => {
       await update(TOWN_RECEPTION_SETTING_KEY, value);
     });
-    connectRuntimeGrouping(async (value, options) => {
-      const answer = await update(
-        RUNTIME_GROUPING_SETTING_KEY,
-        value,
-        options?.onlyIfAbsent ? { only_if_absent: true } : {},
-      );
-      return {
-        value: answer?.value,
-        revision:
-          typeof answer?.revision === "number" ? answer.revision : undefined,
-      };
-    });
+    // The only grouping write a browser makes here: its older Town choice,
+    // stored only while the service holds none. Explicit changes are World
+    // commands (world/worldCommands.ts).
+    connectRuntimeGroupingMigration((value) =>
+      update(RUNTIME_GROUPING_SETTING_KEY, value, { only_if_absent: true }),
+    );
     // Adopting a missing grouping may offer this browser's older Town
     // choice, so the write paths are installed first.
     adoptPublishedUiSettings({ ui, revision });
@@ -179,7 +173,7 @@ export function installUiSettings(): void {
       writes.clear();
       disconnectShortcutPreferences();
       connectTownReceptionFilter(null);
-      connectRuntimeGrouping(null);
+      connectRuntimeGroupingMigration(null);
     }
   });
 }

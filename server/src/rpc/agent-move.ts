@@ -4,7 +4,7 @@ import type {
   AgentMoveRequest,
 } from "../../../shared/agentMove";
 import { connectionRecoveryFingerprint } from "../connections/profiles";
-import { moveAgentAcross } from "../world/agent-move";
+import { type AgentMoveDeps, moveAgentAcross } from "../world/agent-move";
 import { moveSide } from "../world/agent-move-sides";
 import type { BridgeRpcContext } from "./context";
 
@@ -94,6 +94,32 @@ export async function handleAgentMoveRpc(
   }
 }
 
+/**
+ * Testing switch (`?moveBoardRefuses=1`, web/src/world/moveBoardRefuses.ts):
+ * the Board refuses this move's desk rehome (`agent.rehome`), as a refusing
+ * Board would, so a move that lands while its desk details stay behind can
+ * be tried. Other patches (the spawn links kept before a close) pass.
+ * @internal exported for tests.
+ */
+export function boardRefusingRehome(
+  board: AgentMoveDeps["board"],
+): AgentMoveDeps["board"] {
+  return () => {
+    const store = board();
+    return {
+      get: () => store.get(),
+      patch(plan) {
+        const ops = typeof plan === "function" ? plan(store.get()) : plan;
+        if (ops?.some((op) => op.op === "agent.rehome"))
+          return Promise.reject(
+            new Error("the Board refused the change (testing switch)"),
+          );
+        return store.patch(plan);
+      },
+    };
+  };
+}
+
 async function startMove(
   rpc: BridgeRpcContext,
   logger: BridgeRpcContext["services"]["logger"],
@@ -105,6 +131,9 @@ async function startMove(
       false,
     ) as AgentMoveRequest["destination"],
     ...(rpc.params?.fresh === true ? { fresh: true } : {}),
+    ...(rpc.params?.test_board_refuses === true
+      ? { test_board_refuses: true }
+      : {}),
   };
   const { services } = rpc;
   // Connections of one runtime endpoint (a startup default and a saved
@@ -122,7 +151,9 @@ async function startMove(
     {
       side: (id, generation) =>
         moveSide(services, id, generation, undefined, aliases(id)),
-      board: services.board,
+      board: request.test_board_refuses
+        ? boardRefusingRehome(services.board)
+        : services.board,
       publishBoardChanged: services.publishBoardChanged,
       publishWorldInvalidation: services.publishWorldInvalidation,
       sameRuntime: (a, b) => endpointOf(a) === endpointOf(b),

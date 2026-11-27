@@ -2,7 +2,12 @@ import { expect, test } from "bun:test";
 import { fixtureHost, fixtureWorld, type FixtureSpace } from "./boardFixture";
 import { groupBoardZones, projectBoard, zoneHostKeys } from "./boardModel";
 import { emptyLayout, placeNew, positions } from "./boardPlacement";
-import { hostGroupOf, type WorldHost } from "../../worldHosts";
+import {
+  deriveHostGrouping,
+  type GroupingHost,
+  type RuntimeGrouping,
+} from "../../../../shared/hostGrouping";
+import { hostGroupOf as publishedGroupOf } from "../../worldHosts";
 
 const spaces = (count: number): FixtureSpace[] =>
   Array.from({ length: count }, (_, s) => ({
@@ -12,17 +17,22 @@ const spaces = (count: number): FixtureSpace[] =>
 
 const catalogue = (
   id: string,
-  runtime: WorldHost["runtime"],
+  runtime: GroupingHost["runtime"],
   machine: string,
-): WorldHost => ({
+): GroupingHost => ({
   id,
   label: id,
   runtime,
-  state: "ready",
-  generation: 1,
   endpoint: `${runtime}:${id}`,
   machine,
+  writable: true,
+  // This computer's TUI is the startup default: World lists it first.
+  isDefault: id === "tui",
 });
+
+/** Board's groups as World publishes them for this catalogue and setting. */
+const hostGroupOf = (hosts: GroupingHost[], grouping: RuntimeGrouping) =>
+  publishedGroupOf(deriveHostGrouping(hosts, grouping, () => false));
 
 // Herdr TUI and herdr-core on this computer, and one SSH machine between them.
 const hosts = [
@@ -66,19 +76,24 @@ test("one per machine: a machine's runtimes share one Board zone, each keeping i
   expect(zoneHostKeys(model, "remote")).toEqual(["remote"]);
 });
 
-test("one per runtime: every runtime is its own zone, as before", () => {
+test("one per runtime: Board's zones are still machines; only Town's buildings split", () => {
+  const byMachine = groupBoardZones(
+    projectBoard(world),
+    hostGroupOf(hosts, "machine"),
+  );
   const model = groupBoardZones(
     projectBoard(world),
     hostGroupOf(hosts, "runtime"),
   );
   expect(model.zones.map((zone) => zone.hosts.map((host) => host.key))).toEqual(
-    [["tui"], ["remote"], ["core"]],
+    [["tui", "core"], ["remote"]],
   );
-  expect(zoneHostKeys(model, "core")).toEqual(["core"]);
+  expect(model.zones).toEqual(byMachine.zones);
+  expect(zoneHostKeys(model, "core")).toEqual(["tui", "core"]);
 });
 
-test("saved anchors survive a grouping switch, and a runtime joining a placed machine goes beside it", () => {
-  const byRuntime = groupBoardZones(
+test("saved anchors survive, and a runtime joining a placed machine goes beside it", () => {
+  const before = groupBoardZones(
     projectBoard(
       fixtureWorld([
         fixtureHost("tui", spaces(2)),
@@ -87,8 +102,8 @@ test("saved anchors survive a grouping switch, and a runtime joining a placed ma
     ),
     hostGroupOf(hosts, "runtime"),
   );
-  const saved = placeNew(byRuntime, emptyLayout());
-  // herdr-core starts later, with the setting at one per machine.
+  const saved = placeNew(before, emptyLayout());
+  // herdr-core starts later.
   const byMachine = groupBoardZones(
     projectBoard(world),
     hostGroupOf(hosts, "machine"),

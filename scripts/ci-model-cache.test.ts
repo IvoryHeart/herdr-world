@@ -1,8 +1,9 @@
+import { verificationJobs, modelPartScope } from "./ci-model-plan";
 import { expect, test } from "bun:test";
 import { validateModelBundle, type ModelBundle } from "./ci-model-cache";
 import { verificationShard } from "./ci-verification";
 import type { VerificationManifest } from "./verification-evidence";
-import limits from "../tools/quint/resources.json";
+import limits from "../tools/quint/model-resources.json";
 import checker from "../tools/quint/checker.json";
 import tooling from "../tools/quint/package.json";
 
@@ -39,7 +40,7 @@ function fixture(): ModelBundle {
     shard: {
       kind: "ci-shard",
       index: 1,
-      total: 3,
+      total: verificationJobs.length,
       attempt: 1,
       run: "original-run",
       complete: true,
@@ -65,8 +66,8 @@ function fixture(): ModelBundle {
         },
         sourceRevision: "c".repeat(40),
         sourceInputs: [input],
-        scope: { kind: "focused", models: [record.model] },
-        results: [{ name: record.model }],
+        scope: modelPartScope(1),
+        results: [{ name: record.model, controls: [] }],
         complete: true,
         commands: [{ code: 0 }],
       } as VerificationManifest,
