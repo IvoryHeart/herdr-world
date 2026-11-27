@@ -188,6 +188,50 @@ const tabFor = async (
   address: string,
 ) => String((await w.rows()).panes.find((p) => p.pane_id === address)!.tab_id);
 
+test("two desks moved into Crew keep one space ID and distinct tab IDs", async () => {
+  const w = await fixture();
+  w.fake.create({
+    labels: {
+      "herdr.space": "crew",
+      "herdr.tab": "crew-anchor",
+      where: "Crew / Anchor",
+    },
+  });
+  await w.settle();
+  const before = w.fake.calls.length;
+  for (const address of ["t1", "t3"]) {
+    expect(
+      await moveCore(w.lease(), w.topology, {
+        kind: "desk",
+        tab_id: await tabFor(w, address),
+        workspace_id: "hc:space:crew",
+      }),
+    ).toMatchObject({ status: "moved" });
+  }
+  const moved = ["t1", "t2", "t3"].map((a) => w.fake.terminal(a)!);
+  expect(moved[0]!.labels!["herdr.tab"]).toBe(moved[1]!.labels!["herdr.tab"]);
+  expect(moved[0]!.labels!["herdr.tab"]).not.toBe(
+    moved[2]!.labels!["herdr.tab"],
+  );
+  for (const record of moved) {
+    expect(structuredClone(record.labels)).toMatchObject({
+      "herdr.space": "crew",
+      "herdr.tab": expect.stringMatching(/^world-b[0-9a-f]{12}$/),
+      "herdr.seen": "7",
+      "herdr.pinned": "1",
+      "herdr-world.summary": "Keep this",
+      where: expect.stringMatching(/^Crew \/ /),
+    });
+  }
+  expect(
+    w.fake.calls
+      .slice(before)
+      .some((c) =>
+        ["terminal.run", "terminal.kill", "doc.set"].includes(c.method),
+      ),
+  ).toBe(false);
+});
+
 test("World-started agents and shells move between World rooms, app spaces and existing app desks", async () => {
   const w = await fixture();
   const lease = w.lease();

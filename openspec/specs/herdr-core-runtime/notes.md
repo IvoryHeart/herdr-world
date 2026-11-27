@@ -10,6 +10,8 @@
 
 - `server/src/herdr-core/host-runtime.ts`
 - `server/src/herdr-core/host-runtime.test.ts`
+- `server/src/herdr-core/operations.ts`, `server/src/herdr-core/operations.test.ts`
+  (launch placement labels)
 - `server/src/herdr-core/town-move.ts`
 - `server/src/herdr-core/town-moves.test.ts`
 - `server/src/herdr-core/connections.test.ts`
@@ -32,7 +34,8 @@
 - `server/src/herdr-core/harness-start.test.ts`
 - `server/src/herdr-core/testing/capture-harness-start.ts`
 - `server/src/herdr-core/testing/recorded/core-0.1.21-harness-start.json`
-- `server/src/herdr-core/core.live.test.ts` (native status in the unified read model)
+- `server/src/herdr-core/core.live.test.ts` (native status in the unified read model;
+  isolated two-tab launch/move placement readback)
 - `server/src/herdr-core/harnesses.live.test.ts` (ready, blocked and completed reports)
 - `scripts/herdr-core-smoke.ts` (checksum-verified newest-release live suites)
 - `scripts/release-walk/contract.py`, `scripts/release-walk/assets.py` (pinned
@@ -140,6 +143,40 @@ no control for it. Platform and harness limits apply across the table.
   releases for drift without changing your installed runtime.
   Release-walk acceptance pins **0.1.22** for repeatable runtime downloads and
   receipts; install previews and fake release fixtures use the same baseline.
+
+### App placement contract and dispatcher labels
+
+Herdr's published [app skill](https://github.com/herdrdev/herdr-app/blob/1180a5cec3b8bd4dfebf4a9b217ab8cb59a96ffa/src/SKILL.md)
+and [guide](https://github.com/herdrdev/herdr-app/blob/1180a5cec3b8bd4dfebf4a9b217ab8cb59a96ffa/defaults/AGENTS.md)
+say `herdr.space` selects a space and `herdr.tab` selects a tab. IDs are opaque,
+local to that core's machine; strip the app's remote-machine prefix when writing.
+Unknown IDs are adopted as an unnamed space/tab: no pre-existing app layout is
+required. The app's `reconcile` / `adopt` implementation in
+[`src/window.rs`](https://github.com/herdrdev/herdr-app/blob/1180a5cec3b8bd4dfebf4a9b217ab8cb59a96ffa/src/window.rs)
+uses those IDs. Core's [schema](https://github.com/herdrdev/herdr-core/blob/2e8043a2a47db0130943135805f4ec82c2a764bd/schema/README.md)
+and `hc schema` describe free-form label maps, not a core space registry.
+
+Names are separate: the app's `Model::space_name` / `tab_name` in
+[`src/model.rs`](https://github.com/herdrdev/herdr-app/blob/1180a5cec3b8bd4dfebf4a9b217ab8cb59a96ffa/src/model.rs)
+use its layout's explicit names, else the first terminal's folder and tab ordinal.
+`where=<space> / <tab>` is a readable caption, not an adoption naming input.
+There is no supported display-name label; that part of
+[Q8 / app #43](https://github.com/herdrdev/herdr-app/issues/43) remains open.
+World keeps its own names and never writes the app-owned layout.
+
+The crew dispatcher must keep `herdr.space=crew` on **every** crew terminal,
+use a distinct `herdr.tab=crew-<issue>` per desk (the same value for panes sharing
+a desk), and set `where=Crew / crew-<issue>`. Launch with `--keep` and
+`herdr.seen=0`; preserve unrelated labels on moves. Do not change the space ID to
+each issue's name or add speculative name labels. These are already the reported
+crew grouping labels; no additional grouping label is missing. They cannot
+guarantee the app's displayed name **Crew** until upstream supports naming.
+
+World's existing launch/move writes meet this contract. Provider regressions and
+the isolated live-core test pin that fact. The owner's Android observation still
+needs an app fix/investigation; see the prepared
+[upstream report](../../../docs/herdr-app-placement-report.md). The native app
+was unavailable locally, so its grouping was not independently reproduced.
 
 ### Runtime limits
 

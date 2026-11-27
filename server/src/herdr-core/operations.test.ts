@@ -47,6 +47,58 @@ const confirmAll = (plan: CoreKillPlanView): CoreKillConfirmation => ({
 });
 
 describe("launching in herdr-core (M2, M3)", () => {
+  test.each(["app", "world"] as const)(
+    "two launches share one %s space with distinct app tab IDs",
+    async (owner) => {
+      const w = await world();
+      const workspaceId =
+        owner === "world"
+          ? (await createCoreRoom(w.lease(), w.topology, "Crew")).workspace_id
+          : "hc:space:crew";
+      if (owner === "app") {
+        w.fake.create({
+          labels: {
+            "herdr.space": "crew",
+            "herdr.tab": "crew-anchor",
+            where: "Crew / Anchor",
+          },
+        });
+        await w.settle();
+      }
+      const started = [];
+      for (const label of ["First", "Second"]) {
+        const result = await launchCore(
+          w.lease(),
+          { workspaceId, kind: "codex", label, text: "" },
+          { topology: w.topology, resolveExecutable },
+        );
+        if (!("terminal_id" in result)) throw new Error("launch failed");
+        started.push(w.fake.terminal(result.terminal_id)!);
+      }
+      const space =
+        owner === "app"
+          ? "crew"
+          : `world-${workspaceId.slice("hc:room:".length)}`;
+      expect(new Set(started.map((t) => t.labels?.["herdr.tab"])).size).toBe(2);
+      for (const [index, record] of started.entries()) {
+        const labels = {
+          "herdr.space": space,
+          "herdr.tab": expect.stringMatching(/^world-b[0-9a-f]{12}$/),
+          "herdr.seen": "0",
+          where: `Crew / ${index === 0 ? "First" : "Second"}`,
+        };
+        // Read back both core records and the actual RPC parameters. These
+        // are machine-local IDs; no app layout or display-name label is needed.
+        expect(structuredClone(record.labels)).toEqual(labels);
+        expect(structuredClone(runs(w)[index]!.params)).toMatchObject({
+          labels,
+          keep: true,
+        });
+      }
+      expect(w.fake.calls.some((c) => c.method === "doc.set")).toBe(false);
+    },
+  );
+
   test("a non-Claude/Codex profile sends its role and brief through native delivery", async () => {
     const w = await world({ runStatus: "idle" });
     const room = await createCoreRoom(w.lease(), w.topology, "Review");
@@ -177,7 +229,7 @@ describe("launching in herdr-core (M2, M3)", () => {
     expect(labels["herdr.space"]).toMatch(/^world-r[0-9a-f]{12}$/);
     expect(labels["herdr.tab"]).toMatch(/^world-b[0-9a-f]{12}$/);
     expect(labels["herdr.seen"]).toBe("0");
-    // The app shows these names, not the IDs above.
+    // A human-readable hc/World caption, not an app display-name input.
     expect(labels.where).toBe("Review / Reviewer");
     // The app adopts it by those labels: it is live, kept and placed.
     const record = w.fake.terminal("t1")!;

@@ -295,7 +295,8 @@ export async function launchCore(
           "herdr.tab": `world-${tabId}`,
           // A terminal a client starts has seen nothing yet (labels.md).
           "herdr.seen": "0",
-          // The app's caption: the IDs above are not names a person reads.
+          // hc/World caption. App adoption groups by the IDs above; its
+          // display names belong to its layout (upstream app issue #43).
           where: `${caption.label} / ${tabLabel}`.slice(
             0,
             2 * CORE_TOPOLOGY_LIMITS.label + 3,

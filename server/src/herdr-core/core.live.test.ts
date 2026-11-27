@@ -43,6 +43,9 @@ import { WorldSnapshotService } from "../world/snapshot";
 import type { TaskEvent } from "../notifications/task-events";
 import { handleCoreSharedRpc } from "../rpc/core-shared";
 import { coreAgentStatus } from "./topology";
+import { memoryCoreTopologyPort } from "../storage/core-topology";
+import { createCoreRoom, launchCore } from "./operations";
+import { moveCore } from "./town-move";
 
 // Opt in with HERDR_CORE_BIN=<official herdr-core binary>. Linux only; every
 // process runs under scratch HOME/XDG directories and is killed afterwards.
@@ -80,10 +83,12 @@ function keepsObservedSize(version: string): boolean {
 function worldFor(stateDir: string, pushed: TaskEvent[] = []) {
   const root = mkdtempSync(join(tmpdir(), "hcw-world-"));
   roots.push(root);
+  const topology = memoryCoreTopologyPort();
   const core = createCoreConnections({
     logger: silentLogger,
     changed: () => {},
     profiles: () => service,
+    topology: () => topology,
     transportFor: () => localCoreTransport(stateDir),
     push: (task, isCurrent) => {
       if (isCurrent()) pushed.push(task);
@@ -132,10 +137,107 @@ function worldFor(stateDir: string, pushed: TaskEvent[] = []) {
   };
   const observation = () =>
     core.observations.get("core") as CoreObservation | null;
-  return { service, core, profile, observation };
+  return { service, core, profile, observation, topology };
 }
 
 describe("herdr-core live (real release binary)", () => {
+  live(
+    "World launches two tabs in one app space and moves them with the same label contract",
+    async () => {
+      const core = new ScratchCore(bin!);
+      scratch.push(core);
+      await core.start();
+      const w = worldFor(core.stateDir);
+      try {
+        await w.service.create(w.profile);
+        await until(() => w.core.manager.status("core").state === "ready");
+        const lease = w.core.manager.readyRuntimeLease("core")!;
+        const room = await createCoreRoom(lease, w.topology, "Crew");
+        const started = [];
+        for (const label of ["First", "Second"]) {
+          const result = await launchCore(
+            lease,
+            {
+              workspaceId: room.workspace_id,
+              kind: "codex",
+              label,
+              args: ["600"],
+              text: "",
+            },
+            // A harmless stand-in, with no harness credentials or user config.
+            {
+              topology: w.topology,
+              resolveExecutable: async () => "/bin/sleep",
+            },
+          );
+          if (!("terminal_id" in result)) throw new Error("launch failed");
+          const record = JSON.parse(
+            await core.hc("get", "--json", result.terminal_id),
+          );
+          expect(structuredClone(record.labels)).toEqual({
+            "herdr.space": `world-${room.workspace_id.slice("hc:room:".length)}`,
+            "herdr.tab": expect.stringMatching(/^world-b[0-9a-f]{12}$/),
+            "herdr.seen": "0",
+            where: `Crew / ${label}`,
+          });
+          expect(record.keep).toBe(true);
+          started.push({ result, record });
+        }
+        expect(
+          new Set(started.map(({ record }) => record.labels["herdr.tab"])).size,
+        ).toBe(2);
+        const target = await createCoreRoom(lease, w.topology, "Workshop");
+        for (const { result, record } of started) {
+          expect(
+            await moveCore(lease, w.topology, {
+              kind: "desk",
+              tab_id: result.tab_id,
+              workspace_id: target.workspace_id,
+            }),
+          ).toMatchObject({ status: "moved" });
+          const moved = JSON.parse(
+            await core.hc("get", "--json", result.terminal_id),
+          );
+          expect(structuredClone(moved.labels)).toMatchObject({
+            "herdr.space": `world-${target.workspace_id.slice("hc:room:".length)}`,
+            "herdr.tab": expect.stringMatching(/^world-b[0-9a-f]{12}$/),
+            "herdr.seen": "0",
+            where: expect.stringMatching(/^Workshop \/ /),
+          });
+          expect(moved.pid).toBe(record.pid);
+          expect(moved.argv).toEqual(record.argv);
+        }
+        const listing = JSON.parse(await core.hc("ls", "--json"));
+        const terminals = await Promise.all(
+          listing.terminals.map(async (t: { address: string }) =>
+            JSON.parse(await core.hc("get", "--json", t.address)),
+          ),
+        );
+        expect(terminals).toHaveLength(2);
+        expect(
+          new Set(
+            terminals.map(
+              (t: { labels: Record<string, string> }) =>
+                t.labels["herdr.space"],
+            ),
+          ).size,
+        ).toBe(1);
+        expect(
+          new Set(
+            terminals.map(
+              (t: { labels: Record<string, string> }) => t.labels["herdr.tab"],
+            ),
+          ).size,
+        ).toBe(2);
+      } finally {
+        w.service.stopSupervision();
+        await w.core.stop();
+        w.topology.close();
+      }
+    },
+    30_000,
+  );
+
   live(
     "connected; kill -9 goes stale; the same agents return at the same addresses",
     async () => {
