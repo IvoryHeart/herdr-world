@@ -14,6 +14,7 @@
 - `scripts/coverage.test.ts`
 - `quint/models.ts`
 - `scripts/ci-model-plan.ts`, `scripts/ci-model-inputs.ts`, `scripts/ci-model-cache.ts` (independent model input closures and main-only evidence reuse)
+- `scripts/ci-model-groups.ts`, `scripts/ci-model-groups.test.ts` (four time-packed runner groups, four concurrent parts, shared resource receipts and per-part cache admission)
 - `scripts/ci-model-parts.ts`, `scripts/ci-verification.ts` (complete split-model evidence and canonical aggregation)
 - `tools/quint/model-resources.json`, `tools/quint/tlc-ci.json` (owner-approved four-CPU model-only CI envelope)
 - `scripts/features.ts`
@@ -71,7 +72,7 @@
 - `server/src/config/service-discovery.ts`
 - `server/src/config/service-uninstall.test.ts`
 - `scripts/`
-- `.github/workflows/behavioral-verification.yml`, `scripts/ci-workflow.test.ts` (unconditional current-tree type/notices checks alongside reusable model shards)
+- `.github/workflows/behavioral-verification.yml`, `scripts/ci-workflow.test.ts` (current-tree type/notices checks on group 1, complete model evidence, and the sixteen-job full graph budget)
 - `.github/workflows/`
 - `.githooks/`
 - `site/`

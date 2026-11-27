@@ -27,14 +27,21 @@ alongside non-browser shards. Its independent commands run concurrently, each
 with a separate `static-*.log` in `.agents/delivery/lanes/`; any failure fails the
 lane after all commands finish. The terminal names the first completed failure,
 and CI's Static checks summary lists every command, outcome, duration and log.
-CI splits the same commands across three Static checks matrix runners: `build`
-runs the production build, `types` runs both type commands, and `repository` runs
-the other ten checks. This avoids CPU contention on a single hosted runner;
-local `check:static` still runs all thirteen concurrently. Each runner publishes
-its own summary and `static-check-logs-<group>` artifact, including failed checks.
-Every matrix runner must pass; failure never cancels another group. Documentation
-changes retain their existing `check:docs` command on one repository runner.
+Full CI fits sixteen runner jobs: Validation scope, four combined unit/static/web
+runners, six World browser runners, four model groups, and Delivery checks. The
+three static groups remain separate: `types` follows unit shard 2, `build` follows
+unit shard 3, and `repository` plus shipped dependency security follows unit shard
+4. Web browser partitions 1 and 2 follow unit shards 1 and 2. These steps run
+sequentially on each runner, preserving the unit and Chrome concurrency limits;
+static and browser checks still run after a unit failure. Each static group
+publishes its own summary and `static-check-logs-<group>` artifact. Documentation
+changes run `check:docs` and dependency security on one repository runner.
 Checkout retains full Git history for ratchets, filtering historical file blobs.
+`scripts/ci-workflow.test.ts` counts runner leaves recursively through reusable
+workflows and matrix expansions for default full PR, merge-queue and manual runs;
+more than sixteen fails. Optional release previews and browser diagnostics are
+outside that default graph. Browser repartitioning must satisfy the same total
+job budget; a `max-parallel` limit alone does not reduce the count.
 Static checks never retry. `check:changed` remains an explicit local affected
 check and `check:delivery` an explicit complete local gate. Neither is a push hook.
 `check:source` is a local compatibility command, not a release gate.
@@ -55,7 +62,7 @@ The build consumers listed in `scripts/ci-unit-shards.ts` stay on the first shar
 Only a shard selecting those files runs `bun run build`; ordinary scoped units
 need no build. Packing includes a 25-second build allowance. The other shards run
 from clean checkouts without generated assets, so a new undeclared consumer fails
-instead of silently acquiring a second build. Static checks retain their own build.
+instead of silently acquiring a second build. The static build remains a separate step on shard 3.
 
 The timing table was bootstrapped from Bun 1.4.4 Linux x64 serial JUnit. It records
 the outer file-suite time, including setup, without counting nested describe
@@ -98,10 +105,11 @@ deletions and both sides of renames retain their consumers. Golden comparisons
 remain advisory and help picture generation remains an explicit capture command.
 
 Scope checks out the complete Git history with `filter: blob:none`. The PR
-description policy runs as its own leaf after scope, alongside static checks,
-units, dependency security, World and web browser shards, and model shards.
-**Delivery checks** depends directly on those leaves and requires each selected
-lane to succeed; unselected lanes must be skipped. There are no intervening
+description policy runs in Delivery after the code and model evidence steps.
+Units carry the existing static, dependency security and web browser checks;
+World browser and model groups remain separate runners.
+**Delivery checks** depends directly on the combined leaves and requires each
+selected lane to succeed; unselected lanes must be skipped. There are no intervening
 repository, web-browser or behavioral aggregate runners in the PR graph.
 Delivery downloads the model manifests and resource receipts, applies the same
 complete source/tool/model/resource checks, and retains the canonical evidence
@@ -119,23 +127,30 @@ proof establishes an identical tree. A newer red/cancelled verdict is never
 skipped; absent proof or API errors keep a red metadata result without starting
 another suite in that aggregate. An independent **Main model evidence** job runs
 the model lane fresh and saves successful per-model evidence in main's cache scope.
-Model shards restore exact keys before dependency/checker installation; only a
-validated receipt skips model execution. A separate unconditional job installs
-the locked development tooling and runs `verification:typecheck` and
-`verification:notices:check` once on the current tree, including Quint tests
-that do not invalidate model keys. Its failure blocks Delivery even when every
-model reuses evidence; it needs no Java or checker installation. Merge groups, manual runs and nightly/release checks
+The 26 immutable model/part identities are packed longest-first by recorded
+resource-step times from main run 46077711273 into four balanced groups
+(`scripts/ci-model-plan.ts`). Each group admits at most four concurrent parts inside one existing
+400% CPU / 4 GiB cgroup. Every part keeps its scope, controls, cache validation and
+resource receipt; the complete aggregate still requires all 26 parts. A group
+cache restores the latest bundle set, and each part independently validates its
+current content/tool key before dependency/checker installation. Invalid or
+missing parts run fresh. Only main saves successful bundles. Group 1 always
+installs locked development tooling and runs `verification:typecheck` and
+`verification:notices:check` on the current tree, including complete cache hits.
+Its failure blocks Delivery even when every model reuses evidence. Merge groups, manual runs and nightly/release checks
 stay fresh. Nightly catches integration/platform failures as one advisory issue.
 PR reuse still requires the same scope and checkout/base/head identities.
 The stability opt-in explicitly requests fresh repeated browser passes.
 
-If only **PR description** and **Delivery checks** fail, with scope successful
-and all code leaves successful or skipped in the same run, correcting the
-body and adding an eligible label permits fresh validation. This also works after
+If only Delivery's **Check PR description** step fails, with scope successful,
+all other Delivery steps successful or skipped and all code leaves successful or
+skipped, correcting the body and adding an eligible label permits fresh
+validation. Evidence and code failures still hold the head red. Older separate
+**PR description** jobs retain their existing recovery behavior. This also works after
 **Re-run failed jobs**: successful/skipped leaves may carry earlier attempts,
-while the failed description and Delivery must belong to the current attempt.
+while the failed description check and Delivery must belong to the current attempt.
 Failed Delivery evidence is still not reusable, and an earlier code failure still holds the head
-red. Rerunning the description job alone replays its original event body.
+red. Rerunning an older description job alone replays its original event body.
 
 After the owner approves a PR, it joins the merge queue for `main`. GitHub
 combines it with current main and any preceding queued PRs, then sends

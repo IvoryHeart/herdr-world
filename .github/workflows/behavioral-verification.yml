@@ -16,37 +16,12 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
-  # Test-only inputs intentionally do not invalidate model evidence. These
-  # current-tree checks therefore run once even when every shard reuses it.
-  tooling:
-    name: Verification types and tooling notices
-    runs-on: ubuntu-24.04
-    timeout-minutes: 5
-    steps:
-      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
-        with:
-          persist-credentials: false
-      - uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2
-        with:
-          bun-version: "1.4.4"
-          no-cache: true
-      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
-        with:
-          node-version: "24.19.0"
-      - run: bun install --frozen-lockfile
-      - name: Install locked development tooling
-        run: npm ci --prefix tools/quint --ignore-scripts --no-audit --no-fund
-      - name: Validate maintained types and tooling notices
-        run: |
-          bun run verification:typecheck
-          bun run verification:notices:check
-
   shards:
-    name: Behavioral models (${{ matrix.shard }}/26)
+    name: Behavioral models (${{ matrix.shard }}/4)
     strategy:
       fail-fast: false
       matrix:
-        shard: [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23, 24, 25, 26]
+        shard: [1, 2, 3, 4]
     runs-on: ubuntu-24.04
     timeout-minutes: 20
     steps:
@@ -68,18 +43,28 @@ jobs:
           architecture: x64
       - name: Hash model, adapter, replay, tooling and seed inputs
         id: content
-        run: bun scripts/ci-model-cache.ts key ${{ matrix.shard }}
+        run: bun scripts/ci-model-groups.ts key ${{ matrix.shard }}
       - uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
         if: github.event_name == 'pull_request'
         with:
-          path: .agents/model-cache/${{ matrix.shard }}
-          key: model-evidence-v2-${{ matrix.shard }}-${{ steps.content.outputs.hash }}
+          path: .agents/model-cache
+          key: model-group-v1-${{ matrix.shard }}-${{ steps.content.outputs.hash }}
+          restore-keys: model-group-v1-${{ matrix.shard }}-
       - name: Validate reusable model evidence
         id: reuse
         if: github.event_name == 'pull_request'
-        run: bun scripts/ci-model-cache.ts restore ${{ matrix.shard }}
+        run: bun scripts/ci-model-groups.ts restore ${{ matrix.shard }}
+      # Current-tree tooling checks always run, including complete cache hits.
       - run: bun install --frozen-lockfile
-        if: steps.reuse.outputs.reused != 'true'
+        if: matrix.shard == 1 || steps.reuse.outputs.reused != 'true'
+      - name: Install locked development tooling
+        if: matrix.shard == 1
+        run: npm ci --prefix tools/quint --ignore-scripts --no-audit --no-fund
+      - name: Validate maintained types and tooling notices
+        if: matrix.shard == 1
+        run: |
+          bun run verification:typecheck
+          bun run verification:notices:check
       - if: steps.reuse.outputs.reused != 'true'
         uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
         with:
@@ -90,18 +75,18 @@ jobs:
         run: bun run verification:setup
       - name: Run all accepted models within enforced resource limits
         if: steps.reuse.outputs.reused != 'true'
-        run: bun run verification:resources --system --shard=${{ matrix.shard }}/26
+        run: bun scripts/ci-model-groups.ts run ${{ matrix.shard }}
       - name: Exercise a failing candidate and verify retained diagnostics
         if: steps.reuse.outputs.reused != 'true'
         run: bun run verification:diagnostic-control
       - name: Prepare passing model evidence for reuse
         if: steps.reuse.outputs.reused != 'true'
-        run: bun scripts/ci-model-cache.ts save ${{ matrix.shard }}
+        run: bun scripts/ci-model-groups.ts save ${{ matrix.shard }}
       - uses: actions/cache/save@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
         if: success() && github.event_name == 'push' && github.ref == 'refs/heads/main'
         with:
-          path: .agents/model-cache/${{ matrix.shard }}
-          key: model-evidence-v2-${{ matrix.shard }}-${{ steps.content.outputs.hash }}
+          path: .agents/model-cache
+          key: model-group-v1-${{ matrix.shard }}-${{ steps.content.outputs.hash }}
       - name: Retain source-bound evidence manifests
         if: always()
         uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7
@@ -124,7 +109,7 @@ jobs:
   candidate:
     name: Behavioral verification
     if: github.event_name == 'workflow_dispatch' && github.workflow == 'Behavioral verification'
-    needs: [tooling, shards]
+    needs: shards
     runs-on: ubuntu-24.04
     timeout-minutes: 5
     steps:
