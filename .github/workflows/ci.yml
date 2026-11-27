@@ -196,11 +196,17 @@ jobs:
             - run: bun run security:check
 
     static:
-        name: Static checks
+        name: Static checks (${{ matrix.group }})
         needs: validation-scope
         if: needs.validation-scope.outputs.mode != 'reuse' && needs.validation-scope.outputs.mode != 'hold'
         runs-on: ubuntu-latest
         timeout-minutes: 30
+        strategy:
+            fail-fast: false
+            matrix:
+                # Keep CPU-heavy builds and type checking off the analysis runner.
+                # Docs still run their existing command once, on the repository runner.
+                group: ${{ fromJSON(needs.validation-scope.outputs.mode == 'docs' && '["repository"]' || '["repository","types","build"]') }}
         env:
             HERDR_WORLD_RATCHET_TARGET: ${{ github.event.pull_request.base.sha || github.event.merge_group.base_sha }}
             HERDR_CI_SELECTION: ${{ needs.validation-scope.outputs.selection }}
@@ -209,6 +215,8 @@ jobs:
               with:
                   persist-credentials: false
                   fetch-depth: 0
+                  # Keep history for ratchets without downloading historical blobs.
+                  filter: blob:none
                   # Match the immutable event base even if the PR merge ref advances.
                   ref: ${{ github.sha }}
             - uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2
@@ -221,7 +229,15 @@ jobs:
               run: bun run check:docs
             - name: Run static repository checks
               if: needs.validation-scope.outputs.mode != 'docs'
-              run: bun run check:static
+              run: bun run check:static --static-group=${{ matrix.group }}
+            - name: Upload static check logs
+              if: always() && needs.validation-scope.outputs.mode != 'docs'
+              uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7
+              with:
+                  name: static-check-logs-${{ matrix.group }}
+                  path: .agents/delivery/lanes/static-*.log
+                  include-hidden-files: true
+                  if-no-files-found: error
 
     unit-tests:
         name: Non-browser tests (${{ matrix.shard }}/2)
