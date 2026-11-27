@@ -71,12 +71,3 @@ export function parseHello(value: unknown): CoreHello {
     features,
   };
 }
-
-export type CoreServerStatus = {
-  core: { id: string; name: string };
-  version: string;
-  pid: number;
-  uptime_ms: number;
-  live: number;
-  finished: number;
-};

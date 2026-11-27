@@ -1,4 +1,3 @@
-import { appLayoutFixture } from "./testing/app-layout.fixture";
 import { type GuiSettings, repoSettingsKey } from "../config/gui-settings";
 import {
   chmodSync,
@@ -191,7 +190,6 @@ function populate(
   const helper = agent("helper", "opencode");
   fake.output(helper, screen("opencode", ["Waiting for a task."]));
   fake.create({ name: "fixture-shell" });
-  const unnamedSpaces = [];
   for (const folder of FIXTURE_UNNAMED_SPACES) {
     const project = join(root, "projects", folder);
     mkdirSync(project, { recursive: true });
@@ -204,27 +202,8 @@ function populate(
       labels: { "herdr.space": `fx-${folder}`, "herdr.tab": "fx-main" },
       foreground: { pid: 1, name: "codex", argv: ["codex"], cwd: project },
     });
-    unnamedSpaces.push({
-      id: `fx-${folder}`,
-      folder: project,
-      tabs: [{ id: `fx-${folder}-main`, terminals: [unnamed] }],
-    });
     fake.report(unnamed, { state: "idle", app: "codex" });
   }
-  fake.setAppLayout(
-    appLayoutFixture(
-      {
-        id: "fx-web",
-        name: "web",
-        folder: cwd,
-        tabs: [
-          { id: "fx-review", name: "review", terminals: [reviewer, builder] },
-          { id: "fx-research", name: "research", terminals: [scout] },
-        ],
-      },
-      ...unnamedSpaces,
-    ),
-  );
   // The desktop app shows its placed agents; the unplaced helper has no
   // pane, so core runs it at its headless size.
   for (const placed of [reviewer, builder, scout])

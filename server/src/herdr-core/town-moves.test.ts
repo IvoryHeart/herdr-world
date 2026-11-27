@@ -1,5 +1,3 @@
-import { appLayoutFixture } from "./testing/app-layout.fixture";
-import { until } from "./testing/core-world";
 import { moveCore } from "./town-move";
 import { createCoreRoom, launchCore } from "./operations";
 import { createRpcDispatcher } from "../service/rpc-dispatch";
@@ -49,19 +47,6 @@ test("Town moves core agents between desks and rooms through placement labels", 
     });
     core.fake.report(address, { state: "working", app: "claude" });
   }
-  core.fake.setAppLayout(
-    appLayoutFixture(
-      {
-        id: "source",
-        name: "source",
-        tabs: [
-          { id: "a", name: "a" },
-          { id: "b", name: "b" },
-        ],
-      },
-      { id: "target", name: "target", tabs: [{ id: "c", name: "c" }] },
-    ),
-  );
   await core.connect();
   const rows = await core.rows();
   const lease = core.lease();
@@ -202,53 +187,6 @@ const tabFor = async (
   w: Awaited<ReturnType<typeof coreWorld>>,
   address: string,
 ) => String((await w.rows()).panes.find((p) => p.pane_id === address)!.tab_id);
-
-test("two desks moved into Crew keep one space ID and distinct tab IDs", async () => {
-  const w = await fixture();
-  w.fake.setAppLayout(appLayoutFixture({ id: "crew", name: "Crew" }));
-  await w.settle();
-  await until(() => w.lease().runtime.core.mirror.appLayoutCurrent);
-  w.fake.create({
-    labels: {
-      "herdr.space": "crew",
-      "herdr.tab": "crew-anchor",
-      where: "Crew / Anchor",
-    },
-  });
-  await w.settle();
-  const before = w.fake.calls.length;
-  for (const address of ["t1", "t3"]) {
-    expect(
-      await moveCore(w.lease(), w.topology, {
-        kind: "desk",
-        tab_id: await tabFor(w, address),
-        workspace_id: "hc:space:crew",
-      }),
-    ).toMatchObject({ status: "moved" });
-  }
-  const moved = ["t1", "t2", "t3"].map((a) => w.fake.terminal(a)!);
-  expect(moved[0]!.labels!["herdr.tab"]).toBe(moved[1]!.labels!["herdr.tab"]);
-  expect(moved[0]!.labels!["herdr.tab"]).not.toBe(
-    moved[2]!.labels!["herdr.tab"],
-  );
-  for (const record of moved) {
-    expect(structuredClone(record.labels)).toMatchObject({
-      "herdr.space": "crew",
-      "herdr.tab": expect.stringMatching(/^world-b[0-9a-f]{12}$/),
-      "herdr.seen": "7",
-      "herdr.pinned": "1",
-      "herdr-world.summary": "Keep this",
-      where: expect.stringMatching(/^Crew \/ /),
-    });
-  }
-  expect(
-    w.fake.calls
-      .slice(before)
-      .some((c) =>
-        ["terminal.run", "terminal.kill", "doc.set"].includes(c.method),
-      ),
-  ).toBe(false);
-});
 
 test("World-started agents and shells move between World rooms, app spaces and existing app desks", async () => {
   const w = await fixture();

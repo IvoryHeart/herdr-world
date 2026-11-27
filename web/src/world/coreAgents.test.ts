@@ -1,4 +1,3 @@
-import { appLayoutFixture } from "../../../server/src/herdr-core/testing/app-layout.fixture";
 import { describe, expect, test } from "bun:test";
 import { herdrRuntimeFixture } from "../../../server/src/adapters/testing/runtime";
 import { CoreMirror } from "../../../server/src/herdr-core/mirror";
@@ -169,23 +168,6 @@ async function connectionsOf(coreStale = false, records = coreTerminals) {
       terminals: [...records.slice(0, 2), scout, records[3]!],
     } as never,
   });
-  mirror.acceptAppLayout(
-    {
-      value: appLayoutFixture({
-        id: "s1",
-        name: "web",
-        tabs: [
-          {
-            id: "c1",
-            name: "review",
-            terminals: records.map((r) => r.address),
-          },
-        ],
-      }),
-      version: 1,
-    },
-    mirror.appLayoutRevision,
-  );
   const tui = {
     ...herdrRuntimeFixture({
       call: async (method: string) => tuiRows[method] ?? {},

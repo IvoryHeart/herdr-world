@@ -8,23 +8,16 @@
 
 **Code:**
 
-- `server/src/herdr-core/app-layout.ts`, `server/src/herdr-core/app-layout.test.ts`
-  (bounded read-only app layout projection and authority regressions)
-- `server/src/herdr-core/testing/app-layout.fixture.ts`, `server/src/herdr-core/fixture.ts`,
-  `server/src/herdr-core/fixture-addresses.test.ts` (upstream document wire shape;
-  `?coreFixture` preview for app-owned move refusal)
-- `server/src/herdr-core/mirror.ts`, `server/src/herdr-core/runtime.ts`,
-  `server/src/herdr-core/client.ts`, `server/src/herdr-core/hello.ts`
-  (document read, invalidation, refresh and protocol reply types)
 - `server/src/herdr-core/topology.ts`, `server/src/herdr-core/topology.test.ts`,
-  `server/src/herdr-core/world-read-model.test.ts` (unified placement and names)
-- `server/src/herdr-core/float-shell.ts`, `server/src/herdr-core/push.ts`
-  (room consumers use the same app placement)
-- `web/src/world/coreAgents.test.ts` (shared placement through all view projections)
+  `server/src/herdr-core/world-read-model.test.ts` (shared room/tab projection)
+- `server/src/herdr-core/mirror.ts`, `server/src/herdr-core/runtime.ts`,
+  `server/src/herdr-core/client.ts` (observation, document events and framed RPC)
+- `server/src/herdr-core/operations.ts`, `server/src/herdr-core/operations.test.ts`
+  (launch placement)
+- `server/src/herdr-core/layout.ts`, `server/src/storage/core-topology.ts`,
+  `server/src/storage/catalog.ts` (legacy layout and migration metadata)
 - `server/src/herdr-core/host-runtime.ts`
 - `server/src/herdr-core/host-runtime.test.ts`
-- `server/src/herdr-core/operations.ts`, `server/src/herdr-core/operations.test.ts`
-  (launch placement labels)
 - `server/src/herdr-core/town-move.ts`
 - `server/src/herdr-core/town-moves.test.ts`
 - `server/src/herdr-core/connections.test.ts`
@@ -47,8 +40,7 @@
 - `server/src/herdr-core/harness-start.test.ts`
 - `server/src/herdr-core/testing/capture-harness-start.ts`
 - `server/src/herdr-core/testing/recorded/core-0.1.21-harness-start.json`
-- `server/src/herdr-core/core.live.test.ts` (native status in the unified read model;
-  isolated two-tab launch/move placement readback)
+- `server/src/herdr-core/core.live.test.ts` (native status in the unified read model)
 - `server/src/herdr-core/harnesses.live.test.ts` (ready, blocked and completed reports)
 - `scripts/herdr-core-smoke.ts` (checksum-verified newest-release live suites)
 - `scripts/release-walk/contract.py`, `scripts/release-walk/assets.py` (pinned
@@ -58,7 +50,7 @@
 
 **Pitfalls:**
 
-- Core desk moves use native placement only before app adoption; adopted placement belongs to Herdr’s app.
+- Core desk moves use native placement, not TUI split replay.
 
 ## Usage reference
 
@@ -157,57 +149,35 @@ no control for it. Platform and harness limits apply across the table.
   Release-walk acceptance pins **0.1.22** for repeatable runtime downloads and
   receipts; install previews and fake release fixtures use the same baseline.
 
-### App placement contract and dispatcher labels
+### Shared Herdr app layout: approved design, implementation pending
 
-Herdr's published [app skill](https://github.com/herdrdev/herdr-app/blob/1180a5cec3b8bd4dfebf4a9b217ab8cb59a96ffa/src/SKILL.md)
-and [guide](https://github.com/herdrdev/herdr-app/blob/1180a5cec3b8bd4dfebf4a9b217ab8cb59a96ffa/defaults/AGENTS.md)
-say `herdr.space` selects a space and `herdr.tab` selects a tab. IDs are opaque,
-local to that core's machine; strip the app's remote-machine prefix when writing.
-Unknown IDs are adopted as an unnamed space/tab: no pre-existing app layout is
-required. The app's `reconcile` / `adopt` implementation in
-[`src/window.rs`](https://github.com/herdrdev/herdr-app/blob/1180a5cec3b8bd4dfebf4a9b217ab8cb59a96ffa/src/window.rs)
-uses those IDs. Core's [schema](https://github.com/herdrdev/herdr-core/blob/2e8043a2a47db0130943135805f4ec82c2a764bd/schema/README.md)
-and `hc schema` describe free-form label maps, not a core space registry.
+The [shared-layout design](app-layout-design.md) records the owner's 2026-11-27
+decision: World is a peer of the desktop app. It supersedes M1/M2's independent
+core room arrangement. The active
+[placement change](../../changes/core-app-placement-contract/proposal.md)
+tracks three PRs: this design, then observation, then writes/migration. This PR
+changes no runtime behavior; the room/move descriptions below still describe
+the existing implementation until those follow-on PRs land.
 
-The app owns adopted placement in the core document `herdr-app`:
-`spaces[{id,name,folder,tabs:[{id,name,root}]}]`. Terminal membership lives in
-`root`'s terminal blocks, nested row/column/stack children and floating content.
-See [`mirror::Document`](https://github.com/herdrdev/herdr-app/blob/1180a5cec3b8bd4dfebf4a9b217ab8cb59a96ffa/src/mirror.rs),
-[`mirror_sync` (`doc.get`/`doc.set`)](https://github.com/herdrdev/herdr-app/blob/1180a5cec3b8bd4dfebf4a9b217ab8cb59a96ffa/src/mirror_sync.rs)
-and the guide's **The model** section. Labels adopt terminals with no existing
-pane; relabelling an adopted terminal does not move that pane. World reads the
-document on connect and local app `doc` events / missed cuts, never writes it.
-Adopted membership precedes World's saved placement, then labels/parent fallback.
-The projection is shared by all views, alerts and room checks. A missing document
-falls back to labels; unavailable or invalid reads prevent moves until ownership
-can be established. An overtaken read cannot establish current ownership.
+The machine-local `herdr-app` document supplies spaces, names, tabs and pane
+membership. Its exact schema comes from
+[`mirror::Document`](https://github.com/herdrdev/herdr-app/blob/1180a5cec3b8bd4dfebf4a9b217ab8cb59a96ffa/src/mirror.rs)
+and [`layout::Node`](https://github.com/herdrdev/herdr-app/blob/1180a5cec3b8bd4dfebf4a9b217ab8cb59a96ffa/src/layout.rs),
+not labels. `herdr.space`/`herdr.tab` are adoption hints for terminals without a
+pane; the app creates missing IDs. `where` is an output caption only, never a
+room-name input. The installed `herdr-app --skill` was unavailable; its
+[pinned skill source](https://github.com/herdrdev/herdr-app/blob/1180a5cec3b8bd4dfebf4a9b217ab8cb59a96ffa/src/SKILL.md)
+and implementation were checked instead. The design cites adoption, naming,
+versioned document RPC and event sources separately.
 
-Names come from the app document's explicit names. Its
-[`Model::space_name` / `tab_name`](https://github.com/herdrdev/herdr-app/blob/1180a5cec3b8bd4dfebf4a9b217ab8cb59a96ffa/src/model.rs)
-otherwise use the first terminal's folder (then the space folder) and tab ordinal.
-World preserves its existing stable derived-name fallback and suffixes; it never
-reads `where` for room or tab names. The app only writes that caption.
-There is no supported display-name label. World refuses a move of an adopted
-terminal with **Move it in Herdr's app so the change also appears on your phone**.
-Unadopted moves retain existing placement labels and program/lease fences.
-
-**Q8 reopened:** desktop adoption and phone Spaces must be verified separately.
-The [mobile guide](https://herdr.dev/mobile/) says spaces appear when the desktop
-app runs there too. Correct labels without an app document do not prove phone
-grouping. A null document is consistent with no desktop adoption, not evidence
-of an Android defect. App external naming [#43](https://github.com/herdrdev/herdr-app/issues/43)
-remains open. No installed desktop or phone app was available for rendering
-acceptance; see the [placement evidence](../../../docs/herdr-app-placement-report.md).
-
-The crew dispatcher should retain `herdr.space=crew`, a distinct
-`herdr.tab=crew-<issue>` per desk (same for its split panes), `--keep` and initial
-`herdr.seen=0`. `where=Crew / crew-<issue>` is an optional readable caption;
-it neither creates a phone space nor names it. Desktop adoption must publish
-its layout before phone Spaces can share that structure; use the app's supported
-commands for an explicit **Crew** name. Desks started without a parent also
-lack helper nesting in the phone's terminal list; the crew repository handles
-that parentage separately. World must not manufacture parent relationships or
-write the app document to compensate.
+Without a document, the owner's Android observation establishes one group per
+working folder, named after that folder, including separate crew worktrees.
+Parentage does not nest those groups. The dispatcher needs no change. The write
+step will publish the requested **Crew** space and adopt its desks with
+`keep:true`; existing document placement always wins over migration candidates.
+Q8 remains open for real desktop/phone rendering and before/after Town, Board
+and phone evidence. Label readback alone cannot close it. No phone screenshots
+or runtime acceptance are claimed by this design-only PR.
 
 ### Runtime limits
 

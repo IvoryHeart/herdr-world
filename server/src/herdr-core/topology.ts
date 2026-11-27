@@ -1,4 +1,3 @@
-import { coreAppPlacement, type CoreAppLayout } from "./app-layout";
 import type {
   RuntimeReader,
   RuntimeRow,
@@ -14,7 +13,11 @@ import {
 } from "./harness";
 import type { ForegroundGroupReader } from "./process-group";
 import type { CoreMirror, CoreMirrorTerminal } from "./mirror";
-import { coreSpawnedBy, coreSummaryOf } from "./labels";
+import {
+  CORE_UNNAMED_SPACE_LABEL,
+  coreSpawnedBy,
+  coreSummaryOf,
+} from "./labels";
 import { coreRecipientToken } from "./recipient";
 import { coreOccupantFingerprint } from "./occupant";
 import type {
@@ -38,8 +41,8 @@ import {
  * World's read model of one core: the same rows the TUI runtime lists, so
  * Town, Desk, Board and Needs you show core agents with no second code path.
  *
- * - Rooms follow the app document for adopted terminals, then World placement
- *   and adoption labels (`herdr.space`, `herdr.tab`); captions never name rooms;
+ * - Rooms follow Herdr's desktop app: terminals it placed (`herdr.space`,
+ *   `herdr.tab`) share its spaces and tabs, named from its `where` caption;
  *   everything else shares one room. Sub-agents join their parent's room.
  * - Only live terminals on this core. Linked machines' terminals (`m/tN`)
  *   are discovery only and never become actionable rows.
@@ -384,14 +387,15 @@ type Placement =
       kind: "app";
       space: string;
       tab: string | null;
-      name: string | null;
-      tabName: string | null;
+      where: string;
+      /** `where` is World's placeholder caption (`CORE_UNNAMED_SPACE_LABEL`). */
+      placeholder: boolean;
     }
   | { kind: "unplaced" };
 
 /**
- * Where a terminal shows. The app document owns adopted terminals; then
- * World's layout and the app's adoption labels; a sub-agent joins its nearest placed ancestor;
+ * Where a terminal shows. World's own layout (M1) first; then the Herdr
+ * app's placement labels; a sub-agent joins its nearest placed ancestor;
  * anything else is in the core's main room.
  */
 function placementOf(
@@ -401,43 +405,47 @@ function placementOf(
     string,
     { room: CoreTopologyRoom; tab: CoreTopologyTab }
   >,
-  app: CoreAppLayout | null,
 ): Placement {
   let current: CoreMirrorTerminal | undefined = record;
   for (let depth = 0; current && depth < 32; depth += 1) {
-    const adopted = coreAppPlacement(app, current.address);
-    if (adopted)
-      return {
-        kind: "app",
-        space: adopted.space.id,
-        tab: adopted.tab.id,
-        name: text(adopted.space.name),
-        tabName:
-          text(adopted.tab.name) ??
-          String(adopted.space.tabs.indexOf(adopted.tab) + 1),
-      };
     const world = worldTabs.get(current.address);
     if (world) return { kind: "world", ...world };
     const space = label(current, "herdr.space");
-    if (space) {
-      const appSpace = app?.spaces.find((s) => s.id === space);
-      const appTab = appSpace?.tabs.find(
-        (t) => t.id === label(current!, "herdr.tab"),
-      );
+    if (space)
       return {
         kind: "app",
         space,
         tab: label(current, "herdr.tab"),
-        name: text(appSpace?.name),
-        tabName: appTab
-          ? (text(appTab.name) ?? String(appSpace!.tabs.indexOf(appTab) + 1))
-          : null,
+        where: label(current, "where") ?? "",
+        placeholder: worldPlaceholder(current),
       };
-    }
     const parent: unknown = current.parent;
     current = typeof parent === "string" ? byAddress.get(parent) : undefined;
   }
   return { kind: "unplaced" };
+}
+
+/** World wrote this terminal's caption for a space with no name. */
+function worldPlaceholder(record: CoreMirrorTerminal): boolean {
+  return record.labels?.[CORE_UNNAMED_SPACE_LABEL] === "1";
+}
+
+/**
+ * `where` is the app's "<space> / <tab>" caption; it only names rooms. The
+ * placeholder World writes when it starts an agent in an unnamed space
+ * (marked `placeholder`) names nothing; the same words from the app are
+ * its name.
+ */
+function whereParts(
+  where: string,
+  placeholder = false,
+): [string | null, string | null] {
+  const cut = where.lastIndexOf(" / ");
+  const space = text(cut < 0 ? where : where.slice(0, cut));
+  return [
+    placeholder && space === CORE_UNNAMED_SPACE ? null : space,
+    cut < 0 ? null : text(where.slice(cut + 3)),
+  ];
 }
 
 function addressOrder(a: string, b: string) {
@@ -452,7 +460,6 @@ export function coreRoomOf(
   terminals: readonly CoreMirrorTerminal[],
   address: string,
   world: CoreTopologyDocument | null = null,
-  app: CoreAppLayout | null = null,
 ): string | null {
   const local = terminals.filter(
     (record) =>
@@ -463,12 +470,7 @@ export function coreRoomOf(
   const record = local.find((candidate) => candidate.address === address);
   if (!record) return null;
   const byAddress = new Map(local.map((each) => [each.address, each]));
-  const place = placementOf(
-    record,
-    byAddress,
-    worldTabsOf(world, byAddress),
-    app,
-  );
+  const place = placementOf(record, byAddress, worldTabsOf(world, byAddress));
   return place.kind === "world"
     ? coreRoomWorkspaceId(place.room)
     : place.kind === "app"
@@ -557,8 +559,6 @@ export function coreRoomOfWorkspace(
 export type CoreTopologyOptions = {
   occupancy?(address: string): number | null;
   firstSight?: Pick<CoreFirstSight, "turn">;
-  /** Read-only app layout. Adopted membership takes precedence. */
-  app?: CoreAppLayout | null;
   /** World's own layout of this core (M1). */
   world?: CoreTopologyDocument | null;
   coreId?: string;
@@ -582,7 +582,6 @@ export function coreTopology(
   const {
     firstSight = { turn: () => null },
     world = null,
-    app = null,
     coreId = world?.core_id ?? "",
     now = Date.now(),
     occupancy,
@@ -605,7 +604,10 @@ export function coreTopology(
   const worldTabs = worldTabsOf(world, byAddress);
   const workspaces = new Map<string, WorkspaceRow>();
   const tabs = new Map<string, RuntimeRow>();
-  // World rooms retain their order and name memory; app rooms own their names.
+  // World's rooms come first, in its order, even when empty. An app space
+  // World keeps terminals in, and has not named itself, is named by the
+  // app's caption once a terminal gives one.
+  const appNamed = new Set<string>();
   // App spaces with no name yet, and what their terminals show, oldest first.
   const unnamed = new Set<string>();
   const evidence = new Map<string, SpaceEvidence>();
@@ -629,33 +631,10 @@ export function coreTopology(
     });
     if (room.app_space && !room.label) unnamed.add(id);
   }
-  for (const space of app?.spaces ?? []) {
-    const id = SPACE_PREFIX + space.id;
-    const existing = workspaces.get(id);
-    workspaces.set(id, {
-      ...existing,
-      workspace_id: id,
-      label: text(space.name) ?? CORE_UNNAMED_SPACE,
-      focused: false,
-      ...(space.folder ? { cwd: space.folder } : {}),
-    });
-    if (text(space.name)) unnamed.delete(id);
-    else unnamed.add(id);
-    // The app names an unnamed space from its first terminal's folder, then
-    // the space's folder. Keep World's existing display-name memory thereafter.
-    const first = space.tabs
-      .flatMap((tab) => tab.terminals)
-      .map((address) => byAddress.get(address))
-      .find(Boolean);
-    const folder =
-      folderName(text(first?.cwd, 4096)) ??
-      folderName(text(space.folder, 4096));
-    if (folder) evidence.set(id, { folder, tab: null, agent: null });
-  }
   const panes: TerminalRow[] = [];
   const agents: RuntimeRow[] = [];
   for (const record of local) {
-    const place = placementOf(record, byAddress, worldTabs, app);
+    const place = placementOf(record, byAddress, worldTabs);
     let workspaceId: string;
     let tabId: string;
     let workspaceLabel: string;
@@ -666,8 +645,7 @@ export function coreTopology(
       workspaceLabel = place.room.label || coreName;
       tabLabel = place.tab.label || workspaceLabel;
     } else if (place.kind === "app") {
-      const spaceName = place.name;
-      const tabName = place.tabName;
+      const [spaceName, tabName] = whereParts(place.where, place.placeholder);
       workspaceId = SPACE_PREFIX + place.space;
       tabId = `${workspaceId}${TAB_SUFFIX}${place.tab ?? DEFAULT_TAB}`;
       workspaceLabel = spaceName ?? CORE_UNNAMED_SPACE;
@@ -678,14 +656,35 @@ export function coreTopology(
       workspaceLabel = coreName;
       tabLabel = coreName;
     }
-    if (!workspaces.has(workspaceId)) {
+    const caption =
+      place.kind === "app"
+        ? place.where
+        : place.kind === "world" && place.room.app_space && !place.room.label
+          ? (label(record, "where") ?? "")
+          : null;
+    const known = workspaces.get(workspaceId);
+    if (!known) {
       workspaces.set(workspaceId, {
         workspace_id: workspaceId,
         label: workspaceLabel,
         focused: false,
       });
-      if (place.kind === "app" && !place.name) unnamed.add(workspaceId);
+      if (
+        place.kind === "app" &&
+        !whereParts(place.where, place.placeholder)[0]
+      )
+        unnamed.add(workspaceId);
+    } else if (caption !== null && !appNamed.has(workspaceId)) {
+      const [spaceName] = whereParts(
+        caption,
+        place.kind === "app" ? place.placeholder : worldPlaceholder(record),
+      );
+      if (spaceName) {
+        known.label = spaceName;
+        unnamed.delete(workspaceId);
+      }
     }
+    if (caption !== null) appNamed.add(workspaceId);
     // Herdr's tab rows count their panes; Town hands over only a lone one.
     const tab = tabs.get(tabId);
     if (tab) tab.pane_count = Number(tab.pane_count) + 1;
@@ -724,7 +723,7 @@ export function coreTopology(
           place.kind === "world"
             ? text(place.tab.label)
             : place.kind === "app"
-              ? place.tabName
+              ? whereParts(place.where, place.placeholder)[1]
               : null,
         agent: harness ? (text(record.name, 64) ?? harness) : null,
       };
@@ -961,7 +960,6 @@ export function coreReadModel(source: CoreReadModelSource): CoreTopology {
   return coreTopology(source.mirror.terminals(), source.coreName(), {
     firstSight: source.firstSight,
     world: source.world?.() ?? null,
-    app: source.mirror.appLayout,
     coreId: source.coreId?.() ?? undefined,
     now: source.now?.(),
     occupancy: (address) => source.mirror.occupancy(address),

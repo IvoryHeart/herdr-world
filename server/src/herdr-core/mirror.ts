@@ -1,4 +1,3 @@
-import { readCoreAppLayout, type CoreAppLayout } from "./app-layout";
 import { isCoreAddress } from "../../../shared/coreAddress";
 import type { CoreEventLine, CoreTerminalRecord } from "./client";
 
@@ -65,28 +64,6 @@ class AdmissionRefused extends Error {}
  * advance the cursor. A missed snapshot replaces everything at its cut.
  */
 export class CoreMirror {
-  /** App layout observation, invalidated by ordered doc events and missed cuts. */
-  appLayout: CoreAppLayout | null = null;
-  appLayoutCurrent = false;
-  appLayoutRevision = 0;
-
-  acceptAppLayout(reply: unknown, revision: number): void {
-    if (revision !== this.appLayoutRevision || !this.actionable) return;
-    if (
-      !isRecord(reply) ||
-      !Number.isSafeInteger(reply.version) ||
-      Number(reply.version) < 0
-    )
-      throw new Error("Invalid Herdr app document reply");
-    this.appLayout = readCoreAppLayout(reply.value);
-    this.appLayoutCurrent = true;
-  }
-
-  private invalidateAppLayout(): void {
-    this.appLayoutCurrent = false;
-    this.appLayoutRevision++;
-  }
-
   private entries = new Map<string, Entry>();
   private totalBytes = 0;
   private cursorValue = -1;
@@ -223,7 +200,6 @@ export class CoreMirror {
       this.retire(error instanceof AdmissionRefused ? "limit" : "protocol");
       return false;
     }
-    this.invalidateAppLayout();
     this.entries = next;
     this.totalBytes = total;
     this.cursorValue = seq;
@@ -263,15 +239,7 @@ export class CoreMirror {
   private event(params: Record<string, unknown>) {
     const type = params.type;
     const address = params.terminal;
-    if (type === "doc") {
-      if (
-        !params.machine &&
-        isRecord(params.data) &&
-        params.data.name === "herdr-app"
-      )
-        this.invalidateAppLayout();
-      return;
-    }
+    if (type === "doc") return;
     if (typeof type !== "string" || typeof address !== "string")
       throw new Error("event is invalid");
     const data = isRecord(params.data) ? params.data : null;

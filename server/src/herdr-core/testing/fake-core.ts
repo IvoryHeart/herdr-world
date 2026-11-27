@@ -111,27 +111,6 @@ export class FakeCore {
   pid = 41_000;
   private startedAt = Date.now();
   private seq = 0;
-  private appDocument: unknown = null;
-  private appVersion = 0;
-  private heldAppReads: Array<() => void> | null = null;
-  holdAppLayoutReads(): () => void {
-    const held: Array<() => void> = [];
-    this.heldAppReads = held;
-    return () => {
-      if (this.heldAppReads === held) this.heldAppReads = null;
-      for (const send of held) send();
-    };
-  }
-  /** Emulates another app publishing its machine-owned document. */
-  setAppLayout(value: unknown): void {
-    this.appDocument = structuredClone(value);
-    this.appVersion++;
-    this.emit("doc", undefined, {
-      name: "herdr-app",
-      version: this.appVersion,
-    });
-  }
-
   private nextTerminal = 1;
   private readonly terminals = new Map<string, FakeTerminal>();
   private readonly connections = new Set<FakeConnection>();
@@ -877,7 +856,7 @@ export class FakeCore {
     return record;
   }
 
-  private emit(type: string, address: string | undefined, data: unknown) {
+  private emit(type: string, address: string, data: unknown) {
     this.seq += 1;
     const line = this.line("event", {
       seq: this.seq,
@@ -981,7 +960,6 @@ export class FakeCore {
         "server.status",
         "terminal.run",
         "terminal.list",
-        "doc.get",
         "terminal.get",
         "terminal.kill",
         "terminal.read",
@@ -1085,15 +1063,6 @@ export class FakeCore {
           this.options.heartbeatMs ?? 15_000,
         );
         return reply({ ...snapshot, channel });
-      }
-      case "doc.get": {
-        const result = {
-          value: structuredClone(this.appDocument),
-          version: this.appVersion,
-        };
-        if (this.heldAppReads) this.heldAppReads.push(() => reply(result));
-        else reply(result);
-        return;
       }
       case "terminal.list":
         return reply({

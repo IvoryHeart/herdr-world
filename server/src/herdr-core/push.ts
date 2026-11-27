@@ -2,7 +2,7 @@ import { notificationSender } from "../../../shared/notificationSender";
 import type { TaskEvent } from "../notifications/task-events";
 import type { CoreMirrorTerminal } from "./mirror";
 import type { CoreAlert } from "./shared-state";
-import { coreTopology, type CoreTopology } from "./topology";
+import { coreTopology } from "./topology";
 
 /**
  * The task events World pushes for core alerts: the same shape the Herdr
@@ -14,8 +14,8 @@ export function coreTaskEvents(
   alerts: readonly CoreAlert[],
   terminals: readonly CoreMirrorTerminal[],
   coreName: string,
-  rows: CoreTopology = coreTopology(terminals, coreName),
 ): TaskEvent[] {
+  const rows = coreTopology(terminals, coreName);
   const panes = new Map(rows.panes.map((pane) => [pane.pane_id, pane]));
   const label = (
     rowsOf: readonly Record<string, unknown>[],

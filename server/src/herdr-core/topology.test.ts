@@ -1,5 +1,3 @@
-import { appLayoutFixture } from "./testing/app-layout.fixture";
-import { readCoreAppLayout } from "./app-layout";
 import { describe, expect, test } from "bun:test";
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
@@ -632,17 +630,9 @@ describe("rooms follow Herdr's desktop app placement", () => {
       argv: ["gemini"],
     }),
   ];
-  const topology = coreTopology(terminals, "example-host", {
-    app: readCoreAppLayout(
-      appLayoutFixture({
-        id: "s1",
-        name: "web",
-        tabs: [{ id: "c2", name: "review", terminals: ["t1", "t10"] }],
-      }),
-    ),
-  });
+  const topology = coreTopology(terminals, "example-host");
 
-  test("placed terminals share the app's spaces and tabs, named from the app document", () => {
+  test("placed terminals share the app's spaces and tabs, named from its caption", () => {
     expect(topology.workspaces).toEqual([
       { workspace_id: "hc:space:s1", label: "web", focused: false },
       {
@@ -795,10 +785,7 @@ describe("no core room is ever unnamed", () => {
         }),
       ],
       "example-host",
-      {
-        world,
-        app: readCoreAppLayout(appLayoutFixture({ id: "s1", name: "web" })),
-      },
+      { world },
     );
     expect(rows.workspaces.map((w) => [w.workspace_id, w.label])).toEqual([
       ["hc:space:s1", "web"],
@@ -850,10 +837,10 @@ describe("no core room is ever unnamed", () => {
     expect(named(rows)).toEqual([
       ["api", "folder"],
       ["docs", "folder"],
-      ["api 2", "folder"],
+      ["web", null],
     ]);
     // Tabs keep their own names; only the room is derived.
-    expect(rows.tabs.map((tab) => tab.label)).toEqual(["Tab", "Tab", "Tab"]);
+    expect(rows.tabs.map((tab) => tab.label)).toEqual(["Tab", "Tab", "review"]);
   });
 
   test("the name holds while newer agents come and go", () => {
@@ -921,7 +908,6 @@ describe("no core room is ever unnamed", () => {
         unnamedSpace("t4", "s3", { cwd: "/srv/c/web" }),
       ],
       "example-host",
-      { app: readCoreAppLayout(appLayoutFixture({ id: "s0", name: "API" })) },
     );
     expect(named(rows)).toEqual([
       ["API", null],
@@ -947,14 +933,10 @@ describe("no core room is ever unnamed", () => {
 
   test("with World's memory, a name holds when its terminals or another room leave", () => {
     const roomNames = new CoreRoomNames();
-    const observe = (
-      terminals: CoreMirrorTerminal[],
-      app = null as ReturnType<typeof readCoreAppLayout>,
-    ) =>
+    const observe = (terminals: CoreMirrorTerminal[]) =>
       named(
         coreTopology(terminals, "example-host", {
           coreId: "core-a",
-          app,
           roomNames,
         }),
       );
@@ -980,19 +962,14 @@ describe("no core room is ever unnamed", () => {
       address: "t0",
       labels: { "herdr.space": "s0", where: "API 2 / main" },
     });
-    expect(
-      observe(
-        [named2, secondNewer, third],
-        readCoreAppLayout(appLayoutFixture({ id: "s0", name: "API 2" })),
-      ),
-    ).toEqual([
+    expect(observe([named2, secondNewer, third])).toEqual([
       ["API 2", null],
       ["docs", "folder"],
       ["api", "folder"],
     ]);
   });
 
-  test("both app and World captions are ignored as naming inputs", () => {
+  test("the app's own `Herdr space` caption names its space; World's placeholder does not", () => {
     const rows = coreTopology(
       [
         unnamedSpace(
@@ -1015,7 +992,7 @@ describe("no core room is ever unnamed", () => {
       "example-host",
     );
     expect(named(rows)).toEqual([
-      ["api", "folder"],
+      ["Herdr space", null],
       ["docs", "folder"],
     ]);
   });
@@ -1042,22 +1019,4 @@ describe("the read model refuses a mirror that is not current", () => {
     actionable = false;
     await expect(reader.listTerminals()).rejects.toThrow("not current");
   });
-});
-
-test("where is an output caption, never a space or tab name", () => {
-  const rows = coreTopology(
-    [
-      record({
-        cwd: "/srv/example/api",
-        labels: {
-          "herdr.space": "crew",
-          "herdr.tab": "desk",
-          where: "Invented / Wrong",
-        },
-      }),
-    ],
-    "core",
-  );
-  expect(rows.workspaces[0]?.label).toBe("api");
-  expect(rows.tabs[0]?.label).toBe("Tab");
 });

@@ -273,15 +273,6 @@ async function replayShared(split: Split) {
     (b) => new Uint8Array(Buffer.from(b, "base64")),
   );
   const bytes = new Uint8Array(Buffer.concat(chunks));
-  // This recording predates World's optional app-document read. Exercise the
-  // valid no-doc.get capability variant without consuming later label replies.
-  // Whitespace keeps every recorded chunk boundary and framed byte unchanged.
-  const helloEnd = bytes.indexOf(0x0a);
-  const helloText = new TextDecoder().decode(bytes.subarray(0, helloEnd));
-  const withoutDoc = helloText.replace(/"doc\.get",/, (match) =>
-    " ".repeat(match.length),
-  );
-  bytes.set(new TextEncoder().encode(withoutDoc), 0);
   const frames = framesOf(bytes);
   const boundaries: number[] = [];
   let edge = 0;

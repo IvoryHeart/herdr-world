@@ -1,4 +1,3 @@
-import { appLayoutFixture } from "./testing/app-layout.fixture";
 import { afterEach, describe, expect, test } from "bun:test";
 import {
   existsSync,
@@ -44,9 +43,6 @@ import { WorldSnapshotService } from "../world/snapshot";
 import type { TaskEvent } from "../notifications/task-events";
 import { handleCoreSharedRpc } from "../rpc/core-shared";
 import { coreAgentStatus } from "./topology";
-import { memoryCoreTopologyPort } from "../storage/core-topology";
-import { createCoreRoom, launchCore } from "./operations";
-import { moveCore } from "./town-move";
 
 // Opt in with HERDR_CORE_BIN=<official herdr-core binary>. Linux only; every
 // process runs under scratch HOME/XDG directories and is killed afterwards.
@@ -84,12 +80,10 @@ function keepsObservedSize(version: string): boolean {
 function worldFor(stateDir: string, pushed: TaskEvent[] = []) {
   const root = mkdtempSync(join(tmpdir(), "hcw-world-"));
   roots.push(root);
-  const topology = memoryCoreTopologyPort();
   const core = createCoreConnections({
     logger: silentLogger,
     changed: () => {},
     profiles: () => service,
-    topology: () => topology,
     transportFor: () => localCoreTransport(stateDir),
     push: (task, isCurrent) => {
       if (isCurrent()) pushed.push(task);
@@ -138,223 +132,10 @@ function worldFor(stateDir: string, pushed: TaskEvent[] = []) {
   };
   const observation = () =>
     core.observations.get("core") as CoreObservation | null;
-  return { service, core, profile, observation, topology };
+  return { service, core, profile, observation };
 }
 
 describe("herdr-core live (real release binary)", () => {
-  live(
-    "World launches two tabs in one app space and moves them with the same label contract",
-    async () => {
-      const core = new ScratchCore(bin!);
-      scratch.push(core);
-      await core.start();
-      const w = worldFor(core.stateDir);
-      try {
-        await w.service.create(w.profile);
-        await until(() => w.core.manager.status("core").state === "ready");
-        const lease = w.core.manager.readyRuntimeLease("core")!;
-        const room = await createCoreRoom(lease, w.topology, "Crew");
-        const started = [];
-        for (const label of ["First", "Second"]) {
-          const result = await launchCore(
-            lease,
-            {
-              workspaceId: room.workspace_id,
-              kind: "codex",
-              label,
-              args: ["600"],
-              text: "",
-            },
-            // A harmless stand-in, with no harness credentials or user config.
-            {
-              topology: w.topology,
-              resolveExecutable: async () => "/bin/sleep",
-            },
-          );
-          if (!("terminal_id" in result)) throw new Error("launch failed");
-          const record = JSON.parse(
-            await core.hc("get", "--json", result.terminal_id),
-          );
-          expect(structuredClone(record.labels)).toEqual({
-            "herdr.space": `world-${room.workspace_id.slice("hc:room:".length)}`,
-            "herdr.tab": expect.stringMatching(/^world-b[0-9a-f]{12}$/),
-            "herdr.seen": "0",
-            where: `Crew / ${label}`,
-          });
-          expect(record.keep).toBe(true);
-          started.push({ result, record });
-        }
-        expect(
-          new Set(started.map(({ record }) => record.labels["herdr.tab"])).size,
-        ).toBe(2);
-        const target = await createCoreRoom(lease, w.topology, "Workshop");
-        for (const { result, record } of started) {
-          expect(
-            await moveCore(lease, w.topology, {
-              kind: "desk",
-              tab_id: result.tab_id,
-              workspace_id: target.workspace_id,
-            }),
-          ).toMatchObject({ status: "moved" });
-          const moved = JSON.parse(
-            await core.hc("get", "--json", result.terminal_id),
-          );
-          expect(structuredClone(moved.labels)).toMatchObject({
-            "herdr.space": `world-${target.workspace_id.slice("hc:room:".length)}`,
-            "herdr.tab": expect.stringMatching(/^world-b[0-9a-f]{12}$/),
-            "herdr.seen": "0",
-            where: expect.stringMatching(/^Workshop \/ /),
-          });
-          expect(moved.pid).toBe(record.pid);
-          expect(moved.argv).toEqual(record.argv);
-        }
-        const listing = JSON.parse(await core.hc("ls", "--json"));
-        const terminals = await Promise.all(
-          listing.terminals.map(async (t: { address: string }) =>
-            JSON.parse(await core.hc("get", "--json", t.address)),
-          ),
-        );
-        expect(terminals).toHaveLength(2);
-        expect(
-          new Set(
-            terminals.map(
-              (t: { labels: Record<string, string> }) =>
-                t.labels["herdr.space"],
-            ),
-          ).size,
-        ).toBe(1);
-        expect(
-          new Set(
-            terminals.map(
-              (t: { labels: Record<string, string> }) => t.labels["herdr.tab"],
-            ),
-          ).size,
-        ).toBe(2);
-      } finally {
-        w.service.stopSupervision();
-        await w.core.stop();
-        w.topology.close();
-      }
-    },
-    30_000,
-  );
-
-  live(
-    "app document changes override labels and refuse adopted moves on an isolated core",
-    async () => {
-      const core = new ScratchCore(bin!);
-      scratch.push(core);
-      await core.start();
-      const w = worldFor(core.stateDir);
-      try {
-        await core.hc(
-          "run",
-          "--bg",
-          "--keep",
-          "--label",
-          "herdr.space=crew",
-          "--label",
-          "herdr.tab=one",
-          "--",
-          "/bin/sleep",
-          "600",
-        );
-        await core.hc(
-          "run",
-          "--bg",
-          "--keep",
-          "--label",
-          "herdr.space=crew",
-          "--label",
-          "herdr.tab=two",
-          "--",
-          "/bin/sleep",
-          "600",
-        );
-        await w.service.create(w.profile);
-        await until(() => w.core.manager.status("core").state === "ready");
-        const lease = w.core.manager.readyRuntimeLease("core")!;
-        expect((await lease.runtime.operations.listTabs()).tabs).toHaveLength(
-          2,
-        );
-        // This emulates the external app, using core's public JSON-RPC connect.
-        // World's client exposes only doc.get; the test process owns scratch core.
-        const publish = async (version: number, name: string) => {
-          const value = appLayoutFixture({
-            id: "app-crew",
-            name,
-            tabs: [
-              { id: "first", name: "First", terminals: ["t1"] },
-              { id: "second", name: "Second", terminals: ["t2"] },
-            ],
-          });
-          const proc = Bun.spawn([bin!, "connect"], {
-            env: core.env,
-            cwd: core.env.HOME,
-            stdin: "pipe",
-            stdout: "pipe",
-            stderr: "pipe",
-          });
-          proc.stdin.write(
-            JSON.stringify({
-              jsonrpc: "2.0",
-              id: 1,
-              method: "doc.set",
-              params: { name: "herdr-app", version, value },
-            }) + "\n",
-          );
-          proc.stdin.end();
-          const [out, err, code] = await Promise.all([
-            new Response(proc.stdout).text(),
-            new Response(proc.stderr).text(),
-            proc.exited,
-          ]);
-          if (code !== 0 || JSON.parse(out).error)
-            throw new Error(`Scratch app publish failed: ${err || out}`);
-        };
-        await publish(0, "Crew");
-        await until(
-          () =>
-            lease.runtime.core.mirror.appLayoutCurrent &&
-            lease.runtime.core.mirror.appLayout?.spaces[0]?.name === "Crew",
-        );
-        expect(
-          (await lease.runtime.operations.listWorkspaces()).workspaces,
-        ).toMatchObject([{ workspace_id: "hc:space:app-crew", label: "Crew" }]);
-        const target = await createCoreRoom(lease, w.topology, "Other");
-        expect(
-          await moveCore(lease, w.topology, {
-            kind: "desk",
-            tab_id: "hc:space:app-crew:tab:first",
-            workspace_id: target.workspace_id,
-          }),
-        ).toMatchObject({
-          status: "refused",
-          message: expect.stringContaining("Herdr's app"),
-        });
-        await publish(1, "Renamed crew");
-        await until(
-          () =>
-            lease.runtime.core.mirror.appLayout?.spaces[0]?.name ===
-            "Renamed crew",
-        );
-        for (const [address, tab] of [
-          ["t1", "one"],
-          ["t2", "two"],
-        ]) {
-          const native = JSON.parse(await core.hc("get", "--json", address!));
-          expect(native.labels["herdr.space"]).toBe("crew");
-          expect(native.labels["herdr.tab"]).toBe(tab);
-        }
-      } finally {
-        w.service.stopSupervision();
-        await w.core.stop();
-        w.topology.close();
-      }
-    },
-    30_000,
-  );
-
   live(
     "connected; kill -9 goes stale; the same agents return at the same addresses",
     async () => {
@@ -405,7 +186,7 @@ describe("herdr-core live (real release binary)", () => {
   );
 
   test.skipIf(!bin || !Bun.which("cc"))(
-    "core agents reach World's read model with native status and label grouping",
+    "core agents reach World's read model with core's status and the app's rooms",
     async () => {
       const core = new ScratchCore(bin!);
       scratch.push(core);
@@ -499,8 +280,7 @@ int main(void) {
       });
       expect(
         view!.workspaces.find((s) => s.workspace_id === "hc:space:s1")?.label,
-      ).toBe("home");
-      // No app document exists: the folder names the room, never where=web.
+      ).toBe("web");
       // Finished while World watched, no client has marked it seen: done.
       expect(pane("scout")).toMatchObject({
         agent: "gemini",
