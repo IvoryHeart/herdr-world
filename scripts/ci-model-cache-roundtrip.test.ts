@@ -1,10 +1,23 @@
 import { expect, test } from "bun:test";
 import { execFileSync } from "node:child_process";
-import { mkdir, mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
+import {
+  mkdir,
+  mkdtemp,
+  readFile,
+  rm,
+  symlink,
+  writeFile,
+} from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { resolve } from "node:path";
+import { verificationModels } from "../quint/models";
 import { lockedQuintVersion } from "./verification-setup";
-import { modelCache, modelCacheKey } from "./ci-model-cache";
+import {
+  modelCache,
+  modelCacheKey,
+  readReusedBundle,
+  type ModelBundle,
+} from "./ci-model-cache";
 import {
   aggregateCIShards,
   verificationShard,
@@ -164,6 +177,81 @@ test("cached groups survive unrelated revisions and aggregate with origin receip
         ).toBe(true);
       },
     );
+    // Delivery has Bun/Git only. Aggregation must validate the shard's tools,
+    // rather than probing an absent or different Node/Java on its own runner.
+    const bin = resolve(root, "aggregate-bin");
+    await mkdir(bin);
+    await symlink(Bun.which("git")!, resolve(bin, "git"));
+    const child = Bun.spawn(
+      [
+        process.execPath,
+        "--eval",
+        `import { aggregateCIShards } from ${JSON.stringify(new URL("./ci-verification.ts", import.meta.url).pathname)};
+       await aggregateCIShards(${JSON.stringify(root)}, new AbortController().signal);`,
+      ],
+      {
+        cwd: root,
+        env: { ...process.env, PATH: bin },
+        stdout: "pipe",
+        stderr: "pipe",
+      },
+    );
+    const [code, stdout, stderr] = await Promise.all([
+      child.exited,
+      new Response(child.stdout).text(),
+      new Response(child.stderr).text(),
+    ]);
+    expect({ code, stderr }).toEqual({ code: 0, stderr: "" });
+    expect(stdout).toContain(
+      `All ${verificationModels.length} canonical cases accounted for`,
+    );
+    const receiptPath =
+      ".agents/verification/runs/ci-shard-1-reused/origin.json";
+    const receipt = JSON.parse(
+      await readFile(resolve(root, receiptPath), "utf8"),
+    ) as ModelBundle;
+    const reusedShard = JSON.parse(
+      await readFile(
+        resolve(
+          root,
+          ".agents/verification/runs/ci-shard-1-reused/manifest.json",
+        ),
+        "utf8",
+      ),
+    ) as Shard;
+    const corruptions: Array<(bundle: ModelBundle) => void> = [
+      (bundle) => {
+        delete (bundle as Partial<ModelBundle>).toolIdentity;
+      },
+      (bundle) => {
+        bundle.toolIdentity.runtime.node = "foreign-node";
+      },
+      (bundle) => {
+        bundle.toolIdentity.runtime.java = "foreign-java";
+      },
+      (bundle) => {
+        bundle.toolIdentity.runtime.bun = "foreign-bun";
+      },
+      (bundle) => {
+        bundle.toolIdentity.java += "\nforeign full Java identity";
+      },
+      (bundle) => {
+        bundle.toolIdentity.platform = "foreign-platform";
+      },
+      (bundle) => {
+        bundle.toolIdentity.arch = "foreign-arch";
+      },
+      (bundle) => {
+        bundle.cases[0]!.manifest.tools.node = "foreign-node";
+      },
+    ];
+    for (const corrupt of corruptions) {
+      const changed = structuredClone(receipt);
+      corrupt(changed);
+      await write(receiptPath, changed);
+      await expect(readReusedBundle(root, reusedShard)).rejects.toThrow();
+    }
+    await write(receiptPath, receipt);
     const casePath = `.agents/verification/runs/case-${verificationShard(1)[0]}/manifest.json`;
     const original = JSON.parse(
       await readFile(resolve(root, casePath), "utf8"),
@@ -175,8 +263,12 @@ test("cached groups survive unrelated revisions and aggregate with origin receip
     await expect(
       aggregateCIShards(root, new AbortController().signal),
     ).rejects.toThrow("artifact differs from origin");
-    await rm(resolve(root, ".agents/verification"), { recursive: true });
+    await write(casePath, original);
     await write("quint/model.qnt", "changed model");
+    await expect(
+      aggregateCIShards(root, new AbortController().signal),
+    ).rejects.toThrow("Model cache key changed");
+    await rm(resolve(root, ".agents/verification"), { recursive: true });
     await modelCache(root, "restore", 1);
     expect(await readFile(process.env.GITHUB_OUTPUT, "utf8")).toContain(
       "reused=false",

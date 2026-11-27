@@ -2,6 +2,7 @@ import { moveMismatches, moveWitnesses } from "./agent-move";
 import { coreWitnesses } from "./herdr-core-runtime";
 import { seenMismatches, seenWitnesses } from "./herdr-core-seen";
 import type { Model } from "./traces";
+import { writePathScenarios } from "./world-write-path";
 
 // Composed cases have dedicated replay/exploration runners.
 export const composedCases = [
@@ -27,6 +28,11 @@ export const composedCases = [
     mismatches: moveMismatches,
   },
   { name: "ide-lifecycle", witnesses: [], mismatches: [] },
+  {
+    name: "world-write-path",
+    witnesses: writePathScenarios,
+    mismatches: writePathScenarios.map((s) => `write-path.${s}` as const),
+  },
 ] as const;
 
 export function replayTracesPerSeed(name: Model) {

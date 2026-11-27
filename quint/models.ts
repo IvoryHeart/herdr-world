@@ -20,4 +20,5 @@ export const verificationModels = [
   "connection-registry",
   "claude-tap-lock",
   "agent-move",
+  "world-write-path",
 ] as const;

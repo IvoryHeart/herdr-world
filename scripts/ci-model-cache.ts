@@ -13,10 +13,18 @@ import limits from "../tools/quint/resources.json";
 import checker from "../tools/quint/checker.json";
 import tooling from "../tools/quint/package.json";
 
+type ModelToolIdentity = {
+  runtime: { node: string; java: string; bun: string };
+  java: string;
+  platform: string;
+  arch: string;
+};
+
 export type ModelBundle = {
   schema: 1;
   hash: string;
   inputs: InputFingerprint[];
+  toolIdentity: ModelToolIdentity;
   shard: Shard;
   resource: Record<string, unknown>;
   cases: { path: string; manifest: VerificationManifest }[];
@@ -25,7 +33,8 @@ export type ModelBundle = {
 type ModelKey = {
   hash: string;
   inputs: InputFingerprint[];
-  runtime?: { node: string; java: string; bun: string };
+  runtime: ModelToolIdentity["runtime"];
+  toolIdentity: ModelToolIdentity;
 };
 export function validateModelBundle(
   bundle: ModelBundle,
@@ -35,6 +44,11 @@ export function validateModelBundle(
   assert.equal(bundle.schema, 1, "Unknown cache schema");
   assert.equal(bundle.hash, key.hash, "Model cache key changed");
   assert.deepEqual(bundle.inputs, key.inputs, "Model cache inputs changed");
+  assert.deepEqual(
+    bundle.toolIdentity,
+    key.toolIdentity,
+    "Model cache tools changed",
+  );
   assert(
     bundle.shard.complete &&
       bundle.shard.index === index &&
@@ -101,18 +115,16 @@ export function validateModelBundle(
       manifest.sourceInputs.length,
       "Duplicate cached inputs",
     );
-    if (key.runtime) {
-      assert.deepEqual(
-        manifest.tools,
-        {
-          ...key.runtime,
-          quint: tooling.dependencies["@informalsystems/quint"],
-          checker: checker.version,
-          jarSha256: checker.jarSha256,
-        },
-        "Cached tools differ from current tools",
-      );
-    }
+    assert.deepEqual(
+      manifest.tools,
+      {
+        ...key.runtime,
+        quint: tooling.dependencies["@informalsystems/quint"],
+        checker: checker.version,
+        jarSha256: checker.jarSha256,
+      },
+      "Cached tools differ from admitted tools",
+    );
     for (const input of key.inputs)
       assert.deepEqual(
         manifest.sourceInputs.find((item) => item.path === input.path),
@@ -135,11 +147,40 @@ export async function modelCacheKey(root: string, index: number) {
     node: node.stdout.toString().trim(),
     java: java.stderr.toString().trim().split("\n")[0]!,
   };
+  return keyForToolIdentity(root, index, {
+    runtime,
+    java: java.stderr.toString().trim(),
+    platform: process.platform,
+    arch: process.arch,
+  });
+}
+
+async function keyForToolIdentity(
+  root: string,
+  index: number,
+  toolIdentity: ModelToolIdentity,
+) {
+  assert(
+    toolIdentity &&
+      toolIdentity.runtime &&
+      Object.values(toolIdentity.runtime).length === 3 &&
+      (["node", "java", "bun"] as const).every(
+        (name) =>
+          typeof toolIdentity.runtime[name] === "string" &&
+          toolIdentity.runtime[name].length > 0,
+      ) &&
+      toolIdentity.runtime.bun === Bun.version &&
+      typeof toolIdentity.java === "string" &&
+      toolIdentity.java.split("\n")[0] === toolIdentity.runtime.java &&
+      toolIdentity.platform === process.platform &&
+      toolIdentity.arch === process.arch,
+    "Missing or invalid model tool identity",
+  );
   const tools = [
-    JSON.stringify(runtime),
-    java.stderr.toString().trim(),
-    process.platform,
-    process.arch,
+    JSON.stringify(toolIdentity.runtime),
+    toolIdentity.java,
+    toolIdentity.platform,
+    toolIdentity.arch,
   ].join("\n");
   return {
     ...(await contentKey(
@@ -148,7 +189,8 @@ export async function modelCacheKey(root: string, index: number) {
       JSON.stringify(verificationShard(index)),
       tools,
     )),
-    runtime,
+    runtime: toolIdentity.runtime,
+    toolIdentity,
   };
 }
 
@@ -159,10 +201,13 @@ export async function readReusedBundle(root: string, shard: Shard) {
     `.agents/verification/runs/ci-shard-${shard.index}-reused/origin.json`,
     "Invalid reuse origin path",
   );
-  const key = await modelCacheKey(root, shard.index);
   const bundle = JSON.parse(
     await readFile(resolve(root, shard.reuse.origin), "utf8"),
   ) as ModelBundle;
+  // Restore already admitted these tools against the pinned shard runtime.
+  // Delivery validates that same complete identity and today's input closure;
+  // it must not substitute its own unpinned (or absent) Node/Java.
+  const key = await keyForToolIdentity(root, shard.index, bundle.toolIdentity);
   validateModelBundle(bundle, shard.index, key);
   assert.equal(shard.reuse.hash, key.hash, "Reused group key differs");
   assert.deepEqual(

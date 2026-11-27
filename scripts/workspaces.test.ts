@@ -120,11 +120,13 @@ test("CI and release jobs install once from the workspace root", () => {
           [
             "homebrew-preview",
             "validation-scope",
+            "pr-description",
             "validation",
             "delivery",
             "plugin-windows",
             "launchd",
           ].includes(name)) ||
+        (file === "behavioral-verification.yml" && name === "candidate") ||
         (file === "world-browser.yml" &&
           ["web-browser", "world-latency"].includes(name)) ||
         (file === "release.yml" &&

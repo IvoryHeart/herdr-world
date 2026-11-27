@@ -17,7 +17,9 @@
 - `scripts/build-pages.ts`
 - `scripts/pages-features.ts`
 - `scripts/openspec-notes.ts`
+- `scripts/openspec-check.test.ts` (strict requirement lengths and archived-task gate)
 - `scripts/check-knowledge-map.ts`
+- `scripts/check-pr-body.ts` (permits only lossless current-spec length repairs)
 - `web/src/features/FeatureHosts.tsx`
 - `quint/`
 - `docs/design/`
@@ -40,6 +42,8 @@
 - `scripts/release-pr.test.ts` (actual workflow shell/config and ephemeral CLI version override; automatic same-repository CI dispatch)
 - `scripts/release-validation.test.ts` (publisher ordering and tag-only Homebrew release environment; npm keeps OIDC)
 - `scripts/ci-merge-queue.test.ts` (merge-group trigger, Linux graph and queue checkout, exact Delivery checks name, full validation without PR reuse, and side-workflow event audit)
+- `scripts/dependabot-event.ts` (GitHub event sender and PR author identity gate)
+- `scripts/dependabot-policy.test.ts` (bot impact-line exemption, exact metadata identities, retained privacy and test scope)
 - `scripts/release-publication.test.ts`
 - `scripts/release-seal.ts` (seal record of every contract job's result; Release reuses retained bytes only from an all-green record of the same run)
 - `herdr-plugin.toml`
@@ -49,6 +53,11 @@
 - `scripts/release-walk.ts`
 - `scripts/release-channel-upgrade.py`
 - `scripts/release-npm-smoke.ts`
+- `scripts/test-retry.ts` and `scripts/test-retry.test.ts` (CI-only scoped file/case recovery and JUnit proof)
+- `scripts/flaky-test-policy.ts` and `scripts/flaky-test-policy.test.ts` (file/case identity, distinct-run ledger, seven-day limit and explicit quarantine)
+- `scripts/flaky-tests.ts` and `scripts/flaky-tests.test.ts` (Delivery summary/read-only gate; same-repository source admission, trusted serialized issue updates and commit status)
+- `.github/workflows/flaky-tests.yml` (default-branch tracker; skips fork runs before downloading same-repository candidate artifacts as data)
+- `scripts/ci-tests.ts`, `scripts/run-tests.ts`, `scripts/run-world-tests.ts` (retry opt-in and shared browser assets)
 - `scripts/pipeline-retry.ts`
 - `server/src/config/service-executable.ts`
 - `server/src/cli/update-finish.ts`
@@ -81,6 +90,13 @@
 - Agent discovery starts with native OpenSpec capability and active-change lists,
   then capability specs, notes and their Code paths. Public feature rendering
   belongs to `build:site`; internal notes parsing also serves source-ownership checks.
+- Verified Dependabot PR events waive only description impact lines; both sender
+  and author must be `dependabot[bot]` with type `Bot`. The usual test selection
+  remains authoritative. Exact bot metadata identities and unchanged license
+  attribution rules are documented in [contributor guidance](../../../CONTRIBUTING.md#privacy-before-publication).
+- OpenSpec 2.1.1 uses project-scoped skills; keep the adapted `world-openspec-*`
+  files unchanged when refreshing ignored stock workflows. `spec:check` validates
+  current/active contracts strictly and checks archived task completion.
 
 ## Usage reference
 
@@ -88,6 +104,12 @@
   its combined commit with current main under **Delivery checks**, without PR
   result reuse. GitHub merges after checks and review requirements pass. Only CI
   subscribes directly to merge groups; see [CI ownership](../../../docs/ci-pipelines.md).
+
+- **Flaky tests.** Open a PR's Checks → Delivery checks → Flaky tests for every
+  recovered file/case. Issues labelled `flaky` retain occurrences and run links.
+  More than three runs in seven days blocks the file until the owner closes the
+  fixed cause or explicitly adds `flaky-quarantined`; quarantine never excuses
+  a second failure. See [CI guidance](../../../docs/ci-pipelines.md#flaky-tests).
 
 ## World update notifications
 

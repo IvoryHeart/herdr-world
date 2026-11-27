@@ -249,7 +249,7 @@ Desk, Board, Spaces and the CLI show the same value), so it cannot drift back.
 ## 10. Quint assessment
 
 The write path is ordering and ownership, so it needs a model.
-[write-path.qnt](write-path.qnt) models one fact, its source, World and two views,
+[`quint/world-write-path.qnt`](../../../quint/world-write-path.qnt) models one fact, its source, World and two views,
 with late reads, late acknowledgements, direct source changes, refusals and the host
 going offline and back. It checks:
 
@@ -262,24 +262,15 @@ going offline and back. It checks:
 - Once everything is delivered and read, World and every view show the source's
   value.
 
-Commands (`Q=tools/quint/node_modules/@informalsystems/quint/dist/src/cli.js`, after
-`bun run verification:setup`):
-
-- `node $Q test write-path.qnt`: 6 scenarios pass (late read discarded, source change
-  after a command wins, refusal restores, offline, observed command holds until its
-  revision is adopted, two views converge).
-- `node $Q run write-path.qnt --invariant safety --max-samples 200000 --max-steps 30 --seed 7 --backend=rust`:
-  no violation.
-- Control: with `FENCED = false` (World applies any late read, takes an
-  acknowledgement as the value, views take any push) the same run finds a violation
-  and the late-read scenario fails. A second control, settling the command without
-  naming its revision (`crev` 0 in `applyRead`), fails `noFlashBack` and the
-  observed-holds scenario: the asking view shows the old value after World took the
-  new one.
-
-The model stays design-stage in this folder, like `agent-identity.qnt`. The step that
-adds the command records and epoch fence (tasks.md step 4) moves it into `quint/`
-with an adapter over the real code, a coverage entry and the full verification gate.
+It also checks that a command is sent only over the value it names
+(compare-and-set) and that a World restart drops pending values and settles a
+command it recorded as accepted, but never saw settle, as uncertain. Nine scenarios
+pass, including the outcome delivered when the final value is unchanged, pending
+values shared by two screens of one browser and recovery after a restart. Model
+controls (no fence, no compare-and-set) and production mutants are rejected by
+`bun run verification:gate`; the adapter `quint/world-write-path.ts` replays the
+scenarios through the real snapshot service, command path and two browser
+replicas ([contract](../../../verification/contracts/world-write-path.md)).
 
 ## Decisions
 

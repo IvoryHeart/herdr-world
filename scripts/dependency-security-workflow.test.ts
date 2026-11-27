@@ -16,12 +16,12 @@ test("live audit blocks the protected delivery result, release publication and P
   );
   expect(ci.jobs.delivery.needs).toContain("dependency-security");
   const required = ci.jobs.delivery.steps.find(
-    (step: any) => step.name === "Require current dependency security audit",
+    (step: any) => step.name === "Run full repository check",
   );
   expect(required.env).toMatchObject({
     SECURITY_RESULT: "${{ needs.dependency-security.result }}",
   });
-  expect(required.run).toContain('test "$SECURITY_RESULT" = "$expected"');
+  expect(required.run).toBe("bun scripts/ci-delivery-result.ts");
   for (const [path, job] of [
     [".github/workflows/release-candidate.yml", "validate"],
     [".github/workflows/pages.yml", "build"],

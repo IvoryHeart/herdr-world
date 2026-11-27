@@ -84,27 +84,27 @@ bridge.call = (async (method: string, params: Record<string, unknown> = {}) => {
         dir: "/home/user/.local/bin",
         login: "systemd",
       },
-      version: "0.1.21",
+      version: "0.1.22",
     };
   if (params.action === "install")
-    return { phase: "installing", version: "0.1.21", lines: [] };
+    return { phase: "installing", version: "0.1.22", lines: [] };
   if (!installing) return { phase: "idle", version: null, lines: [] };
   coreStatusReads++;
   const lines = ["Reading the herdr-core release list..."];
   if (coreStatusReads < 2)
-    return { phase: "installing", version: "0.1.21", lines };
+    return { phase: "installing", version: "0.1.22", lines };
   // Enough steps for two-digit line numbers.
   const steps = Array.from({ length: 9 }, (_, n) => `Synthetic step ${n + 2}`);
   return coreOutcome === "done"
     ? {
         phase: "done",
-        version: "0.1.21",
+        version: "0.1.22",
         lines: [...lines, ...steps, "herdr-core is running."],
         connection_id: "core-local",
       }
     : {
         phase: "failed",
-        version: "0.1.21",
+        version: "0.1.22",
         lines,
         error: "the download is damaged (checksum mismatch); try again",
       };
@@ -556,7 +556,7 @@ async function coreFirst() {
   await waitFor(
     () =>
       document.body.textContent?.includes(
-        "Install herdr-core 0.1.21 on this computer?",
+        "Install herdr-core 0.1.22 on this computer?",
       ) === true,
     "the herdr-core confirmation",
   );
@@ -668,7 +668,7 @@ async function manageConnections() {
   check(offer, "card: a core that is not running offers the install");
   click(offer!);
   await waitFor(
-    () => text().includes("Install herdr-core 0.1.21 on dev.example.com?"),
+    () => text().includes("Install herdr-core 0.1.22 on dev.example.com?"),
     "the SSH confirmation",
   );
   check(
@@ -714,7 +714,7 @@ async function manageConnections() {
   )!;
   click(local.querySelector("button")!);
   await waitFor(
-    () => text().includes("Install herdr-core 0.1.21 on this computer?"),
+    () => text().includes("Install herdr-core 0.1.22 on this computer?"),
     "the local confirmation",
   );
   click(button("Cancel"));
