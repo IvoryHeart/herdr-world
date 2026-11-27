@@ -8,6 +8,7 @@ import {
   realpathSync,
 } from "node:fs";
 import { basename, dirname, join } from "node:path";
+import { timing } from "../../../shared/timings";
 import { assertSafeDataPath } from "../config/data-paths";
 
 type Purpose = "edit" | "service";
@@ -78,7 +79,9 @@ export async function acquireRegistryOwnership(
     db = new Database(path);
     // A bounded native wait serializes independent CLI processes. No expiring
     // lease, PID reuse inference or stale-owner deletion can authorize a write.
-    db.exec("PRAGMA busy_timeout=5000; BEGIN EXCLUSIVE");
+    db.exec(
+      `PRAGMA busy_timeout=${timing("registryBusyWaitMs")}; BEGIN EXCLUSIVE`,
+    );
     const current = lstatSync(path);
     if (current.dev !== identity.dev || current.ino !== identity.ino)
       throw new Error(
