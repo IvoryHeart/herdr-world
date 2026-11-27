@@ -38,12 +38,8 @@ async function dispatchBridgeRpc(rpc: BridgeRpcContext): Promise<false | void> {
   ) {
     try {
       const result = await rpc.services.uiSettings(method, params ?? {});
-      if (method === "bridge.ui_settings.update") {
-        // Other browsers follow the change without reloading.
-        const line = JSON.stringify({ ui_settings: result });
-        for (const client of clients)
-          if (client !== ws) safeSend(client, line, "ui-settings");
-      }
+      // Every browser follows the change through the World publication.
+      if (method === "bridge.ui_settings.update") rpc.services.publishWorld?.();
       sendReply({ id, result }, "ui-settings");
     } catch (error) {
       sendError("ui-settings-error", error);

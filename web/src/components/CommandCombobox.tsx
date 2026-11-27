@@ -26,6 +26,7 @@ import {
 } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
 import { COMMAND_BOX_OPEN_EVENT, commandBoxKey } from "../commandBoxKey";
+import { renameRoom } from "../world/roomRenameClose";
 import { useViewSearchShortcut } from "../world/viewSearchShortcut";
 import { type FinderSearch, useFinderBoxClosed } from "../world/worldFinder";
 import { findPages } from "./commandFindPages";
@@ -520,7 +521,11 @@ function OwnedCommandCombobox({
       return;
     }
     if (action.type === "rename-workspace") {
-      store.renameWorkspace(action.workspace.workspace_id, trimmed);
+      void renameRoom(
+        store.room(action.workspace.workspace_id),
+        action.workspace.label,
+        trimmed,
+      );
     } else if (action.type === "rename-tab") {
       store.renameTab(action.tab.tab_id, trimmed);
     } else if (action.type === "create-worktree") {

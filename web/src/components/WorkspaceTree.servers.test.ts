@@ -175,9 +175,6 @@ if (process.env.ROAMGATE_SERVER_TREE_DOM_TEST !== "1") {
         true,
       );
       const focus = spyOn(store, "focusWorkspace").mockResolvedValue(undefined);
-      const rename = spyOn(store, "renameWorkspace").mockResolvedValue(
-        undefined,
-      );
       const close = spyOn(store, "closeWorkspace").mockResolvedValue(undefined);
       const selected = spyOn(store, "focusPane").mockResolvedValue(undefined);
       const focusTab = spyOn(store, "focusTab").mockResolvedValue(undefined);
@@ -202,7 +199,7 @@ if (process.env.ROAMGATE_SERVER_TREE_DOM_TEST !== "1") {
       };
       mocks.push(spyOn(bridge, "connection").mockReturnValue(client));
       const onSelect = mock(() => {});
-      mocks.push(summary, navigate, focus, rename, close, selected, focusTab);
+      mocks.push(summary, navigate, focus, close, selected, focusTab);
       __storeTesting.replaceState({
         ...previousState,
         activeConnectionId: "alpha",
@@ -402,7 +399,6 @@ if (process.env.ROAMGATE_SERVER_TREE_DOM_TEST !== "1") {
         },
         { fromKnownList: true },
       );
-      expect(rename).not.toHaveBeenCalled();
       expect(close).not.toHaveBeenCalled();
 
       await write(WORKSPACE_AGENT_LAYOUT_STORAGE_KEY, "separate");

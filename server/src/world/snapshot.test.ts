@@ -1339,14 +1339,117 @@ describe("WorldSnapshotService", () => {
     service.invalidate("local");
     release.resolve();
     const uncertain = await first;
+    // The epoch fence discards the read: nothing it saw is published.
     expect(uncertain.connections[0]).toMatchObject({
-      stale: true,
+      snapshot: null,
       actionable: false,
       snapshot_error: "observation changed during snapshot",
     });
     const refreshed = await service.snapshot();
     expect(refreshed.connections[0].actionable).toBe(true);
     expect(calls).toBe(8);
+  });
+
+  test("only admitted reads reach World commands, with their epoch; a settle publishes", async () => {
+    const release = deferred<void>();
+    let label = "Before";
+    let hold = true;
+    const service = new WorldSnapshotService<Runtime>({
+      list: () => [status("local")],
+      readyRuntimeLease: () => ({
+        connectionId: "local",
+        generation: 1,
+        runtime: {
+          ...herdrRuntimeFixture({
+            async call(method) {
+              if (hold) await release.promise;
+              return runtime(label).herdr.call(method);
+            },
+          }),
+        },
+        isCurrent: () => true,
+      }),
+    });
+    const reads: { epoch: number; labels: unknown[] }[] = [];
+    let settle = false;
+    service.onAdmittedRead((read) => {
+      reads.push({
+        epoch: read.epoch,
+        labels: read.rooms.map((room) => room.label),
+      });
+      return settle;
+    });
+    // A read that began before the change is discarded: it never settles.
+    const late = service.snapshot();
+    label = "After";
+    service.invalidate("local");
+    const epoch = service.epoch("local");
+    release.resolve();
+    await late;
+    hold = false;
+    expect(reads).toEqual([]);
+    const first = await service.snapshot();
+    expect(reads).toEqual([{ epoch, labels: ["After workspace"] }]);
+    expect(service.rooms("local", 1)?.[0]?.label).toBe("After workspace");
+    expect(service.rooms("local", 2)).toBeNull();
+    // An unchanged read that settles a command still publishes a revision.
+    settle = true;
+    service.invalidate("local");
+    const settled = await service.snapshot();
+    // The invalidation advances once; the settle once more.
+    expect(settled.revision).toBe(first.revision + 2);
+    settle = false;
+    service.invalidate("local");
+    expect((await service.snapshot()).revision).toBe(settled.revision + 1);
+  });
+
+  test("a reply waiting on a slow host publishes the other host's newest read with the revision and values it produced", async () => {
+    const release = deferred<void>();
+    const labels: Record<string, string> = { a: "Old", b: "B" };
+    let holdB = false;
+    const service = new WorldSnapshotService<Runtime>({
+      list: () => [status("a"), status("b")],
+      readyRuntimeLease: (id) => ({
+        connectionId: id,
+        generation: 1,
+        runtime: {
+          ...herdrRuntimeFixture({
+            async call(method) {
+              if (id === "b" && holdB) await release.promise;
+              return runtime(labels[id]!).herdr.call(method);
+            },
+          }),
+        },
+        isCurrent: () => true,
+      }),
+    });
+    let settled = false;
+    const admitted = deferred<void>();
+    service.onAdmittedRead((read) => {
+      if (read.connectionId !== "a" || read.rooms[0]?.label !== "New workspace")
+        return false;
+      settled = true;
+      admitted.resolve();
+      return true;
+    });
+    service.publishWith(() => ({ commands: settled ? ["settled"] : [] }));
+    await service.snapshot();
+    // The first reply takes host a from its fresh cache, then waits on b.
+    holdB = true;
+    service.invalidate("b");
+    const first = service.snapshot();
+    // Meanwhile a changes and another reply's read of a settles a command.
+    labels.a = "New";
+    service.invalidate("a");
+    const second = service.snapshot({ priority_connection_ids: ["a"] });
+    await admitted.promise;
+    release.resolve();
+    for (const reply of [await first, await second]) {
+      const a = reply.connections.find((c) => c.connection_id === "a");
+      expect(reply).toMatchObject({ commands: ["settled"] });
+      expect(a?.snapshot?.workspaces[0]?.label).toBe("New workspace");
+    }
+    expect((await first).revision).toBeLessThanOrEqual((await second).revision);
   });
 
   test("a replaced generation cannot publish its late result over the new host", async () => {
