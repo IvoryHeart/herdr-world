@@ -3,6 +3,12 @@
 // Reuse already-published upstream attribution only in this generated artifact.
 // Values come from main's published baseline, never from the current additions.
 export const publishedAttributionFile = "DEPENDENCY_LICENSES.md";
+// Exact public identities emitted by Dependabot's standard signoff/coauthor.
+// Metadata only, and only for GitHub-verified Dependabot PR events.
+export const dependabotMetadataEmails = new Set([
+  ["support", "github.com"].join("@"),
+  ["49699333+dependabot[bot]", "users.noreply.github.com"].join("@"),
+]);
 // Owner-approved #1325: preserve get-tsconfig/resolve-pkg-maps' MIT copyright.
 // This exact address is allowed only in publishedAttributionFile, never elsewhere.
 export const reviewedAttributionEmails = new Set([

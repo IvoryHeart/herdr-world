@@ -29,7 +29,6 @@ export async function releaseWalk(args: string[]) {
       version: { type: "string" },
       "baseline-tag": { type: "string" },
       report: { type: "string" },
-      "signed-in-home": { type: "string" },
       "listing-repetitions": { type: "string" },
       "disposable-host": { type: "boolean" },
       help: { type: "boolean" },
@@ -37,7 +36,7 @@ export async function releaseWalk(args: string[]) {
   });
   if (values.help) {
     console.info(
-      "bun run test:release-walk --disposable-host [--archive PACKAGE.tar.xz --version X.Y.Z] [--signed-in-home DEDICATED_HOME] [--baseline-tag vX.Y.Z] [--report FILE] [--listing-repetitions 0-100]\nRuns every journey on a disposable Linux/macOS user account or VM. Without --archive, builds the native release package. Requires Bun, Node/npm, Python/venv, gh and a native user service manager. No journey may be skipped. Optional repetitions add independent listing journeys and stop at the first failure.",
+      "bun run test:release-walk --disposable-host [--archive PACKAGE.tar.xz --version X.Y.Z] [--baseline-tag vX.Y.Z] [--report FILE] [--listing-repetitions 0-100]\nRuns every journey on a disposable Linux/macOS user account or VM. Without --archive, builds the native release package. Requires Bun, Node/npm, Python/venv, gh and a native user service manager. No journey may be skipped. Optional repetitions add independent listing journeys and stop at the first failure.",
     );
     return;
   }
@@ -109,9 +108,6 @@ export async function releaseWalk(args: string[]) {
         report,
         disposable: values["disposable-host"],
         listing_repetitions: Number(repetitions),
-        signed_home: values["signed-in-home"]
-          ? resolve(values["signed-in-home"])
-          : null,
         herdr_url: herdrReleaseUrl(target),
         herdr_sha256: VERIFIED_HERDR_SHA256[target],
         runtime_target: target,

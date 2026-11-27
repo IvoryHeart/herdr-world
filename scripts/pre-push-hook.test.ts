@@ -1,334 +1,71 @@
 import { expect, test } from "bun:test";
 import { execFileSync, spawnSync } from "node:child_process";
-import {
-  existsSync,
-  mkdirSync,
-  mkdtempSync,
-  readFileSync,
-  readdirSync,
-  rmSync,
-  writeFileSync,
-} from "node:fs";
+import { mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
-import { join } from "node:path";
-import { fileURLToPath } from "node:url";
-import { coverageOwners, gitChanges } from "./affected";
-import { ordinaryDocumentation } from "./validation-scope";
-import { mainMergeOnly } from "./merge-push";
+import { join, resolve } from "node:path";
 
-function scopeResponse(root: string, real = false) {
-  const report = join(root, ".agents/delivery/pre-push.tsv");
-  const rows = existsSync(report)
-    ? readFileSync(report, "utf8")
-        .trim()
-        .split("\n")
-        .map((row) => row.split("\t"))
-    : [];
-  const sha =
-    rows
-      .filter(
-        (row) =>
-          row[2] === "0" && [undefined, "", "full", "changed"].includes(row[4]),
-      )
-      .at(-1)?.[1] ?? "";
-  const docs =
-    !real &&
-    !!sha &&
-    ordinaryDocumentation(gitChanges(root, sha).changed, coverageOwners(root));
-  return { HOOK_SCOPE_SHA: sha, HOOK_SCOPE_EXIT: docs ? "0" : "1" };
-}
-
-// Real Git/shell subprocesses can exceed Bun's five-second unit-test default.
-test("pre-push checks what changed and blocks a failed check", () => {
-  const root = mkdtempSync(join(tmpdir(), "pre-push-hook-"));
-  const argsPath = join(root, "bun-args");
-  const envPath = join(root, "bun-env");
-  const deliveryDir = join(root, ".agents", "delivery");
-  const reportPath = join(deliveryDir, "pre-push.tsv");
-  const hook = fileURLToPath(new URL("../.githooks/pre-push", import.meta.url));
-  execFileSync("git", ["init", "-q"], { cwd: root });
-  writeFileSync(
-    join(root, "bun"),
-    '#!/bin/sh\nif [ "$1" = scripts/check-privacy.ts ]; then exit "${HOOK_PRIVACY_EXIT:-0}"; fi\nif [ "$1" = scripts/check-push-policy.ts ]; then exit "${HOOK_POLICY_EXIT:-0}"; fi\nprintf "%s\\n" "$*" > "$HOOK_ARGS_FILE"\nprintf "%s|%s|%s\\n" "${GIT_DIR:-}" "${GIT_WORK_TREE:-}" "${GIT_INDEX_FILE:-}" > "$HOOK_ENV_FILE"\nprintf "synthetic early diagnostic and stack\\n" >&2\nprintf "(fail) synthetic browser regression\\n" >&2\ni=0\nwhile [ "$i" -lt 100 ]; do\n  printf "filler %s\\n" "$i" >&2\n  i=$((i + 1))\ndone\nexit "$HOOK_EXIT_CODE"\n',
-    { mode: 0o755 },
-  );
-
+test("branch, tag and multi-ref pushes run only read-only formatting and privacy", () => {
+  const root = mkdtempSync(join(tmpdir(), "world-push-"));
+  const hook = resolve(".githooks/pre-push");
   try {
-    const run = (exitCode: number, policyExit = 0) =>
-      spawnSync("sh", [hook], {
-        cwd: root,
-        encoding: "utf8",
-        env: {
-          ...process.env,
-          HERDR_WORLD_PREPUSH: "",
-          PATH: `${root}:${process.env.PATH ?? ""}`,
-          HOOK_ARGS_FILE: argsPath,
-          HOOK_ENV_FILE: envPath,
-          HOOK_EXIT_CODE: String(exitCode),
-          HOOK_POLICY_EXIT: String(policyExit),
-          GIT_DIR: join(root, ".git"),
-          GIT_WORK_TREE: root,
-          GIT_INDEX_FILE: join(root, "foreign-index"),
-        },
-      });
-
-    const success = run(0);
-    expect(success.status).toBe(0);
-    expect(success.stdout).toBe("");
-    expect(success.stderr).toMatch(
-      /pre-push: bun run check:changed passed in \d+s/,
-    );
-    expect(readdirSync(deliveryDir)).toEqual(["pre-push.tsv"]);
-    expect(readFileSync(reportPath, "utf8")).toMatch(/\t0\t\d+\tchanged\n$/);
-    // No pushed ref to compare with: the gate compares with main itself.
-    expect(readFileSync(argsPath, "utf8")).toBe("run check:changed\n");
-    rmSync(argsPath);
-    const policyFailure = run(0, 42);
-    expect(policyFailure.status).toBe(42);
-    expect(existsSync(argsPath)).toBe(false);
-    expect(readFileSync(reportPath, "utf8")).toMatch(/\t42\t\d+\tchanged\n$/);
-    expect(readFileSync(envPath, "utf8")).toBe("||\n");
-
-    const failure = run(37);
-    expect(failure.status).toBe(37);
-    expect(failure.stderr).toMatch(
-      /pre-push: bun run check:changed failed \(exit 37, \d+s\)/,
-    );
-    expect(failure.stderr).toContain("(fail) synthetic browser regression");
-    const logPath = failure.stderr.match(/Full log: (.+)\n/)?.[1];
-    expect(logPath).toBeDefined();
-    expect(readFileSync(logPath!, "utf8")).toContain(
-      "synthetic early diagnostic and stack",
-    );
-    expect(readFileSync(reportPath, "utf8")).toMatch(/\t37\t\d+\tchanged\n$/);
-    expect(readFileSync(argsPath, "utf8")).toBe("run check:changed\n");
-  } finally {
-    rmSync(root, { recursive: true, force: true });
-  }
-}, 30_000);
-
-test("pre-push compares with the pushed branch, and uses the docs gate only after a code gate", () => {
-  const root = mkdtempSync(join(tmpdir(), "pre-push-docs-"));
-  const hook = fileURLToPath(new URL("../.githooks/pre-push", import.meta.url));
-  const argsPath = join(root, "bun-args");
-  const git = (...args: string[]) =>
-    execFileSync("git", args, { cwd: root, encoding: "utf8" }).trim();
-  try {
-    git("init", "-q");
-    git("config", "user.email", "example@example.invalid");
-    git("config", "user.name", "Example");
-    mkdirSync(join(root, "verification/coverage"), { recursive: true });
-    writeFileSync(join(root, "verification/coverage/_meta.json"), "{}");
-    writeFileSync(
-      join(root, "verification/coverage/example.json"),
-      '{"id":"example","owner":"server/src/config/"}',
-    );
-    writeFileSync(join(root, "README.md"), "base\n");
-    git("add", ".");
-    git("commit", "-qm", "base");
-    const base = git("rev-parse", "HEAD");
+    execFileSync("git", ["init", "-q", root]);
     writeFileSync(
       join(root, "bun"),
-      '#!/bin/sh\nif [ "$1" = scripts/check-privacy.ts ]; then exit "${HOOK_PRIVACY_EXIT:-0}"; fi\nif [ "$1" = scripts/check-push-policy.ts ]; then exit "${HOOK_POLICY_EXIT:-0}"; fi\nif [ "$1" = scripts/validation-scope.ts ]; then\n  printf "%s\\n" "$*" > "$HOOK_SCOPE_ARGS"\n  if [ "$HOOK_SCOPE_REAL" = 1 ]; then exec "$REAL_BUN" "$SCOPE_SCRIPT" "$2"; fi\n  [ "$#" = 2 ] && [ "$2" = "--docs-since=$HOOK_SCOPE_SHA" ] || exit 70\n  exit "$HOOK_SCOPE_EXIT"\nfi\nprintf "%s\\n" "$*" > "$HOOK_ARGS_FILE"\nexit "$HOOK_EXIT_CODE"\n',
+      `#!/bin/sh
+printf '%s\\n' "$*" >> "$CALLS"
+if [ "$1" = run ]; then exit "\${FORMAT_EXIT:-0}"; fi
+cp "$3" "$REFS"
+exit "\${PRIVACY_EXIT:-0}"
+`,
       { mode: 0o755 },
     );
-    const run = (
-      local: string,
-      remote: string,
-      exitCode = 0,
-      extra: Record<string, string> = {},
-    ) => {
-      const scope = scopeResponse(root, extra.HOOK_SCOPE_REAL === "1");
-      const scopeArgs = join(root, "scope-args");
-      rmSync(scopeArgs, { force: true });
+    const refs = [
+      "refs/heads/example a refs/heads/example b\n",
+      "refs/tags/v1.0.0 a refs/tags/v1.0.0 b\n",
+      "refs/heads/one a refs/heads/one b\nrefs/heads/two c refs/heads/two d\n",
+    ];
+    for (const input of refs) {
+      writeFileSync(join(root, "calls"), "");
       const result = spawnSync("sh", [hook], {
         cwd: root,
-        input: `refs/heads/example ${local} refs/heads/example ${remote}\n`,
+        input,
         encoding: "utf8",
         env: {
           ...process.env,
-          HERDR_WORLD_PREPUSH: "",
-          PATH: `${root}:${process.env.PATH ?? ""}`,
-          HOOK_ARGS_FILE: argsPath,
-          HOOK_EXIT_CODE: String(exitCode),
-          REAL_BUN: process.execPath,
-          SCOPE_SCRIPT: fileURLToPath(
-            new URL("./validation-scope.ts", import.meta.url),
-          ),
-          ...scope,
-          HOOK_SCOPE_ARGS: scopeArgs,
-          HOOK_SCOPE_REAL: "",
-          ...extra,
+          PATH: `${root}:${process.env.PATH}`,
+          CALLS: join(root, "calls"),
+          REFS: join(root, "refs"),
+          // The old escape hatch must not restore a full local gate.
+          HERDR_WORLD_PREPUSH: "full",
         },
       });
-      if (existsSync(scopeArgs))
-        expect(readFileSync(scopeArgs, "utf8")).toBe(
-          `scripts/validation-scope.ts --docs-since=${scope.HOOK_SCOPE_SHA}\n`,
-        );
-      return result;
-    };
-
-    // A new branch: no remote commit to compare with.
-    expect(run(base, "0".repeat(40)).status).toBe(0);
-    expect(readFileSync(argsPath, "utf8")).toBe("run check:changed\n");
-    mkdirSync(join(root, "docs"));
-    writeFileSync(join(root, "docs", "guide.md"), "updated\n");
-    git("add", "docs/guide.md");
-    git("commit", "-qm", "docs");
-    const docs = git("rev-parse", "HEAD");
-    expect(run(docs, base, 37, { HOOK_SCOPE_REAL: "1" }).status).toBe(37);
-    expect(readFileSync(argsPath, "utf8")).toBe("run check:docs\n");
-    expect(run(docs, base).status).toBe(0);
-    expect(readFileSync(argsPath, "utf8")).toBe("run check:docs\n");
-    for (const path of [
-      "server/src/config/guide.md",
-      "docs/agent-development.md",
-      "verification/contracts/runtime-leases.md",
-      "openspec/specs/runtime-federation/spec.md",
-    ]) {
-      mkdirSync(join(root, path, ".."), { recursive: true });
-      writeFileSync(join(root, path), "changed evidence contract\n");
-      git("add", path);
-      git("commit", "-qm", "contract");
-      writeFileSync(
-        join(root, ".agents/delivery/pre-push.tsv"),
-        `synthetic\t${base}\t0\t0\tfull\n`,
-      );
-      expect(run(git("rev-parse", "HEAD"), docs).status).toBe(0);
-      expect(readFileSync(argsPath, "utf8")).toBe(
-        `run check:changed --base=${docs}\n`,
-      );
+      expect(result.status).toBe(0);
+      const calls = readFileSync(join(root, "calls"), "utf8")
+        .split("\n")
+        .filter(Boolean);
+      expect(calls).toHaveLength(2);
+      expect(calls[0]).toBe("run format:check");
+      expect(calls[1]).toStartWith("scripts/check-privacy.ts --pre-push ");
+      expect(readFileSync(join(root, "refs"), "utf8")).toBe(input);
     }
-    for (const path of [
-      "AGENTS.md",
-      "CONTRIBUTING.md",
-      ".agents/skills/example/SKILL.md",
-    ]) {
-      mkdirSync(join(root, path, ".."), { recursive: true });
-      const priorInstructions = git("rev-parse", "HEAD");
-      writeFileSync(join(root, path), "contributor instructions\n");
-      git("add", path);
-      git("commit", "-qm", "instructions");
-      writeFileSync(
-        join(root, ".agents/delivery/pre-push.tsv"),
-        `synthetic\t${priorInstructions}\t0\t0\tfull\n`,
-      );
-      expect(run(git("rev-parse", "HEAD"), docs).status).toBe(0);
-      expect(readFileSync(argsPath, "utf8")).toBe("run check:docs\n");
-    }
-    writeFileSync(join(root, "code.ts"), "export const value = 1;\n");
-    git("add", "code.ts");
-    git("commit", "-qm", "code");
-    const code = git("rev-parse", "HEAD");
-    expect(run(code, docs).status).toBe(0);
-    expect(readFileSync(argsPath, "utf8")).toBe(
-      `run check:changed --base=${docs}\n`,
-    );
-    // The owner's override runs the full gate here too.
-    expect(run(code, docs, 0, { HERDR_WORLD_PREPUSH: "full" }).status).toBe(0);
-    expect(readFileSync(argsPath, "utf8")).toBe("run check:delivery\n");
-    // A remote commit that is not an ancestor gives no base.
-    expect(run(code, "f".repeat(40)).status).toBe(0);
-    expect(readFileSync(argsPath, "utf8")).toBe("run check:changed\n");
-    // Pushing another ref or several refs checks all local non-browser units;
-    // CI validates the pushed revisions before merge.
-    expect(run(base, docs).status).toBe(0);
-    expect(readFileSync(argsPath, "utf8")).toContain(
-      "run check:changed --all-units",
-    );
-    const several = spawnSync("sh", [hook], {
-      cwd: root,
-      input: `refs/heads/example ${code} refs/heads/example ${docs}\nrefs/heads/other ${base} refs/heads/other ${"0".repeat(40)}\n`,
-      encoding: "utf8",
-      env: {
-        ...process.env,
-        HERDR_WORLD_PREPUSH: "",
-        PATH: `${root}:${process.env.PATH ?? ""}`,
-        HOOK_ARGS_FILE: argsPath,
-        HOOK_EXIT_CODE: "0",
-      },
-    });
-    expect(several.status).toBe(0);
-    expect(readFileSync(argsPath, "utf8")).toContain(
-      "run check:changed --all-units",
-    );
-  } finally {
-    rmSync(root, { recursive: true, force: true });
-  }
-});
-
-test("a push that only merges main runs static checks; a code resolution runs the gate", () => {
-  const root = mkdtempSync(join(tmpdir(), "pre-push-merge-"));
-  const hook = fileURLToPath(new URL("../.githooks/pre-push", import.meta.url));
-  const mergePush = fileURLToPath(new URL("./merge-push.ts", import.meta.url));
-  const argsPath = join(root, "bun-args");
-  const git = (...args: string[]) =>
-    execFileSync("git", args, { cwd: root, encoding: "utf8" }).trim();
-  const commit = (path: string, text: string, message: string) => {
-    writeFileSync(join(root, path), text);
-    git("add", "-A");
-    git("commit", "-qm", message);
-    return git("rev-parse", "HEAD");
-  };
-  try {
-    git("init", "-q", "-b", "main");
-    git("config", "user.email", "example@example.invalid");
-    git("config", "user.name", "Example");
-    commit("a.ts", "export const a = 1;\n", "base");
-    git("switch", "-q", "-c", "feature");
-    const pushed = commit("b.ts", "export const b = 1;\n", "feature");
-    git("switch", "-q", "main");
-    commit("c.ts", "export const c = 1;\n", "main moved");
-    git("update-ref", "refs/remotes/origin/main", "main");
-    git("switch", "-q", "feature");
-    git("merge", "--no-edit", "-q", "origin/main");
-    // The fake bun runs the real merge detection and records the check.
-    writeFileSync(
-      join(root, "bun"),
-      `#!/bin/sh\nif [ "$1" = scripts/merge-push.ts ]; then\n  [ "$#" = 2 ] && [ "$2" = "$HOOK_REMOTE" ] || exit 70\n  if [ "$HOOK_MERGE_REAL" = 1 ]; then exec "$REAL_BUN" "$MERGE_PUSH" "$2"; fi\n  printf '%s\\n' "$HOOK_MERGE_MESSAGE"\n  exit "$HOOK_MERGE_EXIT"\nfi\nprintf "%s\\n" "$*" > "$HOOK_ARGS_FILE"\n`,
-      { mode: 0o755 },
-    );
-    const run = (real = false) => {
-      const merge = real
-        ? undefined
-        : mainMergeOnly({ cwd: root, remote: pushed });
-      return spawnSync("sh", [hook], {
+    for (const [FORMAT_EXIT, PRIVACY_EXIT, code] of [
+      ["23", "0", 23],
+      ["0", "24", 24],
+    ] as const) {
+      const result = spawnSync("sh", [hook], {
         cwd: root,
-        input: `refs/heads/feature ${git("rev-parse", "HEAD")} refs/heads/feature ${pushed}\n`,
-        encoding: "utf8",
+        input: refs[0],
         env: {
           ...process.env,
-          HERDR_WORLD_PREPUSH: "",
-          PATH: `${root}:${process.env.PATH ?? ""}`,
-          HOOK_ARGS_FILE: argsPath,
-          REAL_BUN: process.execPath,
-          MERGE_PUSH: mergePush,
-          HOOK_REMOTE: pushed,
-          HOOK_MERGE_REAL: real ? "1" : "",
-          HOOK_MERGE_MESSAGE: `merge-push: ${merge?.reason ?? ""}`,
-          HOOK_MERGE_EXIT: merge?.ok ? "0" : "1",
+          PATH: `${root}:${process.env.PATH}`,
+          CALLS: join(root, "calls"),
+          REFS: join(root, "refs"),
+          FORMAT_EXIT,
+          PRIVACY_EXIT,
         },
       });
-    };
-    const merged = run(true);
-    expect(run().status).toBe(merged.status);
-    expect(merged.status).toBe(0);
-    expect(merged.stderr).toMatch(
-      /pre-push: merge-push: only merges [0-9a-f]{8} from origin\/main; running static checks only/,
-    );
-    expect(readFileSync(argsPath, "utf8")).toBe("run check:static\n");
-    expect(
-      readFileSync(join(root, ".agents/delivery/pre-push.tsv"), "utf8"),
-    ).toMatch(/\t0\t\d+\tstatic\n$/);
-
-    // Editing code inside the merge commit loses the shortcut.
-    writeFileSync(join(root, "a.ts"), "export const a = 2;\n");
-    git("add", "-A");
-    git("commit", "-q", "--amend", "--no-edit");
-    expect(run().status).toBe(0);
-    expect(readFileSync(argsPath, "utf8")).toBe(
-      `run check:changed --base=${pushed}\n`,
-    );
+      expect(result.status).toBe(code);
+    }
   } finally {
     rmSync(root, { recursive: true, force: true });
   }

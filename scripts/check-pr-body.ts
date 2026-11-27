@@ -6,12 +6,15 @@ import {
   assessSpecEdits,
   changedPathsBetween,
 } from "./check-knowledge-map";
-import { assessPullRequest, readFragments } from "./changelog-fragments";
 import { readCoverageScope } from "./coverage-scope";
 import { readCapabilityNotes } from "./openspec-notes";
 import { coverageDirectory } from "./coverage";
 import { ordinaryDocumentation } from "./validation-scope";
 import { formatPrivacyFinding, scanPrivacyText } from "./check-privacy";
+import {
+  isDependabotPullRequest,
+  type PullRequestEvent,
+} from "./dependabot-event";
 
 function descriptionLines(body: string): string[] {
   let fence: string | undefined;
@@ -110,38 +113,6 @@ export function assessContractImpacts(
   return problems;
 }
 
-/**
- * Help ships with the feature (#1025): a changelog fragment that adds
- * something (`### Added`) comes with a changed `*.help.ts` declaration
- * (web/src/help/helpEntry.ts), or the description says why it needs none.
- */
-export function assessHelpImpact(
-  paths: readonly string[],
-  fragment: (path: string) => string | undefined,
-  body: string,
-): string[] {
-  const adding = paths.filter(
-    (path) =>
-      /^changes\/[a-z0-9-]+\.md$/.test(path) &&
-      /^### Added[ \t]*$/m.test(fragment(path) ?? ""),
-  );
-  if (!adding.length || paths.some((path) => path.endsWith(".help.ts")))
-    return [];
-  const answers = descriptionLines(body).flatMap((line) => {
-    const match = /^[ \t]*(?:-[ \t]+)?Help:[ \t]*(.*)$/i.exec(line);
-    return match ? [match[1].trim()] : [];
-  });
-  const reason =
-    answers.length === 1
-      ? /^none[ \t]*[-–—:][ \t]*(.+)$/i.exec(answers[0])?.[1]
-      : undefined;
-  return reason && /[\p{L}\p{N}]/u.test(reason) && !/<[^>]+>/.test(reason)
-    ? []
-    : [
-        `${adding.join(", ")} adds something: declare its help in a *.help.ts file beside it (web/src/help/helpEntry.ts), or include \`Help: none — <specific reason>\`.`,
-      ];
-}
-
 /** Use CI's policy functions and the committed PR diff, before publication. */
 export function checkPrBody(
   file: string,
@@ -156,13 +127,13 @@ export function checkPrBodyText(
   cwd = process.cwd(),
   baseRef = "origin/main",
   headRef = "HEAD",
+  dependabot = false,
 ): string[] {
   const git = (...args: string[]) =>
     execFileSync("git", args, { cwd, encoding: "utf8" }).trim();
   const base = git("rev-parse", "--verify", `${baseRef}^{commit}`);
   const head = git("rev-parse", "--verify", `${headRef}^{commit}`);
   const paths = changedPathsBetween(cwd, base, head);
-  readFragments(cwd);
   const sourcePaths = changedPathsBetween(cwd, base, head, {
     includeDeleted: false,
   });
@@ -170,37 +141,21 @@ export function checkPrBodyText(
     sourcePaths,
     readCapabilityNotes(cwd),
   );
-  const changelog = assessPullRequest(
-    paths,
-    new Set(paths.filter((path) => existsSync(join(cwd, path)))),
-    body,
-  );
   return [
-    ...scanPrivacyText(body, "PR body").map(formatPrivacyFinding),
+    ...scanPrivacyText(body, "PR body", dependabot).map(formatPrivacyFinding),
     ...assessSpecEdits(paths),
-    ...assessContractImpacts(
-      paths,
-      body,
-      existsSync(join(cwd, coverageDirectory))
-        ? readCoverageScope(cwd).owns
-        : undefined,
-    ),
+    ...(dependabot
+      ? []
+      : assessContractImpacts(
+          paths,
+          body,
+          existsSync(join(cwd, coverageDirectory))
+            ? readCoverageScope(cwd).owns
+            : undefined,
+        )),
     ...(!knowledge.ok
       ? [
           `Source files without a capability notes.md Code path: ${knowledge.uncovered.join(", ")}`,
-        ]
-      : []),
-    ...assessHelpImpact(
-      paths,
-      (path) =>
-        existsSync(join(cwd, path))
-          ? readFileSync(join(cwd, path), "utf8")
-          : undefined,
-      body,
-    ),
-    ...(!changelog.ok
-      ? [
-          "Add a valid changes/<slug>.md fragment, or include `Changelog: none — <specific reason>`.",
         ]
       : []),
   ];
@@ -208,23 +163,25 @@ export function checkPrBodyText(
 
 /** CI checks the immutable PR head, even when its checkout is a merge commit. */
 export function checkPrBodyEvent(file: string, cwd = process.cwd()): string[] {
-  const event = JSON.parse(readFileSync(file, "utf8")) as {
-    pull_request?: {
-      base?: { sha?: string };
-      head?: { sha?: string };
-      body?: string | null;
-      title?: string;
-    };
-  };
+  const event = JSON.parse(readFileSync(file, "utf8")) as PullRequestEvent;
   const pull = event.pull_request;
+  const dependabot = isDependabotPullRequest(event);
   if (
     !/^[0-9a-f]{40}$/.test(pull?.base?.sha ?? "") ||
     !/^[0-9a-f]{40}$/.test(pull?.head?.sha ?? "")
   )
     throw new Error("Missing or invalid pull-request base or head");
   return [
-    ...scanPrivacyText(pull?.title ?? "", "PR title").map(formatPrivacyFinding),
-    ...checkPrBodyText(pull?.body ?? "", cwd, pull?.base?.sha, pull?.head?.sha),
+    ...scanPrivacyText(pull?.title ?? "", "PR title", dependabot).map(
+      formatPrivacyFinding,
+    ),
+    ...checkPrBodyText(
+      pull?.body ?? "",
+      cwd,
+      pull?.base?.sha,
+      pull?.head?.sha,
+      dependabot,
+    ),
   ];
 }
 

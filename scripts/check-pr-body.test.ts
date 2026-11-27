@@ -6,7 +6,6 @@ import { join } from "node:path";
 import { fileURLToPath } from "node:url";
 import {
   assessContractImpacts,
-  assessHelpImpact,
   checkPrBodyEvent,
   checkPrBodyText,
 } from "./check-pr-body";
@@ -411,7 +410,7 @@ test("push policy reads the intended description or existing PR, and never inven
 });
 
 const cli = fileURLToPath(new URL("./check-pr-body.ts", import.meta.url));
-test("draft descriptions enforce the same source-coverage and changelog rules before PR creation", () => {
+test("draft descriptions enforce source coverage and contract impact without fragments", () => {
   const root = mkdtempSync(join(tmpdir(), "pr-body-"));
   const git = (...args: string[]) =>
     execFileSync("git", args, { cwd: root, encoding: "utf8" }).trim();
@@ -441,7 +440,7 @@ test("draft descriptions enforce the same source-coverage and changelog rules be
     const invalid = run("Knowledge map impact: unchanged\nChangelog: none\n");
     expect(invalid.status).toBe(1);
     expect(invalid.stderr).toContain("web/src/world/example.ts");
-    expect(invalid.stderr).toContain("Changelog:");
+    expect(invalid.stderr).not.toContain("Add a valid changes/");
     expect(invalid.stderr).toContain("Spec impact:");
     expect(invalid.stderr).toContain("Verification impact:");
     mkdirSync(join(root, "openspec/specs/example"), { recursive: true });
@@ -457,47 +456,9 @@ test("draft descriptions enforce the same source-coverage and changelog rules be
           "Changelog: none — Only synthetic regression coverage changes.\n",
       ).status,
     ).toBe(0);
-    mkdirSync(join(root, "changes"));
-    writeFileSync(
-      join(root, "changes/example.md"),
-      "### Fixed\n\n- Keep synthetic behavior consistent.\n",
-    );
-    git("add", "changes");
-    git("commit", "-qm", "fragment");
-    expect(run(reason).status).toBe(0);
-    writeFileSync(join(root, "changes/example.md"), "invalid fragment");
-    expect(run(reason).status).toBe(1);
   } finally {
     rmSync(root, { recursive: true, force: true });
   }
-});
-
-test("an added feature ships a help declaration or says why it needs none", () => {
-  const added = "### Added\n\n- A synthetic feature.\n";
-  const fixed = "### Fixed\n\n- A synthetic fix.\n";
-  const paths = ["changes/synthetic.md", "web/src/example.tsx"];
-  const read = (text: string) => (path: string) =>
-    path === "changes/synthetic.md" ? text : undefined;
-  expect(assessHelpImpact(paths, read(added), "")).toEqual([
-    expect.stringContaining("changes/synthetic.md adds something"),
-  ]);
-  expect(assessHelpImpact(paths, read(fixed), "")).toEqual([]);
-  expect(
-    assessHelpImpact(
-      [...paths, "web/src/world/example.help.ts"],
-      read(added),
-      "",
-    ),
-  ).toEqual([]);
-  expect(
-    assessHelpImpact(
-      paths,
-      read(added),
-      "Help: none — The setting has no control on screen.",
-    ),
-  ).toEqual([]);
-  for (const answer of ["Help: none", "Help: none — <reason>", "Help: yes"])
-    expect(assessHelpImpact(paths, read(added), answer)).toHaveLength(1);
 });
 
 test("deleted source owners are optional while deleted current specs still require deltas", () => {

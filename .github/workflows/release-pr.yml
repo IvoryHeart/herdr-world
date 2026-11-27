@@ -1,0 +1,64 @@
+name: Release PR
+
+on:
+  workflow_dispatch:
+    inputs:
+      release_as:
+        description: Optional version override, for example 0.3.8-rc.1
+        type: string
+  schedule:
+    - cron: "27 6 * * 1"
+
+permissions:
+  contents: write
+  actions: write
+  issues: write
+  pull-requests: write
+
+concurrency:
+  group: release-pr
+  cancel-in-progress: false
+
+jobs:
+  prepare:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          persist-credentials: false
+      - uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2
+        with:
+          bun-version: "1.4.4"
+      - name: Prepare the release PR
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+          RELEASE_AS: ${{ inputs.release_as }}
+        run: |
+          set -euo pipefail
+          version_args=()
+          if [ -n "$RELEASE_AS" ]; then
+            bun -e 'import { RELEASE_VERSION_RE } from "./scripts/release-version.ts"; if (!RELEASE_VERSION_RE.test(process.env.RELEASE_AS)) throw new Error("Invalid release_as version")'
+            version_args=(--release-as "$RELEASE_AS")
+          fi
+          # The action drops release-as in manifest mode; the CLI passes it
+          # to Manifest.fromManifest. release-pr never creates tags/releases.
+          npx --yes release-please@17.3.0 release-pr \
+            --repo-url "$GH_REPO" --token "$GH_TOKEN" --target-branch main \
+            --config-file release-please-config.json \
+            --manifest-file .release-please-manifest.json "${version_args[@]}"
+      # GITHUB_TOKEN-created PR events do not trigger CI. The action's PR output
+      # is unavailable with the CLI; resolve the standard manifest PR branch.
+      - name: Dispatch checks for the release-please PR
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+        run: |
+          set -euo pipefail
+          branch="$(gh pr list --state open --base main --head release-please--branches--main \
+            --json headRefName,isCrossRepository \
+            --jq '.[] | select(.isCrossRepository == false) | .headRefName')"
+          if [ -n "$branch" ]; then
+            gh workflow run ci.yml --ref "$branch"
+            gh workflow run privacy.yml --ref "$branch"
+          fi

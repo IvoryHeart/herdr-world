@@ -19,6 +19,18 @@ afterEach(() => {
     rmSync(root, { recursive: true, force: true });
 });
 
+test("release-please's real manifest remains readable by the Windows installer", () => {
+  const manifest = readFileSync("herdr-plugin.toml", "utf8");
+  const script = readFileSync("scripts/install-plugin.ps1", "utf8");
+  // This .NET pattern uses the common JS subset; exercise the actual source
+  // on Linux too, where the native PowerShell install test cannot run.
+  const pattern = /\[regex\]::Match\(\$manifest, '([^']+)'\)/.exec(script)![1];
+  const match = new RegExp(pattern.replace("(?m)", ""), "m").exec(manifest);
+  expect(match?.[1]).toBe(
+    (Bun.TOML.parse(manifest) as { version: string }).version,
+  );
+});
+
 test("plugin manifest runs system installers and the native executable", () => {
   const manifest = Bun.TOML.parse(
     readFileSync(join(import.meta.dir, "../herdr-plugin.toml"), "utf8"),
@@ -56,7 +68,13 @@ for (const failure of [
     for (const dir of [scripts, assets, bin, server]) mkdirSync(dir);
     for (const name of ["install-plugin.sh", "install-herdr-world.sh"])
       copyFileSync(join(import.meta.dir, name), join(scripts, name));
-    writeFileSync(join(root, "herdr-plugin.toml"), 'version = "9.8.7"\n');
+    writeFileSync(
+      join(root, "herdr-plugin.toml"),
+      readFileSync("herdr-plugin.toml", "utf8").replace(
+        /^version = "[^"]+"/m,
+        'version = "9.8.7"',
+      ),
+    );
     const platform = `${process.platform === "darwin" ? "darwin" : "linux"}-${process.arch}`;
     const packageDir = `herdr-world-${platform}`;
     const packagePath = join(assets, packageDir);

@@ -63,6 +63,11 @@ ${launcher}
     (bin/"herdr-world").chmod 0755
   end
 
+  post_install_steps do
+    run "herdr-world", args: ["update", "--finish-install"], base: :libexec,
+      env: { "HERDR_WORLD_SKIP_HERDR" => "1", "HERDR_WORLD_SKIP_INTEGRATIONS" => "1" }
+  end
+
   def caveats
     <<~EOS
       World uses the herdr-core or Herdr you already have. When it starts and
@@ -75,7 +80,7 @@ ${launcher}
   end
 
   test do
-    assert_match "herdr-world ${version}", shell_output("#{bin}/herdr-world --version")
+    assert_match "herdr-world #{version}", shell_output("#{bin}/herdr-world --version")
     assert_match "Herdr", shell_output("#{bin}/herdr-world herdr status")
   end
 end

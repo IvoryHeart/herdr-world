@@ -14,6 +14,11 @@ permissions:
 jobs:
   label:
     name: Apply release-note category
+    # Closed or merged PRs are never relabelled. The category reads the title,
+    # author and changed files, so a description-only edit has nothing to do.
+    if: >-
+      github.event.pull_request.state == 'open' &&
+      (github.event.action != 'edited' || github.event.changes.title || github.event.changes.base)
     runs-on: ubuntu-latest
     steps:
       # pull_request_target checks out the trusted base branch, never PR code.
