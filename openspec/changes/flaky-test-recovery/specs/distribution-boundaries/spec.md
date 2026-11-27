@@ -17,7 +17,7 @@ CI SHALL retry each failed unit test file or browser case at most once in its ex
 - **THEN** no flaky-test retry runs
 
 ### Requirement: Flaky test accountability
-CI SHALL maintain one open issue labelled flaky per recovered file/case, updating each distinct run occurrence with its run link. More than three distinct flaky runs in seven days SHALL fail CI until the issue is closed after a fix or the owner explicitly quarantines it. Rerunning the same run SHALL count once. Quarantine SHALL exempt only the frequency limit and SHALL never permit a test that fails twice to pass.
+CI SHALL maintain one open issue labelled flaky per recovered file/case from same-repository CI runs, updating each distinct run occurrence with its run link. The trusted tracker SHALL skip fork runs before downloading artifacts and SHALL independently verify the source head repository through the Actions API before reading issue history or writing issues or statuses. Missing source repository identity SHALL be rejected. More than three distinct flaky runs in seven days SHALL fail CI until the issue is closed after a fix or the owner explicitly quarantines it. Rerunning the same run SHALL count once. Quarantine SHALL exempt only the frequency limit and SHALL never permit a test that fails twice to pass.
 
 #### Scenario: A cause recurs
 - **WHEN** a recovered test already has an open flaky issue
@@ -31,3 +31,8 @@ CI SHALL maintain one open issue labelled flaky per recovered file/case, updatin
 - **WHEN** the owner closes a fixed cause or labels its open issue flaky-quarantined
 - **THEN** that issue no longer blocks the frequency limit
 - **AND** a later recovered failure after closure creates a new open issue
+
+#### Scenario: Fork or unidentified source run
+- **WHEN** a source CI run belongs to a fork or its head repository identity is missing
+- **THEN** the workflow skips tracking before artifact download
+- **AND** direct tracker invocation rejects that source without reading issue history or writing issues or statuses, for both requested and completed events

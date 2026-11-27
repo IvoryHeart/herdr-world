@@ -23,12 +23,14 @@ function fakeAPI() {
   const calls: Array<{ path: string; body?: any }> = [];
   let failCreateReply = false;
   let sourceConclusion: string | null = "success";
+  let sourceRepository: unknown = { full_name: "example/repo" };
   const api: GitHubAPI = async (path, body: any) => {
     calls.push({ path, body });
     if (path.startsWith("actions/runs/"))
       return {
         path: ".github/workflows/ci.yml",
         head_sha: "a".repeat(40),
+        head_repository: sourceRepository,
         created_at: at,
         conclusion: sourceConclusion,
         run_attempt: 1,
@@ -64,6 +66,9 @@ function fakeAPI() {
     issues,
     statuses,
     calls,
+    repository: (value: unknown) => {
+      sourceRepository = value;
+    },
     loseReply: () => {
       failCreateReply = true;
     },
@@ -160,6 +165,43 @@ test("requested runs hold the required status; late requests and superseded atte
   ).rejects.toThrow("superseded");
 });
 
+test.each([true, false])(
+  "untrusted source repositories cannot write tracking state (pending=%s)",
+  async (pending) => {
+    for (const repository of [
+      { full_name: "contributor/fork" },
+      { full_name: "example/repo-other" },
+      undefined,
+      null,
+      {},
+    ]) {
+      const mock = fakeAPI();
+      mock.repository(repository);
+      mock.conclusion(pending ? null : "success");
+      for (const run of [1, 2, 3, 4])
+        await expect(
+          publishTracking(
+            mock.api,
+            "example/repo",
+            [report],
+            run,
+            1,
+            pending,
+            at,
+          ),
+        ).rejects.toThrow("source repository");
+      expect(mock.issues).toEqual([]);
+      expect(mock.statuses).toEqual([]);
+      expect(mock.calls.map((call) => call.path)).toEqual([
+        "actions/runs/1",
+        "actions/runs/2",
+        "actions/runs/3",
+        "actions/runs/4",
+      ]);
+    }
+  },
+);
+
 test("retained JSON from all attempts is data only and malformed evidence is rejected", () => {
   const root = mkdtempSync(join(tmpdir(), "flake-evidence-"));
   try {
@@ -211,6 +253,9 @@ test("CI delegates only test recovery and tracker runs trusted code with a seria
     issues: "write",
     statuses: "write",
   });
+  expect(tracker.jobs.track.if).toBe(
+    "github.event.workflow_run.head_repository.full_name == github.repository",
+  );
   const steps = tracker.jobs.track.steps;
   expect(
     steps.find((step: any) => step.uses?.startsWith("actions/checkout@")).with,

@@ -6,7 +6,7 @@
 ## 2. Accountability
 
 - [x] 2.1 Add Delivery summary, issue-ledger tracking and seven-day enforcement with deduplication, boundary and quarantine tests.
-- [x] 2.2 Add trusted serialized tracker workflow and test its authority boundary.
+- [x] 2.2 Add trusted serialized tracker workflow and test its authority boundary, including fork/missing source identity rejection before downloads and repository writes.
 
 ## 3. Delivery
 

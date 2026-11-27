@@ -115,6 +115,7 @@ export async function publishTracking(
   const source = (await api(`actions/runs/${run}`)) as {
     path: string;
     head_sha: string;
+    head_repository?: { full_name?: string } | null;
     created_at: string;
     conclusion: string | null;
     run_attempt: number;
@@ -123,6 +124,11 @@ export async function publishTracking(
     source.path === ".github/workflows/ci.yml" &&
       /^[a-f0-9]{40}$/.test(source.head_sha),
     "Unexpected source workflow",
+  );
+  // Default-branch code must not turn fork-controlled artifacts into repository writes.
+  assert(
+    source.head_repository?.full_name === repo,
+    "Unexpected source repository",
   );
   assert(source.run_attempt === attempt, "Source attempt superseded");
   const statuses = (await api(

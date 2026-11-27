@@ -95,6 +95,12 @@ failure, missing recovery evidence, crash or isolation-tripwire violation stays 
 Models, static checks, privacy and PR-description checks never retry. Local test
 commands do not enable recovery by default.
 
+The trusted tracker accepts only runs whose head repository is this repository.
+It skips fork runs before downloading artifacts and independently checks the
+Actions API source identity before accessing issue history or writing issues or
+statuses; a missing identity is rejected. Fork tests still run and report their
+local retry results, but cannot add repository-wide flaky history.
+
 Every test shard retains `flaky-tests-*` JSON artifacts, including failed jobs and
 previous attempts of a rerun. **Delivery checks** lists every recovered file and
 case under **Flaky tests**, and checks the open issue history with a read-only
