@@ -23,6 +23,7 @@ const actions = {
   "herdr-core-runtime": [],
   "herdr-core-seen": [],
   "agent-move": [],
+  "world-write-path": [],
   "ide-lifecycle": [],
   "effect-recovery": effectActions,
   "binding-resolution": [],
@@ -200,6 +201,10 @@ export function validateTrace(
   if (model === "ide-lifecycle")
     throw new Error(
       "IDE lifecycle schedules use their dedicated replay validator",
+    );
+  if (model === "world-write-path")
+    throw new Error(
+      "World write path scenarios use their dedicated replay validator",
     );
   if (model === "effect-recovery") return validateEffectTrace(value);
   if (model === "observation-base") return validateObservationTrace(value);

@@ -1240,7 +1240,7 @@ describe("independent qualified operational sessions", () => {
         runtimeGeneration: 1,
       });
       for (const pending of [
-        () => owned.renameWorkspace("same-workspace", "Synthetic name"),
+        () => owned.renameTab("same-tab", "Synthetic name"),
         () => owned.closeWorkspace("same-workspace"),
       ]) {
         expect(await pending()).toBeUndefined();
@@ -1308,14 +1308,12 @@ describe("independent qualified operational sessions", () => {
         runtimeGeneration: 1,
       });
       await owned.openWorktree("same-workspace", "/synthetic/checkout");
-      await owned.renameWorkspace("same-workspace", "Synthetic renamed");
+      await owned.renameTab("same-tab", "Synthetic renamed");
       await owned.closeTab("same-tab");
       expect(
         calls
           .filter((call) =>
-            ["worktree.open", "workspace.rename", "tab.close"].includes(
-              call.method,
-            ),
+            ["worktree.open", "tab.rename", "tab.close"].includes(call.method),
           )
           .map((call) => call.host),
       ).toEqual(["beta", "beta", "beta"]);
@@ -1332,7 +1330,7 @@ describe("independent qualified operational sessions", () => {
         owned.openWorktree("same-workspace", "/synthetic/checkout"),
       ).rejects.toThrow();
       await expect(
-        owned.renameWorkspace("same-workspace", "Replacement must stay intact"),
+        owned.renameTab("same-tab", "Replacement must stay intact"),
       ).resolves.toBeUndefined();
       await expect(owned.closeTab("same-tab")).resolves.toBeUndefined();
       expect(calls.length).toBe(count);
@@ -2790,11 +2788,6 @@ describe("connection-partitioned store state", () => {
       {
         method: "workspace.create",
         run: () => store.createQualifiedWorkspace(target, "New room"),
-      },
-      {
-        method: "workspace.rename",
-        run: () =>
-          store.renameQualifiedWorkspace(target, "same-workspace", "Renamed"),
       },
       {
         method: "workspace.close",

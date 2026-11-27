@@ -10,6 +10,7 @@ import {
 } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { resolve } from "node:path";
+import { verificationModels } from "../quint/models";
 import { lockedQuintVersion } from "./verification-setup";
 import {
   modelCache,
@@ -201,7 +202,9 @@ test("cached groups survive unrelated revisions and aggregate with origin receip
       new Response(child.stderr).text(),
     ]);
     expect({ code, stderr }).toEqual({ code: 0, stderr: "" });
-    expect(stdout).toContain("All 20 canonical cases accounted for");
+    expect(stdout).toContain(
+      `All ${verificationModels.length} canonical cases accounted for`,
+    );
     const receiptPath =
       ".agents/verification/runs/ci-shard-1-reused/origin.json";
     const receipt = JSON.parse(
