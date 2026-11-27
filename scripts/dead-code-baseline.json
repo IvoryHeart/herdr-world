@@ -994,7 +994,6 @@
       "web/src/world/CoreWorktrees.tsx#createCoreWorktreeFor",
       "web/src/world/CoreWorktrees.tsx#openCoreWorktreeFor",
       "web/src/world/CoreWorktrees.tsx#removeCoreWorktreeConfirmed",
-      "web/src/world/DeskOtherHosts.tsx#otherHostSummaries",
       "web/src/world/DeskView.tsx#DeskBoard",
       "web/src/world/DeskView.tsx#agentDirectory",
       "web/src/world/DeskView.tsx#agentFolder",

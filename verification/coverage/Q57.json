@@ -7,6 +7,7 @@
   "existingTests": [
     "quint/agent-move.test.ts",
     "server/src/world/agent-move.test.ts",
+    "server/src/rpc/agent-move.test.ts",
     "server/src/world/agent-move-views.test.ts",
     "server/src/rpc/core.test.ts",
     "server/src/herdr-core/operations.test.ts"
@@ -14,8 +15,8 @@
   "acceptedDelivery": "https://github.com/IvoryHeart/herdr-world/pull/1184",
   "status": "pending",
   "technique": "finite-model-with-production-replay",
-  "assessment": "TLC explores both directions and the native route through admission, start, the fork check, recheck, pin and desk move, second recheck, close-first close and resume, resume back, close and cleanup, and a second move, interleaved with the source turning busy, splitting, ending or starting a child, either connection dropping or reconnecting, and lost or unconfirmed replies (14,086 states). Three sampled seeds replay through the real moveAgentAcross with lease-fenced sides; seven model faults and six production mutants are rejected. The first model found that an unreadable source after a lost close dropped the copy and that a lost start reply did not name the copy. Both are fixed and kept as replay witnesses. The close-first extension found that a reconnect during the pre-close recheck escaped as a raw error instead of a refusal; it is fixed and has a unit test. Probes of Claude Code 2.1.330 and Codex CLI 0.171 (verification/contracts/agent-move-audit.md) fixed which harness starts first.",
-  "remaining": "Independent acceptance of the model and Q57 mapping. A source turning busy between the last recheck and the close, independent Worlds, a service crash during a handoff and real harness startup are not proved. A close-first move whose Board update fails leaves the desk details on the old address; the agent itself moved. A forking harness that does not report its session is not detected and falls to start-first. Chains of moves are covered by unit tests, not the model, beyond the settle refusal.",
+  "assessment": "TLC explores both directions and the native route through admission, start, the fork check, recheck, pin and desk move, second recheck, close-first close and resume, resume back, close and cleanup, and a second move, interleaved with the source turning busy, splitting, ending or starting a child, either connection dropping or reconnecting, and lost or unconfirmed replies (14,086 states). Three sampled seeds replay through the real moveAgentAcross with lease-fenced sides; seven model faults and six production mutants are rejected. The first model found that an unreadable source after a lost close dropped the copy and that a lost start reply did not name the copy. Both are fixed and kept as replay witnesses. The close-first extension found that a reconnect during the pre-close recheck escaped as a raw error instead of a refusal; it is fixed and has a unit test. A close-first move whose Board refuses the desk once the original closed reports the move and says its desk details stayed behind (namesDesk); a silent report is a replay mismatch. Probes of Claude Code 2.1.330 and Codex CLI 0.171 (verification/contracts/agent-move-audit.md) fixed which harness starts first.",
+  "remaining": "Independent acceptance of the model and Q57 mapping. A source turning busy between the last recheck and the close, independent Worlds, a service crash during a handoff and real harness startup are not proved. A forking harness that does not report its session is not detected and falls to start-first. Chains of moves are covered by unit tests, not the model, beyond the settle refusal.",
   "requiredChecks": ["bun run check", "bun run verification:gate"],
   "partialEvidence": {
     "models": ["quint/agent-move.qnt"],

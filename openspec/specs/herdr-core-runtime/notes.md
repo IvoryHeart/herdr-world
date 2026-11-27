@@ -28,6 +28,8 @@
 - `server/src/world/agent-rehome.ts`
 - `server/src/rpc/agent-move.ts`
 - `shared/agentMove.ts`
+- `web/src/world/town/townRuntimeMove.ts` (handoff request and its toast outcome)
+- `web/src/world/moveBoardRefuses.ts` (`?moveBoardRefuses=1` testing switch)
 - `server/src/herdr-core/shared-state.ts` (`waitsWithoutResult`: started-harness readiness)
 - `server/src/herdr-core/harness-start.test.ts`
 - `server/src/herdr-core/testing/capture-harness-start.ts`
@@ -204,7 +206,13 @@ no control for it. Platform and harness limits apply across the table.
   Codex keeps one conversation open at a time, so a Codex agent closes first
   and then resumes in the new room; if it doesn't start there it resumes back
   in its own room, and if that fails too the message says which `codex
-  resume` command continues it. A Claude copy that reports a new
+  resume` command continues it. If the Codex agent starts there but the
+  Board refuses its desk, the original has already closed: the toast says it
+  moved and that its desk details stayed behind (colour, pin and links stay
+  on the old desk). Testing switch: open World with `?moveBoardRefuses=1`
+  (the page drops it at once; it lasts until a reload, `=0` turns it off) and
+  every move to another runtime asks the service to refuse its desk rehome
+  (`web/src/world/moveBoardRefuses.ts`). A Claude copy that reports a new
   conversation instead of its own is closed and the move goes the same way.
   Two connections that reach the same Herdr are one runtime: Move to…
   doesn't offer the other's rooms as another runtime, and a move between them

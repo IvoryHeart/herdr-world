@@ -53,6 +53,7 @@ type WorkflowJob = {
       suite?: string[];
       suites?: string[];
       order?: string[];
+      group?: string;
     };
   };
   steps: WorkflowStep[];
@@ -293,6 +294,22 @@ test("CI exposes the protected delivery gate and runs the complete repository ch
     filter: "blob:none",
   });
   expect(workflow.jobs.validate).toBeUndefined();
+});
+
+test("Delivery reports timings after every verdict without making timing a gate", () => {
+  const steps = workflow.jobs.delivery.steps;
+  expect(steps.at(-1)).toEqual({
+    name: "Report run timings",
+    if: "always()",
+    env: { GH_TOKEN: "${{ github.token }}" },
+    run: "bun scripts/ci-run-timing.ts",
+  });
+  expect(workflow.permissions.actions).toBe("read");
+  expect(
+    steps.findIndex(
+      (step) => step.name === "Verify applicable or reused results",
+    ),
+  ).toBeLessThan(steps.length - 1);
 });
 
 test("no timing gates delivery: browser jobs use the pinned Chrome and delegate scoped recovery", () => {
@@ -905,4 +922,43 @@ test("release package verification extracts into a temp folder tar would unescap
   } finally {
     rmSync(root, { recursive: true, force: true });
   }
+});
+
+test("Static checks retain concurrent command logs even after failure", () => {
+  const job = workflow.jobs.static!;
+  expect(job.strategy?.["fail-fast"]).toBe(false);
+  expect(job.strategy?.matrix?.group).toBe(
+    '${{ fromJSON(needs.validation-scope.outputs.mode == \'docs\' && \'["repository"]\' || \'["repository","types","build"]\') }}',
+  );
+  expect(job.name).toBe("Static checks (${{ matrix.group }})");
+  expect(job.needs).toBe("validation-scope");
+  expect(job["continue-on-error"] ?? false).toBe(false);
+  expect(
+    job.steps.find((step) => step.uses?.startsWith("actions/checkout@"))?.with,
+  ).toMatchObject({
+    "fetch-depth": 0,
+    filter: "blob:none",
+    ref: "${{ github.sha }}",
+  });
+  expect(
+    job.steps.find(
+      (step) =>
+        step.run === "bun run check:static --static-group=${{ matrix.group }}",
+    ),
+  ).toMatchObject({
+    if: "needs.validation-scope.outputs.mode != 'docs'",
+  });
+  expect(job.steps.filter((step) => step["continue-on-error"])).toHaveLength(0);
+  expect(
+    job.steps.find((step) => step.name === "Upload static check logs"),
+  ).toMatchObject({
+    if: "always() && needs.validation-scope.outputs.mode != 'docs'",
+    uses: "actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9",
+    with: {
+      name: "static-check-logs-${{ matrix.group }}",
+      path: ".agents/delivery/lanes/static-*.log",
+      "include-hidden-files": true,
+      "if-no-files-found": "error",
+    },
+  });
 });

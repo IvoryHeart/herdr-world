@@ -23,7 +23,19 @@ required. The native launchd shim reports have been removed.
 `bun run typecheck:quick` checks all three TypeScript projects. Use focused
 `bun run test <path>` while iterating. `check:static` retains notices,
 size, formatting/lint, types, build, site and OpenSpec checks; CI runs that lane
-alongside non-browser shards. `check:changed` remains an explicit local affected
+alongside non-browser shards. Its independent commands run concurrently, each
+with a separate `static-*.log` in `.agents/delivery/lanes/`; any failure fails the
+lane after all commands finish. The terminal names the first completed failure,
+and CI's Static checks summary lists every command, outcome, duration and log.
+CI splits the same commands across three Static checks matrix runners: `build`
+runs the production build, `types` runs both type commands, and `repository` runs
+the other ten checks. This avoids CPU contention on a single hosted runner;
+local `check:static` still runs all thirteen concurrently. Each runner publishes
+its own summary and `static-check-logs-<group>` artifact, including failed checks.
+Every matrix runner must pass; failure never cancels another group. Documentation
+changes retain their existing `check:docs` command on one repository runner.
+Checkout retains full Git history for ratchets, filtering historical file blobs.
+Static checks never retry. `check:changed` remains an explicit local affected
 check and `check:delivery` an explicit complete local gate. Neither is a push hook.
 `check:source` is a local compatibility command, not a release gate.
 `check:pr-body <file> <base-ref>` validates the exact committed PR description in
@@ -42,6 +54,15 @@ complete PR, even if incremental unit scope narrows. Unknown/configuration
 changes select full Linux validation. Packaging scope remains descriptive; every
 PR check runs on Linux. Native storage/plugin/launchd checks and running upgrades
 belong to the nightly or release candidate, never a PR matrix.
+
+Runtime-loaded check assets have explicit ownership: `__snapshots__/<test>.snap`
+selects that adjacent test, Town golden PNGs select their existing advisory
+**Town golden images** comparison, and help WebP files plus
+`web/src/help/pictures.json` belong to the static lane's `help:check` (and its
+affected tests). Asset-only edits do not select production boot or World runtime
+journeys. Missing consumers and unknown assets keep the full-mode fallback;
+deletions and both sides of renames retain their consumers. Golden comparisons
+remain advisory and help picture generation remains an explicit capture command.
 
 Scope checks out the complete Git history with `filter: blob:none`. The PR
 description policy runs as its own leaf after scope, alongside static checks,
@@ -287,6 +308,23 @@ requires success from all applicable leaves. Advisory macOS reports remain in
 their own workflows. No crew automation or branch protection is changed.
 Actual elapsed CI times come from workflow runs, rather than from a claimed
 bound on shared hosted runners.
+
+Open **Actions → CI → a run → Summary → Delivery checks → Run timings** to see
+the observed critical path, the last-completing dependency at each workflow
+join, the longest execution, and each job's execution and runner wait. Reusable
+workflows show their last leaf at the join. The read-only report runs after
+successful, failed, held or reused validation and never changes a check verdict.
+It reads only the current run attempt; on partial reruns it does not silently
+mix earlier attempts' jobs into the table. Elapsed time starts at the run's
+original `created_at`, including any delay before a rerun.
+
+Runner wait is job `created_at` → `started_at`, excluding dependency waits before
+the job enters GitHub's queue. The sum can exceed wall time because jobs wait in
+parallel. Skipped jobs are excluded; missing timestamps or API failures are
+reported as unavailable. Delivery is still running while it writes the summary,
+so run `created_at` → report time is a lower bound. For acceptance measurements,
+use the completed job's `completed_at` from the Actions API; downstream preview
+jobs and the workflow's later `updated_at` do not extend Delivery check time.
 
 The size ratchet evaluates the proposed merge into the target against main's
 ratchet policy. A branch behind main inherits main's lowered ceilings, while a

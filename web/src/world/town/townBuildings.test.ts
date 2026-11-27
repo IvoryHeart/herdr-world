@@ -1,18 +1,16 @@
 import { expect, test } from "bun:test";
-import type { ConnectionSummary } from "../../api";
-import type { CoreConnectionSummary } from "../../coreConnections";
+import {
+  deriveHostGrouping,
+  endpointAnchors,
+  type GroupingHost,
+  groupingHosts,
+  type RuntimeGrouping,
+} from "../../../../shared/hostGrouping";
 import { fixtureHost, fixtureWorld } from "../board/boardFixture";
 import { projectWorldOffice } from "../herdrOfficeProjection";
 import { officeSpaceForRoom } from "../officeRoomActions";
 import { officeReadModel } from "../officeReadModel";
-import {
-  createTownBuildings,
-  townBuildingOf,
-  townBuildingsMode,
-  townEndpointAnchors,
-  type TownRuntime,
-  townRuntimes,
-} from "./townBuildings";
+import { createTownBuildings, townBuildingOf } from "./townBuildings";
 import type { BoardDocumentStore, BoardOp } from "../board/boardDocument";
 import { anchoredDeskPins, setDeskPinned, type DeskPins } from "../useDeskPins";
 import { terminalColorKey } from "../terminalColor";
@@ -46,34 +44,37 @@ const world = fixtureWorld([
 const office = projectWorldOffice(world, 0);
 const runtime = (
   id: string,
-  kind: TownRuntime["runtime"],
+  kind: GroupingHost["runtime"],
   machine: string,
   endpoint = id,
   writable = true,
-): TownRuntime => ({ id, runtime: kind, machine, endpoint, writable });
+): GroupingHost => ({
+  id,
+  label: id,
+  runtime: kind,
+  machine,
+  endpoint,
+  writable,
+});
 const runtimes = [
   runtime("tui-default", "herdr", "local", "local-socket", false),
   runtime("tui-profile", "herdr", "local", "local-socket"),
   runtime("core", "herdr-core", "local"),
   runtime("remote", "herdr", "ssh:dev.example.test"),
 ];
+/** What World publishes for these runtimes, with these connections stale. */
+const published = (
+  grouping: RuntimeGrouping,
+  stale: readonly string[] = ["remote"],
+  hosts: readonly GroupingHost[] = runtimes,
+) => deriveHostGrouping(hosts, grouping, (id) => stale.includes(id));
 const keyOf = (connectionId: string) =>
   office.hosts.find((host) => host.connectionId === connectionId)!.key;
 const roomsOf = (town: typeof office, connectionId: string) =>
   town.rooms.filter((room) => room.workspaceRef.connectionId === connectionId);
 
-test("the setting picks the buildings; the page flag compares the two", () => {
-  expect(townBuildingsMode("")).toBe("machine");
-  expect(townBuildingsMode("", "runtime")).toBe("runtime");
-  expect(townBuildingsMode("?view=town&townBuildings=runtime")).toBe("runtime");
-  expect(townBuildingsMode("?townBuildings=machine", "runtime")).toBe(
-    "machine",
-  );
-  expect(townBuildingsMode("?townBuildings=other", "runtime")).toBe("runtime");
-});
-
 test("a machine's building holds each runtime's rooms; identity is untouched", () => {
-  const town = createTownBuildings()(office, runtimes, "machine");
+  const town = createTownBuildings()(office, published("machine"));
   // One view of the shared socket: the writable profile, not the default.
   expect(roomsOf(town, "tui-default")).toEqual([]);
   expect(roomsOf(town, "tui-profile")).toHaveLength(2);
@@ -165,7 +166,7 @@ test("a machine's building holds each runtime's rooms; identity is untouched", (
 });
 
 test("one building per runtime keeps each apart, still showing a socket once", () => {
-  const town = createTownBuildings()(office, runtimes, "runtime");
+  const town = createTownBuildings()(office, published("runtime"));
   expect(town.hosts.map((host) => host.connectionId)).toEqual([
     "tui-profile",
     "core",
@@ -194,7 +195,10 @@ test("a live view of a socket wins over a writable one that is down", () => {
     ]),
     0,
   );
-  const town = createTownBuildings()(down, runtimes, "machine");
+  const town = createTownBuildings()(
+    down,
+    published("machine", ["tui-profile"]),
+  );
   expect(town.rooms.map((room) => room.workspaceRef.connectionId)).toEqual([
     "tui-default",
   ]);
@@ -211,86 +215,30 @@ test("a machine of one runtime, or none known, is the projection itself", () => 
     0,
   );
   const buildings = createTownBuildings();
-  expect(buildings(lone, solo, "machine")).toBe(lone);
-  expect(buildings(office, [], "machine")).toBe(office);
+  expect(buildings(lone, published("machine", [], solo))).toBe(lone);
+  // Before World's first publication nothing is grouped or hidden.
+  expect(buildings(office, undefined)).toBe(office);
   // The same inputs give the same office, so Town does not lay out again.
   const again = createTownBuildings();
-  expect(again(office, runtimes, "machine")).toBe(
-    again(office, runtimes, "machine"),
-  );
-});
-
-test("the store's connections name each runtime's machine and endpoint", () => {
-  const tui = (id: string, read_only: boolean) =>
-    ({
-      id,
-      label: id,
-      type: "local",
-      state: "ready",
-      generation: 1,
-      read_only,
-      control_socket_path: "/run/example/herdr.sock",
-      client_socket_path: "/run/example/herdr-client.sock",
-    }) as unknown as ConnectionSummary;
-  const core = {
-    id: "core",
-    label: "core",
-    type: "local",
-    state: "ready",
-    generation: 1,
-    core_session: "default",
-    core_state_dir: "",
-  } as unknown as CoreConnectionSummary;
-  const remote = {
-    ...tui("remote", false),
-    type: "ssh",
-    ssh_destination: "dev.example.test",
-    remote_control_socket_path: "/run/example/herdr.sock",
-    remote_client_socket_path: "/run/example/herdr-client.sock",
-  } as unknown as ConnectionSummary;
-  const state = {
-    connections: [tui("tui-default", true), tui("tui-profile", false), remote],
-    coreConnections: [core],
-  };
-  const found = townRuntimes(state);
-  expect(
-    found.map(({ id, runtime, machine, writable }) => [
-      id,
-      runtime,
-      machine,
-      writable,
-    ]),
-  ).toEqual([
-    ["tui-default", "herdr", "local", false],
-    ["tui-profile", "herdr", "local", true],
-    ["remote", "herdr", "ssh:dev.example.test", true],
-    ["core", "herdr-core", "local", true],
-  ]);
-  expect(found[0]!.endpoint).toBe(found[1]!.endpoint);
-  expect(townRuntimes({ ...state })).toBe(found);
+  const grouping = published("machine");
+  expect(again(office, grouping)).toBe(again(office, grouping));
 });
 
 test("endpoints compare socket path strings, as the service does", () => {
-  const tui = (id: string, socket: string) =>
-    ({
-      id,
-      label: id,
-      type: "local",
-      state: "ready",
-      generation: 1,
-      read_only: false,
-      control_socket_path: socket,
-      client_socket_path: `${socket}-client`,
-    }) as unknown as ConnectionSummary;
-  const [a, b, c] = townRuntimes({
-    connections: [
-      tui("tui-default", "/run/example/herdr.sock"),
-      tui("tui-profile", "/run/example/herdr.sock"),
-      // A symlinked spelling of the same socket is not resolved: a second
-      // view, shown twice rather than hiding a different Herdr's rooms.
-      tui("tui-link", "/run/example/link/herdr.sock"),
-    ],
+  const tui = (id: string, socket: string) => ({
+    id,
+    label: id,
+    type: "local",
+    control_socket_path: socket,
+    client_socket_path: `${socket}-client`,
   });
+  const [a, b, c] = groupingHosts([
+    tui("tui-default", "/run/example/herdr.sock"),
+    tui("tui-profile", "/run/example/herdr.sock"),
+    // A symlinked spelling of the same socket is not resolved: a second
+    // view, shown twice rather than hiding a different Herdr's rooms.
+    tui("tui-link", "/run/example/link/herdr.sock"),
+  ]);
   expect(a!.endpoint).toBe(b!.endpoint);
   expect(c!.endpoint).not.toBe(a!.endpoint);
   const linked = projectWorldOffice(
@@ -307,7 +255,10 @@ test("endpoints compare socket path strings, as the service does", () => {
     ]),
     0,
   );
-  const town = createTownBuildings()(linked, [a!, b!, c!], "runtime");
+  const town = createTownBuildings()(
+    linked,
+    published("runtime", [], [a!, b!, c!]),
+  );
   expect(town.rooms.map((room) => room.workspaceRef.connectionId)).toEqual([
     "tui-default",
     "tui-link",
@@ -337,7 +288,7 @@ test("a takeover of a socket keeps its building, saved spots and colours", () =>
       0,
     );
   const pins: Record<string, { x: number; y: number }> = {};
-  const before = createTownBuildings()(twins(null), runtimes, "machine");
+  const before = createTownBuildings()(twins(null), published("machine", []));
   // Spots saved while the profile is shown are kept under the profile.
   for (const [connectionId, spots] of roomSpotsByRuntime(
     before.rooms.map((room, index) => [room, { x: index, y: 1 }] as const),
@@ -380,8 +331,7 @@ test("a takeover of a socket keeps its building, saved spots and colours", () =>
   const steady = shown(before);
   const takenOver = createTownBuildings()(
     twins("tui-profile"),
-    runtimes,
-    "machine",
+    published("machine", ["tui-profile"]),
   );
   const flipped = shown(takenOver);
   // The live default's rooms now (their actions reach it) ...
@@ -400,12 +350,56 @@ test("a takeover of a socket keeps its building, saved spots and colours", () =>
     ).keys(),
   ]).toEqual(["tui-profile", "core"]);
   expect(
-    shown(createTownBuildings()(twins(null), runtimes, "machine")),
+    shown(createTownBuildings()(twins(null), published("machine", []))),
   ).toEqual(steady);
   // One building per runtime keeps the same footing.
   const perRuntime = (down: string | null) =>
-    shown(createTownBuildings()(twins(down), runtimes, "runtime")).buildings;
+    shown(
+      createTownBuildings()(
+        twins(down),
+        published("runtime", down ? [down] : []),
+      ),
+    ).buildings;
   expect(perRuntime("tui-profile")).toEqual(perRuntime(null));
+});
+
+test("a building reads as World names its group, whichever view Town shows", () => {
+  // A read-only startup default and a writable saved profile of one socket.
+  const named = [
+    { ...runtimes[0]!, label: "Studio", isDefault: true },
+    { ...runtimes[1]!, label: "Saved profile" },
+    { ...runtimes[2]!, label: "Workshop" },
+    runtimes[3]!,
+  ];
+  const groupLabel = (
+    grouping: ReturnType<typeof published>,
+    connectionId: string,
+  ) =>
+    grouping.groups.find((group) =>
+      group.members.some((member) => member.connection_id === connectionId),
+    )?.label;
+  const label = (town: typeof office, connectionId: string) =>
+    town.hosts.find((host) => host.key === keyOf(connectionId))?.displayLabel;
+  for (const grouping of ["machine", "runtime"] as const) {
+    const live = deriveHostGrouping(named, grouping, (id) => id === "remote");
+    expect(groupLabel(live, "tui-profile")).toBe("Saved profile");
+    const town = createTownBuildings()(office, live);
+    expect(label(town, "tui-profile")).toBe("Saved profile");
+    expect(label(town, "tui-default")).toBeUndefined();
+    // The profile drops: the default's view takes over under the same name.
+    const down = deriveHostGrouping(named, grouping, (id) =>
+      ["remote", "tui-profile"].includes(id),
+    );
+    expect(groupLabel(down, "tui-profile")).toBe("Saved profile");
+    const takenOver = createTownBuildings()(office, down);
+    expect(label(takenOver, "tui-default")).toBe("Saved profile");
+    // Actions still name the view's own connection.
+    expect(
+      roomsOf(takenOver, "tui-default").every(
+        (room) => room.workspaceRef.connectionId === "tui-default",
+      ),
+    ).toBe(true);
+  }
 });
 
 test("a takeover of a socket keeps its pinned desks at their seats", () => {
@@ -427,7 +421,7 @@ test("a takeover of a socket keeps its pinned desks at their seats", () => {
       ]),
     ]);
   const pin = "tui-profile:w1:t1";
-  const anchors = townEndpointAnchors(runtimes);
+  const anchors = endpointAnchors(published("machine", []));
   // Every view of the socket reads the writable profile's pins.
   const deskPins = anchoredDeskPins(
     { [pin]: { cell: null, rank: 0 } } as DeskPins,
@@ -442,8 +436,7 @@ test("a takeover of a socket keeps its pinned desks at their seats", () => {
         undefined,
         new Set(Object.keys(deskPins)),
       ),
-      runtimes,
-      "machine",
+      published("machine", down ? [down] : []),
     );
     const model = townModelFromProjection(town, {}, deskPins);
     const room = town.rooms.find((each) => each.displayLabel === "Web")!;
@@ -488,7 +481,7 @@ test("during a takeover, pin controls on the live view pin and unpin the desk To
       return null;
     },
   } as unknown as BoardDocumentStore;
-  const anchors = townEndpointAnchors(runtimes);
+  const anchors = endpointAnchors(published("machine", []));
   // The agent window or phone terminal of the live default connection.
   const live = {
     connectionId: "tui-default",
@@ -510,8 +503,7 @@ test("during a takeover, pin controls on the live view pin and unpin the desk To
       ]),
       0,
     ),
-    runtimes,
-    "machine",
+    published("machine", ["tui-profile"]),
   );
   const shown = () => {
     const pins = anchoredDeskPins(saved as DeskPins, anchors);

@@ -9,6 +9,7 @@ import {
 } from "node:fs";
 import { join } from "node:path";
 import { SHIPYARD_LIMITS } from "../../../shared/shipyard";
+import { timing } from "../../../shared/timings";
 import { assertSafeDataPath } from "../config/data-paths";
 import { isLoopbackAddress } from "../workspace/file-manager";
 import { readJsonBody } from "../http/json-body";
@@ -46,9 +47,6 @@ export const ASK_PEER_LIMITS = {
   alerts: 20,
   name: 60,
   timeoutMs: 2_000,
-  pollMs: 5_000,
-  /** A failed read keeps the last good list this long, so items do not flicker. */
-  graceMs: 15_000,
 } as const;
 
 /** The `asks` block a World adds to its registry report. */
@@ -300,6 +298,9 @@ export function createAskPeers(deps: {
   let queued: Promise<void> | null = null;
   let timer: { cancel(): void } | null = null;
   let running = false;
+  // Completed reads, and who waits for a count of them (`afterReads`).
+  let reads = 0;
+  let readWaiters: { at: number; resolve(): void }[] = [];
 
   const own = () =>
     [...new Set(deps.runtimes())]
@@ -391,7 +392,7 @@ export function createAskPeers(deps: {
           // Down, restarting or older: keep the last list a little while,
           // then the home's questions leave this World's list.
           const last = homes.get(peer.id);
-          if (last && now - last.at < ASK_PEER_LIMITS.graceMs)
+          if (last && now - last.at < timing("askPeerGraceMs"))
             next.set(peer.id, last);
         }
       }),
@@ -428,6 +429,10 @@ export function createAskPeers(deps: {
       .catch((error) => deps.log?.(`Sibling questions: ${String(error)}`))
       .finally(() => {
         inflight = null;
+        reads++;
+        const due = readWaiters.filter((waiter) => waiter.at <= reads);
+        readWaiters = readWaiters.filter((waiter) => waiter.at > reads);
+        for (const waiter of due) waiter.resolve();
       });
     return inflight;
   }
@@ -436,7 +441,7 @@ export function createAskPeers(deps: {
     if (!running) return;
     timer = deps.scheduler.schedule(() => {
       void refresh().finally(schedule);
-    }, ASK_PEER_LIMITS.pollMs);
+    }, timing("askPeerPollMs"));
   }
 
   function peerFor(id: string) {
@@ -555,6 +560,15 @@ export function createAskPeers(deps: {
       running = false;
       timer?.cancel();
       timer = null;
+    },
+    /**
+     * Settles once `count` more reads of the shared homes have completed,
+     * successful or not: the signal a test waits on instead of a pause.
+     */
+    afterReads(count = 1): Promise<void> {
+      return new Promise((resolve) =>
+        readWaiters.push({ at: reads + count, resolve }),
+      );
     },
   };
 }

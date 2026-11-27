@@ -549,7 +549,8 @@ export default function BoardView({
   useEffect(() => worldRuntimeStore.retainView("board"), []);
   const deferredWorld = useDeferredValue(world);
   const shownWorld = boardObservation(world, deferredWorld);
-  // Zones follow World's "Group runtimes" setting, as Town and Desk do.
+  // Zones are World's published hosts (machines), as Desk's and the Hosts
+  // control's are; "Group runtimes" changes only Town's buildings.
   const groupOf = useHostGroupOf();
   const projectedModel = useMemo(() => projectBoard(shownWorld), [shownWorld]);
   const fullModel = useMemo(
@@ -766,7 +767,7 @@ export default function BoardView({
   const holdTimer = useRef(0);
   /**
    * A zone's runtimes' places before its label drag, for a cancelled drag.
-   * A zone holds one runtime, or a machine's under "Group runtimes".
+   * A zone holds one machine's runtimes.
    */
   const hostStart = useRef<{
     key: string;
@@ -3649,8 +3650,8 @@ export default function BoardView({
         ) : null}
         <div ref={worldRef} className="board-world">
           {model.zones.map((zone) => {
-            // One frame per zone: a runtime, or a machine's runtimes under
-            // World's "Group runtimes" setting. Each runtime keeps its own
+            // One frame per zone: a machine's runtimes, as World publishes
+            // its hosts. Each runtime keeps its own
             // heading, colour, counts and actions inside it.
             const lead = zone.hosts[0]!;
             const single = zone.hosts.length === 1;

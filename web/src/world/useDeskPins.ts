@@ -20,8 +20,7 @@ import {
   type CorePins,
 } from "./corePins";
 import { worldRuntimeStore } from "./runtimeStore";
-import { store as worldStore } from "../store";
-import { townEndpointAnchors, townRuntimes } from "./town/townBuildings";
+import { endpointAnchors } from "../../../shared/hostGrouping";
 import type { WorldLeafObject, WorldSpaceObject } from "./worldObject";
 
 /**
@@ -56,9 +55,9 @@ export function keepDeskPins(last: DeskPins, next: DeskPins): DeskPins {
     : next;
 }
 
-/** Each endpoint view's anchor (townBuildings.ts `townEndpointAnchors`). */
+/** Each endpoint view's anchor, as World publishes it (`host_grouping`). */
 const currentPinAnchors = () =>
-  townEndpointAnchors(townRuntimes(worldStore.get()));
+  endpointAnchors(worldRuntimeStore.get().hostGrouping);
 
 /**
  * Two connections of one Herdr endpoint (a startup default and a saved
@@ -101,11 +100,9 @@ export function useDeskPins(
     (listener: () => void) => {
       const board = store.subscribe(listener);
       const runtime = worldRuntimeStore.subscribe(listener);
-      const catalogue = worldStore.subscribe(listener);
       return () => {
         board();
         runtime();
-        catalogue();
       };
     },
     [store],
