@@ -498,9 +498,14 @@ export function useBoardHerdrActions({
           notify("ok", `Moving ${name} to ${room.label}…`);
           void requestAgentHandoff(handoff, workspaceRoom(room)).then(
             (outcome) =>
-              outcome.status === "moved"
-                ? notify("ok", `${name} moved to ${room.label}`)
-                : notify("error", outcome.message),
+              outcome.status !== "moved"
+                ? notify("error", outcome.message)
+                : outcome.message
+                  ? notify(
+                      "error",
+                      `${name} moved to ${room.label}. ${outcome.message}`,
+                    )
+                  : notify("ok", `${name} moved to ${room.label}`),
             (cause: unknown) => notify("error", String(cause)),
           );
         },

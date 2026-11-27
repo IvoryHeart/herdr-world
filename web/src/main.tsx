@@ -1,4 +1,5 @@
 import { coreFixtureEnabled } from "./coreFixture";
+import { moveBoardRefuses } from "./world/moveBoardRefuses";
 import { coreInstallFake } from "./coreInstall";
 import { integrationsFixtureEnabled } from "./integrationsFixture";
 import { initializeLayoutPreferences } from "./layoutPreferences";
@@ -93,11 +94,12 @@ class ErrorBoundary extends React.Component<
 
 initializeLayoutPreferences();
 initializeShortcutPreferences();
-// Testing switches: read `?coreFixture`, `?coreInstall` and
-// `?integrationsFixture` before any view rewrites the URL; each drops its
-// parameter at once.
+// Testing switches: read `?coreFixture`, `?coreInstall`,
+// `?integrationsFixture` and `?moveBoardRefuses` before any view rewrites
+// the URL; each drops its parameter at once.
 coreFixtureEnabled();
 coreInstallFake();
+moveBoardRefuses();
 integrationsFixtureEnabled();
 const stopInstanceNameSync =
   siblingQuestionsFixture ||
