@@ -9,6 +9,11 @@ or, once, under the legacy shared name when it signed that session, and SHALL mo
 to its own name with the same token. Logout SHALL clear every cookie a later request could be
 admitted with.
 
+Per-World cookie names stop Worlds on one host from clobbering each other's sessions by accident.
+They are not isolation against a hostile service on another port of the same host: cookies are not
+scoped by port, so such a service can read and set every World cookie on that host. Isolation from
+it needs a separate hostname per World.
+
 A World SHALL record in its cookie the hour it last set it and set it again on the first page load
 of an hour. Whenever it sets its cookie, it SHALL clear other World cookies that can sign nobody
 in (expired or not a World session), and, when more than 48 live ones remain, the least recently

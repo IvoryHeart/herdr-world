@@ -15,7 +15,8 @@ import { renderLoginPage } from "./login-page";
  */
 const LEGACY_AUTH_COOKIE = "herdr_world_auth";
 const AUTH_COOKIE_PREFIX = `${LEGACY_AUTH_COOKIE}_`;
-const AUTH_COOKIE_ID_LABEL = "herdr-world session cookie name";
+/** Versioned and NUL-terminated like the credential fingerprint's label. */
+const AUTH_COOKIE_ID_LABEL = "herdr-world:session-cookie-name:v1\0";
 /**
  * Other Worlds' live session cookies a browser keeps on one host. Every
  * fresh preview has its own secret and so its own cookie; without a bound

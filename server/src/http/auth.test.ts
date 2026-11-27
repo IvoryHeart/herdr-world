@@ -1243,6 +1243,11 @@ describe("per-World session cookies and login return paths", () => {
     "/\n/evil.example",
     "/.//evil.example",
     "/%2e//evil.example",
+    "/..//x",
+    "/a/../..//x",
+    "/.%2e//x",
+    "\uFF0F\uFF0Fevil.example",
+    "\u2215\u2215evil.example",
     "town",
     "",
     "/login?next=%2Ftown",
@@ -1264,6 +1269,14 @@ describe("per-World session cookies and login return paths", () => {
     );
     expect(safeReturnPath("/town?token=secret")).toBe("/town");
     expect(safeReturnPath("/%2F%2Fevil.example")).toBe("/%2F%2Fevil.example");
+    // Slash lookalikes (U+FF0F, U+2215) are not slashes: after a real
+    // leading slash they stay one encoded path segment on this origin.
+    expect(safeReturnPath("/\uFF0F/evil.example")).toBe(
+      "/%EF%BC%8F/evil.example",
+    );
+    expect(safeReturnPath("/\u2215\u2215evil.example")).toBe(
+      "/%E2%88%95%E2%88%95evil.example",
+    );
     expect(safeReturnPath('/town?q="><script>')).toBe(
       "/town?q=%22%3E%3Cscript%3E",
     );

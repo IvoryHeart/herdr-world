@@ -28,6 +28,8 @@
 - Keep one browser origin; shell and transport operations need qualified authority.
 - Login (`server/src/http/auth.ts`): the session cookie is `herdr_world_auth_<12 hex>`, a digest
   of the signing secret, because cookies ignore ports; a port name breaks when Worlds swap ports.
+  It stops accidental clobbering only: a hostile service on another port of the host still sees
+  every World cookie there, so real isolation needs a hostname per World.
   Its value is `<token>.h<hour>`: the unsigned hour only orders pruning. Fresh previews each add a
   cookie, and Bun answers 431 above ~16 KB of headers, so a World setting its cookie clears expired
   World cookies and keeps 48 live ones (~10 KB), least recently set first to go; fewer than 48
