@@ -4,6 +4,6 @@
   "version": "0.0.0",
   "description": "Locked development-only Quint tooling; excluded from application workspaces",
   "dependencies": {
-    "@informalsystems/quint": "0.33.1"
+    "@informalsystems/quint": "0.34.0"
   }
 }

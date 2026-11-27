@@ -13,7 +13,7 @@ when redistributing that checker. No checker binary is committed or shipped here
 | @grpc/grpc-js@1.14.6 | Apache-2.0 |
 | @grpc/proto-loader@0.8.1 | Apache-2.0 |
 | @grpc/proto-loader@0.7.15 | Apache-2.0 |
-| @informalsystems/quint@0.33.1 | Apache 2.0 |
+| @informalsystems/quint@0.34.0 | Apache 2.0 |
 | @isaacs/fs-minipass@4.0.1 | ISC |
 | @js-sdsl/ordered-map@4.4.2 | MIT |
 | @octokit/endpoint@9.0.6 | MIT |
