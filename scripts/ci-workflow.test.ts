@@ -257,7 +257,9 @@ test("CI exposes the protected delivery gate and runs the complete repository ch
   expect(workflow.jobs.validation).toBeUndefined();
   expect(worldWorkflow.jobs["web-browser"]).toBeUndefined();
   expect(workflow.jobs["world-browser"].needs).toBe("validation-scope");
-  expect(workflow.jobs["unit-tests"].strategy?.matrix?.shard).toEqual([1, 2]);
+  expect(workflow.jobs["unit-tests"].strategy?.matrix?.shard).toEqual([
+    1, 2, 3, 4,
+  ]);
   expect(workflow.jobs["unit-tests"].strategy?.["fail-fast"]).toBe(false);
   expect(workflow.jobs["unit-tests"].needs).toBe("validation-scope");
   const scope = workflow.jobs["validation-scope"];
@@ -292,6 +294,66 @@ test("CI exposes the protected delivery gate and runs the complete repository ch
     filter: "blob:none",
   });
   expect(workflow.jobs.validate).toBeUndefined();
+});
+
+test("unit shards run four files at a time, build only for their consumers and require comparison evidence", () => {
+  const job = workflow.jobs["unit-tests"];
+  expect(job.name).toBe("Non-browser tests (${{ matrix.shard }}/4)");
+  expect(job["timeout-minutes"]).toBe(
+    "${{ needs.validation-scope.outputs.unit_comparison == 'true' && 120 || 20 }}",
+  );
+  expect(
+    (job as WorkflowJob & { env: Record<string, string> }).env,
+  ).toMatchObject({
+    HERDR_TEST_PARALLEL: "4",
+    HERDR_TEST_MAX_CONCURRENCY: "2",
+    HERDR_TEST_EXCLUDE_WORLD_BROWSER: "1",
+  });
+  expect(job.steps.find((step) => step.id === "unit-plan")?.run).toBe(
+    "bun scripts/ci-tests.ts unit ${{ matrix.shard }}/4 --plan",
+  );
+  expect(job.steps.find((step) => step.run === "bun run build")?.if).toBe(
+    "steps.unit-plan.outputs.build == 'true'",
+  );
+  expect(job.steps.filter((step) => step.run === "bun run build")).toHaveLength(
+    1,
+  );
+  expect(
+    job.steps.find(
+      (step) =>
+        step.run === "bun scripts/ci-tests.ts unit ${{ matrix.shard }}/4",
+    )?.if,
+  ).toBe("needs.validation-scope.outputs.unit_comparison != 'true'");
+  expect(
+    job.steps.find(
+      (step) =>
+        step.run ===
+        "bun scripts/ci-unit-comparison.ts run ${{ matrix.shard }}/4",
+    ),
+  ).toMatchObject({
+    if: "needs.validation-scope.outputs.unit_comparison == 'true'",
+  });
+  expect(
+    job.steps.find(
+      (step) =>
+        step.name === "Retain unit JUnit, comparison inventory and timings",
+    )?.if,
+  ).toBe("always()");
+  expect(
+    job.steps.find((step) => step.name === "Retain flaky test evidence")?.if,
+  ).toBe("always()");
+  expect(job.steps.some((step) => step["continue-on-error"])).toBe(false);
+  expect(
+    workflow.jobs["validation-scope"].steps.find(
+      (step) => step.id === "unit-comparison",
+    ),
+  ).toMatchObject({
+    run: "bun scripts/ci-unit-comparison.ts required",
+    env: {
+      UNIT_COMPARISON_BASE:
+        "${{ github.event.pull_request.base.sha || github.event.merge_group.base_sha }}",
+    },
+  });
 });
 
 test("no timing gates delivery: browser jobs use the pinned Chrome and delegate scoped recovery", () => {

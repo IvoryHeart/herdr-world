@@ -58,6 +58,8 @@
 - `scripts/flaky-tests.ts` and `scripts/flaky-tests.test.ts` (Delivery summary/read-only gate; same-repository source admission, trusted serialized issue updates and commit status)
 - `.github/workflows/flaky-tests.yml` (default-branch tracker; skips fork runs before downloading same-repository candidate artifacts as data)
 - `scripts/ci-tests.ts`, `scripts/run-tests.ts`, `scripts/run-world-tests.ts` (retry opt-in and shared browser assets)
+- `scripts/ci-unit-shards.ts`, `scripts/ci-unit-timings.json`, `scripts/ci-unit-timings.ts` (four timed unit partitions, build consumers and JUnit timing refresh)
+- `scripts/ci-unit-shards.test.ts`, `scripts/ci-unit-comparison.ts`, `scripts/ci-unit-comparison.test.ts` (complete unit inventory and twenty required serial/parallel controls for scheduler changes)
 - `scripts/pipeline-retry.ts`
 - `server/src/config/service-executable.ts`
 - `server/src/cli/update-finish.ts`
@@ -110,6 +112,11 @@
   More than three runs in seven days blocks the file until the owner closes the
   fixed cause or explicitly adds `flaky-quarantined`; quarantine never excuses
   a second failure. See [CI guidance](../../../docs/ci-pipelines.md#flaky-tests).
+
+- **Unit scheduling.** Open a PR's Checks → Non-browser tests for the four timed
+  shards. Scheduling changes must complete twenty serial/parallel pairs in each
+  shard; job summaries and `unit-evidence-*` artifacts retain counts, JUnit and
+  timings. See [unit evidence](../../../docs/ci-pipelines.md#non-browser-units).
 
 ## World update notifications
 

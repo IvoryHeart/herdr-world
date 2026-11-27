@@ -31,6 +31,39 @@ CI and before handoff. `check:dead` is read-only unless given `--prune`.
 `check:privacy --range <base-ref> <head-ref>` scans committed additions; the hook
 instead checks every actual pushed ref. Do not bypass hooks.
 
+### Non-browser units
+
+CI packs the selected unit files onto four runners using the committed
+`scripts/ci-unit-timings.json` table. Each runner executes four files at a time,
+with the existing maximum of two concurrent cases. The longest files start first;
+new files always run with a one-second scheduling estimate. The four partitions
+are disjoint and cover the complete selection.
+
+The build consumers listed in `scripts/ci-unit-shards.ts` stay on the first shard.
+Only a shard selecting those files runs `bun run build`; ordinary scoped units
+need no build. Packing includes a 25-second build allowance. The other shards run
+from clean checkouts without generated assets, so a new undeclared consumer fails
+instead of silently acquiring a second build. Static checks retain their own build.
+
+The timing table was bootstrapped from Bun 1.4.4 Linux x64 serial JUnit. It records
+the outer file-suite time, including setup, without counting nested describe
+suites twice. Its versioned millisecond format also feeds Bun’s `--timings`,
+which makes the parallel runner start the longest files first. To refresh it, download the `unit-evidence-*` artifacts and pass
+their serial JUnit reports to
+`bun scripts/ci-unit-timings.ts <serial-junit.xml> ... > scripts/ci-unit-timings.json`.
+Multiple observations use the median per file. Timing changes select full validation.
+
+Changes to the CI unit job, CI test entry, test runner, unit packing, timing or
+comparison implementation require **twenty serial/parallel pairs on every unit
+shard** before Delivery passes. The order alternates between serial first and
+parallel first. Each pair uses the same selected files and existing retry policy;
+first-attempt JUnit must retain every case and skip, with zero new parallel
+failures even if retry recovers them. Normal PRs execute the unit lane once.
+Comparison jobs have a separate 120-minute allowance; individual test deadlines
+and the normal 20-minute job limit are unchanged. `unit-evidence-*` retains JUnit,
+command logs, case/file inventories and elapsed times; the job summary records the
+twenty completed pairs. `flaky-tests-*` evidence and its Delivery gate remain required.
+
 ## Scope and scheduling
 
 CI listens to PR open/synchronize/reopen. It does not listen to `edited`.
