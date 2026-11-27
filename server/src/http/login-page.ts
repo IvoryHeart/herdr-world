@@ -6,9 +6,14 @@ function escapeHtml(text: string): string {
   return text.replace(/[&<>"']/g, (char) => `&#${char.charCodeAt(0)};`);
 }
 
+/**
+ * `returnPath` is where a login lands: a same-origin path the caller has
+ * validated (`safeReturnPath`); the page keeps the address's `#` part.
+ */
 export function renderLoginPage(
   pinEnabled: boolean,
   tokenCommand?: string,
+  returnPath = "/",
 ): string {
   return `<!doctype html>
 <html lang="en">
@@ -83,7 +88,7 @@ export function renderLoginPage(
   <section class="card" aria-labelledby="heading">
     <h1 id="heading">Welcome back</h1>
     <p>Log in to access your workspaces.</p>
-    <form id="login">
+    <form id="login" data-next="${escapeHtml(returnPath)}">
       ${pinEnabled ? '<label id="credential-label" for="pw">PIN</label>' : '<label for="pw">Password or token</label>'}
       <div class="password">
         <input id="pw" ${pinEnabled ? 'name="pin" type="password" placeholder="6-12 digit PIN" inputmode="numeric" pattern="[0-9]{6,12}" minlength="6" maxlength="12"' : 'name="password" type="password" placeholder="Password or token"'}
@@ -134,7 +139,7 @@ const PASSWORD_LOGIN_SCRIPT = `  const form=document.getElementById('login'),pw=
     btn.disabled=true;btn.textContent='Logging in...';
     try{
       const r=await fetch('/api/login',{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify({password:pw.value})});
-      if(r.ok){location.replace('/'+location.hash);return;}
+      if(r.ok){location.replace((form.dataset.next||'/')+location.hash);return;}
       if(r.status===401){
         err.textContent='Wrong password or token. Try again.';
         pw.setAttribute('aria-invalid','true');pw.value='';pw.focus();
@@ -208,7 +213,7 @@ const PIN_LOGIN_SCRIPT = `
     let loggedIn=false,focusSecret=false;
     try{
       const r=await fetch(pinMode?'/api/login/pin':'/api/login',{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify(pinMode?{pin:pw.value}:{password:pw.value})});
-      if(r.ok){loggedIn=true;location.replace('/'+location.hash);return;}
+      if(r.ok){loggedIn=true;location.replace((form.dataset.next||'/')+location.hash);return;}
       if(r.status===401){
         err.textContent=pinMode?'Wrong PIN. Try again or use your password or token.':'Wrong password or token. Try again.';
         hideSecret();

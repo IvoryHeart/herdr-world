@@ -114,6 +114,7 @@ test("browserStorage consumers have exactly one home per discovered key family",
     ).toHaveLength(1);
   for (const pattern of locations("browser")) {
     if (pattern === "update-notifications/versions") continue; // IndexedDB, not Storage.
+    if (pattern.startsWith("herdr_world_auth")) continue; // HttpOnly cookie, not Storage.
     expect(
       keys.some((key) => match(pattern, key)),
       `${pattern}: ${catalogRule}`,

@@ -74,6 +74,7 @@ const STATIC = [
   "notices:check",
   "check:dead",
   "check:size",
+  "check:test-waits",
   "check:commit",
   // `build` below generates and validates production assets. Avoid the extra
   // web build in server's pretypecheck while checking all three TS projects.

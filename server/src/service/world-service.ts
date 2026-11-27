@@ -830,6 +830,11 @@ async function compose(
     paths,
     storage,
     failed: storage.failed,
+    /**
+     * @internal Settles after `count` more reads of sibling Worlds'
+     * questions: tests count reads instead of pausing (#1419).
+     */
+    afterAskPeerReads: askPeers.afterReads,
     /** The listener's port once started. */
     get port(): number | undefined {
       return server?.port;

@@ -162,6 +162,7 @@ test("the static lane retains all checks and builds production assets once", () 
     "notices:check",
     "check:dead",
     "check:size",
+    "check:test-waits",
     "check:commit",
     "typecheck:quick",
     "typecheck:bun",
@@ -180,7 +181,7 @@ test("the static lane retains all checks and builds production assets once", () 
   ).toEqual({ status: 1, commands: commands.slice(0, 3) });
   expect(
     exercise(["scripts/check-delivery.ts", "--static"], "typecheck:quick"),
-  ).toEqual({ status: 1, commands: commands.slice(0, 6) });
+  ).toEqual({ status: 1, commands: commands.slice(0, 7) });
   expect(
     exercise(
       ["scripts/check-delivery.ts", "--static"],

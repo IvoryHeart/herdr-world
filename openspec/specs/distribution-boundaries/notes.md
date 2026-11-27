@@ -53,6 +53,11 @@
 - `scripts/release-walk.ts`
 - `scripts/release-channel-upgrade.py`
 - `scripts/release-npm-smoke.ts`
+- `scripts/test-retry.ts` and `scripts/test-retry.test.ts` (CI-only scoped file/case recovery and JUnit proof)
+- `scripts/flaky-test-policy.ts` and `scripts/flaky-test-policy.test.ts` (file/case identity, distinct-run ledger, seven-day limit and explicit quarantine)
+- `scripts/flaky-tests.ts` and `scripts/flaky-tests.test.ts` (Delivery summary/read-only gate; same-repository source admission, trusted serialized issue updates and commit status)
+- `.github/workflows/flaky-tests.yml` (default-branch tracker; skips fork runs before downloading same-repository candidate artifacts as data)
+- `scripts/ci-tests.ts`, `scripts/run-tests.ts`, `scripts/run-world-tests.ts` (retry opt-in and shared browser assets)
 - `scripts/pipeline-retry.ts`
 - `server/src/config/service-executable.ts`
 - `server/src/cli/update-finish.ts`
@@ -99,6 +104,12 @@
   its combined commit with current main under **Delivery checks**, without PR
   result reuse. GitHub merges after checks and review requirements pass. Only CI
   subscribes directly to merge groups; see [CI ownership](../../../docs/ci-pipelines.md).
+
+- **Flaky tests.** Open a PR's Checks → Delivery checks → Flaky tests for every
+  recovered file/case. Issues labelled `flaky` retain occurrences and run links.
+  More than three runs in seven days blocks the file until the owner closes the
+  fixed cause or explicitly adds `flaky-quarantined`; quarantine never excuses
+  a second failure. See [CI guidance](../../../docs/ci-pipelines.md#flaky-tests).
 
 ## World update notifications
 

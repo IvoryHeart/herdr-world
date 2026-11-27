@@ -16,6 +16,12 @@ const CODE = /\.(?:m?[jt]sx?)$/;
 export const TEST = /\.test\.(?:m?[jt]sx?)$/;
 /** Files whose references the always-run static lane (the build) exercises. */
 const BUILT = new Set(["web/vite.config.ts"]);
+/** These consumers run outside affected unit/browser suites: static help:check
+ * and the path-filtered, advisory Town golden images workflow. */
+const ASSET_AUTHORITIES = new Set([
+  "scripts/help-check.ts",
+  "scripts/town-golden.browser.test.ts",
+]);
 /** A test that drives Chrome, as World's browser inventory recognises one. */
 export const CHROME = /CHROME_BIN|--headless/;
 const RESOLVE = ["", ".ts", ".tsx", ".js", ".mjs", "/index.ts", "/index.tsx"];
@@ -73,6 +79,26 @@ export type Graph = {
   /** files the change deleted: still resolvable, so their consumers are found */
   gone: Set<string>;
 };
+
+/** Runtime-loaded test assets have ownership even without a literal import. */
+export function checkAssetOwner(path: string, files: ReadonlySet<string>) {
+  let owner: string | undefined;
+  const snapshot = path.match(/^(.*\/)?__snapshots__\/([^/]+)\.snap$/);
+  if (snapshot) {
+    const test = `${snapshot[1] ?? ""}${snapshot[2]}`;
+    if (TEST.test(test)) owner = test;
+  } else if (
+    /^web\/src\/world\/testing\/town-golden\/images\/[^/]+\.png$/.test(path)
+  ) {
+    owner = "scripts/town-golden.browser.test.ts";
+  } else if (
+    /^web\/public\/help\/[^/]+\.webp$/.test(path) ||
+    path === "web/src/help/pictures.json"
+  ) {
+    owner = "scripts/help-check.ts";
+  }
+  return owner && files.has(owner) ? owner : undefined;
+}
 
 /** Every relative import, bundled fixture or named data file a file refers to. */
 export function references(
@@ -152,6 +178,14 @@ export function buildGraph(
       ),
     );
   }
+  for (const path of files) {
+    const owner = checkAssetOwner(path, files);
+    if (owner && !gone.has(owner)) {
+      const inputs = deps.get(owner) ?? new Set<string>();
+      inputs.add(path);
+      deps.set(owner, inputs);
+    }
+  }
   return { deps, files, gone };
 }
 
@@ -219,10 +253,11 @@ export function affected(
       return { full: true, reason: `${path} is not a tracked file` };
     const reach = distances(reverse, path);
     let nearest = Infinity;
-    let tested = false;
+    let tested = [...reach.keys()].some((file) => ASSET_AUTHORITIES.has(file));
     for (const [file, distance] of reach) {
       if (!TEST.test(file) || graph.gone.has(file)) continue;
       tested = true;
+      if (ASSET_AUTHORITIES.has(file)) continue;
       if (!suites.has(file)) unit.add(file);
       else nearest = Math.min(nearest, distance);
     }
