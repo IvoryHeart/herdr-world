@@ -15,8 +15,15 @@ import { renderLoginPage } from "./login-page";
  */
 const LEGACY_AUTH_COOKIE = "herdr_world_auth";
 const AUTH_COOKIE_PREFIX = `${LEGACY_AUTH_COOKIE}_`;
-/** Other World cookies checked for this World's session after a move. */
-const MOVED_COOKIE_CANDIDATES = 32;
+const AUTH_COOKIE_ID_LABEL = "herdr-world session cookie name";
+/**
+ * Other Worlds' session cookies a browser keeps on one host. Every fresh
+ * preview has its own secret and so its own cookie; without a bound they
+ * would pile up for their lifetime until request headers outgrow the
+ * server's limit (Bun answers 431 at about 16 KB, some 80 cookies).
+ */
+const OTHER_WORLD_COOKIES_KEPT = 24;
+const DAY_SECONDS = 24 * 60 * 60;
 /** Longest return path a login carries; longer ones land on `/`. */
 const RETURN_PATH_MAX_LENGTH = 2048;
 const RETURN_PATH_BASE = "http://world.invalid";
@@ -55,17 +62,62 @@ function base64UrlDecode(value: string) {
 }
 
 /**
- * The session cookie name for the World the browser reached. Cookies are
- * scoped to a host but not to its port, so the name carries the port the
- * browser used (its scheme's default when the address has none): each
- * World on a host keeps its own cookie, and a browser holds at most one per
- * port, however many previews come and go (one name per signing secret
- * would pile up until request headers outgrow the server's limit).
+ * The session cookie name of the World with this signing secret. Cookies
+ * are scoped to a host but not to its port, so each World names its own: a
+ * short digest of its secret, stable across restarts and ports, that tells
+ * nothing about the secret itself.
  */
-function authCookieName(req: Request): string {
-  const url = new URL(req.url);
-  const port = url.port || (url.protocol === "https:" ? "443" : "80");
-  return `${AUTH_COOKIE_PREFIX}${port}`;
+function authCookieName(sessionSecret: string): string {
+  const id = createHmac("sha256", Buffer.from(sessionSecret, "hex"))
+    .update(AUTH_COOKIE_ID_LABEL)
+    .digest("hex")
+    .slice(0, 12);
+  return `${AUTH_COOKIE_PREFIX}${id}`;
+}
+
+function today(): number {
+  return Math.floor(Date.now() / 1000 / DAY_SECONDS);
+}
+
+/**
+ * A World session cookie's value: the signed token, then the day this World
+ * last set it (`<token>.d<day>`), which only orders pruning and is not
+ * signed. The legacy cookie holds the bare token.
+ */
+function readCookieValue(value: string): { token: string; seenDay?: number } {
+  const parts = value.split(".");
+  const seen = parts[2]?.match(/^d(\d{1,7})$/);
+  return parts.length === 3 && seen
+    ? { token: `${parts[0]}.${parts[1]}`, seenDay: Number(seen[1]) }
+    : { token: value };
+}
+
+/** The day a World cookie was last set, from any World; -1 when unreadable. */
+function lastSeenDay(value: string): number {
+  const { token, seenDay } = readCookieValue(value);
+  if (seenDay !== undefined) return seenDay;
+  try {
+    const { iat } = JSON.parse(base64UrlDecode(token.split(".")[0]!)) as {
+      iat?: unknown;
+    };
+    return typeof iat === "number" ? Math.floor(iat / DAY_SECONDS) : -1;
+  } catch {
+    return -1;
+  }
+}
+
+/** Every World session cookie in a Cookie header, by name. */
+function worldCookies(header: string | null): Map<string, string> {
+  const cookies = new Map<string, string>();
+  for (const part of header?.split(";") ?? []) {
+    const separator = part.indexOf("=");
+    if (separator < 0) continue;
+    const key = part.slice(0, separator).trim();
+    if (key !== LEGACY_AUTH_COOKIE && !key.startsWith(AUTH_COOKIE_PREFIX))
+      continue;
+    if (!cookies.has(key)) cookies.set(key, part.slice(separator + 1).trim());
+  }
+  return cookies;
 }
 
 /**
@@ -265,12 +317,12 @@ export function createAuthHandlers(args: {
     return `${payload}.${sign(payload)}`;
   }
 
+  const cookieName = authRequired
+    ? authCookieName(args.sessionSecret)
+    : `${AUTH_COOKIE_PREFIX}open`;
+
   function cookieAttributes(maxAge: number): string {
     return `HttpOnly; SameSite=Lax; Path=/; Max-Age=${maxAge}${args.secureCookies ? "; Secure" : ""}`;
-  }
-
-  function setCookie(req: Request, token: string, maxAge: number): string {
-    return `${authCookieName(req)}=${token}; ${cookieAttributes(maxAge)}`;
   }
 
   function clearCookie(name: string): string {
@@ -290,36 +342,47 @@ export function createAuthHandlers(args: {
   }
 
   /**
-   * A session found under another World cookie name, moved to this World's
-   * name: the same token, so Web Push and open sockets keep their session,
-   * for the time it has left. Only the legacy shared name is cleared; an
-   * earlier port's cookie stays, since that port may still reach this World
-   * (a forwarded port) and each port holds one cookie at most.
+   * This World's cookie set to `token`, stamped with today, for the time the
+   * token has left. Moving a legacy session keeps its token, so Web Push and
+   * open sockets keep their session; the legacy name is then cleared. Other
+   * Worlds' cookies beyond the kept number go, least recently seen first:
+   * they are other Worlds' logins, so only a bound, never all of them.
    */
-  function migratedCookieHeaders(
+  function sessionCookieHeaders(
     req: Request,
-    session: { token: string; moved: string },
+    token: string,
   ): [string, string][] {
+    const fromLegacy = ownLegacySession(req);
     const headers: [string, string][] = [
       [
         "set-cookie",
-        setCookie(req, session.token, remainingSeconds(session.token)),
+        `${cookieName}=${token}.d${today()}; ${cookieAttributes(remainingSeconds(token))}`,
       ],
     ];
-    if (session.moved === LEGACY_AUTH_COOKIE)
+    const others = [...worldCookies(req.headers.get("cookie"))].filter(
+      ([name]) =>
+        name !== cookieName && !(fromLegacy && name === LEGACY_AUTH_COOKIE),
+    );
+    if (fromLegacy)
       headers.push(["set-cookie", clearCookie(LEGACY_AUTH_COOKIE)]);
+    const excess = others.length - OTHER_WORLD_COOKIES_KEPT;
+    if (excess > 0)
+      for (const [name] of others
+        .map(([name, value]) => [name, lastSeenDay(value)] as const)
+        .sort((left, right) => left[1] - right[1])
+        .slice(0, excess))
+        headers.push(["set-cookie", clearCookie(name)]);
     return headers;
   }
 
   function authCookieHeaders(req: Request): [string, string][] {
-    // Reauthentication keeps every live tab on the same session token.
+    // Reauthentication keeps every live tab on the same session token, and
+    // leaves a current cookie and its expiry alone.
     const session = authedSession(req);
-    if (session?.moved)
-      return migratedCookieHeaders(req, { ...session, moved: session.moved });
-    if (session) return [];
-    return [
-      ["set-cookie", setCookie(req, signedToken(), AUTH_TOKEN_TTL_SECONDS)],
-    ];
+    if (!session) return sessionCookieHeaders(req, signedToken());
+    return currentCookie(req, session)
+      ? []
+      : sessionCookieHeaders(req, session.token);
   }
 
   function secretsEqual(actual: string, expected: string): boolean {
@@ -351,54 +414,31 @@ export function createAuthHandlers(args: {
   }
 
   /**
-   * This World's valid sessions in the request, the current name first. A
-   * session can also sit under another World cookie name: the legacy shared
-   * name, or the name of a port this World used before a restart. `first`
-   * stops at the first one found.
+   * This World's session in the request: its own cookie, or else the legacy
+   * shared one when this World signed it. No other name is ever accepted, so
+   * logout can clear every session cookie a later request could use.
    */
-  function ownSessions(
-    req: Request,
-    first: boolean,
-  ): { name: string; token: string }[] {
-    if (!authRequired) return [];
-    const header = req.headers.get("cookie");
-    if (!header) return [];
-    const name = authCookieName(req);
-    const sessions: { name: string; token: string }[] = [];
-    const current = parseCookie(header, name);
-    if (current !== null && isValidSignedToken(current)) {
-      sessions.push({ name, token: current });
-      if (first) return sessions;
-    }
-    let checked = 0;
-    for (const part of header.split(";")) {
-      const separator = part.indexOf("=");
-      const key = part.slice(0, Math.max(0, separator)).trim();
-      if (
-        separator < 0 ||
-        key === name ||
-        (key !== LEGACY_AUTH_COOKIE && !key.startsWith(AUTH_COOKIE_PREFIX))
-      )
-        continue;
-      // Bounded: a browser's other Worlds, not an arbitrary cookie pile.
-      if (++checked > MOVED_COOKIE_CANDIDATES) break;
-      const token = parseCookie(part, key);
-      if (token === null || !isValidSignedToken(token)) continue;
-      sessions.push({ name: key, token });
-      if (first) break;
-    }
-    return sessions;
-  }
-
-  /** This World's session; `moved` names its other cookie, if it is there. */
   function authedSession(
     req: Request,
-  ): { token: string; moved?: string } | null {
-    const [session] = ownSessions(req, true);
-    if (!session) return null;
-    return session.name === authCookieName(req)
-      ? { token: session.token }
-      : { token: session.token, moved: session.name };
+  ): { token: string; legacy: boolean; seenDay?: number } | null {
+    if (!authRequired) return null;
+    const header = req.headers.get("cookie");
+    const own = parseCookie(header, cookieName);
+    if (own !== null) {
+      const { token, seenDay } = readCookieValue(own);
+      if (isValidSignedToken(token)) return { token, legacy: false, seenDay };
+    }
+    const legacy = parseCookie(header, LEGACY_AUTH_COOKIE);
+    if (legacy !== null && isValidSignedToken(legacy))
+      return { token: legacy, legacy: true };
+    return null;
+  }
+
+  /** Whether the legacy shared cookie holds a session this World signed. */
+  function ownLegacySession(req: Request): boolean {
+    if (!authRequired) return false;
+    const legacy = parseCookie(req.headers.get("cookie"), LEGACY_AUTH_COOKIE);
+    return legacy !== null && isValidSignedToken(legacy);
   }
 
   function isAuthed(req: Request): boolean {
@@ -406,29 +446,29 @@ export function createAuthHandlers(args: {
   }
 
   function sessionToken(req: Request): string | null {
+    const own = parseCookie(req.headers.get("cookie"), cookieName);
     return (
       authedSession(req)?.token ??
-      parseCookie(req.headers.get("cookie"), authCookieName(req))
+      (own === null ? null : readCookieValue(own).token)
     );
   }
 
   /**
-   * A page load signed in under another World cookie name: the same address
-   * again with the session under this World's name, so it moves once.
+   * Cookie headers for a signed-in page load: the legacy session moves to
+   * this World's name, and this World's cookie is stamped once a day so
+   * pruning keeps the Worlds in use. They go on the page itself, never a
+   * redirect, so a browser that refuses the cookie cannot loop.
    */
-  function migrateLegacyCookie(req: Request): Response | null {
-    if (req.method !== "GET") return null;
+  function sessionCookieRefresh(req: Request): [string, string][] {
+    if (req.method !== "GET") return [];
     const session = authedSession(req);
-    if (!session?.moved) return null;
-    const url = new URL(req.url);
-    return new Response(null, {
-      status: 302,
-      headers: [
-        ["location", safeReturnPath(`${url.pathname}${url.search}`) ?? "/"],
-        ["cache-control", "no-store"],
-        ...migratedCookieHeaders(req, { ...session, moved: session.moved }),
-      ],
-    });
+    if (!session || currentCookie(req, session)) return [];
+    return sessionCookieHeaders(req, session.token);
+  }
+
+  /** This World's own cookie, set today, with no legacy session left. */
+  function currentCookie(req: Request, session: { seenDay?: number }): boolean {
+    return session.seenDay === today() && !ownLegacySession(req);
   }
 
   /** Failed agent CLI tokens, kept apart so they never lock out a login. */
@@ -470,13 +510,12 @@ export function createAuthHandlers(args: {
     )
       return new Response("forbidden", { status: 403 });
     const headers: [string, string][] = [
-      ["set-cookie", clearCookie(authCookieName(req))],
+      ["set-cookie", clearCookie(cookieName)],
       ["cache-control", "no-store"],
     ];
-    // A session this World signed under another name would sign it back in.
-    for (const session of ownSessions(req, false))
-      if (session.name !== authCookieName(req))
-        headers.push(["set-cookie", clearCookie(session.name)]);
+    // A legacy session this World signed would sign the browser back in.
+    if (ownLegacySession(req))
+      headers.push(["set-cookie", clearCookie(LEGACY_AUTH_COOKIE)]);
     return new Response(null, { status: 204, headers });
   }
 
@@ -610,7 +649,7 @@ export function createAuthHandlers(args: {
     handlePinLogin,
     handleLogout,
     loginPage,
-    migrateLegacyCookie,
+    sessionCookieRefresh,
   };
 }
 

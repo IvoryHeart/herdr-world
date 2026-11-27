@@ -160,7 +160,7 @@ export function listen(deps: ListenerDeps) {
     handlePinLogin,
     handleLogout,
     loginPage,
-    migrateLegacyCookie,
+    sessionCookieRefresh,
     bearerAuth,
   } = deps.auth;
   const { handleUpdateCheck, handleUpdateInstall } = deps.update;
@@ -472,10 +472,6 @@ export function listen(deps: ListenerDeps) {
       config.publicOrigin,
     );
     if (admissionError) return admissionError;
-    if (req.headers.get("accept")?.includes("text/html")) {
-      const migrated = migrateLegacyCookie(req);
-      if (migrated) return migrated;
-    }
 
     if (url.pathname.startsWith("/ide/"))
       return handleIdeRequest(req, url, server);
@@ -553,11 +549,16 @@ export function listen(deps: ListenerDeps) {
       return handleConnectionHttpRequest(connectionRoute, url, req);
     }
     // Everything else: serve the built frontend (embedded or on-disk).
-    return serveStatic(
+    const page = await serveStatic(
       req,
       config.publicDir,
       (await settings.read()).title_suffix,
     );
+    // A page load keeps this World's session cookie current (#1250).
+    if (req.headers.get("accept")?.includes("text/html"))
+      for (const [name, value] of sessionCookieRefresh(req))
+        page.headers.append(name, value);
+    return page;
   }
 
   return Bun.serve<ListenerSocketData>({
