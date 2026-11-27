@@ -3,7 +3,7 @@ import { weatherCliHandler } from "../weather/cli";
 import { composeFeatures } from "../features/compose";
 import { featureKernel } from "../features/contract";
 import { findHerdrBinary } from "../herdr/bootstrap";
-import { createUiSettingsRpcHandler } from "../bridge/settings-rpc";
+import { composeWorldPublication } from "./world-commands";
 import { createCoreInstall } from "../herdr-core/install";
 import { createSharedTerminalMarks } from "./terminal-mark-service";
 import { randomUUID } from "node:crypto";
@@ -493,6 +493,18 @@ async function compose(
     },
     serviceIncarnation,
   );
+  // Settings and commands: published with topology, under its revision.
+  const publication = composeWorldPublication({
+    settings,
+    broadcast,
+    now: () => clock.now(),
+    connectionManager,
+    core: () => coreRpc,
+    snapshots: worldSnapshots,
+    ledger: () => storage.ledger(),
+    invalidate: (id, generation) => publishWorldInvalidation(id, generation),
+    log: (message) => logger.warn(message),
+  });
 
   const assistantContext = createRuntimeAssistantContext({
     profiles: () => [
@@ -763,11 +775,7 @@ async function compose(
     snapshotAdmission,
     townMoveQueues,
     moveSettle,
-    uiSettings: createUiSettingsRpcHandler({
-      readSettings: () => settings.read(),
-      updateSettings: (update, shouldCommit) =>
-        settings.update(update, shouldCommit),
-    }),
+    ...publication,
     ...terminalMarks,
     bin,
     focus,
@@ -822,6 +830,11 @@ async function compose(
     paths,
     storage,
     failed: storage.failed,
+    /**
+     * @internal Settles after `count` more reads of sibling Worlds'
+     * questions: tests count reads instead of pausing (#1419).
+     */
+    afterAskPeerReads: askPeers.afterReads,
     /** The listener's port once started. */
     get port(): number | undefined {
       return server?.port;

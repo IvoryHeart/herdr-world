@@ -73,6 +73,8 @@ function launch(
     args?: string[];
     hold?: string;
     ownerRoot?: string;
+    /** The contender's ownership wait expires in milliseconds, not seconds. */
+    testTimings?: boolean;
   },
 ) {
   const child = spawn(
@@ -200,7 +202,7 @@ test("a paused offline owner is never stolen after the contender's wait expires"
   await seed(f);
   const a = launch(f, { mode: "edit", args: add("beta"), hold: "snapshot" });
   await a.event("snapshot");
-  const b = launch(f, { mode: "edit", args: add("gamma") });
+  const b = launch(f, { mode: "edit", args: add("gamma"), testTimings: true });
   expect(await b.exited).toBe(1);
   expect(b.events.some((e) => e.name === "snapshot")).toBe(false);
   expect(ids(f)).toEqual(["alpha"]);
@@ -234,7 +236,7 @@ test("startup timeout releases its instance claim without replacing a paused CLI
   await seed(f);
   const edit = launch(f, { mode: "edit", args: add("beta"), hold: "snapshot" });
   await edit.event("snapshot");
-  const startup = launch(f, { mode: "startup" });
+  const startup = launch(f, { mode: "startup", testTimings: true });
   expect(await startup.exited).toBe(1);
   expect(existsSync(join(f.root, "instance.lock"))).toBe(false);
   expect(ids(f)).toEqual(["alpha"]);
@@ -298,7 +300,11 @@ test("a live owner of an overridden registry in another data folder prevents off
     hold: "bootstrapped",
   });
   await startup.event("bootstrapped");
-  const edit = launch(f, { mode: "edit", args: add("beta") });
+  const edit = launch(f, {
+    mode: "edit",
+    args: add("beta"),
+    testTimings: true,
+  });
   expect(await edit.exited).toBe(1);
   expect(
     edit.events

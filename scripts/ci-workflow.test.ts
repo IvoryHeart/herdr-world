@@ -294,7 +294,23 @@ test("CI exposes the protected delivery gate and runs the complete repository ch
   expect(workflow.jobs.validate).toBeUndefined();
 });
 
-test("no timing gates delivery: browser jobs use the pinned Chrome and retry failures once", () => {
+test("Delivery reports timings after every verdict without making timing a gate", () => {
+  const steps = workflow.jobs.delivery.steps;
+  expect(steps.at(-1)).toEqual({
+    name: "Report run timings",
+    if: "always()",
+    env: { GH_TOKEN: "${{ github.token }}" },
+    run: "bun scripts/ci-run-timing.ts",
+  });
+  expect(workflow.permissions.actions).toBe("read");
+  expect(
+    steps.findIndex(
+      (step) => step.name === "Verify applicable or reused results",
+    ),
+  ).toBeLessThan(steps.length - 1);
+});
+
+test("no timing gates delivery: browser jobs use the pinned Chrome and delegate scoped recovery", () => {
   expect(worldWorkflow.jobs["latency-shards"]).toBeUndefined();
   expect(worldWorkflow.jobs["world-latency"]).toBeUndefined();
   expect(JSON.stringify(worldWorkflow)).not.toContain("--retry");
@@ -387,7 +403,7 @@ test("all World browser shards and the web browser suites run independently and 
   );
   expect(world?.["continue-on-error"] ?? false).toBe(false);
   expect(world.steps.filter((step) => step["continue-on-error"])).toHaveLength(
-    1,
+    0,
   );
   expect(world?.["runs-on"]).toBe("ubuntu-latest");
   expect(world?.strategy?.matrix?.shard).toBe(
@@ -407,8 +423,8 @@ test("all World browser shards and the web browser suites run independently and 
     },
   });
   expect(
-    world?.steps.find((step) =>
-      step.uses?.startsWith("actions/upload-artifact@"),
+    world?.steps.find(
+      (step) => step.name === "Upload World test results and timings",
     ),
   ).toMatchObject({
     if: "always()",
@@ -430,7 +446,7 @@ test("all World browser shards and the web browser suites run independently and 
     uses: "./.github/workflows/world-browser.yml",
     with: { lane: "web" },
   });
-  expect(web.steps.filter((step) => step["continue-on-error"])).toHaveLength(1);
+  expect(web.steps.filter((step) => step["continue-on-error"])).toHaveLength(0);
   expect(
     web?.steps.find(
       (step) =>
@@ -557,8 +573,10 @@ test("accepted behavioral evidence stays unfiltered whenever its protected depen
   expect(aggregate?.if).toBe(
     "needs.validation-scope.outputs.verification == 'true' && needs.behavioral.result == 'success'",
   );
-  const download = workflow.jobs.delivery.steps.find((step) =>
-    step.uses?.startsWith("actions/download-artifact@"),
+  const download = workflow.jobs.delivery.steps.find(
+    (step) =>
+      step.uses?.startsWith("actions/download-artifact@") &&
+      (step.with as { pattern?: string })?.pattern === "behavioral-shard-*",
   );
   expect(download).toMatchObject({
     if: aggregate!.if,
@@ -568,8 +586,12 @@ test("accepted behavioral evidence stays unfiltered whenever its protected depen
       "merge-multiple": true,
     },
   });
-  const upload = workflow.jobs.delivery.steps.find((step) =>
-    step.uses?.startsWith("actions/upload-artifact@"),
+  const upload = workflow.jobs.delivery.steps.find(
+    (step) =>
+      step.uses?.startsWith("actions/upload-artifact@") &&
+      (step.with as { name?: string })?.name?.startsWith(
+        "behavioral-evidence-",
+      ),
   );
   expect(upload).toMatchObject({
     if: "always() && needs.validation-scope.outputs.verification == 'true'",
@@ -603,7 +625,7 @@ test("accepted behavioral evidence stays unfiltered whenever its protected depen
   )!;
   expect(verify).toBeDefined();
   expect(verify.if).toBe("steps.reuse.outputs.reused != 'true'");
-  expect(verify["continue-on-error"]).toBe(true);
+  expect(verify["continue-on-error"]).toBeUndefined();
   expect(
     job.steps.some((step) => step.run === "bun run verification:setup"),
   ).toBe(true);
@@ -624,7 +646,7 @@ test("accepted behavioral evidence stays unfiltered whenever its protected depen
     job.steps.find(
       (step) => step.run === "bun run verification:diagnostic-control",
     )?.["continue-on-error"],
-  ).toBe(true);
+  ).toBeUndefined();
   expect(
     job.steps.some(
       (step) => step.run === "bun run verification:diagnostic-control",
@@ -676,76 +698,28 @@ test("behavioral checks retain each main version commit's evidence", async () =>
   );
 });
 
-test("an in-job model retry preserves failed evidence outside the aggregate's live inputs", async () => {
-  const {
-    mkdtempSync,
-    mkdirSync,
-    readFileSync,
-    writeFileSync,
-    rmSync,
-    readdirSync,
-  } = await import("node:fs");
-  const { join } = await import("node:path");
-  const { tmpdir } = await import("node:os");
-  const root = mkdtempSync(join(tmpdir(), "model-retry-"));
-  try {
-    const candidate = Bun.YAML.parse(
-      await Bun.file(".github/workflows/behavioral-verification.yml").text(),
-    ) as any;
-    const retry = candidate.jobs.shards.steps.find(
-      (step: any) =>
-        step.name === "Retry failed test once" &&
-        step.run.includes("verification:resources"),
-    );
-    const prefix = join(root, ".agents/verification");
-    mkdirSync(join(prefix, "runs/ci-shard-1-failed"), { recursive: true });
-    mkdirSync(join(prefix, "resources/first"), { recursive: true });
-    writeFileSync(
-      join(prefix, "runs/ci-shard-1-failed/manifest.json"),
-      "failed shard",
-    );
-    writeFileSync(
-      join(prefix, "resources/first/resources.json"),
-      "failed accounting",
-    );
-    mkdirSync(join(root, "bin"));
-    writeFileSync(
-      join(root, "bin/bun"),
-      "#!/bin/sh\nmkdir -p .agents/verification/runs/ci-shard-1-retry .agents/verification/resources/retry\nprintf success > .agents/verification/runs/ci-shard-1-retry/manifest.json\nprintf success > .agents/verification/resources/retry/resources.json\n",
-      { mode: 0o755 },
-    );
-    const run = Bun.spawnSync(
-      ["bash", "-euc", retry.run.replaceAll("${{ matrix.shard }}", "1")],
-      {
-        cwd: root,
-        env: { PATH: `${root}/bin:${process.env.PATH}` },
-        stdout: "pipe",
-        stderr: "pipe",
-      },
-    );
-    expect(run.stderr.toString()).toBe("");
-    expect(run.exitCode).toBe(0);
-    expect(readdirSync(join(prefix, "runs"))).toEqual(["ci-shard-1-retry"]);
-    expect(readdirSync(join(prefix, "resources"))).toEqual(["retry"]);
-    expect(
-      readFileSync(
-        join(prefix, "retries/first-runs/ci-shard-1-failed/manifest.json"),
-        "utf8",
-      ),
-    ).toBe("failed shard");
-    expect(
-      readFileSync(
-        join(prefix, "retries/first-resources/first/resources.json"),
-        "utf8",
-      ),
-    ).toBe("failed accounting");
-    const upload = candidate.jobs.shards.steps.find(
-      (step: any) => step.name === "Retain source-bound evidence manifests",
-    );
-    expect(upload.with.path).toContain(".agents/verification/retries/**");
-  } finally {
-    rmSync(root, { recursive: true, force: true });
-  }
+test("model and diagnostic checks fail immediately and retain original evidence", async () => {
+  const candidate = Bun.YAML.parse(
+    await Bun.file(".github/workflows/behavioral-verification.yml").text(),
+  ) as { jobs: Record<string, WorkflowJob> };
+  const steps = candidate.jobs.shards.steps;
+  expect(steps.some((step) => step.name?.includes("Retry"))).toBe(false);
+  expect(steps.some((step) => step["continue-on-error"])).toBe(false);
+  expect(
+    steps.filter((step) => step.run?.includes("verification:resources")),
+  ).toHaveLength(1);
+  expect(
+    steps.filter(
+      (step) => step.run === "bun run verification:diagnostic-control",
+    ),
+  ).toHaveLength(1);
+  const artifact = steps.find(
+    (step) => step.name === "Retain source-bound evidence manifests",
+  )!;
+  expect(artifact.if).toBe("always()");
+  expect((artifact.with as { path: string }).path).toContain(
+    ".agents/verification/runs/",
+  );
 });
 
 test("nightly native plugin regressions run each OS's own installer test", async () => {

@@ -1,5 +1,5 @@
 import assert from "node:assert/strict";
-import { mkdirSync } from "node:fs";
+import { mkdirSync, writeFileSync } from "node:fs";
 import type { ValidationSelection } from "./validation-scope";
 import {
   worldBrowserParallelSuites,
@@ -65,7 +65,14 @@ if (import.meta.main) {
     lane === "world" ? Number(process.env.HERDR_CI_WORLD_RUNS || 1) : 1;
   assert(runs === 1 || runs === 3, "World browser runs must be 1 or 3");
   const batches = ciTestBatches(selection, lane, shard);
-  if (!batches.length) console.info(`${lane}: no affected suites`);
+  if (!batches.length) {
+    console.info(`${lane}: no affected suites`);
+    mkdirSync(".agents/delivery", { recursive: true });
+    writeFileSync(
+      `.agents/delivery/flakes-${lane}-${shard?.replace("/", "-of-") || "all"}-empty-${process.env.GITHUB_RUN_ATTEMPT || "local"}.json`,
+      JSON.stringify({ files: [], flaky: [] }),
+    );
+  }
   passes: for (let pass = 1; pass <= runs; pass++) {
     for (const { files, parallel } of batches) {
       mkdirSync(".agents/delivery", { recursive: true });
@@ -78,10 +85,12 @@ if (import.meta.main) {
           ...files,
           `--parallel=${parallel}`,
           `--max-concurrency=${lane === "world" ? 1 : 2}`,
-          ...(lane === "web"
+          `--retry-flaky=${lane === "unit" ? "unit" : "browser"}`,
+          `--flake-report=.agents/delivery/flakes-${lane}-${shard?.replace("/", "-of-") || "all"}-${pass}-${parallel}-${process.env.GITHUB_RUN_ATTEMPT || "local"}.json`,
+          ...(lane !== "world"
             ? [
                 "--reporter=junit",
-                `--reporter-outfile=.agents/delivery/web-browser-${shard?.replace("/", "-of-") || "all"}.xml`,
+                `--reporter-outfile=.agents/delivery/${lane === "web" ? "web-browser" : lane}-${shard?.replace("/", "-of-") || "all"}.xml`,
               ]
             : []),
         ],

@@ -2,15 +2,8 @@
 
 - [x] 1.1 Proposal, design, [sources](sources.md), [audit](audit.md) and the
   `world-model` spec delta.
-- [x] 1.2 Design-stage Quint model [`write-path.qnt`](write-path.qnt), with the
-  tooling locked by `bun run verification:setup`
-  (`Q=tools/quint/node_modules/@informalsystems/quint/dist/src/cli.js`):
-  - `node $Q test write-path.qnt`: 6 scenarios pass.
-  - `node $Q run write-path.qnt --invariant safety --max-samples 200000 --max-steps 30 --seed 7 --backend=rust`:
-    no violation.
-  - Control: with `FENCED = false` the same run finds a violation and
-    `lateReadIsDiscardedTest` fails; settling a command without naming its
-    revision fails `noFlashBack` and `observedHoldsUntilAdoptedTest`.
+- [x] 1.2 Design-stage Quint model of the write path, now maintained as
+  [`quint/world-write-path.qnt`](../../../quint/world-write-path.qnt) (task 4.3).
 
 Each later step is one PR of about 300 changed lines, excluding tests. Each leaves
 `main` working and moves at least one fact fully onto the World path: derived on the
@@ -48,21 +41,27 @@ Needs the agent and place records of `world-agent-identity` (tasks 3, 6, 7.2 and
 
 ## 4. Commands, fences and room names
 
-- [ ] 4.1 Command records on the service: command ID, entity, field, expected value,
+- [x] 4.1 Command records on the service: command ID, entity, field, expected value,
   states (`accepted`, `stored`, `sent`, `observed`, `refused`, `failed`, `uncertain`),
   history entries in `ledger_changes` for every actor, and the commands in progress in
   `world.snapshot`.
-- [ ] 4.2 The per-host epoch fence in `server/src/world/snapshot.ts`: an
+- [x] 4.2 The per-host epoch fence in `server/src/world/snapshot.ts`: an
   acknowledgement or source event moves the epoch on; a read is applied only if it
   started after the newest applied read and in the current epoch.
-- [ ] 4.3 Move `write-path.qnt` into `quint/` with an adapter over 4.1 and 4.2, a
-  coverage entry and the full verification gate.
-- [ ] 4.4 The browser replica's pending values, shared by every view in the browser.
-- [ ] 4.5 Room names: one rename command for Herdr and core rooms. Town, Board, the
+- [x] 4.3 Move `write-path.qnt` into `quint/` with an adapter over 4.1 and 4.2, a
+  coverage entry and the full verification gate
+  ([contract](../../../verification/contracts/world-write-path.md)).
+  Commands, settled outcomes and history reuse the World ledger; no table, column
+  or data file is added. Topology, hosts and the settings World derives from are
+  published under one revision, which also moves when only a command settles.
+- [x] 4.4 The browser replica's pending values, shared by every view in the browser.
+- [x] 4.5 Room names: one rename command for Herdr and core rooms. Town, Board, the
   command bar, the context menu and the CLI use it; delete the direct
   `workspace.rename` calls (`web/src/store.ts`, `web/src/store/operations.ts`,
   `web/src/world/roomRenameClose.tsx`). Split 4.1–4.3 and 4.4–4.5 into two PRs if
   they pass 300 lines; the first then moves the grouping setting onto command records.
+  Delivered in one PR; the CLI has no room rename yet, and synthetic preview scenes
+  keep their own scene call.
 
 ## 5. Agent and tab names
 

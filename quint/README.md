@@ -157,6 +157,12 @@ The [agent move case](../verification/contracts/agent-move-audit.md) checks ever
 bounded runtime move with TLC and replays three sampled seeds through the real
 `moveAgentAcross`; four model faults and two production mutants are rejected.
 
+The [World write path case](../verification/contracts/world-write-path.md)
+samples three seeds of the room-rename write path (exhaustive TLC does not finish
+in ten minutes), runs its nine named scenarios with `--backend typescript`, and
+replays seven of them through the real snapshot service, command path and two
+browser replicas; two model flags and three production mutants are rejected.
+
 The [Claude tap ownership case](../verification/contracts/claude-tap-lock.md)
 checks all eight bounded live/dead suspension schedules, replays their real
 filesystem commit histories and retains unsafe live-owner stealing as a rejected
