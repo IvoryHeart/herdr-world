@@ -8,6 +8,7 @@
 
 **Code:**
 
+- `server/src/features/integrations/`
 - `server/src/cli/integration.ts`
 - `server/src/cli/integration.test.ts`
 - `server/src/integrations/`
