@@ -17,7 +17,7 @@
 
 - `server/src/workspace/`
 - `server/src/worktree/`
-- `server/src/rpc/desk.ts`
+- `server/src/features/desk/rpc.ts`
 - `server/src/rpc/desk.test.ts`
 - `server/src/storage/profile-port.ts`
 - `server/src/service/profile-storage.test.ts`

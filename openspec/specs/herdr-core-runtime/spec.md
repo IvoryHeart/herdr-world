@@ -157,13 +157,18 @@ reset sequence interpretation while preserving durable terminal identity.
 ### Requirement: Occupant-bound session delivery
 
 Messages, answers and asks SHALL use core's own send/keys for every harness
-supported by herdr-core and herdr. World SHALL check the original occupant and
-its foreground immediately before each send/keys dispatch on the captured lease
-and SHALL NOT build per-harness side channels. Kept replacement, changed
-session/foreground evidence and retired leases SHALL invalidate World dispatch
-authority even when address, pid or labels survive. A timeout SHALL be shown as
-"uncertain"; unanswered possible writes SHALL NOT retry automatically. Closing
-the queued-send replacement window belongs to core (Q3), not World's pre-send check.
+supported by herdr-core and herdr.
+
+#### Scenario: Core occupant fences and uncertain sends
+
+- **WHEN** World delivers a message, answer or ask to core
+- **THEN** World SHALL check the original occupant and
+  its foreground immediately before each send/keys dispatch on the captured lease
+  and SHALL NOT build per-harness side channels. Kept replacement, changed
+  session/foreground evidence and retired leases SHALL invalidate World dispatch
+  authority even when address, pid or labels survive. A timeout SHALL be shown as
+  "uncertain"; unanswered possible writes SHALL NOT retry automatically. Closing
+  the queued-send replacement window belongs to core (Q3), not World's pre-send check.
 
 #### Scenario: Every supported harness
 
@@ -207,14 +212,19 @@ the queued-send replacement window belongs to core (Q3), not World's pre-send ch
 
 Core Chat SHALL identify Claude and Codex conversations, including `claude -p`
 and fresh `codex exec`, from evidence owned by the matching live foreground
-process on its captured connection's host. Claude's native process record SHALL
-retain precedence. Linux writable descriptors and macOS `lsof` output MAY name a
-unique native transcript or canonical Claude session debug ID, with process
-start-time checks around the read. Discovery SHALL be bounded and read-only.
-Missing, changed, unreadable, deleted or ambiguous process evidence SHALL NOT
-establish a session. World SHALL NOT infer Claude/Codex identity from directory
-recency. Explicit launch references and reading links SHALL retain their existing
-behavior; discovery SHALL NOT grant additional input authority.
+process on its captured connection's host.
+
+#### Scenario: Foreground evidence and discovery bounds
+
+- **WHEN** Core Chat discovers a headless conversation
+- **THEN** Claude's native process record SHALL
+  retain precedence. Linux writable descriptors and macOS `lsof` output MAY name a
+  unique native transcript or canonical Claude session debug ID, with process
+  start-time checks around the read. Discovery SHALL be bounded and read-only.
+  Missing, changed, unreadable, deleted or ambiguous process evidence SHALL NOT
+  establish a session. World SHALL NOT infer Claude/Codex identity from directory
+  recency. Explicit launch references and reading links SHALL retain their existing
+  behavior; discovery SHALL NOT grant additional input authority.
 
 #### Scenario: Fresh headless run without a launch session ID
 
@@ -239,18 +249,23 @@ behavior; discovery SHALL NOT grant additional input authority.
 ### Requirement: Shared app state with independent World ownership
 
 World SHALL own topology, asks/results and review receipts; it SHALL share
-app placement at launch and on explicit Town moves, seen and the pin under the [M1–M11 ownership decisions](../../changes/archive/2026-11-17-herdr-core-runtime/design.md). A core tab's desk and
-card SHALL be pinned exactly while one of its terminals carries
-`herdr.pinned`; Herdr (TUI) tabs keep World's own pin. Pinned SHALL mean
-pinned goes first, as in Herdr's apps: World derives a pinned card's place
-from the pin and tab order and saves none; a Town room's pinned desks keep
-the order the person gave them on its rug as World's own view layout (Herdr's
-apps have no order for pins), else tab order. World SHALL read
-agent status from core and SHALL NOT write it, including for integrations World
-installed. Native destructive actions SHALL confirm all dying descendants,
-including ending a room shell, and a confirmation SHALL name each terminal's
-occupant incarnation (the mirror's occupancy token), so a replacement that
-reuses the pid and argv is refused.
+app placement at launch and on explicit Town moves, seen and the pin under the [M1–M11 ownership decisions](../../changes/archive/2026-11-17-herdr-core-runtime/design.md).
+
+#### Scenario: Core placement, pins and destructive authority
+
+- **WHEN** World shares app state or manages core terminals
+- **THEN** A core tab's desk and
+  card SHALL be pinned exactly while one of its terminals carries
+  `herdr.pinned`; Herdr (TUI) tabs keep World's own pin. Pinned SHALL mean
+  pinned goes first, as in Herdr's apps: World derives a pinned card's place
+  from the pin and tab order and saves none; a Town room's pinned desks keep
+  the order the person gave them on its rug as World's own view layout (Herdr's
+  apps have no order for pins), else tab order. World SHALL read
+  agent status from core and SHALL NOT write it, including for integrations World
+  installed. Native destructive actions SHALL confirm all dying descendants,
+  including ending a room shell, and a confirmation SHALL name each terminal's
+  occupant incarnation (the mirror's occupancy token), so a replacement that
+  reuses the pid and argv is refused.
 
 #### Scenario: Town moves core agents and desks by placement
 
@@ -361,11 +376,16 @@ reuses the pid and argv is refused.
 World SHALL start agents in core with an absolute host executable, no caller,
 no parent, no notes and an explicit keep, placed in the apps by `herdr.space`,
 `herdr.tab`, a `where` caption and an unseen `herdr.seen`; plain shells SHALL
-start unplaced and not kept. World's rooms, their order and the tabs it started
-SHALL live in World's SQLite under the durable core ID. Before any native kill,
-room close or bin close, World SHALL name every terminal core will end with it,
-bind each to the program it saw (core, address, pid and argv) and send the kill
-only while its current observation ends no more than that confirmed set.
+start unplaced and not kept.
+
+#### Scenario: Core launch placement and confirmed teardown
+
+- **WHEN** World starts or ends core terminals
+- **THEN** World's rooms, their order and the tabs it started
+  SHALL live in World's SQLite under the durable core ID. Before any native kill,
+  room close or bin close, World SHALL name every terminal core will end with it,
+  bind each to the program it saw (core, address, pid and argv) and send the kill
+  only while its current observation ends no more than that confirmed set.
 
 #### Scenario: Agent launch
 
@@ -392,21 +412,26 @@ World SHALL serve a core connection's Files, Changes, Git actions, file
 transfers and an agent's worktree from World's read model of that core and
 World's own guarded host helpers on the core's host, never from core's
 `file.*`, and only under the connection and runtime generation the request
-names. An agent's worktree selection SHALL be bound to the program occupying
-its address. A core room MAY be a Git worktree World created or opened; its
-checkout is the room's folder. Any other World-created room MAY keep a
-folder World checked on the core's host when creating it; its terminals SHALL
-start there. Removing a worktree room SHALL ask to confirm every
-terminal that ends with it, run the teardown hook only while that
-confirmation holds, end the confirmed terminals, and only then remove the
-checkout under the same generation. A `herdr-world` command inside a core
-terminal SHALL be a verified caller only when that terminal's program is an
-ancestor of the calling process; its ask SHALL be bound to that program.
-World SHALL deliver saved core ask answers and confirmed Ranger prompts
-through core's native send, with a fresh program/foreground check before
-submission. Lost replies SHALL remain uncertain and SHALL NOT automatically
-replay. Ranger SHALL read core rooms (screen only, never a scrolling read);
-core lifecycle controls SHALL remain in World's dedicated controls.
+names.
+
+#### Scenario: Core project resources and native delivery
+
+- **WHEN** World serves resources or acts for a core agent
+- **THEN** An agent's worktree selection SHALL be bound to the program occupying
+  its address. A core room MAY be a Git worktree World created or opened; its
+  checkout is the room's folder. Any other World-created room MAY keep a
+  folder World checked on the core's host when creating it; its terminals SHALL
+  start there. Removing a worktree room SHALL ask to confirm every
+  terminal that ends with it, run the teardown hook only while that
+  confirmation holds, end the confirmed terminals, and only then remove the
+  checkout under the same generation. A `herdr-world` command inside a core
+  terminal SHALL be a verified caller only when that terminal's program is an
+  ancestor of the calling process; its ask SHALL be bound to that program.
+  World SHALL deliver saved core ask answers and confirmed Ranger prompts
+  through core's native send, with a fresh program/foreground check before
+  submission. Lost replies SHALL remain uncertain and SHALL NOT automatically
+  replay. Ranger SHALL read core rooms (screen only, never a scrolling read);
+  core lifecycle controls SHALL remain in World's dedicated controls.
 
 #### Scenario: Two cores with the same address
 
@@ -517,33 +542,38 @@ popups and use the fixed PowerShell named-pipe/key transport for Windows connect
 ### Requirement: Every supported harness and shared transcript readers
 
 World SHALL offer a core launch kind for every harness in Herdr's integration
-registry, detection manifest, desktop program list and World's profiles. World
-SHALL read status from core records checked against the process, without
-running TUI screen inference or status-writing integrations for core: an
-interactive agent without a report SHALL be unknown, never working; a live
-headless invocation (`claude -p`, `codex exec` and the like) SHALL be working
-unless it reports blocked; and a known harness's working or blocked report
-SHALL be stale, read idle, once no harness runs in the terminal's foreground.
-A report SHALL speak only for the harness running: one naming another
-harness, or left unchanged by a process World saw exit, SHALL count as no
-report. A harness World saw inside a wrapper SHALL stay the desk's agent,
-idle, after it exits while that wrapper leads the terminal; that departed
-harness, never an earlier reporter, SHALL name the desk. World SHALL count a
-process as exited only on evidence: a foreground group the host could not read
-SHALL keep what World last saw running there, harness and headless alike, as
-the desk's process evidence ahead of any report. An option's value SHALL never mark an
-invocation headless.
-World SHALL find a desk's agent as Herdr's TUI does: the foreground group's
-leader, else, where the host can read it (a core on this Linux machine), the
-nearest group member that is a harness; a shell or interpreter leading the
-group whose members World cannot read SHALL keep its report.
-Generic profile briefs SHALL use the same native delivery path as Chat after
-core has observed the original program's foreground, with native `if: "idle"`
-so core checks readiness after its queue/startup/draft waits, before typing.
-Unknown, blocked or other non-idle status SHALL NOT receive an automatic brief.
-Startup timeout or native refusal SHALL leave the program running with an
-explicit unsent-brief notice. Uncertain brief delivery SHALL retain the started
-terminal's identity and distinguish it from an uncertain launch.
+registry, detection manifest, desktop program list and World's profiles.
+
+#### Scenario: Core harness status and brief delivery
+
+- **WHEN** World launches, observes or sends a brief to a core harness
+- **THEN** World
+  SHALL read status from core records checked against the process, without
+  running TUI screen inference or status-writing integrations for core: an
+  interactive agent without a report SHALL be unknown, never working; a live
+  headless invocation (`claude -p`, `codex exec` and the like) SHALL be working
+  unless it reports blocked; and a known harness's working or blocked report
+  SHALL be stale, read idle, once no harness runs in the terminal's foreground.
+  A report SHALL speak only for the harness running: one naming another
+  harness, or left unchanged by a process World saw exit, SHALL count as no
+  report. A harness World saw inside a wrapper SHALL stay the desk's agent,
+  idle, after it exits while that wrapper leads the terminal; that departed
+  harness, never an earlier reporter, SHALL name the desk. World SHALL count a
+  process as exited only on evidence: a foreground group the host could not read
+  SHALL keep what World last saw running there, harness and headless alike, as
+  the desk's process evidence ahead of any report. An option's value SHALL never mark an
+  invocation headless.
+  World SHALL find a desk's agent as Herdr's TUI does: the foreground group's
+  leader, else, where the host can read it (a core on this Linux machine), the
+  nearest group member that is a harness; a shell or interpreter leading the
+  group whose members World cannot read SHALL keep its report.
+  Generic profile briefs SHALL use the same native delivery path as Chat after
+  core has observed the original program's foreground, with native `if: "idle"`
+  so core checks readiness after its queue/startup/draft waits, before typing.
+  Unknown, blocked or other non-idle status SHALL NOT receive an automatic brief.
+  Startup timeout or native refusal SHALL leave the program running with an
+  explicit unsent-brief notice. Uncertain brief delivery SHALL retain the started
+  terminal's identity and distinguish it from an uncertain launch.
 
 #### Scenario: Unreported startup trust prompt
 
@@ -580,12 +610,17 @@ terminal's identity and distinguish it from an uncertain launch.
 
 World SHALL name an app-created core space that has no name in its `where`
 captions for display only, once, from the space's oldest terminal that shows
-anything: its folder, else its tab, else its agent. World SHALL keep that name
-while the space lasts, so agents coming and going, in that room or another,
-never change it. The row SHALL say the name is derived and views SHALL mark it.
-A derived name another room of the same core already shows SHALL get a number,
-kept when other rooms leave. World SHALL NOT write the derived name to core and
-SHALL NOT change the space's owner.
+anything: its folder, else its tab, else its agent.
+
+#### Scenario: Unnamed space display continuity
+
+- **WHEN** World names an unnamed app-created core space
+- **THEN** World SHALL keep that name
+  while the space lasts, so agents coming and going, in that room or another,
+  never change it. The row SHALL say the name is derived and views SHALL mark it.
+  A derived name another room of the same core already shows SHALL get a number,
+  kept when other rooms leave. World SHALL NOT write the derived name to core and
+  SHALL NOT change the space's owner.
 
 #### Scenario: Unnamed app space
 

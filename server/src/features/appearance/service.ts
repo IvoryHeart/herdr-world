@@ -1,7 +1,7 @@
-import type { createRevisionPublisher } from "../world/revision-publisher";
-import type { ProfileStorePort } from "./profile-store";
-import { TerminalSettings } from "./terminal-settings";
-import type { PaneRow, SettingsLease } from "./terminal-tokens";
+import type { createRevisionPublisher } from "../../world/revision-publisher";
+import type { ProfileStorePort } from "../../agent/profile-store";
+import { TerminalSettings } from "../../agent/terminal-settings";
+import type { PaneRow, SettingsLease } from "../../agent/terminal-tokens";
 
 /** Lazy profile storage and the terminal-settings reconciler share one publisher. */
 export function createProfileServices(

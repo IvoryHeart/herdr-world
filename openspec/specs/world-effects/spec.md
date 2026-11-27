@@ -11,51 +11,56 @@ workflow authoring model:
 
 ### Requirement: Intents through a transactional outbox
 
-World SHALL record each durable effect as an intent before dispatching it. A durable
-effect is one that must survive a service restart, or be queued, scheduled or retried.
-The intent SHALL be committed in the same transaction as the domain change that
-requires it.
+World SHALL record each durable effect as an intent before dispatching it.
 
-An intent SHALL record:
-- its verb and validated parameters;
-- its targets;
-- its actor and authorization evidence;
-- an idempotency key;
-- its operation version;
-- its preconditions;
-- an opaque origin supplied by its creator.
+#### Scenario: Intent capture, resolution and dispatch
 
-**Targets.** Targets SHALL be bindings. Where bindings do not exist yet, a target SHALL
-capture the binding's fields inline: adapter, connection ID, entity kind, native ID,
-and the terminal or session evidence. A target SHALL NOT be a bare runtime generation.
-A target with no pane resource, such as a user alert, SHALL capture only the
-connection ID.
+- **WHEN** World records or processes a durable effect
+- **THEN** A durable
+  effect is one that must survive a service restart, or be queued, scheduled or retried.
+  The intent SHALL be committed in the same transaction as the domain change that
+  requires it.
 
-**Dispatch.** Each attempt SHALL record its own fences when it is claimed. Dispatch
-SHALL happen only from committed intents. Interactive commands that need not outlive
-the request SHALL keep their direct path and existing uncertainty rules.
+  An intent SHALL record:
+  - its verb and validated parameters;
+  - its targets;
+  - its actor and authorization evidence;
+  - an idempotency key;
+  - its operation version;
+  - its preconditions;
+  - an opaque origin supplied by its creator.
 
-**Resolution.** Before every dispatch, including the first after a service incarnation
-change, an intent's targets SHALL be resolved by their binding state:
-- **attached:** dispatch may proceed, under the recovery rules;
-- **unresolved:** the intent SHALL wait and stay pending, with no time limit. This
-  covers a host not yet observed after a restart, an offline host and a partial
-  listing;
-- **ended or unconfirmed:** the intent SHALL be recorded as not sent, but only when none
-  of its attempts reached dispatching. Otherwise its recovery class decides the outcome.
+  **Targets.** Targets SHALL be bindings. Where bindings do not exist yet, a target SHALL
+  capture the binding's fields inline: adapter, connection ID, entity kind, native ID,
+  and the terminal or session evidence. A target SHALL NOT be a bare runtime generation.
+  A target with no pane resource, such as a user alert, SHALL capture only the
+  connection ID.
 
-Fresh attempt qualification SHALL NOT establish native runtime continuity across
-a World restart. A driver SHALL refuse a new submission without its required
-native continuity evidence or current World-run dispatch authority. Current
-Herdr has no checkable runtime boot token: alert and saved-answer drivers SHALL
-refuse old or missing World-run authority even when connection, generation and
-native/session values repeat. New alert contracts SHALL capture World-run
-authority in their authorization envelope at commit; migration SHALL NOT refresh
-it. Saved answers SHALL use the original recipient's captured service incarnation.
-An intent with no possible dispatch SHALL resolve not-sent; an intent with any
-possible dispatch SHALL retain uncertainty. Receipts and history SHALL survive.
-Explicit duplicate approval SHALL NOT bypass driver eligibility. Generic recovery
-classes and valid synthetic existing-source contracts remain unchanged.
+  **Dispatch.** Each attempt SHALL record its own fences when it is claimed. Dispatch
+  SHALL happen only from committed intents. Interactive commands that need not outlive
+  the request SHALL keep their direct path and existing uncertainty rules.
+
+  **Resolution.** Before every dispatch, including the first after a service incarnation
+  change, an intent's targets SHALL be resolved by their binding state:
+  - **attached:** dispatch may proceed, under the recovery rules;
+  - **unresolved:** the intent SHALL wait and stay pending, with no time limit. This
+    covers a host not yet observed after a restart, an offline host and a partial
+    listing;
+  - **ended or unconfirmed:** the intent SHALL be recorded as not sent, but only when none
+    of its attempts reached dispatching. Otherwise its recovery class decides the outcome.
+
+  Fresh attempt qualification SHALL NOT establish native runtime continuity across
+  a World restart. A driver SHALL refuse a new submission without its required
+  native continuity evidence or current World-run dispatch authority. Current
+  Herdr has no checkable runtime boot token: alert and saved-answer drivers SHALL
+  refuse old or missing World-run authority even when connection, generation and
+  native/session values repeat. New alert contracts SHALL capture World-run
+  authority in their authorization envelope at commit; migration SHALL NOT refresh
+  it. Saved answers SHALL use the original recipient's captured service incarnation.
+  An intent with no possible dispatch SHALL resolve not-sent; an intent with any
+  possible dispatch SHALL retain uncertainty. Receipts and history SHALL survive.
+  Explicit duplicate approval SHALL NOT bypass driver eligibility. Generic recovery
+  classes and valid synthetic existing-source contracts remain unchanged.
 
 #### Scenario: Crash after commit
 - **WHEN** World commits a domain change and its intent, then stops before dispatching
@@ -94,17 +99,22 @@ classes and valid synthetic existing-source contracts remain unchanged.
 
 ### Requirement: Fenced dispatch attempts
 
-At most one attempt per intent SHALL be active. An attempt SHALL be claimed with a
-fence naming the service incarnation and an attempt number. Immediately before
-dispatch, World SHALL recheck all of these:
-- the actor's current authorization;
-- the intent's preconditions;
-- its targets, resolved to fresh qualified targets;
-- support for its operation version.
+At most one attempt per intent SHALL be active.
 
-A committed intent or a claimed attempt SHALL NOT preserve a permission that has since
-been revoked. World SHALL durably mark an attempt as dispatching before dispatching it,
-and SHALL record its receipt, refusal or uncertainty afterwards.
+#### Scenario: Attempt qualification and evidence
+
+- **WHEN** World claims or dispatches an intent attempt
+- **THEN** An attempt SHALL be claimed with a
+  fence naming the service incarnation and an attempt number. Immediately before
+  dispatch, World SHALL recheck all of these:
+  - the actor's current authorization;
+  - the intent's preconditions;
+  - its targets, resolved to fresh qualified targets;
+  - support for its operation version.
+
+  A committed intent or a claimed attempt SHALL NOT preserve a permission that has since
+  been revoked. World SHALL durably mark an attempt as dispatching before dispatching it,
+  and SHALL record its receipt, refusal or uncertainty afterwards.
 
 #### Scenario: Claim left by a stopped process
 - **WHEN** World stops after claiming an attempt but before marking it dispatching
@@ -121,17 +131,22 @@ and SHALL record its receipt, refusal or uncertainty afterwards.
 When an attempt may have dispatched and its outcome is unknown, World SHALL recover by
 its verb's recovery class:
 - **keyed**: retry with the same idempotency key, and record the receipt;
-- **reconcilable**: read the source decisively first. Record success if the effect
-  happened; dispatch again only if it did not;
-- **reattachable**: find the existing run by its external handle, and reattach and
-  observe it. Never relaunch it;
-- **repeatable**: retry, because a duplicate is harmless. This class SHALL NOT be used
-  for terminal input, Chat sends or pane answers;
-- **opaque**: mark the intent uncertain and show it. Never retry it automatically, and
-  wait for an authorized decision.
+- **reconcilable**: read the source decisively first.
 
-A permanent refusal SHALL be recorded with its reason and SHALL stop further attempts
-until it is resolved. World SHALL NOT claim exactly-once delivery for any class.
+#### Scenario: Recovery classes and permanent refusals
+
+- **WHEN** an effect attempt may have dispatched with an unknown outcome
+- **THEN** Record success if the effect
+    happened; dispatch again only if it did not;
+  - **reattachable**: find the existing run by its external handle, and reattach and
+    observe it. Never relaunch it;
+  - **repeatable**: retry, because a duplicate is harmless. This class SHALL NOT be used
+    for terminal input, Chat sends or pane answers;
+  - **opaque**: mark the intent uncertain and show it. Never retry it automatically, and
+    wait for an authorized decision.
+
+  A permanent refusal SHALL be recorded with its reason and SHALL stop further attempts
+  until it is resolved. World SHALL NOT claim exactly-once delivery for any class.
 
 #### Scenario: Opaque effect after a crash
 - **WHEN** World crashes after dispatching an opaque effect and before recording its
@@ -193,36 +208,41 @@ and SHALL NOT lose an external handle.
 
 ### Requirement: State-conditioned queued intents
 
-Only verbs that declare themselves queueable SHALL be queued for later dispatch. A
-queued intent SHALL capture the target state it was made against. When it can next be
-dispatched, World SHALL:
-- dispatch it if that state is unchanged, however much time has passed;
-- otherwise record it as not sent because the target changed, provided no attempt
-  reached dispatching.
+Only verbs that declare themselves queueable SHALL be queued for later dispatch.
 
-No expiry timer SHALL remove a queued intent.
+#### Scenario: Queued target state and per-connection dispatch
 
-The generic terminal input and Chat send verbs SHALL NOT be queueable, so there is
-never a second send queue. A declared verb that delivers one stored record to its bound
-recipient, such as an ask's answer to its asker, MAY be queueable only when it:
-- reads the record's text at dispatch and copies none of it into the intent;
-- is conditioned on the recipient's binding and on the record still awaiting delivery;
-- uses the opaque recovery class;
-- dispatches through the same guarded send checks as an interactive send.
+- **WHEN** World admits or processes queued intents
+- **THEN** A
+  queued intent SHALL capture the target state it was made against. When it can next be
+  dispatched, World SHALL:
+  - dispatch it if that state is unchanged, however much time has passed;
+  - otherwise record it as not sent because the target changed, provided no attempt
+    reached dispatching.
 
-A declared verb that closes one captured pane, such as the agent bin's
-`world.bin.close`, MAY be queueable only when it is conditioned on the captured
-connection, runtime generation and terminal and on the World run that recorded
-it, ends unsent once that generation is replaced, and uses the reconcilable
-recovery class. A runtime generation is a per-run counter, so in a later World run
-such a close SHALL NOT be dispatched or reconciled against the host's current
-runtime: an unsent one SHALL be recorded as not sent and a possibly sent one SHALL
-stay uncertain. A close captured for a pinned tab SHALL NOT be sent when its final
-read shows the pane is its tab's last.
+  No expiry timer SHALL remove a queued intent.
 
-A dispatcher MAY run one lane per connection. Each lane SHALL select its
-connection before the dispatch query's bound, and lanes SHALL be found from
-storage, so one connection's backlog never hides or delays another's work.
+  The generic terminal input and Chat send verbs SHALL NOT be queueable, so there is
+  never a second send queue. A declared verb that delivers one stored record to its bound
+  recipient, such as an ask's answer to its asker, MAY be queueable only when it:
+  - reads the record's text at dispatch and copies none of it into the intent;
+  - is conditioned on the recipient's binding and on the record still awaiting delivery;
+  - uses the opaque recovery class;
+  - dispatches through the same guarded send checks as an interactive send.
+
+  A declared verb that closes one captured pane, such as the agent bin's
+  `world.bin.close`, MAY be queueable only when it is conditioned on the captured
+  connection, runtime generation and terminal and on the World run that recorded
+  it, ends unsent once that generation is replaced, and uses the reconcilable
+  recovery class. A runtime generation is a per-run counter, so in a later World run
+  such a close SHALL NOT be dispatched or reconciled against the host's current
+  runtime: an unsent one SHALL be recorded as not sent and a possibly sent one SHALL
+  stay uncertain. A close captured for a pinned tab SHALL NOT be sent when its final
+  read shows the pane is its tab's last.
+
+  A dispatcher MAY run one lane per connection. Each lane SHALL select its
+  connection before the dispatch query's bound, and lanes SHALL be found from
+  storage, so one connection's backlog never hides or delays another's work.
 
 #### Scenario: One host's backlog
 - **WHEN** one offline host holds more queued intents than one query returns and
@@ -262,19 +282,24 @@ storage, so one connection's backlog never hides or delays another's work.
 ### Requirement: Durable deadlines and injected time
 
 Substrate logic SHALL read time and defer work only through the service's injected
-clock and scheduler. The clock SHALL provide wall time for timestamps and deadlines, and
-monotonic time for in-process waits.
+clock and scheduler.
 
-**Durable deadlines.**
-- A deadline SHALL persist its wall time.
-- It SHALL fire only once the wall clock has reached it.
-- A wait SHALL check the wall clock again at least every 60 seconds, so a deadline
-  fires at most 60 seconds late even when the machine sleeps.
-- A deadline that passed while World was stopped SHALL fire once on start, after its
-  authorization is rechecked.
+#### Scenario: Clock semantics and durable deadlines
 
-**Tests.** Deterministic clock and scheduler substitutes SHALL be able to drive this
-behaviour without real time.
+- **WHEN** substrate logic reads time or schedules work
+- **THEN** The clock SHALL provide wall time for timestamps and deadlines, and
+  monotonic time for in-process waits.
+
+  **Durable deadlines.**
+  - A deadline SHALL persist its wall time.
+  - It SHALL fire only once the wall clock has reached it.
+  - A wait SHALL check the wall clock again at least every 60 seconds, so a deadline
+    fires at most 60 seconds late even when the machine sleeps.
+  - A deadline that passed while World was stopped SHALL fire once on start, after its
+    authorization is rechecked.
+
+  **Tests.** Deterministic clock and scheduler substitutes SHALL be able to drive this
+  behaviour without real time.
 
 #### Scenario: Deadline passes while stopped
 - **WHEN** a durable deadline passes while World is stopped

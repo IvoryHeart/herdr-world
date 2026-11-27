@@ -1,6 +1,6 @@
 import { expect, test } from "bun:test";
 
-test("verification shards and aggregate install one exact Java build before verification", async () => {
+test("verification shards install one exact Java build; aggregation needs no Java", async () => {
   const workflow = Bun.YAML.parse(
     await Bun.file(
       new URL(
@@ -24,7 +24,7 @@ test("verification shards and aggregate install one exact Java build before veri
   expect(workflow.env?.VERIFICATION_JAVA_VERSION).toMatch(
     /^21\.\d+\.\d+\+\d+$/,
   );
-  const installations = ["shards", "candidate"].map((name) => {
+  const installations = ["shards"].map((name) => {
     const steps = workflow.jobs[name]!.steps;
     const java = steps.filter((step) =>
       step.uses?.startsWith("actions/setup-java@"),
@@ -44,5 +44,10 @@ test("verification shards and aggregate install one exact Java build before veri
     );
     return java[0];
   });
-  expect(installations[0]).toEqual(installations[1]);
+  expect(installations).toHaveLength(1);
+  expect(
+    workflow.jobs.candidate.steps.some((step) =>
+      step.uses?.startsWith("actions/setup-java@"),
+    ),
+  ).toBe(false);
 });

@@ -7,6 +7,27 @@ are optional because the merged PR history records their source. New entries arr
 fragments under [changes/](changes/README.md) and are added here when a stable release is
 prepared.
 
+## [0.3.8-rc.1](https://github.com/IvoryHeart/herdr-world/compare/v0.3.7...v0.3.8-rc.1) (2026-11-26)
+
+
+### Features
+
+* **cli:** list own questions and refuse command-word asks ([#1368](https://github.com/IvoryHeart/herdr-world/issues/1368)) ([8515273](https://github.com/IvoryHeart/herdr-world/commit/85152730350a2bcf8275480d525ea0e8ecdd7399)), closes [#1362](https://github.com/IvoryHeart/herdr-world/issues/1362)
+* Library keeps what agents made on a host whose agents have all stopped ([#1350](https://github.com/IvoryHeart/herdr-world/issues/1350)) ([28ffd87](https://github.com/IvoryHeart/herdr-world/commit/28ffd8714a05698e7c018e414d3e5e846af951fb)), closes [#1342](https://github.com/IvoryHeart/herdr-world/issues/1342)
+* move agents between Herdr TUI and herdr-core from Town and Board ([#1184](https://github.com/IvoryHeart/herdr-world/issues/1184)) ([9e2b74d](https://github.com/IvoryHeart/herdr-world/commit/9e2b74d553a9b642d4772e6ad4760b29fbcfb385)), closes [#1172](https://github.com/IvoryHeart/herdr-world/issues/1172)
+* one search: /, Ctrl+F and Cmd+K open the same finder; choosing goes to the thing ([#1364](https://github.com/IvoryHeart/herdr-world/issues/1364)) ([6b018eb](https://github.com/IvoryHeart/herdr-world/commit/6b018eb53c176e398cd7718872569892c138d9ce)), closes [#1355](https://github.com/IvoryHeart/herdr-world/issues/1355)
+* **spaces:** click into and switch between herdr-core terminals ([#1396](https://github.com/IvoryHeart/herdr-world/issues/1396)) ([4e8c333](https://github.com/IvoryHeart/herdr-world/commit/4e8c333dab884f4808c39536dfc1ec719e2421b9)), closes [#1390](https://github.com/IvoryHeart/herdr-world/issues/1390)
+* **town:** civic buildings stand as buildings on a phone, not folded signs ([#1354](https://github.com/IvoryHeart/herdr-world/issues/1354)) ([cf14ab2](https://github.com/IvoryHeart/herdr-world/commit/cf14ab29a1c6568993095fe9f9c8a0eb436d3ca1)), closes [#1351](https://github.com/IvoryHeart/herdr-world/issues/1351)
+
+
+### Bug Fixes
+
+* brew upgrade keeps World running; lean release and merge pipelines ([#1374](https://github.com/IvoryHeart/herdr-world/issues/1374)) ([b5a9ca1](https://github.com/IvoryHeart/herdr-world/commit/b5a9ca1ee31c737d628c0eee379bb08e124a46cf))
+* honor release_as and validate merge queue commits ([#1405](https://github.com/IvoryHeart/herdr-world/issues/1405)) ([98ab6a2](https://github.com/IvoryHeart/herdr-world/commit/98ab6a21500109cd356dded21896e650e40f0e4c))
+* **inspector:** the narrow window's view chip opens the views ([#1369](https://github.com/IvoryHeart/herdr-world/issues/1369)) ([496f200](https://github.com/IvoryHeart/herdr-world/commit/496f200660a3e1b55950bd1e7e142bdbc7667eaa)), closes [#1361](https://github.com/IvoryHeart/herdr-world/issues/1361)
+* **privacy:** scan commit messages and PR metadata ([#1370](https://github.com/IvoryHeart/herdr-world/issues/1370)) ([0d98499](https://github.com/IvoryHeart/herdr-world/commit/0d98499afb23d04740da452e6f98abf9b3ac68c9)), closes [#1367](https://github.com/IvoryHeart/herdr-world/issues/1367)
+* **world:** Cmd+K opens a found agent's window in the current view, never switching view ([#1378](https://github.com/IvoryHeart/herdr-world/issues/1378)) ([888b900](https://github.com/IvoryHeart/herdr-world/commit/888b9003a8b4ee21278592af00d08179e43fcb90)), closes [#1356](https://github.com/IvoryHeart/herdr-world/issues/1356)
+
 ## [Unreleased]
 
 ## [0.3.7] - 2026-11-24

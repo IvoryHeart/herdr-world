@@ -1,16 +1,21 @@
-import { WORLD_SKILL_VERSION } from "../cli/integration";
+import { WORLD_SKILL_VERSION } from "../../cli/integration";
 import { afterEach, expect, test } from "bun:test";
 import type { ServerWebSocket } from "bun";
 import { existsSync, mkdirSync } from "node:fs";
 import { join } from "node:path";
-import { createLegacyRoutingLogger } from "../connections/protocol";
-import { runCli } from "../cli/index";
-import { createTestCli, type TestCli } from "../cli/test-context";
-import { WORLD_HARNESSES } from "../cli/integration-paths";
-import { createRpcDispatcher } from "../service/rpc-dispatch";
-import { registeredVerb } from "../verbs/registry";
-import { ACTORS } from "../verbs/types";
-import type { RpcServices } from "./context";
+import { createLegacyRoutingLogger } from "../../connections/protocol";
+import { runCli } from "../../cli/index";
+import { createTestCli, type TestCli } from "../../cli/test-context";
+import { WORLD_HARNESSES } from "../../cli/integration-paths";
+import { createRpcDispatcher } from "../../service/rpc-dispatch";
+import { registeredVerb } from "../../verbs/registry";
+import { object, text } from "../../verbs/declaration";
+import { rpcInput, rpcOutput } from "../../verbs/rpc-contracts";
+import { ACTORS } from "../../verbs/types";
+import type { RpcServices } from "../../rpc/context";
+import { composeFeatures } from "../compose";
+import { createIntegrations } from "./service";
+import { testFeatureKernel } from "../../testing/features";
 
 let cli: TestCli;
 afterEach(() => cli?.cleanup());
@@ -22,7 +27,12 @@ function harness() {
   const services = {
     clients: new Set([ws]),
     snapshotAdmission: { acknowledge: () => false },
-    worldIntegrationRuntime: () => cli.context.runtime,
+    featureRpc: composeFeatures(
+      testFeatureKernel({
+        createIntegrations: (sources, owners) =>
+          createIntegrations(sources, owners, () => cli.context.runtime),
+      }),
+    ).rpc,
     safeSend: (_ws: unknown, payload: string) => {
       replies.push(JSON.parse(payload));
       return true;
@@ -134,7 +144,15 @@ test("World integration verbs are operator-only: agents and unauthenticated sock
     "world.integration.uninstall",
   ]) {
     const verb = registeredVerb("rpc", name)!;
+    expect(verb.input).toEqual(
+      name.endsWith(".list") ? rpcInput(name) : object({ harness: text }),
+    );
+    expect(verb.output).toEqual(rpcOutput(name));
     expect(verb.capabilities).toEqual(["world"]);
+    expect(verb.recovery).toBe(
+      name.endsWith(".list") ? "read" : "reconcilable",
+    );
+    expect(verb.preconditions).toEqual(["operation owner validation"]);
     for (const actor of ACTORS)
       expect(verb.policy[actor]).toBe(actor === "browser" ? "allow" : "deny");
   }

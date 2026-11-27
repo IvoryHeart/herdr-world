@@ -39,6 +39,8 @@ server/*.bun-build
 # Local agent worktrees, browser fixtures, and generated release/build output
 .agents/*
 !.agents/skills/
+# Stock workflows are local CLI output; tracked world-openspec-* skills own policy.
+.agents/skills/openspec-*/
 .scratch/
 _site/
 bridge/target/

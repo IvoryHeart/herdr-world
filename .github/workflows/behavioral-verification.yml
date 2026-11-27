@@ -115,8 +115,11 @@ jobs:
           if-no-files-found: warn
           retention-days: 14
 
+  # Direct manual runs still publish canonical evidence. PR/CI calls aggregate
+  # in Delivery checks, so their model leaves have no intermediate runner.
   candidate:
     name: Behavioral verification
+    if: github.event_name == 'workflow_dispatch' && github.workflow == 'Behavioral verification'
     needs: shards
     runs-on: ubuntu-24.04
     timeout-minutes: 5
@@ -128,16 +131,6 @@ jobs:
         with:
           bun-version: "1.4.4"
           no-cache: true
-      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
-        with:
-          node-version: "24.19.0"
-      - name: Install pinned verification Java
-        uses: actions/setup-java@d1374f8ac74474200d16ef8ecee22c7ae7a51880 # v6.3.0
-        with:
-          distribution: temurin
-          java-version: ${{ env.VERIFICATION_JAVA_VERSION }}
-          architecture: x64
-      - run: bun install --frozen-lockfile
       - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8
         with:
           pattern: behavioral-shard-*

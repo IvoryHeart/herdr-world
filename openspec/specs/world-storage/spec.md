@@ -28,12 +28,17 @@ Acknowledgement SHALL follow COMMIT. Time and scheduling SHALL be injected.
 ### Requirement: Atomic records and declared attention
 
 An ask/result mutation, ordered change reference and any declared attention
-intent SHALL commit atomically. The outbox SHALL accept the declared recovery
-classes keyed, reconcilable, reattachable, repeatable and opaque without
-granting replay merely by storing a class. One user-alert intent SHALL exist per ask;
-retries SHALL be attempts on that row. Result recording SHALL retain its existing
-behavior without introducing user notifications. A database worker failure SHALL
-reject pending outcomes as unknown and fail-stop the service for restart.
+intent SHALL commit atomically.
+
+#### Scenario: Atomic attention and worker failure
+
+- **WHEN** World commits ask or result mutations
+- **THEN** The outbox SHALL accept the declared recovery
+  classes keyed, reconcilable, reattachable, repeatable and opaque without
+  granting replay merely by storing a class. One user-alert intent SHALL exist per ask;
+  retries SHALL be attempts on that row. Result recording SHALL retain its existing
+  behavior without introducing user notifications. A database worker failure SHALL
+  reject pending outcomes as unknown and fail-stop the service for restart.
 
 #### Scenario: Crash interrupts COMMIT acknowledgement
 - **WHEN** the application dies before COMMIT or after COMMIT but before reply
@@ -46,29 +51,33 @@ reject pending outcomes as unknown and fail-stop the service for restart.
 A verified asker's authority to withdraw its own retained question, by ID or
 cause key, SHALL follow its immutable connection ID and stable terminal ID,
 independently of runtime generation or occupant/session fingerprint changes.
-World SHALL verify the current caller in that terminal; an unverified caller,
-a different terminal or another connection SHALL NOT inherit that authority.
-Legacy questions without a stable terminal identity SHALL retain their stricter
-original identity checks. This authority SHALL change World question state only;
-runtime sends, answer acknowledgement and answer delivery SHALL retain their
-own current-generation and original-recipient guards. Cause-key creation
-idempotency SHALL remain scoped to the original verified occupant.
 
-Admission SHALL count at most 20 open questions per verified terminal across
-runtime restarts, one shared allowance for unverified callers, and 500 open
-questions overall. Both the initial check and the serialized mutation SHALL
-refuse excess asks with `question_cap` (CLI exit 3, HTTP 429) and tell the caller
-to wait until a question closes. A cap refusal SHALL create neither a question
-nor an attention intent and SHALL NOT send a service or CLI fallback owner alert,
-including on repeated attempts. Unexpected recording failures SHALL retain the
-existing fallback alert.
+#### Scenario: Question ownership, caps and bulk dismissal
 
-The owner SHALL be able to dismiss all currently open questions from one
-verified connection/terminal in one atomic mutation, across generations and
-sessions. This SHALL preserve answered, withdrawn and already dismissed records,
-leave other askers untouched, cancel pending alerts through normal closure,
-and leave cause keys closed until the asker withdraws them. The owner action
-SHALL NOT require that runtime to be online.
+- **WHEN** World admits, withdraws or dismisses questions
+- **THEN** World SHALL verify the current caller in that terminal; an unverified caller,
+  a different terminal or another connection SHALL NOT inherit that authority.
+  Legacy questions without a stable terminal identity SHALL retain their stricter
+  original identity checks. This authority SHALL change World question state only;
+  runtime sends, answer acknowledgement and answer delivery SHALL retain their
+  own current-generation and original-recipient guards. Cause-key creation
+  idempotency SHALL remain scoped to the original verified occupant.
+
+  Admission SHALL count at most 20 open questions per verified terminal across
+  runtime restarts, one shared allowance for unverified callers, and 500 open
+  questions overall. Both the initial check and the serialized mutation SHALL
+  refuse excess asks with `question_cap` (CLI exit 3, HTTP 429) and tell the caller
+  to wait until a question closes. A cap refusal SHALL create neither a question
+  nor an attention intent and SHALL NOT send a service or CLI fallback owner alert,
+  including on repeated attempts. Unexpected recording failures SHALL retain the
+  existing fallback alert.
+
+  The owner SHALL be able to dismiss all currently open questions from one
+  verified connection/terminal in one atomic mutation, across generations and
+  sessions. This SHALL preserve answered, withdrawn and already dismissed records,
+  leave other askers untouched, cancel pending alerts through normal closure,
+  and leave cause keys closed until the asker withdraws them. The owner action
+  SHALL NOT require that runtime to be online.
 
 #### Scenario: The asking runtime restarts
 - **WHEN** a caller is freshly verified in the original terminal after its runtime generation and occupant fingerprint change
@@ -88,17 +97,22 @@ SHALL NOT require that runtime to be online.
 ### Requirement: Explicit external-effect recovery
 
 World SHALL persist dispatching before any attention send and turn interrupted
-attempts into visible uncertain outcomes. User notifications MAY retry because
-duplicates are harmless. Pane-answer attempts SHALL NOT automatically replay
-after uncertainty. Herdr delivery SHALL NOT be described as deduplicated without
-proven downstream support. Answer text SHALL remain available through ask get.
-A user alert SHALL use its captured connection's current runtime lease and
-recheck currency; it SHALL never fall back to another connection. A pending alert
-SHALL be cancelled when its ask closes. Definite disabled/no-foreground-client
-refusals SHALL finish without retry; busy/rate-limited or missing-lease outcomes
-SHALL defer with bounded backoff. A worker or process crash during dispatch SHALL
-preserve explicit uncertainty. A recording failure other than a cap refusal SHALL retain the
-CLI's existing fallback user alert and report the recording failure.
+attempts into visible uncertain outcomes.
+
+#### Scenario: Attention recovery and fallback alerts
+
+- **WHEN** World dispatches or recovers an attention effect
+- **THEN** User notifications MAY retry because
+  duplicates are harmless. Pane-answer attempts SHALL NOT automatically replay
+  after uncertainty. Herdr delivery SHALL NOT be described as deduplicated without
+  proven downstream support. Answer text SHALL remain available through ask get.
+  A user alert SHALL use its captured connection's current runtime lease and
+  recheck currency; it SHALL never fall back to another connection. A pending alert
+  SHALL be cancelled when its ask closes. Definite disabled/no-foreground-client
+  refusals SHALL finish without retry; busy/rate-limited or missing-lease outcomes
+  SHALL defer with bounded backoff. A worker or process crash during dispatch SHALL
+  preserve explicit uncertainty. A recording failure other than a cap refusal SHALL retain the
+  CLI's existing fallback user alert and report the recording failure.
 
 #### Scenario: Effect happens before its receipt is persisted
 - **WHEN** a sender is killed after the effect but before recording its receipt
@@ -108,13 +122,18 @@ CLI's existing fallback user alert and report the recording failure.
 ### Requirement: Idempotent private JSON migration
 
 Before importing a changed configured legacy ledger, World SHALL preserve an
-exact private backup named by content hash. Import of missing IDs and its hash
-marker SHALL be atomic; unchanged second startup SHALL make no import writes.
-Existing SQLite rows SHALL take precedence. Invalid legacy input SHALL remain
-untouched and be reported while the current store starts; repaired input MAY
-import on a later start. Historical import SHALL create no notification sends.
-Future schema upgrades SHALL take a private consistent SQLite backup first and
-reject a foreign application ID. Configuration and secrets SHALL remain files.
+exact private backup named by content hash.
+
+#### Scenario: Legacy import backups and precedence
+
+- **WHEN** World imports or upgrades legacy ledger data
+- **THEN** Import of missing IDs and its hash
+  marker SHALL be atomic; unchanged second startup SHALL make no import writes.
+  Existing SQLite rows SHALL take precedence. Invalid legacy input SHALL remain
+  untouched and be reported while the current store starts; repaired input MAY
+  import on a later start. Historical import SHALL create no notification sends.
+  Future schema upgrades SHALL take a private consistent SQLite backup first and
+  reject a foreign application ID. Configuration and secrets SHALL remain files.
 
 #### Scenario: Board elements upgrade alongside Apartments
 - **WHEN** a database upgrades from the pre-Apartments release (schema 13) or
@@ -135,24 +154,29 @@ reject a foreign application ID. Configuration and secrets SHALL remain files.
 ### Requirement: Durable World-owned agent profiles
 
 Agent profiles and chimes SHALL use the instance SQLite single writer through
-the storage port. Existing validation, profile IDs and revisioned RPC behavior
-SHALL remain compatible. Synchronous readers SHALL see only acknowledged commits;
-concurrent operations SHALL read fresh transaction-local state. A refused edit
-SHALL NOT undo another accepted operation in the same group.
-Pending legacy terminal assignments, per-connection import completion and the
-highest observed/written Town master revision SHALL persist in this family.
-Master revision allocation SHALL be atomic. Live terminal choices SHALL remain
-Herdr-owned, qualified by the current connection and generation.
+the storage port.
 
-Before the first profile import, World SHALL preserve an exact private
-content-hash backup of the configured profile JSON. Domain rows and the import
-marker SHALL commit atomically. Missing source SHALL seed starters once.
-Malformed initial input or an unsafe/conflicting backup SHALL stop startup
-without partial profile rows, leaving the source and preserved backup intact.
-Once initialized, the family SHALL ignore retained JSON and SHALL NOT reseed
-deleted starters, rewrite the source or repeat the import. Configuration and
-secrets SHALL remain files. Close SHALL drain admitted profile writes, fence
-later writes and retain committed cached reads without reopening storage.
+#### Scenario: Profile transactions, migration and close
+
+- **WHEN** World reads, mutates or imports agent profiles
+- **THEN** Existing validation, profile IDs and revisioned RPC behavior
+  SHALL remain compatible. Synchronous readers SHALL see only acknowledged commits;
+  concurrent operations SHALL read fresh transaction-local state. A refused edit
+  SHALL NOT undo another accepted operation in the same group.
+  Pending legacy terminal assignments, per-connection import completion and the
+  highest observed/written Town master revision SHALL persist in this family.
+  Master revision allocation SHALL be atomic. Live terminal choices SHALL remain
+  Herdr-owned, qualified by the current connection and generation.
+
+  Before the first profile import, World SHALL preserve an exact private
+  content-hash backup of the configured profile JSON. Domain rows and the import
+  marker SHALL commit atomically. Missing source SHALL seed starters once.
+  Malformed initial input or an unsafe/conflicting backup SHALL stop startup
+  without partial profile rows, leaving the source and preserved backup intact.
+  Once initialized, the family SHALL ignore retained JSON and SHALL NOT reseed
+  deleted starters, rewrite the source or repeat the import. Configuration and
+  secrets SHALL remain files. Close SHALL drain admitted profile writes, fence
+  later writes and retain committed cached reads without reopening storage.
 
 #### Scenario: Concurrent edits and restart
 - **WHEN** independent profile and chime edits share a group with a refused edit
@@ -173,38 +197,43 @@ later writes and retain committed cached reads without reopening storage.
 
 World SHALL store Board notes, strings, drawings, registered element references,
 appearance, layout concerns, interest and relations in separate SQLite tables through the instance's single asynchronous
-writer. Board patches SHALL remain all-or-none, retain existing document and
-per-note/Group conflict wire behavior, and commit identity captures with their
-records. Only acknowledged commits SHALL advance synchronous reads, replies or
-revision events. Independent edits SHALL use fresh transaction-local state;
-unchanged rows SHALL retain their row revision. Queued planning SHALL recheck
-captured runtime authority. Conditional undo SHALL NOT overwrite newer admitted
-edits, and native-move reconciliation SHALL preserve concurrent explicit fields.
-Existing identity binding policies SHALL remain unchanged. Layout positions,
-pins, folds and workspace/host colours SHALL remain native-keyed preferences.
-Runtime claims SHALL remain in memory. Existing valid Board document and patch
-capacity, including multibyte text, SHALL fit the bounded storage admission port.
-Queued plans SHALL reserve their retained payload bytes before entering the
-queue, including client RPC parameters. Wrappers SHALL preserve reservations,
-and every completion, refusal or skipped plan SHALL release its reservation.
-Validation and runtime-authority rechecks SHALL still use acknowledged state
-when planning runs.
-Snapshot-driven metadata plans SHALL project only their consumer's observation
-inputs before reservation. Dense aggregate labels or agent metadata SHALL NOT
-prevent a small relationship or legacy appearance update. Projections SHALL
-preserve completeness, captured generation and current-runtime authority checks,
-and reconciliation SHALL still use acknowledged Board state when its plan runs.
+writer.
 
-Before its initial import, World SHALL preserve exact private content-hash backup
-bytes of the configured Board JSON. Concern rows, ID reservations, bindings and
-the completion marker SHALL commit atomically before the listener starts. Missing
-JSON SHALL initialize empty state once. Malformed initial JSON or an unsafe or
-conflicting backup SHALL stop startup without partial Board data and leave the
-source intact. After initialization, SQLite SHALL take precedence over all
-retained JSON versions without reimport or source writes. Existing note, string
-and Group IDs SHALL survive import and remain reserved against generated reuse.
-Close SHALL drain admitted Board writes, refuse later writes and retain committed
-cached reads without reopening storage. Configuration and secrets remain files.
+#### Scenario: Board transactions, binding and migration
+
+- **WHEN** World reads, mutates or imports Board concerns
+- **THEN** Board patches SHALL remain all-or-none, retain existing document and
+  per-note/Group conflict wire behavior, and commit identity captures with their
+  records. Only acknowledged commits SHALL advance synchronous reads, replies or
+  revision events. Independent edits SHALL use fresh transaction-local state;
+  unchanged rows SHALL retain their row revision. Queued planning SHALL recheck
+  captured runtime authority. Conditional undo SHALL NOT overwrite newer admitted
+  edits, and native-move reconciliation SHALL preserve concurrent explicit fields.
+  Existing identity binding policies SHALL remain unchanged. Layout positions,
+  pins, folds and workspace/host colours SHALL remain native-keyed preferences.
+  Runtime claims SHALL remain in memory. Existing valid Board document and patch
+  capacity, including multibyte text, SHALL fit the bounded storage admission port.
+  Queued plans SHALL reserve their retained payload bytes before entering the
+  queue, including client RPC parameters. Wrappers SHALL preserve reservations,
+  and every completion, refusal or skipped plan SHALL release its reservation.
+  Validation and runtime-authority rechecks SHALL still use acknowledged state
+  when planning runs.
+  Snapshot-driven metadata plans SHALL project only their consumer's observation
+  inputs before reservation. Dense aggregate labels or agent metadata SHALL NOT
+  prevent a small relationship or legacy appearance update. Projections SHALL
+  preserve completeness, captured generation and current-runtime authority checks,
+  and reconciliation SHALL still use acknowledged Board state when its plan runs.
+
+  Before its initial import, World SHALL preserve exact private content-hash backup
+  bytes of the configured Board JSON. Concern rows, ID reservations, bindings and
+  the completion marker SHALL commit atomically before the listener starts. Missing
+  JSON SHALL initialize empty state once. Malformed initial JSON or an unsafe or
+  conflicting backup SHALL stop startup without partial Board data and leave the
+  source intact. After initialization, SQLite SHALL take precedence over all
+  retained JSON versions without reimport or source writes. Existing note, string
+  and Group IDs SHALL survive import and remain reserved against generated reuse.
+  Close SHALL drain admitted Board writes, refuse later writes and retain committed
+  cached reads without reopening storage. Configuration and secrets remain files.
 
 #### Scenario: Independent note edits and a stale draft
 - **WHEN** independent notes are edited while another writer submits a stale note revision
@@ -224,29 +253,34 @@ cached reads without reopening storage. Configuration and secrets remain files.
 ### Requirement: Durable auto-sync runtime status separate from configuration
 
 World SHALL store auto-sync last-run time, outcome, message and branch in typed
-SQLite rows behind the single writer and storage port. Rows SHALL retain existing
-connection-qualified settings keys. Cached reads SHALL advance only after commit;
-close SHALL drain admitted writes, fence later writes and retain cached reads.
-The scheduler SHALL use committed last-run time for its existing interval policy
-and await recording results. The composition root SHALL pass its Clock and
-Scheduler through each connection runtime to auto-sync. Eligibility and recorded
-timestamps SHALL use that clock; polling SHALL use cancellable scheduler jobs.
-Stop SHALL cancel polling, and callbacks from a retired start SHALL NOT run or
-rearm work or clear a replacement start's timer. A retired scheduler SHALL NOT
-admit a late result.
-Settings RPCs SHALL combine configuration with committed runtime status while
-preserving existing fields and connection isolation.
+SQLite rows behind the single writer and storage port.
 
-Schedules, enabled flags, intervals, checkout/host configuration, custom settings
-and secrets SHALL remain files. Runtime writes SHALL NOT rewrite configuration;
-configuration writes SHALL NOT overwrite runtime rows. Before the first status
-import, World SHALL preserve exact settings bytes in a private hash-named backup.
-Only status fields and their completion marker SHALL enter SQLite atomically.
-Missing source SHALL initialize empty history once. Malformed initial input or
-an unsafe/conflicting backup SHALL stop startup without partial runtime rows.
-Completed imports SHALL ignore all later JSON versions, without resetting history.
-Pre-start CLI edits SHALL preserve legacy status until it can be imported; service
-configuration writes after migration SHALL omit legacy status fields.
+#### Scenario: Auto-sync scheduling, migration and shutdown
+
+- **WHEN** World reads, mutates or imports auto-sync status
+- **THEN** Rows SHALL retain existing
+  connection-qualified settings keys. Cached reads SHALL advance only after commit;
+  close SHALL drain admitted writes, fence later writes and retain cached reads.
+  The scheduler SHALL use committed last-run time for its existing interval policy
+  and await recording results. The composition root SHALL pass its Clock and
+  Scheduler through each connection runtime to auto-sync. Eligibility and recorded
+  timestamps SHALL use that clock; polling SHALL use cancellable scheduler jobs.
+  Stop SHALL cancel polling, and callbacks from a retired start SHALL NOT run or
+  rearm work or clear a replacement start's timer. A retired scheduler SHALL NOT
+  admit a late result.
+  Settings RPCs SHALL combine configuration with committed runtime status while
+  preserving existing fields and connection isolation.
+
+  Schedules, enabled flags, intervals, checkout/host configuration, custom settings
+  and secrets SHALL remain files. Runtime writes SHALL NOT rewrite configuration;
+  configuration writes SHALL NOT overwrite runtime rows. Before the first status
+  import, World SHALL preserve exact settings bytes in a private hash-named backup.
+  Only status fields and their completion marker SHALL enter SQLite atomically.
+  Missing source SHALL initialize empty history once. Malformed initial input or
+  an unsafe/conflicting backup SHALL stop startup without partial runtime rows.
+  Completed imports SHALL ignore all later JSON versions, without resetting history.
+  Pre-start CLI edits SHALL preserve legacy status until it can be imported; service
+  configuration writes after migration SHALL omit legacy status fields.
 
 #### Scenario: A run completes while its schedule is toggled
 - **WHEN** a current run records its result while a configuration RPC disables its schedule
@@ -268,12 +302,16 @@ configuration writes after migration SHALL omit legacy status fields.
 
 The change log SHALL retain at most 10,000 references and expire rows after 24
 hours on writes; expired or previous-incarnation cursors SHALL explicitly require reset.
-It SHALL scope cursors to the service incarnation and keep references/tombstones rather than duplicate
-record bodies without a reader requiring them. Unanswered asks and unresolved
-attention intents SHALL survive history pruning. A retained domain record SHALL
-retain its finished attention evidence; trimming that record SHALL also trim its
-finished attention rows. PR 1 SHALL create no answer-send backlog without a
-consumer; the answer-delivery follow-up introduces that effect with its consumer.
+
+#### Scenario: Replay cursors and domain retention
+
+- **WHEN** World prunes or replays its change history
+- **THEN** It SHALL scope cursors to the service incarnation and keep references/tombstones rather than duplicate
+  record bodies without a reader requiring them. Unanswered asks and unresolved
+  attention intents SHALL survive history pruning. A retained domain record SHALL
+  retain its finished attention evidence; trimming that record SHALL also trim its
+  finished attention rows. PR 1 SHALL create no answer-send backlog without a
+  consumer; the answer-delivery follow-up introduces that effect with its consumer.
 
 #### Scenario: Replay expires while an answer is pending
 - **WHEN** retention removes the creation replay entry
@@ -284,12 +322,16 @@ consumer; the answer-delivery follow-up introduces that effect with its consumer
 
 Close SHALL stop admission, drain admitted operations and any final partial
 group, close the worker and release handles before releasing instance ownership.
-Unopened lazy families SHALL remain closed after close; SQLite accessors SHALL
-NOT reopen the database, import JSON or run migrations.
-Independent roots SHALL share no storage state. The compiled executable SHALL
-embed its worker and require no adjacent source. Native Linux, macOS and Windows
-crash tests SHALL report the SQLite identity actually used; process recovery
-evidence SHALL NOT claim OS/power-loss durability.
+
+#### Scenario: Storage shutdown and platform recovery
+
+- **WHEN** World closes storage or validates recovery on a platform
+- **THEN** Unopened lazy families SHALL remain closed after close; SQLite accessors SHALL
+  NOT reopen the database, import JSON or run migrations.
+  Independent roots SHALL share no storage state. The compiled executable SHALL
+  embed its worker and require no adjacent source. Native Linux, macOS and Windows
+  crash tests SHALL report the SQLite identity actually used; process recovery
+  evidence SHALL NOT claim OS/power-loss durability.
 
 #### Scenario: Close follows a partial group
 - **WHEN** close follows already-admitted writes
@@ -312,22 +354,26 @@ answer to a different ask.
 
 Desk review marks/recent opens and watchlist SHALL use bounded
 World-ID rows paired atomically with verified bindings in the single SQLite writer.
-Their current wire projections and shared change notices SHALL publish only after
-COMMIT and after captured runtime currency is rechecked. Restart captures SHALL
-remain unresolved until current complete unambiguous original-source evidence
-attaches them under each kind's declared lifetime. No runtime generation or service
-incarnation SHALL be stored as durable identity. A refused row operation SHALL NOT
-roll back neighboring accepted operations; close SHALL drain admitted writes.
 
-There is no current file-owned or browser-owned state to import. The first upgrade
-SHALL start empty rather than inventing continuity for old process memory or
-obsolete browser keys. Subsequent starts SHALL retain committed rows and World IDs.
-Board layout and ordinary Town placement SHALL NOT enter this family.
-Publication SHALL merge against the latest live state without restoring another
-connection's retired projection or decreasing its notice revisions. Pending agent
-commands SHALL be fenced by observed ownership even when session identity is
-unknown or omitted. Exact saved-watch removal SHALL remain available while its
-source is unavailable and SHALL NOT delete a replacement record.
+#### Scenario: Terminal marks, restart and publication
+
+- **WHEN** World stores or projects Desk marks and watchlist records
+- **THEN** Their current wire projections and shared change notices SHALL publish only after
+  COMMIT and after captured runtime currency is rechecked. Restart captures SHALL
+  remain unresolved until current complete unambiguous original-source evidence
+  attaches them under each kind's declared lifetime. No runtime generation or service
+  incarnation SHALL be stored as durable identity. A refused row operation SHALL NOT
+  roll back neighboring accepted operations; close SHALL drain admitted writes.
+
+  There is no current file-owned or browser-owned state to import. The first upgrade
+  SHALL start empty rather than inventing continuity for old process memory or
+  obsolete browser keys. Subsequent starts SHALL retain committed rows and World IDs.
+  Board layout and ordinary Town placement SHALL NOT enter this family.
+  Publication SHALL merge against the latest live state without restoring another
+  connection's retired projection or decreasing its notice revisions. Pending agent
+  commands SHALL be fenced by observed ownership even when session identity is
+  unknown or omitted. Exact saved-watch removal SHALL remain available while its
+  source is unavailable and SHALL NOT delete a replacement record.
 
 #### Scenario: Restart after acknowledgement
 - **WHEN** a process dies after acknowledging a terminal mark

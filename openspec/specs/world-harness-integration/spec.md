@@ -17,15 +17,20 @@ paths, discovery and runtime support.
 World SHALL offer one integration per harness that Herdr integrates, under
 Herdr's harness names, through `herdr-world integration install <harness>`,
 `herdr-world integration uninstall <harness>` and `herdr-world integration
-status [<harness>]`. Each integration SHALL consist only of World-named files in
-the harness's own user extension folders, plus, where stated, one World-owned
-configuration entry. Each World file SHALL carry the marker lines `installed by
-herdr-world`, `HERDR_WORLD_INTEGRATION_ID=<id>` and
-`HERDR_WORLD_INTEGRATION_VERSION=<n>`. World SHALL resolve each harness's
-folders from the same variables Herdr uses, and SHALL NOT create a harness's
-configuration folder. Installation SHALL follow an explicit install command, local Settings action
-or the local discovery flow specified below; observation and normal service
-startup SHALL NOT install integrations.
+status [<harness>]`.
+
+#### Scenario: Integration files and installation authority
+
+- **WHEN** World installs, removes or inspects a harness integration
+- **THEN** Each integration SHALL consist only of World-named files in
+  the harness's own user extension folders, plus, where stated, one World-owned
+  configuration entry. Each World file SHALL carry the marker lines `installed by
+  herdr-world`, `HERDR_WORLD_INTEGRATION_ID=<id>` and
+  `HERDR_WORLD_INTEGRATION_VERSION=<n>`. World SHALL resolve each harness's
+  folders from the same variables Herdr uses, and SHALL NOT create a harness's
+  configuration folder. Installation SHALL follow an explicit install command, local Settings action
+  or the local discovery flow specified below; observation and normal service
+  startup SHALL NOT install integrations.
 
 #### Scenario: Status lists every harness
 - **WHEN** the operator runs `herdr-world integration status`
@@ -49,11 +54,16 @@ startup SHALL NOT install integrations.
 Every integration SHALL install the World skill as `herdr-world/SKILL.md` in the
 harness's user skill folder, with Agent Skills frontmatter, the World marker
 lines, and as its body the release's `herdr-world --skill` text, which SHALL
-cover `ask`, `result`, `task-summary` and `stamp`. A harness without a
-documented user skill folder SHALL report `unsupported` with the reason, and
-install SHALL write nothing for it. Harnesses that share a user skill folder
-SHALL share one file, and uninstalling for one of them SHALL name the others
-that lose it.
+cover `ask`, `result`, `task-summary` and `stamp`.
+
+#### Scenario: Skill folder support and shared ownership
+
+- **WHEN** World installs or uninstalls a harness skill
+- **THEN** A harness without a
+  documented user skill folder SHALL report `unsupported` with the reason, and
+  install SHALL write nothing for it. Harnesses that share a user skill folder
+  SHALL share one file, and uninstalling for one of them SHALL name the others
+  that lose it.
 
 #### Scenario: Install the skill for Codex
 - **WHEN** the operator runs `herdr-world integration install codex`
@@ -76,15 +86,20 @@ The `claude` integration SHALL also install #727's status line tap as a
 World-named script under Claude's user configuration folder, save the user-scope
 `statusLine` value it replaces in a World-owned file beside it with owner-only
 permissions, and set `statusLine` in the user `settings.json` to that script,
-keeping every other key. The tap SHALL run the saved previous command with the
-same input and return its output unchanged, and SHALL record only the limit
-numbers and times in the file the usage collector already reads. Uninstall
-SHALL restore unchanged settings bytes exactly, including an absent file or
-key, and SHALL preserve intervening user edits. A user-scope tap SHALL chain
-with the per-launch tap without recursion; missing World runtime support SHALL
-still run the saved command with its input/output unchanged.
-Status for `claude` SHALL be `current` only when the skill, the script, the
-saved value and the entry are all present and current.
+keeping every other key.
+
+#### Scenario: Claude tap chaining and restoration
+
+- **WHEN** World installs, runs or removes the Claude limits tap
+- **THEN** The tap SHALL run the saved previous command with the
+  same input and return its output unchanged, and SHALL record only the limit
+  numbers and times in the file the usage collector already reads. Uninstall
+  SHALL restore unchanged settings bytes exactly, including an absent file or
+  key, and SHALL preserve intervening user edits. A user-scope tap SHALL chain
+  with the per-launch tap without recursion; missing World runtime support SHALL
+  still run the saved command with its input/output unchanged.
+  Status for `claude` SHALL be `current` only when the skill, the script, the
+  saved value and the entry are all present and current.
 
 #### Scenario: Claude limits from a session World did not start
 - **WHEN** the `claude` integration is current on a host and the user runs
@@ -142,14 +157,19 @@ SHALL NOT mutate an SSH host or choose another connection as fallback.
 Standalone installation and World update, including an already-current update,
 SHALL discover supported local harnesses by existing configuration folders and
 install or refresh World integrations without launching a harness or creating
-its configuration folder. `integration sync` SHALL perform the same discovery.
-`HERDR_WORLD_SKIP_INTEGRATIONS=1` SHALL skip it independently of the Herdr runtime
-opt-out; `update --check` and ordinary startup SHALL remain read-only.
-Uninstall SHALL persist a removal preference even for an absent integration;
-subsequent discovery SHALL respect it until explicit Install reenables it.
-Codex, Pi and Kimi SHALL share both their skill and removal preference. An
-unmarked or foreign skill SHALL be preserved and refused; per-harness failures
-SHALL be reported without stopping discovery for other harnesses.
+its configuration folder.
+
+#### Scenario: Discovery opt-outs and removal preferences
+
+- **WHEN** World discovers or synchronizes local harness integrations
+- **THEN** `integration sync` SHALL perform the same discovery.
+  `HERDR_WORLD_SKIP_INTEGRATIONS=1` SHALL skip it independently of the Herdr runtime
+  opt-out; `update --check` and ordinary startup SHALL remain read-only.
+  Uninstall SHALL persist a removal preference even for an absent integration;
+  subsequent discovery SHALL respect it until explicit Install reenables it.
+  Codex, Pi and Kimi SHALL share both their skill and removal preference. An
+  unmarked or foreign skill SHALL be preserved and refused; per-harness failures
+  SHALL be reported without stopping discovery for other harnesses.
 
 #### Scenario: A removed shared skill stays removed
 - **WHEN** Codex is uninstalled and a later installer, update or sync discovers Pi

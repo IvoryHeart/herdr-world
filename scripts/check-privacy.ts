@@ -1,6 +1,8 @@
 import { execFileSync } from "node:child_process";
 import { readFileSync } from "node:fs";
+import { isDependabotPullRequest } from "./dependabot-event";
 import {
+  dependabotMetadataEmails,
   publishedAttributionFile,
   reviewedAttributionEmails,
   reservedEmailDomain,
@@ -32,7 +34,7 @@ export type PrivacyFinding = {
 function emailMatches(line: string) {
   return [
     ...line.matchAll(
-      /[a-z0-9.!#$%&'*+/=?^_`{|}~-]+@((?:[a-z0-9](?:[a-z0-9-]*[a-z0-9])?\.)+[a-z]{2,63})\b/gi,
+      /[a-z0-9.!#$%&'*+/=?^_`{|}~-]+(?:\[[a-z0-9-]+\])?@((?:[a-z0-9](?:[a-z0-9-]*[a-z0-9])?\.)+[a-z]{2,63})\b/gi,
     ),
   ].filter(
     (match) =>
@@ -127,16 +129,18 @@ export function privacyRules(
 export function scanPrivacyText(
   text: string,
   source: string,
+  dependabot = false,
 ): PrivacyFinding[] {
   return text.split(/\r?\n/).flatMap((line, index) => {
     // GitHub publishes these identities in bot signoffs and human coauthors.
     // Permit only the email value in metadata; all other rules still apply.
     const publicEmails = new Set(
       emailMatches(line)
-        .filter(
-          (match) =>
-            match[0].toLowerCase() === ["support", "github.com"].join("@") ||
-            match[1].toLowerCase() === "users.noreply.github.com",
+        .filter((match) =>
+          dependabot
+            ? dependabotMetadataEmails.has(match[0].toLowerCase())
+            : match[0].toLowerCase() === ["support", "github.com"].join("@") ||
+              match[1].toLowerCase() === "users.noreply.github.com",
         )
         .map((match) => match[0].toLowerCase()),
     );
@@ -222,6 +226,7 @@ export function scanPrivacyRange(
   cwd: string,
   base: string | string[] | null,
   head: string,
+  dependabot = false,
 ): PrivacyFinding[] {
   const after = commitId(cwd, head);
   const before = (Array.isArray(base) ? base : base === null ? [] : [base]).map(
@@ -254,6 +259,7 @@ export function scanPrivacyRange(
     for (const finding of scanPrivacyText(
       git(cwd, ["show", "--no-patch", "--format=%B", commit]),
       "commit message",
+      dependabot,
     ))
       findings.push({ ...finding, commit });
     const parents = git(cwd, ["rev-list", "--parents", "-n", "1", commit])
@@ -324,7 +330,11 @@ function pushBaseline(cwd: string, before: string, after: string): string[] {
   return main ? [main] : [];
 }
 type PrivacyRange = [string | string[] | null, string];
-type PrivacyRequest = { ranges: PrivacyRange[]; findings?: PrivacyFinding[] };
+type PrivacyRequest = {
+  ranges: PrivacyRange[];
+  findings?: PrivacyFinding[];
+  dependabot?: boolean;
+};
 /** Pre-push scans the intended description (`HERDR_WORLD_PR_BODY`) or the
  * existing PR's, plus the existing title. With no PR or no `gh` access there is
  * nothing remote to scan; Privacy CI rescans metadata on every PR event. */
@@ -355,8 +365,10 @@ function request(cwd: string, args: string[]): PrivacyRequest {
     return { ranges: [[args[1], args[2]]] };
   if (args[0] === "--event" && args.length === 2) {
     const event = JSON.parse(readFileSync(args[1], "utf8"));
+    const dependabot = isDependabotPullRequest(event);
     if (event.pull_request)
       return {
+        dependabot,
         ranges: [
           [
             exactSha(event.pull_request.base?.sha),
@@ -364,8 +376,16 @@ function request(cwd: string, args: string[]): PrivacyRequest {
           ],
         ],
         findings: [
-          ...scanPrivacyText(event.pull_request.title ?? "", "PR title"),
-          ...scanPrivacyText(event.pull_request.body ?? "", "PR body"),
+          ...scanPrivacyText(
+            event.pull_request.title ?? "",
+            "PR title",
+            dependabot,
+          ),
+          ...scanPrivacyText(
+            event.pull_request.body ?? "",
+            "PR body",
+            dependabot,
+          ),
         ],
       };
     const after = exactSha(event.after);
@@ -398,7 +418,7 @@ if (import.meta.main) {
     const input = request(cwd, process.argv.slice(2));
     const findings = input.findings ?? [];
     for (const [base, head] of input.ranges)
-      findings.push(...scanPrivacyRange(cwd, base, head));
+      findings.push(...scanPrivacyRange(cwd, base, head, input.dependabot));
     for (const finding of findings)
       console.error(formatPrivacyFinding(finding));
     if (findings.length) {
