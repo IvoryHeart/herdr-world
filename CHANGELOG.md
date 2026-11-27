@@ -7,6 +7,10 @@ are optional because the merged PR history records their source. New entries arr
 fragments under [changes/](changes/README.md) and are added here when a stable release is
 prepared.
 
+## Unreleased
+
+- Questions open at upgrade show **Not sent** when answered and remain retrievable with `herdr-world ask get <id>`.
+
 ## [0.3.8-rc.1](https://github.com/IvoryHeart/herdr-world/compare/v0.3.7...v0.3.8-rc.1) (2026-11-26)
 
 

@@ -3,7 +3,7 @@ import {
   type CoreAnswerConnections,
 } from "../herdr-core/ask-recipient";
 import { coreRecipientChange } from "../herdr-core/recipient";
-import { harnessName } from "../herdr-core/harness";
+import { foregroundHarness } from "../herdr-core/harness";
 import { agentForegroundWitness } from "../adapters/agent-input";
 import type { ReadyRuntimeLease } from "../connections/manager";
 import type { CoreConnectionRuntime } from "../herdr-core/runtime";
@@ -123,7 +123,7 @@ export function createAskRecipients(deps: {
     if (
       !occupant ||
       !occupant.foreground ||
-      !harnessName(occupant.foreground.name) ||
+      !foregroundHarness(occupant.foreground.name, occupant.foreground.argv) ||
       actor.terminal_id !== actor.pane_id ||
       occupant.fingerprint !== actor.agent_session_fingerprint
     )
@@ -135,7 +135,10 @@ export function createAskRecipients(deps: {
       terminal_id: actor.pane_id!,
       core_id: occupant.coreId,
       pid: occupant.pid,
-      foreground: occupant.foreground!,
+      foreground: {
+        pid: occupant.foreground.pid,
+        name: occupant.foreground.name,
+      },
       reported: {
         scheme: "herdr-core-occupant-v1",
         fingerprint: occupant.fingerprint,
@@ -380,11 +383,25 @@ export function createAskRecipients(deps: {
         reason:
           "The conversation binding changed or is unverified; use ask get",
       };
-    const inputForeground = await agentForegroundWitness(
-      host(lease).call,
-      recipient.pane_id,
-      conversation.agent,
-    ).catch(() => null);
+    let inputForeground: string | null;
+    try {
+      inputForeground = await agentForegroundWitness(
+        host(lease).call,
+        recipient.pane_id,
+        conversation.agent,
+      );
+    } catch (error) {
+      return error instanceof Error && /^agent_not_ready:/.test(error.message)
+        ? {
+            state: "unconfirmed",
+            reason: error.message.replace(/^agent_not_ready:\s*/, ""),
+          }
+        : {
+            state: "unresolved",
+            reason:
+              "The original terminal could not be checked; waiting to retry",
+          };
+    }
     if (
       !recipient.input_foreground ||
       inputForeground !== recipient.input_foreground

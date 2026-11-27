@@ -1,6 +1,11 @@
 import { createHash } from "node:crypto";
 import { AsyncLocalStorage } from "node:async_hooks";
-import { harnessName, foregroundHarness } from "../herdr-core/harness";
+import {
+  harnessName,
+  foregroundHarness,
+  unsafeForegroundProgram,
+  mayWrapHarness,
+} from "../herdr-core/harness";
 import type { TuiControlClient } from "./herdr-runtime";
 
 type Row = Record<string, unknown>;
@@ -20,6 +25,23 @@ const row = (value: unknown): Row | null =>
     ? (value as Row)
     : null;
 
+/** Admission errors prove no text was submitted; keep native codes out of UI. */
+export function agentInputFailure(error: unknown): {
+  reason: "changed" | "unavailable";
+  message: string;
+} | null {
+  if (!(error instanceof Error)) return null;
+  const match = /^(agent_not_ready|agent_input_unavailable):\s*(.*)$/s.exec(
+    error.message,
+  );
+  return match
+    ? {
+        reason: match[1] === "agent_not_ready" ? "changed" : "unavailable",
+        message: `Not sent. ${match[2]}`,
+      }
+    : null;
+}
+
 /** Only live process evidence can authorize typing; OSC/session reports may linger. */
 export async function agentForegroundWitness(
   call: TuiControlClient["call"],
@@ -30,9 +52,9 @@ export async function agentForegroundWitness(
   if (!harness) return null;
   const reply = row(await call("pane.process_info", { pane_id: paneId }));
   const process = row(reply?.process_info);
+  if (!process) throw new Error("Foreground information could not be read");
   const group = process?.foreground_process_group_id;
   if (
-    !process ||
     (process.pane_id !== undefined && process.pane_id !== paneId) ||
     !Number.isSafeInteger(group) ||
     Number(group) <= 1 ||
@@ -45,18 +67,35 @@ export async function agentForegroundWitness(
       (item: unknown) => row(item)?.pid === group,
     ),
   );
-  if (!leader || foregroundHarness(leader.name, leader.argv) !== harness)
+  if (!leader || foregroundHarness(leader.name, leader.argv) !== harness) {
+    if (
+      leader &&
+      mayWrapHarness(leader, process.shell_pid) &&
+      process.foreground_processes.some((item: unknown) => {
+        const child = row(item);
+        return (
+          child?.pid !== group &&
+          foregroundHarness(child?.name, child?.argv) === harness
+        );
+      })
+    )
+      throw new Error(
+        "agent_not_ready: Original agent is not attached; started through a wrapper script; use `exec` in the script. Nothing was sent.",
+      );
     return null;
-  const agents = process.foreground_processes.flatMap((item: unknown) => {
+  }
+  const agents = process.foreground_processes.map((item: unknown) => {
     const seen = row(item);
     return seen &&
       Number.isSafeInteger(seen.pid) &&
       Number(seen.pid) > 1 &&
-      foregroundHarness(seen.name, seen.argv) === harness
-      ? [[seen.pid, harness]]
-      : [];
+      typeof seen.name === "string" &&
+      seen.name.length > 0 &&
+      (seen.pid === group || !unsafeForegroundProgram(seen.name, seen.argv))
+      ? [seen.pid, seen.name]
+      : null;
   });
-  if (!agents.length) return null;
+  if (!agents.length || agents.some((item) => item === null)) return null;
   return createHash("sha256")
     .update(JSON.stringify([paneId, harness, group, agents.sort()]))
     .digest("hex");
@@ -68,9 +107,6 @@ const identity = (agent: Row) =>
     agent.terminal_id,
     agent.agent,
     agent.agent_session,
-    agent.terminal_title,
-    agent.state_change_seq,
-    agent.revision,
   ]);
 
 /** A shared last boundary for prompts, notification replies and Chat input. */
@@ -84,9 +120,15 @@ export async function guardAgentInput(
       "agent_not_ready: Original agent is not attached to this terminal's foreground. Nothing was sent.",
     );
   try {
+    const readAgent = async (target: string) => {
+      const reply = row(await client.call("agent.get", { target }));
+      if (!reply || !("agent" in reply))
+        throw new Error("Agent information could not be read");
+      return row(reply.agent);
+    };
     const target = paneInput ? params.pane_id : params.target;
     if (typeof target !== "string" || !target) throw refuse();
-    const before = row(row(await client.call("agent.get", { target }))?.agent);
+    const before = await readAgent(target);
     const expected = expectedAgent.getStore()?.info;
     if (
       !before ||
@@ -107,12 +149,20 @@ export async function guardAgentInput(
         params.world_foreground !== witness)
     )
       throw refuse();
-    const after = row(
-      row(await client.call("agent.get", { target: before.pane_id }))?.agent,
-    );
+    const after = await readAgent(before.pane_id);
     if (!after || identity(before) !== identity(after)) throw refuse();
     return before.pane_id;
-  } catch {
-    throw refuse();
+  } catch (error) {
+    if (error instanceof Error && /^agent_not_ready:/.test(error.message))
+      throw error;
+    if (
+      error instanceof Error &&
+      /^(agent_not_found|pane_not_found):/.test(error.message)
+    )
+      throw refuse();
+    throw new Error(
+      "agent_input_unavailable: The terminal could not be checked. Nothing was sent; waiting to retry.",
+      { cause: error },
+    );
   }
 }

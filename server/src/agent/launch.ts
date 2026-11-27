@@ -1,4 +1,4 @@
-import { withAgentInput } from "../adapters/agent-input";
+import { withAgentInput, agentInputFailure } from "../adapters/agent-input";
 import { AGENT_KIND, agentNameFor } from "../../../shared/agentProfile";
 
 /**
@@ -247,6 +247,13 @@ export async function launchAgent(
             ...created(),
           };
         } catch (error) {
+          const admission = agentInputFailure(error);
+          if (admission)
+            return {
+              status: "failed",
+              message: admission.message,
+              ...created(),
+            };
           return {
             status: "uncertain",
             message: `The prompt may not have been sent: ${message(error)}`,

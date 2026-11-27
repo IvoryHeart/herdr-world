@@ -18,6 +18,15 @@
 - `server/src/world/answer-dispatch.ts`
 - `server/src/adapters/agent-input.ts`
 - `server/src/adapters/agent-input.test.ts`
+- `server/src/herdr-core/harness.ts`, `server/src/herdr-core/harness.test.ts`
+- `server/src/herdr-core/ask-caller.ts`
+- `web/src/world/town/AnswerDeliveries.tsx`, `web/src/world/town/AnswerDeliveries.test.ts`
+- `web/src/world/town/answerOutbox.ts`, `web/src/world/town/answerOutbox.test.ts`
+- `web/src/world/town/TownSummaryPanel.tsx`
+- `web/src/world/terminalComposerRequest.ts`, `web/src/world/terminalComposerRequest.test.ts`
+- `web/src/world/CoreTerminalComposer.tsx`, `web/src/components/TerminalView.tsx`
+- `web/src/components/TerminalComposer.css` (shared editor styles for explicit desktop recovery)
+- `web/src/world/AnswerDeliveries.browser.tsx`, `web/src/world/AnswerDeliveries.browser.test.ts`
 - `server/src/herdr-core/runtime.ts`
 - `server/src/herdr-core/recipient.ts`
 - `server/src/storage/catalog.ts`
@@ -53,4 +62,4 @@
 
 ## Foreground admission
 
-World agent text requires fresh native evidence of the addressed harness and session in the foreground. A shell, editor or unknown foreground refuses input even if its old agent report remains. An ask also retains its original process witness: after exit or replacement, Reception shows **Not sent** with not-attached evidence, and `herdr-world ask get ID` retains the answer. Old asks without the witness stay retrieval-only. No refused delivery revives for a new agent. Core cancels held native sends on observed foreground changes; neither runtime provides atomic foreground/session conditional typing, so the final native RPC race remains a runtime limitation.
+World sends answers, Chat messages, notifications and prompts only while the original agent is running in front in that terminal. A shell, editor, pager, different agent or unknown program stops delivery, including a shell or editor opened by the agent. Temporary failures to check the terminal leave the answer waiting. Changing a working title does not stop delivery. If the agent exits, restarts or resumes as a new process, World shows **Not sent** and keeps the answer readable with `herdr-world ask get <id>`; starting another agent never sends it again. Questions left open across a World restart or upgrade also show **Not sent** when answered and remain readable with that command. Agents started through a wrapper script cannot receive this input while the script stays in front; use `exec` in the script to let the agent take its place. In Reception > Outbox, **Copy answer** copies the saved owner answer, and **Put in Terminal composer** opens that terminal with the answer in its draft, preserving any existing draft. The owner reviews and sends it explicitly; putting it there sends nothing. Neither runtime can make the last foreground check and typing one indivisible operation.

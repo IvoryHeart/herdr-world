@@ -108,9 +108,12 @@ Targets are on your own host; add --connection ID for another one.
   ask get ID [--wait] | ask answer ID "ANSWER" | ask withdraw ID|--key CAUSE
          New asks from a verified local Linux caller with a supported bound
          Chat session can receive the saved answer there without --wait.
-         Offline delivery waits for that original session; a changed session
-         is skipped. Older, unverified and unsupported asks stay retrieval-only.
-         Always keep the ask ID: ask get reads the saved answer after restart.
+         Offline delivery waits only while the original agent process and
+         World service keep running. Restarting or resuming an agent, or
+         restarting/upgrading World, stops automatic delivery of open asks.
+         Reception shows Not sent; herdr-world ask get ID reads the saved answer.
+         Wrapper scripts must exec the harness to receive terminal delivery.
+         Older, unverified and unsupported asks also keep answers for ask get.
          An owner answer may end with "Attached files:" and one absolute path
          per line: files the owner attached, stored temporarily; open them.
          Possible pane sends are never retried automatically. The owner can

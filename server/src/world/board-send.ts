@@ -12,7 +12,7 @@ import {
   matchesRecipient,
   decodeRecipient,
 } from "./board-recipient";
-import { withAgentInput } from "../adapters/agent-input";
+import { withAgentInput, agentInputFailure } from "../adapters/agent-input";
 import type { BoardDocument } from "./board-store";
 import { bindingWitnessMatches } from "./binding-resolution";
 
@@ -177,6 +177,8 @@ export async function sendNote(
         : { recipient: latest }),
     };
   } catch (error) {
+    const admission = agentInputFailure(error);
+    if (admission) return refuse("changed", admission.message);
     // Herdr rejects a blocked agent before submitting any input.
     if (error instanceof Error && /^agent_blocked:/.test(error.message))
       return refuse(

@@ -37,7 +37,7 @@ export type CoreCliOccupant = {
   coreId: string;
   pid: number;
   foregroundPid: number | null;
-  foreground?: { pid: number; name: string };
+  foreground?: { pid: number; name: string; argv?: string[] };
   /** `coreOccupantFingerprint`: core, address, pid, argv, template. */
   fingerprint: string;
 };

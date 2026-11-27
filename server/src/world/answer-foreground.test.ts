@@ -17,7 +17,10 @@ afterEach(async () => {
   for (const close of cleanups.splice(0).reverse()) await close();
 });
 
-async function fixture(runtime: "core" | "tui") {
+async function fixture(
+  runtime: "core" | "tui",
+  foreground = { name: "claude", argv: ["claude"] },
+) {
   const world = await coreWorld();
   cleanups.push(world.dispose);
   await world.connect();
@@ -26,7 +29,7 @@ async function fixture(runtime: "core" | "tui") {
     pid: 5000,
     reported: true,
     status: { app: "claude", state: "idle" },
-    foreground: { pid: 6000, name: "claude", argv: ["claude"] },
+    foreground: { pid: 6000, ...foreground },
   });
   await world.settle();
   let detachDuringInput = false;
@@ -234,3 +237,49 @@ for (const name of ["vim", "codex", "claude", null])
     await f.dispatcher.wake();
     await f.check();
   });
+
+for (const name of ["bash", "vim"])
+  test(`TUI: a ${name} child of the original harness refuses saved answer delivery`, async () => {
+    const f = await fixture("tui");
+    await f.answer();
+    f.f.foreground.foreground_processes.push({ pid: 6001, name });
+    await f.dispatcher.wake();
+    await f.check();
+  });
+
+for (const harness of ["codex", "pi", "gemini"])
+  test(`core: a node-launched ${harness} captures a recipient and delivers through Outbox`, async () => {
+    const f = await fixture("core", {
+      name: "node",
+      argv: ["node", `/opt/${harness}.js`],
+    });
+    expect(f.recipient?.adapter).toBe("herdr-core");
+    await f.answer();
+    await f.dispatcher.wake();
+    expect(f.world.fake.deliveredInput).toHaveLength(1);
+    expect(
+      f.f.storage.ledger.ask("q-foreground")?.delivery?.answer?.state,
+    ).toBe("delivered");
+  });
+
+test("TUI foreground read failure waits, then rechecks the original recipient", async () => {
+  const f = await fixture("tui");
+  const call = f.f.lease.runtime.tui.call.bind(f.f.lease.runtime.tui);
+  let fail = true;
+  f.f.lease.runtime.tui.call = async (method, params, timeout, beforeSend) => {
+    if (method === "pane.process_info" && fail) throw new Error("RPC timeout");
+    return call(method, params, timeout, beforeSend);
+  };
+  expect(await f.recipients.resolve(f.recipient)).toMatchObject({
+    state: "unresolved",
+  });
+  await f.answer();
+  await f.dispatcher.wake();
+  const entries = await f.f.storage.outbox.forRecord("q-foreground");
+  expect(entries[0]?.state).not.toBe("refused");
+  expect(f.world.fake.deliveredInput).toEqual([]);
+  fail = false;
+  expect(await f.recipients.resolve(f.recipient)).toMatchObject({
+    state: "attached",
+  });
+});

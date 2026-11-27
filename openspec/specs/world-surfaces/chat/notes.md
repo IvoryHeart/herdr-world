@@ -11,6 +11,9 @@
 
 **Code:**
 
+- `web/src/components/TerminalComposer.css` (shared editor styles, including desktop answer recovery)
+- `web/src/world/terminalComposerRequest.ts`, `web/src/world/CoreTerminalComposer.tsx`
+
 - `server/src/adapters/agent-input.ts`
 - `server/src/adapters/herdr-runtime.ts`
 - `server/src/adapters/agent-input.test.ts`
@@ -41,8 +44,4 @@
 - Successful input is not a confirmed answer; preserve uncertain receipts.
 - CLI ask answers use the durable ask ledger, not Chat's native prompt keys.
 
-## Foreground admission
-
-Explicit Terminal composer submissions, draft insertion, paste and review-feedback prefill retain raw terminal authority, including in shells and editors. World agent sends opt into foreground admission through server-side `withAgentInput` context; `agent.prompt` always requires admission. The browser's raw `pane.send_input` route still checks browser authorization and the captured connection/generation, without requiring an agent.
-
-World agent text requires fresh native evidence of the addressed harness and session in the foreground. A shell, editor or unknown foreground refuses input even if its old agent report remains. An ask also retains its original process witness: after exit or replacement, Reception shows **Not sent** with not-attached evidence, and `herdr-world ask get ID` retains the answer. Old asks without the witness stay retrieval-only. No refused delivery revives for a new agent. Core cancels held native sends on observed foreground changes; neither runtime provides atomic foreground/session conditional typing, so the final native RPC race remains a runtime limitation.
+See [Foreground admission](../../ask-answer-delivery/notes.md#foreground-admission) for send checks, temporary failures, restarts and wrapper scripts. Explicit Terminal composer submissions, draft insertion and paste keep their existing terminal authority in shells and editors. Recovery from Outbox prepares a draft for the owner to review and send.

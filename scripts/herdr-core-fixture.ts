@@ -7,7 +7,7 @@ import { chmodSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { createHash } from "node:crypto";
 import { join } from "node:path";
 
-export const FIXTURE_CORE_VERSION = "0.1.21";
+export const FIXTURE_CORE_VERSION = "0.1.22";
 const TARGETS = [
   "linux-x86_64",
   "linux-aarch64",

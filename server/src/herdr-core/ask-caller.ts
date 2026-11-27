@@ -51,7 +51,7 @@ function cliHost(
       );
       if (!fingerprint || typeof record.pid !== "number") return null;
       const foreground = record.foreground as
-        | { pid?: unknown; name?: unknown }
+        | { pid?: unknown; name?: unknown; argv?: unknown }
         | undefined;
       return {
         coreId,
@@ -60,7 +60,16 @@ function cliHost(
           typeof foreground?.pid === "number" ? foreground.pid : null,
         ...(typeof foreground?.pid === "number" &&
         typeof foreground.name === "string"
-          ? { foreground: { pid: foreground.pid, name: foreground.name } }
+          ? {
+              foreground: {
+                pid: foreground.pid,
+                name: foreground.name,
+                ...(Array.isArray(foreground.argv) &&
+                foreground.argv.every((word) => typeof word === "string")
+                  ? { argv: [...foreground.argv] as string[] }
+                  : {}),
+              },
+            }
           : {}),
         fingerprint,
       };

@@ -15,3 +15,11 @@
 
 - [x] 3.1 Reproduce composer/paste refusal in shells and stale agent panes; scope pane admission to server-side agent context.
 - [x] 3.2 Cover composer submission/insertion and paste through the browser dispatcher, preserving World-send refusal and browser revocation.
+
+## 4. Owner review repair
+
+- [x] 4.1 Reject unsafe foreground children and interpreter REPLs; carry core argv and add muse-code.
+- [x] 4.2 Separate unavailable reads from changed agents; remove titles and observation revisions from identity.
+- [x] 4.3 Give definite plain Not sent messages and Outbox copy/composer recovery.
+- [x] 4.4 Document restart/upgrade and wrappers once, align help and deltas, and include the requested upgrade changelog line.
+- [x] 4.5 Pass focused/browser regressions, quick typecheck, OpenSpec and full verification on the frozen candidate; merge current main and push.

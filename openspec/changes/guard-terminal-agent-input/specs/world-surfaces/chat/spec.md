@@ -19,3 +19,15 @@ World agent text input SHALL require fresh native foreground evidence of the add
 - **WHEN** the owner submits or inserts a Terminal composer draft, pastes text or pre-fills review feedback into a shell or a pane whose foreground is no longer its reported agent
 - **THEN** the raw terminal request retains its existing connection, generation and browser authority without requiring an attached agent
 - **AND** World-originated agent sends through the same pane input method still require the original agent foreground
+
+#### Scenario: Script interpreters and wrapper scripts
+
+- **WHEN** a foreground leader is an interpreter
+- **THEN** admission requires its script argument to identify the harness, and interactive REPL flags or later arguments cannot authorize input
+- **AND** a wrapper leader with a harness child refuses with the remedy: started through a wrapper script; use `exec` in the script
+
+#### Scenario: Clear refusal and transient unavailability
+
+- **WHEN** foreground admission refuses Board notes, launch briefs or Chat before typing
+- **THEN** the owner sees Not sent and a plain reason without native error codes or possible-send wording
+- **AND** a failed read is unavailable rather than a confirmed session change, so saved answers can wait and retry

@@ -19,6 +19,7 @@ const ALIASES: Record<string, readonly string[]> = {
   qodercli: ["qoder", "qoderclicn", "qodercn"],
   pi: ["pi-agent", "pi-coding-agent"],
   hermes: ["hermes-agent"],
+  muse: ["muse-code"],
 };
 /** Detection/desktop harnesses outside World's integration-name list. */
 const EXTRA_HARNESSES = [
@@ -243,7 +244,68 @@ export function foregroundHarness(
     )
   )
     return null;
-  return harnessOfArgv(argv) ?? harnessName(name);
+  // Detection can look through launchers; input admission must identify the
+  // actual script, never a later argument or an interpreter's REPL.
+  const words =
+    Array.isArray(argv) && argv.every((word) => typeof word === "string")
+      ? (argv as string[])
+      : [];
+  const program = base(
+    typeof first === "string" ? first : typeof name === "string" ? name : "",
+  );
+  if (
+    INTERPRETERS.has(program) ||
+    (typeof name === "string" && INTERPRETERS.has(base(name)))
+  ) {
+    const switches: Record<string, string[]> = {
+      node: ["--no-warnings", "--enable-source-maps"],
+      bun: [],
+      python: ["-u", "-B", "-E", "-s", "-S"],
+      python3: ["-u", "-B", "-E", "-s", "-S"],
+      ruby: [],
+    };
+    if (!switches[program]) return null;
+    let at = 1;
+    for (; at < words.length; at++) {
+      const word = words[at]!;
+      if (word === "--") {
+        at++;
+        break;
+      }
+      if (!word.startsWith("-")) break;
+      if (!switches[program]!.includes(word)) return null;
+    }
+    const script = words[at];
+    if (!script || script === "-") return null;
+    const named = harnessName(script.replace(/\.(?:[cm]?js|ts|py|rb)$/, ""));
+    if (named) return named;
+    const entry = script.replace(/\\/g, "/");
+    const packages: [RegExp, string][] = [
+      [/(?:^|\/)@anthropic-ai\/claude-code\/cli\.js$/, "claude"],
+      [/(?:^|\/)@google\/gemini-cli\/dist\/index\.js$/, "gemini"],
+      [/(?:^|\/)@mariozechner\/pi-coding-agent\/dist\/cli\.js$/, "pi"],
+    ];
+    return packages.find(([pattern]) => pattern.test(entry))?.[1] ?? null;
+  }
+  return harnessName(program) ?? harnessName(name);
+}
+
+/** Programs that can take terminal input away from a harness group leader. */
+export function unsafeForegroundProgram(
+  name: unknown,
+  argv?: unknown,
+): boolean {
+  const names = [name, Array.isArray(argv) ? argv[0] : undefined];
+  const editors = new Set(
+    "vi vim nvim view nano emacs emacsclient joe pico ed ex less more most pager sensible-editor editor".split(
+      " ",
+    ),
+  );
+  return names.some(
+    (value) =>
+      typeof value === "string" &&
+      (SHELLS.has(base(value).replace(/^-/, "")) || editors.has(base(value))),
+  );
 }
 
 /**

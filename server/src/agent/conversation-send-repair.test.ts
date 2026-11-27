@@ -431,3 +431,33 @@ for (const remote of [false, true]) {
     }
   });
 }
+
+for (const [code, reason] of [
+  ["agent_not_ready", "changed"],
+  ["agent_input_unavailable", "unavailable"],
+])
+  test(`${code} proves Chat sent nothing and preserves retry`, async () => {
+    const { source, state } = setup();
+    try {
+      const fp = (await source.latest({ pane_id: "w1:p1" }))
+        .session_fingerprint!;
+      state.status = "working";
+      state.rejectNextPrompt = `${code}: The terminal could not admit input.`;
+      const send = () =>
+        source.send({
+          pane_id: "w1:p1",
+          text: "/permissions",
+          session_fingerprint: fp,
+        });
+      const result = await send();
+      expect(result).toMatchObject({
+        status: "refused",
+        reason,
+        message: "Not sent. The terminal could not admit input.",
+      });
+      expect(state.prompts).toEqual([]);
+      expect((await send()).status).toBe("sent");
+    } finally {
+      source.dispose();
+    }
+  });

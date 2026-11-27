@@ -84,3 +84,47 @@ test("an unbound legacy answer allows closing but offers no resend, and in-fligh
     expect(html.includes(">Dismiss</button>")).toBe(close);
   }
 });
+
+test("Not sent explains an exited asker and offers safe owner recovery with the full retrieval command", () => {
+  const html = renderToStaticMarkup(
+    createElement(AnswerDeliveries, {
+      state: {
+        entries: [
+          {
+            ...notice,
+            can_resend: false,
+            delivery: {
+              state: "refused",
+              attempt: 1,
+              reason:
+                "agent_not_ready: Original agent is not attached; use ask get",
+            },
+          },
+        ],
+        next: null,
+        older: false,
+        loading: false,
+        error: null,
+      },
+      actions,
+      recipient: () => ({
+        name: "Dispatch",
+        location: "Studio",
+        target: null,
+        terminal: {
+          nodeId: "leaf",
+          target: { connectionId: "studio", generation: 3, paneId: "w1:p1" },
+        },
+      }),
+      compose() {},
+    }),
+  );
+  expect(html).toContain(
+    "The agent that asked isn&#x27;t running in that terminal any more",
+  );
+  expect(html).toContain("herdr-world ask get q-fixture");
+  expect(html).toContain(">Copy answer</button>");
+  expect(html).toContain(">Put in Terminal composer</button>");
+  expect(html).not.toContain("agent_not_ready:");
+  expect(html).not.toContain("Send again");
+});
