@@ -319,9 +319,10 @@ module agent_move {
       m' = if (reply == "ready") {
           val y = { ...x, copy: true, pinReply: pinReply }
           val z = if (m.pinned) fx(y, "pin") else y
-          if (pinReply == "fail") done(z, "moved", "")
+          // The original has closed: a desk that can't follow is reported.
+          if (pinReply == "fail") done({ ...z, namesDesk: true }, "moved", "")
           else if (boardOk) done({ ...fx(z, "rehome"), rehomeReply: "ok", desk: "dst" }, "moved", "")
-          else done({ ...z, rehomeReply: "fail" }, "moved", "")
+          else done({ ...z, rehomeReply: "fail", namesDesk: true }, "moved", "")
         }
         else if (back == "ready") {
           // Back where it was; its desk follows the new terminal there.
@@ -373,11 +374,11 @@ module agent_move {
       (not(m.copy) or m.namesCopy))
   // A moved agent continues its own conversation in one place. Close-first
   // can't undo a Board that refused the desk once the original closed: the
-  // agent moved, its desk details stayed (verification/contracts).
+  // agent moved, and the report says its desk details stayed behind.
   val movedClean = m.outcome != "moved" or
     (m.route == "native" and m.alive and not(m.copy) and m.desk == "dst" and m.effects == ["native"]) or
     (not(m.alive) and m.copy and m.copyConv and
-      (m.desk == "dst" or (m.closeFirst and (m.pinReply == "fail" or m.rehomeReply == "fail"))))
+      (m.desk == "dst" or (m.closeFirst and m.namesDesk and (m.pinReply == "fail" or m.rehomeReply == "fail"))))
   val uncertainNamed = m.outcome != "uncertain" or (m.copy and m.desk == "dst" and m.namesOrig) or
     (m.route == "native" and m.alive and not(m.copy) and m.namesOrig)
   // One runtime: nothing closes or restarts, whatever the runtime answers.

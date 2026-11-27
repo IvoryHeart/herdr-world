@@ -151,10 +151,12 @@ function service(
     publish: () => undefined,
     log: () => undefined,
   });
-  snapshots.publishWith(() => ({
-    commands: commands.published(),
-    ui_settings: { ui: {}, revision: 0 },
-  }));
+  snapshots.publishWith({
+    values: () => ({
+      commands: commands.published(),
+      ui_settings: { ui: {}, revision: 0 },
+    }),
+  });
   return { snapshots, commands, incarnation };
 }
 

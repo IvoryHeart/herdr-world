@@ -2,6 +2,7 @@ import { afterEach, describe, expect, test } from "bun:test";
 import type { AgentAddress } from "../../../shared/agentMove";
 import type { TerminalRow } from "../adapters/runtime-ports";
 import { createCoreRoom, launchCore } from "../herdr-core/operations";
+import { boardRefusingRehome } from "../rpc/agent-move";
 import { coreWorld } from "../herdr-core/testing/core-world";
 import {
   moveAgentAcross,
@@ -461,7 +462,7 @@ test("every start, recheck, close and cleanup outcome leaves one owner of the de
           const desk =
             ops.filter((op) => op.op === "agent.rehome").at(-1)?.to
               .connection_id ?? "tui";
-          const message = "message" in result ? result.message : "";
+          const message = ("message" in result && result.message) || "";
           if (result.status === "moved") {
             expect([label, original, copy, desk]).toEqual([
               label,
@@ -935,6 +936,32 @@ describe("harness semantics (probe 2026-11-23: Claude re-attaches, Codex locks)"
       "start core codex resume session-1 in /synthetic/project",
       "pin core c5",
     ]);
+  });
+
+  test("a Codex move that lands while the Board refuses its desk says the desk details stayed behind", async () => {
+    const { deps, log, ops, pane } = setup();
+    pane.agent = "codex";
+    // The testing switch (?moveBoardRefuses=1) refuses only the rehome: the
+    // spawn links kept before the close still land.
+    const result = await moveAgentAcross(
+      { ...deps, board: boardRefusingRehome(deps.board) },
+      { source, destination },
+    );
+    expect(result).toEqual({
+      status: "moved",
+      target: expect.objectContaining({
+        connection_id: "core",
+        terminal_id: "c5",
+      }),
+      message:
+        "Its desk details stayed behind: the Board refused the change (testing switch). Its colour, pin and links stay on its old desk.",
+    });
+    expect(log).toEqual([
+      "close tui p1 tui-root-only",
+      "start core codex resume session-1 in /synthetic/project",
+      "pin core c5",
+    ]);
+    expect(ops.some((op) => op.op === "agent.rehome")).toBe(false);
   });
 
   test("a Codex copy that fails to start resumes back where it was; when that fails too, the message says how to resume it", async () => {

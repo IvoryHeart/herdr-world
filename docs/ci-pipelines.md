@@ -55,6 +55,15 @@ changes select full Linux validation. Packaging scope remains descriptive; every
 PR check runs on Linux. Native storage/plugin/launchd checks and running upgrades
 belong to the nightly or release candidate, never a PR matrix.
 
+Runtime-loaded check assets have explicit ownership: `__snapshots__/<test>.snap`
+selects that adjacent test, Town golden PNGs select their existing advisory
+**Town golden images** comparison, and help WebP files plus
+`web/src/help/pictures.json` belong to the static lane's `help:check` (and its
+affected tests). Asset-only edits do not select production boot or World runtime
+journeys. Missing consumers and unknown assets keep the full-mode fallback;
+deletions and both sides of renames retain their consumers. Golden comparisons
+remain advisory and help picture generation remains an explicit capture command.
+
 Scope checks out the complete Git history with `filter: blob:none`. The PR
 description policy runs as its own leaf after scope, alongside static checks,
 units, dependency security, World and web browser shards, and model shards.
@@ -294,6 +303,23 @@ requires success from all applicable leaves. Advisory macOS reports remain in
 their own workflows. No crew automation or branch protection is changed.
 Actual elapsed CI times come from workflow runs, rather than from a claimed
 bound on shared hosted runners.
+
+Open **Actions → CI → a run → Summary → Delivery checks → Run timings** to see
+the observed critical path, the last-completing dependency at each workflow
+join, the longest execution, and each job's execution and runner wait. Reusable
+workflows show their last leaf at the join. The read-only report runs after
+successful, failed, held or reused validation and never changes a check verdict.
+It reads only the current run attempt; on partial reruns it does not silently
+mix earlier attempts' jobs into the table. Elapsed time starts at the run's
+original `created_at`, including any delay before a rerun.
+
+Runner wait is job `created_at` → `started_at`, excluding dependency waits before
+the job enters GitHub's queue. The sum can exceed wall time because jobs wait in
+parallel. Skipped jobs are excluded; missing timestamps or API failures are
+reported as unavailable. Delivery is still running while it writes the summary,
+so run `created_at` → report time is a lower bound. For acceptance measurements,
+use the completed job's `completed_at` from the Actions API; downstream preview
+jobs and the workflow's later `updated_at` do not extend Delivery check time.
 
 The size ratchet evaluates the proposed merge into the target against main's
 ratchet policy. A branch behind main inherits main's lowered ceilings, while a
