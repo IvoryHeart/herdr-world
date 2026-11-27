@@ -14,6 +14,13 @@ store because Herdr already resolves them. Existing original-recipient equality
 continues to check the captured pane, terminal and session, so accepting a lookup
 alias does not retarget automatic answer input.
 
+Self-answer refusal instead uses the question's stable connection and terminal
+identity, just like question withdrawal. The CLI, recipient authorization,
+atomic answer recording and dispatch guards share this ownership check even
+for asks without a delivery recipient. Legacy records without a stable terminal
+retain same-connection pane matching. Original-recipient checks stay strict for
+delivery and acknowledgement; owning a question does not authorize either.
+
 ## Evidence boundary
 
 The isolated CLI tests cover both native runtime mappings, before/after move
@@ -21,6 +28,9 @@ records, stale inherited runtime claims in both directions and a process that
 claims another pane. The core move uses the real framed client, mirror, topology
 and move operation against a disposable in-process core. Existing caller and
 answer-delivery suites exercise nearest ancestry, replacement and generation
-refusals. This is deterministic source-field mapping over existing authority;
-it adds no queue, ordering or recovery state for a new Quint model. Vendor
+refusals. Self-answer checks exhaust all 128 combinations of verification,
+connection, terminal, generation, session fingerprint, session ID and pane
+equality, with separate legacy-record and exact-recipient boundaries. This
+identity predicate adds no queue, ordering or recovery state for a new Quint
+model; the complete verification gate still covers the answer lifecycle owners. Vendor
 harness resume itself remains covered by the existing agent-move tests.

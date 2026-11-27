@@ -124,6 +124,28 @@ function result(reply: WorldCliResponse) {
   return reply.result;
 }
 
+test("a moved asker cannot answer questions from before or after its move", async () => {
+  const w = fixture();
+  const before = result(
+    await w.run("ask", { question: "Continue before moving?" }),
+  ) as { id: string };
+  const saved = structuredClone(w.ledger.ask(before.id));
+  await w.host.call("pane.move", { pane_id: "w1:p1", tab_id: "w2:t3" });
+  const after = result(
+    await w.run("ask", { question: "Continue after moving?" }),
+  ) as { id: string };
+  for (const { id } of [before, after]) {
+    expect(await w.run("ask answer", { id, answer: "yes" })).toMatchObject({
+      ok: false,
+      code: "refused",
+      error: "an agent cannot answer its own question",
+      actor: { pane_id: "w2:p3", terminal_id: "term_a" },
+    });
+    expect(w.ledger.ask(id)?.answer).toBeUndefined();
+  }
+  expect(w.ledger.ask(before.id)).toEqual(saved);
+});
+
 async function record(
   run: (
     command: string,

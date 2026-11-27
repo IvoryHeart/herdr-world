@@ -6,3 +6,5 @@
 - [x] Preserve historical actor snapshots and process-ancestry refusals.
 - [x] Update capability navigation and the existing storage catalog.
 - [x] Run focused caller and answer checks, quick typecheck and spec validation.
+- [x] Preserve self-answer refusal across pane moves, including legacy asks;
+      exhaust identity boundaries without relaxing original-recipient authority.

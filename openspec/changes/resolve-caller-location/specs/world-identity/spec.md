@@ -22,6 +22,16 @@ preserve process-ancestry verification and original answer-recipient authority.
 - **THEN** new caller snapshots carry its current tab and room from World, while
   retaining the core terminal's native ID
 
+#### Scenario: Asker attempts to answer after moving
+
+- **WHEN** a verified asker moves to another pane, tab or room and attempts to
+  answer its own question recorded before the move
+- **THEN** World refuses the answer using the asker's stable connection and
+  terminal identity, including when no automatic-delivery recipient was captured
+- **AND** the question remains unanswered with its original actor snapshot
+- **AND** this ownership match grants no original-recipient delivery or
+  acknowledgement authority
+
 #### Scenario: Agent resumed in another runtime
 
 - **WHEN** an agent resumes on the destination of a move between TUI and core
