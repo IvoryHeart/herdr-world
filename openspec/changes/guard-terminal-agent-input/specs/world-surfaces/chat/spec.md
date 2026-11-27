@@ -13,3 +13,9 @@ World agent text input SHALL require fresh native foreground evidence of the add
 
 - **WHEN** the addressed agent/session changes while World prepares its foreground check
 - **THEN** no input reaches the replacement and the action is not replayed
+
+#### Scenario: Owner explicitly enters text in Terminal
+
+- **WHEN** the owner submits or inserts a Terminal composer draft, pastes text or pre-fills review feedback into a shell or a pane whose foreground is no longer its reported agent
+- **THEN** the raw terminal request retains its existing connection, generation and browser authority without requiring an attached agent
+- **AND** World-originated agent sends through the same pane input method still require the original agent foreground

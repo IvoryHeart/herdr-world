@@ -53,11 +53,13 @@ for (const method of ["agent.prompt", "pane.send_input"])
     test(`${method} refuses ${name ?? "unknown"} foreground with stale Claude metadata`, async () => {
       const f = fixture(name);
       await expect(
-        f.tui.call(method, {
-          target: "w1:p1",
-          pane_id: "w1:p1",
-          text: "printf unsafe",
-        }),
+        withAgentInput(null, () =>
+          f.tui.call(method, {
+            target: "w1:p1",
+            pane_id: "w1:p1",
+            text: "printf unsafe",
+          }),
+        ),
       ).rejects.toThrow("not attached");
       expect(f.writes).toEqual([]);
     });
@@ -129,11 +131,13 @@ for (const method of ["agent.prompt", "pane.send_input"])
             }
           : call(method);
       await expect(
-        f.tui.call(method, {
-          target: "w1:p1",
-          pane_id: "w1:p1",
-          text: "printf unsafe",
-        }),
+        withAgentInput(null, () =>
+          f.tui.call(method, {
+            target: "w1:p1",
+            pane_id: "w1:p1",
+            text: "printf unsafe",
+          }),
+        ),
       ).rejects.toThrow("not attached");
       expect(f.writes).toEqual([]);
     });

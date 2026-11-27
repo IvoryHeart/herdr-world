@@ -10,3 +10,8 @@
 - [x] 2.1 Pass isolated core/TUI answer exit, retrieval, Reception and no-replay regressions and focused input tests.
 - [x] 2.2 Update capability notes and verification consumer mappings; validate the OpenSpec change.
 - [x] 2.3 Run quick typecheck and the full verification gate; format and inspect the candidate.
+
+## 3. Preserve explicit Terminal authority (review repair)
+
+- [x] 3.1 Reproduce composer/paste refusal in shells and stale agent panes; scope pane admission to server-side agent context.
+- [x] 3.2 Cover composer submission/insertion and paste through the browser dispatcher, preserving World-send refusal and browser revocation.

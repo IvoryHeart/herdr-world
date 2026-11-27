@@ -4,11 +4,16 @@ import { harnessName, foregroundHarness } from "../herdr-core/harness";
 import type { TuiControlClient } from "./herdr-runtime";
 
 type Row = Record<string, unknown>;
-const expectedAgent = new AsyncLocalStorage<Row>();
+const expectedAgent = new AsyncLocalStorage<{ info: Row | null }>();
 
 /** Keep the caller's checked session across the final transport preparation. */
 export function withAgentInput<T>(info: Row | null, send: () => T): T {
-  return info ? expectedAgent.run(info, send) : send();
+  return expectedAgent.run({ info }, send);
+}
+
+/** Server-side opt-in; explicit browser terminal input retains terminal authority. */
+export function isAgentInput(): boolean {
+  return expectedAgent.getStore() !== undefined;
 }
 const row = (value: unknown): Row | null =>
   value !== null && typeof value === "object" && !Array.isArray(value)
@@ -82,7 +87,7 @@ export async function guardAgentInput(
     const target = paneInput ? params.pane_id : params.target;
     if (typeof target !== "string" || !target) throw refuse();
     const before = row(row(await client.call("agent.get", { target }))?.agent);
-    const expected = expectedAgent.getStore();
+    const expected = expectedAgent.getStore()?.info;
     if (
       !before ||
       typeof before.pane_id !== "string" ||

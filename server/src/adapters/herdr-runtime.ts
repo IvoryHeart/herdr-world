@@ -5,7 +5,7 @@ import type {
   RuntimePorts,
   SessionProducers,
 } from "./runtime-ports";
-import { guardAgentInput } from "./agent-input";
+import { guardAgentInput, isAgentInput } from "./agent-input";
 
 /** Untyped native replies are confined to the TUI provider/legacy escape hatch. */
 export type TuiControlClient = {
@@ -115,7 +115,12 @@ export function createTuiPassThrough(
   return {
     kind: "herdr",
     async call(method, params = {}, ...rest) {
-      if (method === "agent.prompt" || method === "pane.send_input") {
+      // pane.send_input also carries the owner's explicit Terminal interaction.
+      // Only World agent sends opt into foreground admission via async context.
+      if (
+        method === "agent.prompt" ||
+        (method === "pane.send_input" && isAgentInput())
+      ) {
         const paneId = await guardAgentInput(
           client,
           params,
