@@ -24,7 +24,7 @@ World validation, record or observation.
 | Kind | Where | What |
 |---|---|---|
 | Around | `web/src/store.ts:1319,1378`, `web/src/store/operations.ts:494,505`, `web/src/world/BoardView.tsx:327` | Tab names written with runtime-tier `tab.rename` (tab bar, command bar, Board's new tab). |
-| Around | `web/src/store.ts:1672,1685`, `web/src/world/roomRenameClose.tsx:61` | Room names written with runtime-tier `workspace.rename`, shared by Town and Board. Core rooms use the World verb `world.core.room.rename`; Herdr rooms do not. |
+| Around | `web/src/store.ts:1672,1685`, `web/src/world/roomRenameClose.tsx:61` | Room names written with runtime-tier `workspace.rename`, shared by Town and Board. Core rooms use the World verb `world.core.room.rename`; Herdr rooms do not. Fixed: both go through the `world.command` room rename (task 4.5). |
 | ok | `web/src/world/TerminalAppearanceEditor.tsx` → `world.appearance.rename` | The one rename that goes through World. |
 | Derive | `web/src/world/town/officeAgent.ts:35`, `web/src/world/deskAgentLabels.ts:9`, `web/src/world/board/useBoardHerdrActions.tsx:71`, `web/src/world/needsYou.ts:22`, `web/src/world/code/codeProjects.ts:154`, `web/src/components/agentDisplayName.ts:6`, `web/src/agentName.ts:21`, `web/src/world/memory/memoryModel.ts:112` | Eight agent-name rules with different fallbacks; Inspector alone shows `name-harness`. |
 | Derive | `web/src/world/town/officeAgent.ts:89`, `web/src/world/board/boardRoom.ts` | Desk labels: Town falls back to the single agent's name, Board to the tab label. |

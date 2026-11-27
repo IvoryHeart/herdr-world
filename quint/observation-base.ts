@@ -230,11 +230,20 @@ export async function replayObservationBase(
             connection_state: state.live[h] ? "ready" : "reconnecting",
           });
           break;
-        case "drop":
+        case "drop": {
+          // The browser no longer holds this host: neither in what views
+          // show nor in the published copy its observation base comes from.
+          const held = store as unknown as {
+            published: ReturnType<typeof store.get>["connections"];
+          };
+          held.published = held.published.filter(
+            (host) => host.connectionId !== ids[h],
+          );
           store.get().connections = store
             .get()
             .connections.filter((host) => host.connectionId !== ids[h]);
           break;
+        }
         case "restart":
           status("disconnected");
           qualifier.restore();

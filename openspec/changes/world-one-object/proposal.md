@@ -26,7 +26,7 @@ This change is a design. It adds no product code.
 - [tasks.md](tasks.md) is the migration: ordered steps of about 300 lines, each
   leaving `main` working and moving at least one fact fully onto the World path in
   every view. Grouping and colour go first.
-- [write-path.qnt](write-path.qnt) is a design-stage Quint model of the write path:
+- [`quint/world-write-path.qnt`](../../../quint/world-write-path.qnt) models the write path:
   late observations, late acknowledgements, direct source changes and offline hosts.
 
 ## Capabilities
