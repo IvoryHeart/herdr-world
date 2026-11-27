@@ -46,7 +46,10 @@ move step, and a refusal SHALL tell the user its reason.
   copy that reports another conversation) SHALL be closed first and then
   resumed on the destination; if the destination does not start it, World
   SHALL resume it back where it was, and if that fails too World SHALL name
-  the saved conversation and how to continue it.
+  the saved conversation and how to continue it. When it started there but the
+  Board refuses to carry its desk, the original has already closed: World
+  SHALL report the move and say that the desk details (colour, pin and links)
+  stayed on the old desk.
 
 #### Scenario: Agent moves between runtimes desk rules
 
@@ -87,6 +90,11 @@ move step, and a refusal SHALL tell the user its reason.
 
 - **WHEN** the user moves an idle Codex agent to the other runtime and the destination does not start it
 - **THEN** World resumes the agent back in its room with its desk, and says it didn't start there
+
+#### Scenario: A Codex desk that can't follow its agent
+
+- **WHEN** an idle Codex agent resumes in the other runtime's room but the Board refuses to carry its desk
+- **THEN** World says the agent moved and that its desk details (colour, pin and links) stayed behind
 
 #### Scenario: Two connections of one Herdr
 
