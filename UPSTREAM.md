@@ -16,6 +16,11 @@ Current synchronization points:
   are now inside the recorded source range.
 - Herdr compatibility: Herdr 0.9.5, terminal protocol 22. Windows SSH hosts
   additionally require a running Herdr 0.9.1+ session and Windows PowerShell.
+- herdr-core: compatible with 0.1.22 (protocol generation 1), also verified
+  against 0.1.21 with the live status suites. The status schema and parser are
+  unchanged between those releases: `blocked` still needs input. Smoke fixtures
+  keep the reporting harness running and use Claude/Codex's `done` report for a
+  completed answer; their `idle` report means ready without a result.
 
 The integration adopts Ranger workspace chat, background and scheduled tasks,
 monitoring alerts, Git commit history and file-preview tabs, tab pinning and

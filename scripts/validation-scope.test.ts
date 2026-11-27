@@ -22,6 +22,57 @@ import {
   webBrowserSuites,
 } from "./world-browser-suites";
 import { ciTestBatches, selectedCITests } from "./ci-tests";
+import { goldenInputsChanged } from "./ci-golden-scope";
+
+test("tracked snapshot, golden and help assets retain their check without selecting runtime journeys", () => {
+  const { tracked } = gitChanges(process.cwd(), "HEAD");
+  const assets = buildGraph(process.cwd(), tracked);
+  const snapshot = "server/src/cli/__snapshots__/world.test.ts.snap";
+  const snapshots = selectValidation(assets, [snapshot]);
+  expect(snapshots).toMatchObject({
+    full: false,
+    world: [],
+    web: [],
+    verification: false,
+  });
+  expect(snapshots.unit).toContain("server/src/cli/world.test.ts");
+  const goldens = tracked.filter((path) =>
+    /^web\/src\/world\/testing\/town-golden\/images\/.*\.png$/.test(path),
+  );
+  expect(goldens.length).toBeGreaterThan(0);
+  const golden = selectValidation(assets, goldens);
+  expect(golden).toMatchObject({
+    full: false,
+    world: [],
+    web: [],
+    verification: false,
+  });
+  for (const path of goldens)
+    expect(goldenInputsChanged(assets, [path])).toBe(true);
+  const help = tracked.filter(
+    (path) => path.startsWith("web/public/help/") && path.endsWith(".webp"),
+  );
+  expect(help.length).toBeGreaterThan(0);
+  const pictures = selectValidation(assets, [
+    ...help,
+    "web/src/help/pictures.json",
+  ]);
+  expect(pictures).toMatchObject({
+    full: false,
+    world: [],
+    web: [],
+    verification: false,
+  });
+  expect(pictures.unit).toContain("scripts/help-check.test.ts");
+  // No image-shaped allowlist can cover an unrelated unknown input.
+  const unknown = "web/public/unknown.png";
+  expect(
+    selectValidation(
+      { ...assets, files: new Set([...assets.files, unknown]) },
+      [goldens[0]!, unknown],
+    ).full,
+  ).toBe(true);
+});
 
 test("only the explicit agent tooling paths qualify", () => {
   const allowed = [

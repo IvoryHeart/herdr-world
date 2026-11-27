@@ -372,7 +372,7 @@ test("PIN login uses a separate endpoint and preserves password recovery during 
       const loggedIn = await pinLogin("012345");
       expect(loggedIn.status).toBe(200);
       const cookie = loggedIn.headers.get("set-cookie")!.split(";", 1)[0]!;
-      expect(cookie).toContain("herdr_world_auth=");
+      expect(cookie).toMatch(/^herdr_world_auth_[0-9a-f]{12}=/);
       expect((await request("/", { headers: { cookie } })).status).toBe(200);
       for (let i = 0; i < 5; i++)
         expect((await pinLogin("654321")).status).toBe(401);
@@ -444,6 +444,34 @@ test("instances with their own data folders on one home preserve independent ses
         expect(await status(secondBase, secondCookie)).toBe(200);
         expect(await status(firstBase, secondCookie)).toBe(401);
         expect(await status(secondBase, firstCookie)).toBe(401);
+        // One browser sends both Worlds' cookies to each of them (#1250).
+        const jar = `${firstCookie}; ${secondCookie}`;
+        expect(await status(firstBase, jar)).toBe(200);
+        expect(await status(secondBase, jar)).toBe(200);
+        // A page load re-stamps a cookie set in an earlier hour, on the page
+        // itself, and leaves the other World's cookie alone.
+        const stale = firstCookie.replace(
+          /\.h(\d+)$/,
+          (_, hour) => `.h${Number(hour) - 1}`,
+        );
+        const restamped = await fetch(`${firstBase}/town`, {
+          headers: { cookie: `${stale}; ${secondCookie}`, accept: "text/html" },
+          redirect: "manual",
+          signal: AbortSignal.timeout(5000),
+        });
+        expect(restamped.status).toBe(200);
+        expect(
+          restamped.headers.getSetCookie().map((c) => c.split(";", 1)[0]),
+        ).toEqual([firstCookie]);
+        const page = await fetch(`${secondBase}/town?focusTest=1`, {
+          headers: { accept: "text/html" },
+          redirect: "manual",
+          signal: AbortSignal.timeout(5000),
+        });
+        expect(page.status).toBe(302);
+        expect(page.headers.get("location")).toBe(
+          "/login?next=%2Ftown%3FfocusTest%3D1",
+        );
       }, second);
     }, first);
     await withAuthServer(async (firstBase) => {

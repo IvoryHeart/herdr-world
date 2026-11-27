@@ -16,6 +16,7 @@ import {
   queuedConnectionKeys,
 } from "./refresh";
 import { type UpdateInfo } from "./types";
+import { loginReturnUrl } from "../loginReturn";
 import {
   TASK_NOTIFICATIONS_KEY,
   TASK_NOTIFICATION_PREFERENCES_KEY,
@@ -183,8 +184,7 @@ let updateReloadVerification: {
 } | null = null;
 
 function redirectToLogin() {
-  const loginUrl = new URL("/login", window.location.origin);
-  window.location.replace(loginUrl.href);
+  window.location.replace(loginReturnUrl(window.location.href));
 }
 
 /**
