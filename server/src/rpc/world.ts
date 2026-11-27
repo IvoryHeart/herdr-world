@@ -13,7 +13,6 @@ import { handleBinRpc } from "./bin";
 import { handleCoreRpc } from "./core";
 import { handleFloatRpc } from "./float";
 import { handleIdeRpc } from "./ide";
-import { handleWorldIntegrationRpc } from "./integration";
 import { handleCoreSharedRpc } from "./core-shared";
 import { profileWrite } from "../agent/profile-store";
 import { recordSpawnClaims } from "../world/relations";
@@ -98,8 +97,6 @@ async function dispatchWorldRpc(rpc: BridgeRpcContext): Promise<false | void> {
   if (method.startsWith("world.bin.")) return handleBinRpc(rpc);
   if (method.startsWith("world.core.")) return handleCoreRpc(rpc);
   if (method.startsWith("world.float.")) return handleFloatRpc(rpc);
-  if (method.startsWith("world.integration."))
-    return handleWorldIntegrationRpc(rpc);
   if (method.startsWith("world.ide.")) return handleIdeRpc(rpc);
   if (method === "world.snapshot") {
     const runtimeFor = (connectionId: string, generation: number) =>

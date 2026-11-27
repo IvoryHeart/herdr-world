@@ -28,13 +28,15 @@ export type FeatureKernel = Readonly<
       | "coreControl"
     >;
     createAppearance: typeof import("./appearance/service").createProfileServices;
+    createIntegrations: typeof import("./integrations/service").createIntegrations;
     createUsage: typeof import("../service/usage-analytics").composeWorldUsage;
     createApartments: typeof import("./apartments/service").createApartmentsService;
     createArtefactShelf: typeof import("../world/artefact-shelf").createArtefactShelf;
-    paths: Pick<WorldServiceDeps["paths"], "root">;
+    paths: Pick<WorldServiceDeps["paths"], "root" | "sourceSecrets">;
     config: Pick<WorldServiceDeps["config"], "sshHost">;
     serviceIncarnation: string;
-    profiles: Pick<RpcServices["connectionProfiles"], "list">;
+    profiles: Pick<RpcServices["connectionProfiles"], "list" | "coreList"> &
+      Partial<Pick<RpcServices["connectionProfiles"], "hosts">>;
     coreHost: import("../rpc/core").CoreRpcServices["host"];
     observations: {
       observedConnections: {
@@ -43,7 +45,7 @@ export type FeatureKernel = Readonly<
       worldSnapshots: NonNullable<RpcServices["worldSnapshots"]>;
       officeObservability: Pick<
         import("../world/observability").OfficeObservabilityService,
-        "snapshot"
+        "snapshot" | "configuration"
       >;
     };
     logger: RpcServices["logger"];
@@ -86,8 +88,10 @@ export function featureKernel(
   desk: FeatureKernel["desk"],
   createAppearance: FeatureKernel["createAppearance"],
   createArtefactShelf: FeatureKernel["createArtefactShelf"],
+  createIntegrations: FeatureKernel["createIntegrations"],
 ): FeatureKernel {
   return Object.freeze({
+    createIntegrations,
     createAppearance,
     desk,
     send: rpc.safeSend,

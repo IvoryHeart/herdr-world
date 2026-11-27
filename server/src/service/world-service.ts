@@ -56,7 +56,8 @@ import type { ObservedSnapshots, RpcServices } from "../rpc/context";
 import { composeSources, runSourceProcess } from "../sources/composition";
 import { composeShipyard } from "../shipyard/composition";
 import { profileCheckoutHost, ShipyardProjects } from "../shipyard/projects";
-import { withIntegrations } from "../integrations/http";
+import { integrationsKey } from "../features/integrations/register";
+import { createIntegrations } from "../features/integrations/service";
 import { herdrEventName } from "../utils/herdr-events";
 import { serverLogger } from "../utils/logger";
 import { afterHerdrClose } from "../world/board-closing";
@@ -701,12 +702,6 @@ async function compose(
     },
     now: () => clock.now(),
   });
-  const handleWorldSources = withIntegrations(worldSources, {
-    profiles: connectionProfiles,
-    metrics: officeObservability,
-    vaultPath: paths.sourceSecrets,
-    now: () => clock.now(),
-  });
   // Shipyard's lanes are the projects open in the runtimes (#1226).
   const shipyardProjects = new ShipyardProjects({
     run: runSourceProcess,
@@ -793,8 +788,10 @@ async function compose(
       desk,
       createProfileServices,
       createArtefactShelf,
+      createIntegrations,
     ),
   );
+  const handleWorldSources = features.get(integrationsKey).http;
   worldUsage = features.get(usageKey);
   rpcServices.apartments = features.get(apartmentsKey);
   rpcServices.featureRpc = features.rpc;
