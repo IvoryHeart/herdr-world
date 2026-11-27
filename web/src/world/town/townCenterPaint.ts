@@ -6,6 +6,7 @@
  * Outlined in Town's ink like the agents, desks and post office beside it.
  */
 
+import { artCenter, townArtLandmark } from "./townArtLandmarks";
 import { TOWN_CENTER_FRIEZE_Y, TOWN_CENTER_HEIGHT } from "./townCenter";
 import { TOWN_TILE as T } from "./townLayout";
 import {
@@ -32,6 +33,10 @@ const painted = new Map<number, TownCanvas>();
 
 /** The center `widthTiles` wide, painted once per width. */
 export function paintTownCenter(widthTiles: number): TownCanvas {
+  const art = townArtLandmark(`center:${widthTiles}`, (style) =>
+    artCenter(style, widthTiles * T, TOWN_CENTER_HEIGHT * T),
+  );
+  if (art) return art;
   let canvas = painted.get(widthTiles);
   if (!canvas) {
     canvas = paint(widthTiles * T, TOWN_CENTER_HEIGHT * T);

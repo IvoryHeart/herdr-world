@@ -69,6 +69,11 @@ lighthouse and the warehouse with its crates are painted the same way by
 paths) is generated from a fixed seed by `townLandscape.ts` and drawn by
 `townLandscapePaint.ts` in the same way. It ships no image files and no third-party art.
 
+The landmarks can also be painted in one of three art directions for
+comparison (`?townArt=`, see the [Town art guide](design/town-art.md)). These
+directions are drawn by `townArtKit.ts`, `townArtStyles.ts` and
+`townArtLandmarks.ts` in the same way and add no files.
+
 The website film draws its Town scenes, characters and finale parade with the
 same code: `site/film/town-art.ts` re-exports `townLayout.ts`, `townPaint.ts`,
 `townSprites.ts`, the town center's painting, the post office's house and yard

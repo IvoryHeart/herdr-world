@@ -14,6 +14,7 @@
  * two outdoor sprites.
  */
 
+import { artPostHouse, artPostYard, townArtLandmark } from "./townArtLandmarks";
 import { TOWN_TILE as T } from "./townLayout";
 import {
   TOWN_POST_HOUSE_ROWS,
@@ -81,12 +82,20 @@ function outlined(ground: Paint, art: Paint) {
 
 /** The house: TOWN_POST_WIDTH tiles wide, its door on its bottom row. */
 export function paintTownPostHouse(): TownCanvas {
+  const art = townArtLandmark("post-house", (style) =>
+    artPostHouse(style, TOWN_POST_WIDTH * T, TOWN_POST_HOUSE_ROWS * T),
+  );
+  if (art) return art;
   if (!house) house = paintHouse(TOWN_POST_WIDTH * T, TOWN_POST_HOUSE_ROWS * T);
   return house;
 }
 
 /** The forecourt: cobbles, mail sacks, a bicycle and the mail trolley. */
 export function paintTownPostYard(): TownCanvas {
+  const art = townArtLandmark("post-yard", (style) =>
+    artPostYard(style, TOWN_POST_WIDTH * T, TOWN_POST_YARD_ROWS * T),
+  );
+  if (art) return art;
   if (!yard) yard = paintYard(TOWN_POST_WIDTH * T, TOWN_POST_YARD_ROWS * T);
   return yard;
 }

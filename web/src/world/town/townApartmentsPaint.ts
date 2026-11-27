@@ -5,6 +5,7 @@
  * once and shared; the renderer places it as one outdoor sprite.
  */
 
+import { artApartments, townArtLandmark } from "./townArtLandmarks";
 import { TOWN_TILE as T } from "./townLayout";
 import {
   TOWN_APARTMENTS_ROWS,
@@ -32,6 +33,10 @@ let house: TownCanvas | null = null;
 
 /** The house: TOWN_APARTMENTS_WIDTH tiles wide, its door on its bottom row. */
 export function paintTownApartments(): TownCanvas {
+  const art = townArtLandmark("apartments", (style) =>
+    artApartments(style, TOWN_APARTMENTS_WIDTH * T, TOWN_APARTMENTS_ROWS * T),
+  );
+  if (art) return art;
   if (!house)
     house = paint(TOWN_APARTMENTS_WIDTH * T, TOWN_APARTMENTS_ROWS * T);
   return house;
