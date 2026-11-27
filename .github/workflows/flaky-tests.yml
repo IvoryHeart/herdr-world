@@ -20,7 +20,7 @@ jobs:
   track:
     # Fork artifacts must never reach the write-enabled tracker.
     if: github.event.workflow_run.head_repository.full_name == github.repository
-    name: Track flaky tests and enforce recurring failures
+    name: Record advisory flaky accounting
     runs-on: ubuntu-latest
     timeout-minutes: 10
     steps:
@@ -32,23 +32,14 @@ jobs:
         with:
           bun-version: "1.4.4"
           no-cache: true
-      - name: Hold the required status while trusted accounting is pending
+      - name: Mark optional Flaky accounting pending
         if: github.event.action == 'requested'
         env:
           GH_TOKEN: ${{ github.token }}
           SOURCE_RUN: ${{ github.event.workflow_run.id }}
           SOURCE_ATTEMPT: ${{ github.event.workflow_run.run_attempt }}
         run: bun scripts/flaky-tests.ts pending
-      - name: Download source test evidence as data
-        if: github.event.action == 'completed'
-        uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8
-        with:
-          github-token: ${{ github.token }}
-          run-id: ${{ github.event.workflow_run.id }}
-          pattern: flaky-tests-*
-          path: .agents/delivery/flakes
-          merge-multiple: true
-      - name: Update one issue per cause and record the trusted verdict
+      - name: Catch up retained source evidence and record advisory accounting
         if: github.event.action == 'completed'
         env:
           GH_TOKEN: ${{ github.token }}

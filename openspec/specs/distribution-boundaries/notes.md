@@ -55,8 +55,9 @@
 - `scripts/release-npm-smoke.ts`
 - `scripts/test-retry.ts` and `scripts/test-retry.test.ts` (CI-only scoped file/case recovery and JUnit proof)
 - `scripts/flaky-test-policy.ts` and `scripts/flaky-test-policy.test.ts` (file/case identity, distinct-run ledger, seven-day limit and explicit quarantine)
-- `scripts/flaky-tests.ts` and `scripts/flaky-tests.test.ts` (Delivery summary/read-only gate; same-repository source admission, trusted serialized issue updates and commit status)
-- `.github/workflows/flaky-tests.yml` (default-branch tracker; skips fork runs before downloading same-repository candidate artifacts as data)
+- `scripts/flaky-tests.ts` and `scripts/flaky-tests.test.ts` (Delivery summary/read-only gate; same-repository source admission, serialized issue updates, optional Flaky accounting receipts and retained-run catch-up)
+- `scripts/ci-workflow.test.ts` (required Delivery job remains independent of asynchronous flaky accounting)
+- `.github/workflows/flaky-tests.yml` (default-branch advisory tracker; source identity verified before downloading retained same-repository artifacts as data)
 - `scripts/ci-tests.ts`, `scripts/run-tests.ts`, `scripts/run-world-tests.ts` (retry opt-in and shared browser assets)
 - `scripts/pipeline-retry.ts`
 - `server/src/config/service-executable.ts`
@@ -109,7 +110,10 @@
   recovered file/case. Issues labelled `flaky` retain occurrences and run links.
   More than three runs in seven days blocks the file until the owner closes the
   fixed cause or explicitly adds `flaky-quarantined`; quarantine never excuses
-  a second failure. See [CI guidance](../../../docs/ci-pipelines.md#flaky-tests).
+  a second failure. The source Delivery job decides using recorded history plus
+  its current run. Optional **Flaky accounting** never delays a merge; the next
+  completed event catches up missed retained evidence. Keep it out of the required
+  checks. See [CI guidance](../../../docs/ci-pipelines.md#flaky-tests).
 
 ## World update notifications
 

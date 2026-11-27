@@ -17,7 +17,7 @@ CI SHALL retry each failed unit test file or browser case at most once in its ex
 - **THEN** no flaky-test retry runs
 
 ### Requirement: Flaky test accountability
-CI SHALL maintain one open issue labelled flaky per recovered file/case from same-repository CI runs, updating each distinct run occurrence with its run link. More than three distinct flaky runs in seven days SHALL fail CI until the issue is closed after a fix or the owner explicitly quarantines it.
+CI SHALL maintain one open issue labelled flaky per recovered file/case from same-repository CI runs, updating each distinct run occurrence with its run link. Delivery checks SHALL enforce the frequency limit using recorded history plus its current run, until the issue is closed after a fix or the owner explicitly quarantines it. Asynchronous accounting SHALL use only an optional Flaky accounting status, never Delivery checks, and SHALL never block a merge.
 
 #### Scenario: A cause recurs
 - **WHEN** a recovered test already has an open flaky issue
@@ -25,8 +25,19 @@ CI SHALL maintain one open issue labelled flaky per recovered file/case from sam
 - **AND** rerunning the same run SHALL count once
 
 #### Scenario: Fourth run in seven days
-- **WHEN** an unquarantined open cause reaches a fourth distinct run within seven days
+- **WHEN** the source Delivery job observes an unquarantined open cause reaching a fourth distinct run within seven days in recorded history plus its current run
 - **THEN** Delivery checks fails, including later runs that select the affected file until fixed or explicitly quarantined
+
+#### Scenario: Accounting is queued or unavailable
+- **WHEN** a source Delivery checks check run succeeds while trusted accounting is pending, late, failed or missing
+- **THEN** accounting SHALL publish no Delivery checks commit status and SHALL not delay merge eligibility
+- **AND** Flaky accounting SHALL remain outside the required ruleset checks
+
+#### Scenario: Missed or interrupted accounting
+- **WHEN** a later completed event processes retained same-repository CI evidence
+- **THEN** the trusted tracker SHALL reconcile previously unaccounted completed runs within artifact retention, including their retained attempts
+- **AND** it SHALL record each run once in flaky history and acknowledge each accounted attempt only after durable issue updates
+- **AND** an error for one run SHALL not prevent accounting for other completed runs
 
 #### Scenario: Explicit owner resolution
 - **WHEN** the owner closes a fixed cause or labels its open issue flaky-quarantined

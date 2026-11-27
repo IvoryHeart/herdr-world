@@ -84,6 +84,27 @@ const worldWorkflow = Bun.YAML.parse(
   jobs: Record<string, WorkflowJob>;
 };
 
+test("flaky accounting is asynchronous and never owns the required Delivery status", async () => {
+  const tracker = Bun.YAML.parse(
+    await Bun.file(".github/workflows/flaky-tests.yml").text(),
+  ) as {
+    on: { workflow_run: { workflows: string[] } };
+    jobs: Record<string, WorkflowJob>;
+  };
+  expect(tracker.on.workflow_run.workflows).toEqual(["CI"]);
+  expect(
+    Object.values(tracker.jobs).some((job) => job.name === "Delivery checks"),
+  ).toBe(false);
+  expect(workflow.jobs.delivery.needs).not.toContain("track");
+  const gate = workflow.jobs.delivery.steps.find(
+    (step) => step.run === "bun scripts/flaky-tests.ts gate",
+  );
+  expect(gate?.if).toBe("always()");
+  const source = await Bun.file("scripts/flaky-tests.ts").text();
+  expect(source.includes('"Flaky accounting"')).toBe(true);
+  expect(source.includes('context: "Delivery checks"')).toBe(false);
+});
+
 test("World stability label selects fresh full evidence and three consecutive passes", () => {
   const requested = `\${{ contains(github.event.pull_request.labels.*.name, '${STABILITY_LABEL}') }}`;
   expect(workflow.jobs["world-browser"].with?.stability).toBe(requested);

@@ -104,8 +104,9 @@ local retry results, but cannot add repository-wide flaky history.
 Every test shard retains `flaky-tests-*` JSON artifacts, including failed jobs and
 previous attempts of a rerun. **Delivery checks** lists every recovered file and
 case under **Flaky tests**, and checks the open issue history with a read-only
-token. A test that flakes on more than three distinct CI runs in seven days
-blocks runs selecting its file, including a later first-pass success. Attempts
+token inside that same job. When its recorded history plus the current run shows
+more than three distinct flaky CI runs in seven days, Delivery checks blocks runs
+selecting that file, including a later first-pass success. Attempts
 of the same run count once; occurrences exactly seven days old still count.
 Once breached, the open cause stays blocked until explicit fix or quarantine;
 waiting for the original window to expire does not clear it.
@@ -119,17 +120,28 @@ open issue (create that label if needed). Quarantine exempts only the frequency
 limit: tests still run and a second failure still fails CI. No automatic skip,
 quarantine or issue closure occurs.
 
-While accounting is pending, the trusted workflow holds a `Delivery checks`
-commit status, then records success or failure after updating history. GitHub
-[requires both a same-named status and check to pass](https://docs.github.com/en/pull-requests/how-tos/merge-and-close-pull-requests/troubleshooting-required-status-checks),
-so concurrently finishing runs cannot erase a fourth occurrence. History/API
-errors keep accounting red or pending. The tracker becomes active when its
-workflow reaches the default branch; a stacked preview still exercises the
-read-only gate and complete synthetic runner/policy regressions.
+The tracker publishes only the optional **Flaky accounting** commit status.
+The main ruleset requires only **Delivery checks**; never add Flaky accounting
+to its required checks. Queued, late, failed or missing accounting never holds a
+merge or changes a completed Delivery verdict. Retry and frequency verdicts live
+inside the source run's Delivery checks job. Concurrent runs can pass before
+their combined history is recorded; subsequent Delivery jobs enforce that history.
+
+Each completed event reconciles completed same-repository CI runs from the last
+seven days, while their evidence is retained. Final Flaky accounting statuses
+acknowledge each run attempt only after its issue writes finish. A missed event
+or interrupted update has no final receipt, so the next event catches it up;
+reruns count once in the issue ledger. Artifact/API errors leave that run for the
+next completion while other runs continue. Evidence older than its retention
+cannot be recovered automatically. The tracker becomes active on the default
+branch; a preview exercises the read-only gate and synthetic tracking regressions.
 
 To inspect it in GitHub, open a PR's **Checks**, select **Delivery checks**, then
 read **Flaky tests** in its summary. Open **Actions → Flaky test tracking** for
-issue-update evidence, or **Issues → Labels → flaky** for causes and run links.
+issue-update and catch-up evidence, or **Issues → Labels → flaky** for causes and
+run links. After deployment, check two real PRs: each should become mergeable as
+soon as its Delivery checks check run succeeds, without a pending Delivery checks
+commit status, and flaky history should retain occurrences from both runs.
 The focused `scripts/test-retry.test.ts` fixtures deliberately fail once and pass,
 fail twice, crash and trip the isolation guard without creating real flaky issues.
 
