@@ -257,7 +257,6 @@
       "scripts/web-asset-headroom.ts#parseDelta",
       "scripts/web-asset-headroom.ts#parseMain",
       "scripts/web-asset-headroom.ts#settleVerdict",
-      "scripts/world-browser-suites.ts#discoverWorldBrowserShards",
       "scripts/world-browser-suites.ts#reportBrowserSuites",
       "scripts/world-browser-suites.ts#worldLatencyTrendSuites",
       "scripts/world-plugin.ts#PLATFORM_ASSETS",

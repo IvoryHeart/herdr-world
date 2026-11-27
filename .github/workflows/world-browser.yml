@@ -17,6 +17,7 @@ permissions:
     contents: read
 
 jobs:
+    # Per-case timing assignment, three process-isolated workers per runner.
     world-browser:
         name: World browser tests (${{ matrix.shard }}/6)
         if: inputs.lane == 'world' && toJSON(fromJSON(inputs.selection).world) != '[]'

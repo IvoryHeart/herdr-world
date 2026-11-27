@@ -45,7 +45,11 @@ belong to the nightly or release candidate, never a PR matrix.
 
 Scope checks out the complete Git history with `filter: blob:none`. The PR
 description policy runs as its own leaf after scope, alongside static checks,
-units, dependency security, World and web browser shards, and model shards.
+units, dependency security, web browser shards, and model shards. World browser
+jobs start after description/security and optional manual diagnostics finish,
+so full validation peaks at 14 runners (six World, two web, two unit, three
+model and one static). Each World runner balances cases across three isolated
+processes using committed CI JUnit timings; case selectors retain unseen tests.
 **Delivery checks** depends directly on those leaves and requires each selected
 lane to succeed; unselected lanes must be skipped. There are no intervening
 repository, web-browser or behavioral aggregate runners in the PR graph.

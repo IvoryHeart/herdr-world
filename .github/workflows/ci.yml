@@ -261,10 +261,13 @@ jobs:
                   if-no-files-found: error
                   retention-days: 7
 
+    # Once the short description/audit jobs (and optional diagnostics) release
+    # their runners, full validation peaks at 14: 6 World + 2 web + 2 unit +
+    # 3 model + 1 static. Each World runner owns three isolated case workers.
     world-browser:
         name: World browser tests
-        needs: validation-scope
-        if: needs.validation-scope.outputs.world == 'true' && toJSON(fromJSON(needs.validation-scope.outputs.selection).world) != '[]'
+        needs: [validation-scope, pr-description, dependency-security, browser-diagnostics]
+        if: "!cancelled() && needs.validation-scope.result == 'success' && needs.validation-scope.outputs.world == 'true' && toJSON(fromJSON(needs.validation-scope.outputs.selection).world) != '[]'"
         uses: ./.github/workflows/world-browser.yml
         with:
             lane: world

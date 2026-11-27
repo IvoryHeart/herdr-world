@@ -18,6 +18,7 @@ import { buildGraph, gitChanges, type Graph } from "./affected";
 import { readCoverageScope } from "./coverage-scope";
 import {
   worldBrowserSuites,
+  worldBrowserShards,
   worldRuntimeSuites,
   webBrowserSuites,
 } from "./world-browser-suites";
@@ -177,7 +178,9 @@ test("browser Chat selects nearby consumers without verification, runtime suites
     unit: [unit],
     world: [worldBrowserSuites[0]],
     web: [webBrowserSuites[0]],
-    worldShards: [1],
+    worldShards: worldBrowserShards.flatMap((files, index) =>
+      files.includes(worldBrowserSuites[0]!) ? [index + 1] : [],
+    ),
   });
 });
 
@@ -292,10 +295,10 @@ test("rename deletions retain World and native obligations", () => {
 test("the CI runner executes only its selected lane and rejects invalid selectors", () => {
   const selection = selectValidation(graph, [chat]);
   expect(selectedCITests(selection, "unit")).toEqual([unit]);
-  expect(selectedCITests(selection, "world", "1")).toEqual([
-    worldBrowserSuites[0]!,
-  ]);
-  expect(selectedCITests(selection, "world", "2")).toEqual([]);
+  for (const [index, files] of worldBrowserShards.entries())
+    expect(selectedCITests(selection, "world", String(index + 1))).toEqual(
+      files.includes(worldBrowserSuites[0]!) ? [worldBrowserSuites[0]!] : [],
+    );
   for (const lane of ["invalid", "full", "latency", "__proto__"])
     expect(() => selectedCITests(selection, lane)).toThrow();
   expect(() => selectedCITests(selection, "world", "0")).toThrow();

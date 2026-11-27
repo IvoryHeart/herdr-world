@@ -137,7 +137,7 @@ export function registerTownCanvasCases(group: keyof typeof townCanvasCases) {
           // frames at every sampled second, it took 109 s locally on two
           // cores and exceeded this guard on CI. It now samples without
           // drawn frames (#1183).
-          scale === "extended" ||
+          scale.startsWith("extended") ||
             scale === "protected" ||
             scale === "max" ||
             ((scale === "typical" || scale === "bus") && width >= 1440)

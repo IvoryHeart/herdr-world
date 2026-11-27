@@ -1,57 +1,435 @@
 {
-  "sourceRun": "https://github.com/IvoryHeart/herdr-world/actions/runs/44600794516",
-  "units": "seconds; runner per-file timings (includes all scenarios and fixture setup)",
-  "sourceNotes": {
-    "refresh": "2026-11-19: six retained world-shard timings from full run 44600794516. Weights include setup and all assertions, not test speed thresholds.",
-    "memory/MemoryLibrary.browser": "2026-11-20 local focused run: about 3 s per viewport, two viewports, bun run test web/src/world/memory/MemoryLibrary.browser.test.ts.",
-    "memory/MemoryLibraryLifecycle.browser": "2026-11-20 local focused run: about 2 s, one viewport, five scripted scenarios, bun run test web/src/world/memory/MemoryLibraryLifecycle.browser.test.ts.",
-    "ApartmentsAvatars.browser": "2026-11-20 local focused run: 3.06 s file duration, one fixture across phone and desktop, bun run test web/src/world/ApartmentsAvatars.browser.test.ts.",
-    "ShipyardLighthouse.browser": "2026-11-21 local focused run: 16.47 s file duration, one fixture across phone and desktop in two Shipyard modes and two town sizes, bun run test web/src/world/ShipyardLighthouse.browser.test.ts.",
-    "TownOwnerTopology.browser": "2026-11-22 hosted CI run 45017581877, World browser shard 1/6 job 137197559547: 170.387 s passing case across both layouts; replaces the 38.4 s local estimate. https://github.com/IvoryHeart/herdr-world/actions/runs/45017581877",
-    "code/CodeView.browser": "2026-11-19 local focused run: 5.04 s file duration, one fixture across the IDE states, bun run test web/src/world/code/CodeView.browser.test.ts."
+  "sourceRun": "https://github.com/IvoryHeart/herdr-world/actions/runs/46059013951",
+  "units": "seconds per JUnit case; setup outside cases is excluded",
+  "cases": {
+    "web/src/world/AnswerDeliveries.browser.test.ts": {
+      "Reception answer controls preserve uncertainty, exact duplicate decisions and five viewport layouts": 3.228511
+    },
+    "web/src/world/ApartmentsAvatars.browser.test.ts": {
+      "every Apartments resident shows an avatar, kept or nearest, on a phone and a desktop": 2.156933
+    },
+    "web/src/world/BoardView.test.ts": {
+      "Board renders, settles, folds, tidies and zooms at 1280x1440px controls": 1.604537,
+      "Board renders, settles, folds, tidies and zooms at 1440x2560px controls": 1.63332,
+      "Board renders, settles, folds, tidies and zooms at 1440x900px": 11.52497,
+      "Board renders, settles, folds, tidies and zooms at 1440x900px live settings": 1.455314,
+      "Board renders, settles, folds, tidies and zooms at 1440x900px with reduced motion": 10.649027,
+      "Board renders, settles, folds, tidies and zooms at 1512x982px controls": 1.625858,
+      "Board renders, settles, folds, tidies and zooms at 2560x1440px controls": 1.658548,
+      "Board renders, settles, folds, tidies and zooms at 320x900px controls": 1.616023,
+      "Board renders, settles, folds, tidies and zooms at 360x900px controls": 1.629851,
+      "Board renders, settles, folds, tidies and zooms at 390x844px": 9.42162,
+      "Board renders, settles, folds, tidies and zooms at 430x900px controls": 1.664906,
+      "Board renders, settles, folds, tidies and zooms at 800x900px with the bin's dock": 1.48311,
+      "capture readiness (assets): controlled assets, resize/view fences and negative controls": 21.209829,
+      "capture readiness (recovery): controlled assets, resize/view fences and negative controls": 21.209829,
+      "capture readiness (views): controlled assets, resize/view fences and negative controls": 21.209829
+    },
+    "web/src/world/ComposerTypingStyle.browser.test.ts": {
+      "typing in a World-sized chat composer restyles only the composer": 2.528776
+    },
+    "web/src/world/ConcurrentContexts.test.ts": {
+      "two mounted runtimes retain terminals and Files across focus and host retirement at 1440 pixels": 17.073039,
+      "two mounted runtimes retain terminals and Files across focus and host retirement at 390 pixels": 15.336922
+    },
+    "web/src/world/CoreControl.browser.test.ts": {
+      "core control: a found core agent's terminal opens in the current view": 23.459988,
+      "core control: one click starts a core terminal and opens its window at 1440px": 9.346498,
+      "core control: one click starts a core terminal and opens its window at 390px": 8.722656,
+      "core control: the launcher starts in core and the bin names what ends (bin)": 2.197357,
+      "core control: the launcher starts in core and the bin names what ends (launcher)": 2.966206
+    },
+    "web/src/world/CoreSharedState.browser.test.ts": {
+      "core agents: seen and the one pin round-trip with Herdr's apps from Town's and Board's peeks": 5.611518
+    },
+    "web/src/world/CoreTerminalWatch.browser.test.ts": {
+      "a core Terminal tab holds its fitted size while open, draws an app's grid readably, and takes the first key": 5.568817
+    },
+    "web/src/world/CoreViewOnly.browser.test.ts": {
+      "core agents: answers are available while terminal controls remain disabled": 1.629111
+    },
+    "web/src/world/DeskView.browser.test.ts": {
+      "Desk keys act on the agent that has focus": 13.989945
+    },
+    "web/src/world/FeatureHosts.browser.test.ts": {
+      "the dialogs feature slot opens Apartments and the Memory Library": 1.178553
+    },
+    "web/src/world/HostsFilter.actions.test.ts": {
+      "rendering and focus: qualified Actions and watch feedback {\"width\":1440,\"operation\":\"actions\",\"view\":\"board\"}": 1.826085,
+      "rendering and focus: qualified Actions and watch feedback {\"width\":1440,\"operation\":\"actions\",\"view\":\"town\"}": 2.646538,
+      "rendering and focus: qualified Actions and watch feedback {\"width\":1440,\"operation\":\"cold-host\",\"view\":\"board\"}": 1.602826,
+      "rendering and focus: qualified Actions and watch feedback {\"width\":1440,\"operation\":\"cold-host\",\"view\":\"town\"}": 2.405553,
+      "rendering and focus: qualified Actions and watch feedback {\"width\":1440,\"operation\":\"notifications\",\"view\":\"board\"}": 1.69257,
+      "rendering and focus: qualified Actions and watch feedback {\"width\":1440,\"operation\":\"notifications\",\"view\":\"town\"}": 4.593766,
+      "rendering and focus: qualified Actions and watch feedback {\"width\":1440,\"operation\":\"watch-unavailable\",\"view\":\"board\"}": 1.347543,
+      "rendering and focus: qualified Actions and watch feedback {\"width\":1440,\"operation\":\"watches\",\"view\":\"board\"}": 1.79267,
+      "rendering and focus: qualified Actions and watch feedback {\"width\":1440,\"operation\":\"watches\",\"view\":\"town\"}": 3.144183,
+      "rendering and focus: qualified Actions and watch feedback {\"width\":390,\"operation\":\"actions\",\"view\":\"board\"}": 1.840851,
+      "rendering and focus: qualified Actions and watch feedback {\"width\":390,\"operation\":\"actions\",\"view\":\"town\"}": 2.593443,
+      "rendering and focus: qualified Actions and watch feedback {\"width\":390,\"operation\":\"cold-host\",\"view\":\"board\"}": 1.613812,
+      "rendering and focus: qualified Actions and watch feedback {\"width\":390,\"operation\":\"cold-host\",\"view\":\"town\"}": 2.367483,
+      "rendering and focus: qualified Actions and watch feedback {\"width\":390,\"operation\":\"notifications\",\"view\":\"board\"}": 1.64502,
+      "rendering and focus: qualified Actions and watch feedback {\"width\":390,\"operation\":\"notifications\",\"view\":\"town\"}": 2.875306,
+      "rendering and focus: qualified Actions and watch feedback {\"width\":390,\"operation\":\"watch-unavailable\",\"view\":\"board\"}": 1.303366,
+      "rendering and focus: qualified Actions and watch feedback {\"width\":390,\"operation\":\"watches\",\"view\":\"board\"}": 1.78527,
+      "rendering and focus: qualified Actions and watch feedback {\"width\":390,\"operation\":\"watches\",\"view\":\"town\"}": 2.455139
+    },
+    "web/src/world/HostsFilter.arrangement.test.ts": {
+      "the shell preserves qualified operational targets: {\"width\":1440,\"operation\":\"arrangement-focus\",\"view\":\"board\"}": 2.005582,
+      "the shell preserves qualified operational targets: {\"width\":1440,\"operation\":\"arrangement-retirement\",\"view\":\"board\"}": 2.119715,
+      "the shell preserves qualified operational targets: {\"width\":1440,\"operation\":\"close-all\",\"view\":\"board\"}": 1.995695,
+      "the shell preserves qualified operational targets: {\"width\":1440,\"operation\":\"filtered-open-all\",\"view\":\"board\"}": 1.604295,
+      "the shell preserves qualified operational targets: {\"width\":1440,\"operation\":\"open-all\",\"view\":\"board\"}": 1.663054,
+      "the shell preserves qualified operational targets: {\"width\":390,\"operation\":\"close-all\",\"view\":\"board\"}": 1.925388,
+      "the shell preserves qualified operational targets: {\"width\":390,\"operation\":\"close-all\",\"view\":\"town\"}": 2.834422,
+      "the shell preserves qualified operational targets: {\"width\":390,\"operation\":\"compact-arrangement\",\"view\":\"board\"}": 1.941253,
+      "the shell preserves qualified operational targets: {\"width\":390,\"operation\":\"compact-arrangement\",\"view\":\"town\"}": 2.620231,
+      "the shell preserves qualified operational targets: {\"width\":390,\"operation\":\"filtered-open-all\",\"view\":\"board\"}": 1.743136,
+      "the shell preserves qualified operational targets: {\"width\":390,\"operation\":\"filtered-open-all\",\"view\":\"town\"}": 2.535911,
+      "the shell preserves qualified operational targets: {\"width\":390,\"operation\":\"open-all\",\"view\":\"board\"}": 1.917142,
+      "the shell preserves qualified operational targets: {\"width\":390,\"operation\":\"open-all\",\"view\":\"town\"}": 2.543138
+    },
+    "web/src/world/HostsFilter.cold.test.ts": {
+      "the shell preserves qualified operational targets: {\"width\":1440,\"operation\":\"cold-master\",\"view\":\"board\"}": 2.338798,
+      "the shell preserves qualified operational targets: {\"width\":1440,\"operation\":\"cold-master\",\"view\":\"town\"}": 3.145455,
+      "the shell preserves qualified operational targets: {\"width\":1440,\"operation\":\"cold-master-connect\",\"view\":\"town\"}": 2.740405,
+      "the shell preserves qualified operational targets: {\"width\":1440,\"operation\":\"worktree-resource-cold\",\"view\":\"board\"}": 2.341908,
+      "the shell preserves qualified operational targets: {\"width\":390,\"operation\":\"worktree-resource-cold\",\"view\":\"board\"}": 2.232328
+    },
+    "web/src/world/HostsFilter.creation.test.ts": {
+      "the shell preserves qualified operational targets: {\"width\":1440,\"operation\":\"global-creation\",\"view\":\"board\"}": 1.448182,
+      "the shell preserves qualified operational targets: {\"width\":1440,\"operation\":\"global-creation\",\"view\":\"town\"}": 2.157646,
+      "the shell preserves qualified operational targets: {\"width\":1440,\"operation\":\"global-creation-retirement\",\"view\":\"board\"}": 1.380074,
+      "the shell preserves qualified operational targets: {\"width\":1440,\"operation\":\"global-creation-retirement\",\"view\":\"town\"}": 2.148596,
+      "the shell preserves qualified operational targets: {\"width\":1440,\"operation\":\"global-creation-retry\",\"view\":\"board\"}": 1.594246,
+      "the shell preserves qualified operational targets: {\"width\":390,\"operation\":\"global-creation\",\"view\":\"board\"}": 1.489857,
+      "the shell preserves qualified operational targets: {\"width\":390,\"operation\":\"global-creation\",\"view\":\"town\"}": 1.971989,
+      "the shell preserves qualified operational targets: {\"width\":390,\"operation\":\"global-creation-retirement\",\"view\":\"board\"}": 1.356903,
+      "the shell preserves qualified operational targets: {\"width\":390,\"operation\":\"global-creation-retirement\",\"view\":\"town\"}": 1.93939,
+      "the shell preserves qualified operational targets: {\"width\":390,\"operation\":\"global-creation-retry\",\"view\":\"board\"}": 1.544575
+    },
+    "web/src/world/HostsFilter.inspector-timeout.test.ts": {
+      "the shell preserves qualified operational targets: {\"width\":1440,\"operation\":\"pending-inspector-timeout\",\"view\":\"spaces\"}": 2.270407,
+      "the shell preserves qualified operational targets: {\"width\":390,\"operation\":\"pending-inspector-timeout\",\"view\":\"spaces\"}": 1.55232
+    },
+    "web/src/world/HostsFilter.navigation.test.ts": {
+      "the shell preserves qualified operational targets: {\"width\":1440,\"operation\":\"bare-navigator\",\"view\":\"town\"}": 3.802511,
+      "the shell preserves qualified operational targets: {\"width\":1440,\"operation\":\"focus-tab\",\"view\":\"board\"}": 3.034458,
+      "the shell preserves qualified operational targets: {\"width\":1440,\"operation\":\"focus-tab\",\"view\":\"town\"}": 4.856947,
+      "the shell preserves qualified operational targets: {\"width\":1440,\"operation\":\"navigator\",\"view\":\"board\"}": 2.608323,
+      "the shell preserves qualified operational targets: {\"width\":1440,\"operation\":\"navigator\",\"view\":\"town\"}": 4.259103,
+      "the shell preserves qualified operational targets: {\"width\":1440,\"operation\":\"shortcut\",\"view\":\"board\"}": 2.890946,
+      "the shell preserves qualified operational targets: {\"width\":1440,\"operation\":\"shortcut\",\"view\":\"town\"}": 5.661997,
+      "the shell preserves qualified operational targets: {\"width\":1440,\"operation\":\"spaces-navigator\",\"view\":\"spaces\"}": 2.948884,
+      "the shell preserves qualified operational targets: {\"width\":1440,\"operation\":\"spaces-notifications\",\"view\":\"spaces\"}": 2.683566,
+      "the shell preserves qualified operational targets: {\"width\":390,\"operation\":\"bare-navigator\",\"view\":\"town\"}": 3.381277,
+      "the shell preserves qualified operational targets: {\"width\":390,\"operation\":\"focus-tab\",\"view\":\"board\"}": 2.92431,
+      "the shell preserves qualified operational targets: {\"width\":390,\"operation\":\"focus-tab\",\"view\":\"town\"}": 4.102631,
+      "the shell preserves qualified operational targets: {\"width\":390,\"operation\":\"navigator\",\"view\":\"board\"}": 2.879776,
+      "the shell preserves qualified operational targets: {\"width\":390,\"operation\":\"navigator\",\"view\":\"town\"}": 3.622965,
+      "the shell preserves qualified operational targets: {\"width\":390,\"operation\":\"shortcut\",\"view\":\"board\"}": 2.93338,
+      "the shell preserves qualified operational targets: {\"width\":390,\"operation\":\"shortcut\",\"view\":\"town\"}": 3.89103,
+      "the shell preserves qualified operational targets: {\"width\":390,\"operation\":\"spaces-navigator\",\"view\":\"spaces\"}": 3.455181,
+      "the shell preserves qualified operational targets: {\"width\":390,\"operation\":\"spaces-notifications\",\"view\":\"spaces\"}": 2.860817
+    },
+    "web/src/world/HostsFilter.pending.test.ts": {
+      "the shell preserves qualified operational targets: {\"width\":1440,\"operation\":\"pending-inspector-delayed\",\"view\":\"spaces\"}": 2.060372,
+      "the shell preserves qualified operational targets: {\"width\":1440,\"operation\":\"pending-inspector-scope\",\"view\":\"spaces\"}": 1.965066,
+      "the shell preserves qualified operational targets: {\"width\":1440,\"operation\":\"pending-inspector-unmount\",\"view\":\"spaces\"}": 1.854094,
+      "the shell preserves qualified operational targets: {\"width\":390,\"operation\":\"pending-inspector-delayed\",\"view\":\"spaces\"}": 2.054079,
+      "the shell preserves qualified operational targets: {\"width\":390,\"operation\":\"pending-inspector-scope\",\"view\":\"spaces\"}": 1.950715,
+      "the shell preserves qualified operational targets: {\"width\":390,\"operation\":\"pending-inspector-unmount\",\"view\":\"spaces\"}": 1.855447
+    },
+    "web/src/world/HostsFilter.resources.test.ts": {
+      "rendering, focus and browser file input: qualified resource targets {\"width\":1440,\"operation\":\"context-menu-pull-failure\",\"view\":\"board\"}": 1.414916,
+      "rendering, focus and browser file input: qualified resource targets {\"width\":1440,\"operation\":\"file-delete-retirement\",\"view\":\"board\"}": 2.317132,
+      "rendering, focus and browser file input: qualified resource targets {\"width\":1440,\"operation\":\"file-download-error\",\"view\":\"board\"}": 1.892872,
+      "rendering, focus and browser file input: qualified resource targets {\"width\":1440,\"operation\":\"file-mutation-interruption\",\"view\":\"board\"}": 2.057076,
+      "rendering, focus and browser file input: qualified resource targets {\"width\":1440,\"operation\":\"file-upload-retirement\",\"view\":\"board\"}": 2.47857,
+      "rendering, focus and browser file input: qualified resource targets {\"width\":1440,\"operation\":\"worktree\",\"view\":\"board\"}": 1.382443,
+      "rendering, focus and browser file input: qualified resource targets {\"width\":1440,\"operation\":\"worktree\",\"view\":\"town\"}": 2.010213,
+      "rendering, focus and browser file input: qualified resource targets {\"width\":1440,\"operation\":\"worktree-changes\",\"view\":\"board\"}": 1.486124,
+      "rendering, focus and browser file input: qualified resource targets {\"width\":1440,\"operation\":\"worktree-files\",\"view\":\"board\"}": 1.498253,
+      "rendering, focus and browser file input: qualified resource targets {\"width\":1440,\"operation\":\"worktree-resource-rejection\",\"view\":\"board\"}": 1.547953,
+      "rendering, focus and browser file input: qualified resource targets {\"width\":390,\"operation\":\"context-menu-pull-failure\",\"view\":\"board\"}": 1.305984,
+      "rendering, focus and browser file input: qualified resource targets {\"width\":390,\"operation\":\"file-delete-retirement\",\"view\":\"board\"}": 2.111378,
+      "rendering, focus and browser file input: qualified resource targets {\"width\":390,\"operation\":\"file-download-error\",\"view\":\"board\"}": 1.83683,
+      "rendering, focus and browser file input: qualified resource targets {\"width\":390,\"operation\":\"file-mutation-interruption\",\"view\":\"board\"}": 2.067606,
+      "rendering, focus and browser file input: qualified resource targets {\"width\":390,\"operation\":\"file-upload-retirement\",\"view\":\"board\"}": 2.219462,
+      "rendering, focus and browser file input: qualified resource targets {\"width\":390,\"operation\":\"worktree\",\"view\":\"board\"}": 1.412761,
+      "rendering, focus and browser file input: qualified resource targets {\"width\":390,\"operation\":\"worktree\",\"view\":\"town\"}": 1.796495,
+      "rendering, focus and browser file input: qualified resource targets {\"width\":390,\"operation\":\"worktree-changes\",\"view\":\"board\"}": 1.8066,
+      "rendering, focus and browser file input: qualified resource targets {\"width\":390,\"operation\":\"worktree-files\",\"view\":\"board\"}": 1.653196,
+      "rendering, focus and browser file input: qualified resource targets {\"width\":390,\"operation\":\"worktree-resource-rejection\",\"view\":\"board\"}": 2.395291
+    },
+    "web/src/world/HostsFilter.test.ts": {
+      "geometry, rendering, focus and terminal lifecycle: Hosts scope {\"width\":1280,\"height\":1440,\"operation\":\"desk-reveal\",\"view\":\"desk\"}": 3.044124,
+      "geometry, rendering, focus and terminal lifecycle: Hosts scope {\"width\":1440,\"height\":2560,\"operation\":\"desk-reveal\",\"view\":\"desk\"}": 3.177494,
+      "geometry, rendering, focus and terminal lifecycle: Hosts scope {\"width\":1440,\"operation\":\"empty-filter\",\"view\":\"board\"}": 1.943024,
+      "geometry, rendering, focus and terminal lifecycle: Hosts scope {\"width\":1440,\"operation\":\"filters\",\"view\":\"board\"}": 7.179735,
+      "geometry, rendering, focus and terminal lifecycle: Hosts scope {\"width\":1440,\"operation\":\"hidden-selection\",\"view\":\"board\"}": 2.566985,
+      "geometry, rendering, focus and terminal lifecycle: Hosts scope {\"width\":1440,\"operation\":\"hidden-selection\",\"view\":\"town\"}": 4.774499,
+      "geometry, rendering, focus and terminal lifecycle: Hosts scope {\"width\":1440,\"operation\":\"hidden-spaces\",\"view\":\"board\"}": 1.849726,
+      "geometry, rendering, focus and terminal lifecycle: Hosts scope {\"width\":1440,\"operation\":\"hidden-spaces\",\"view\":\"town\"}": 2.611021,
+      "geometry, rendering, focus and terminal lifecycle: Hosts scope {\"width\":1440,\"operation\":\"room\",\"view\":\"board\"}": 2.588654,
+      "geometry, rendering, focus and terminal lifecycle: Hosts scope {\"width\":1440,\"operation\":\"spaces\",\"view\":\"board\"}": 3.148855,
+      "geometry, rendering, focus and terminal lifecycle: Hosts scope {\"width\":1440,\"operation\":\"spaces\",\"view\":\"town\"}": 4.74969,
+      "geometry, rendering, focus and terminal lifecycle: Hosts scope {\"width\":1440,\"operation\":\"town-idle\",\"view\":\"town\"}": 21.434311,
+      "geometry, rendering, focus and terminal lifecycle: Hosts scope {\"width\":1440,\"operation\":\"town-idle-draws\",\"view\":\"town\"}": 21.144883,
+      "geometry, rendering, focus and terminal lifecycle: Hosts scope {\"width\":1440,\"operation\":\"town-walk-anchor\",\"view\":\"town\"}": 25.728066,
+      "geometry, rendering, focus and terminal lifecycle: Hosts scope {\"width\":1512,\"height\":982,\"operation\":\"desk-reveal\",\"view\":\"desk\"}": 3.039137,
+      "geometry, rendering, focus and terminal lifecycle: Hosts scope {\"width\":2560,\"height\":1440,\"operation\":\"desk-reveal\",\"view\":\"desk\"}": 3.123451,
+      "geometry, rendering, focus and terminal lifecycle: Hosts scope {\"width\":390,\"height\":1200,\"operation\":\"town-idle\",\"view\":\"town\"}": 11.890621,
+      "geometry, rendering, focus and terminal lifecycle: Hosts scope {\"width\":390,\"height\":844,\"operation\":\"desk-reveal\",\"view\":\"desk\"}": 2.918302,
+      "geometry, rendering, focus and terminal lifecycle: Hosts scope {\"width\":390,\"height\":844,\"operation\":\"phone-hosts-menu\",\"view\":\"town\"}": 3.237694,
+      "geometry, rendering, focus and terminal lifecycle: Hosts scope {\"width\":390,\"operation\":\"empty-filter\",\"view\":\"board\"}": 1.972328,
+      "geometry, rendering, focus and terminal lifecycle: Hosts scope {\"width\":390,\"operation\":\"filters\",\"view\":\"board\"}": 6.735725,
+      "geometry, rendering, focus and terminal lifecycle: Hosts scope {\"width\":390,\"operation\":\"hidden-selection\",\"view\":\"board\"}": 2.486656,
+      "geometry, rendering, focus and terminal lifecycle: Hosts scope {\"width\":390,\"operation\":\"hidden-selection\",\"view\":\"town\"}": 3.78434,
+      "geometry, rendering, focus and terminal lifecycle: Hosts scope {\"width\":390,\"operation\":\"hidden-spaces\",\"view\":\"board\"}": 1.835711,
+      "geometry, rendering, focus and terminal lifecycle: Hosts scope {\"width\":390,\"operation\":\"hidden-spaces\",\"view\":\"town\"}": 2.403202,
+      "geometry, rendering, focus and terminal lifecycle: Hosts scope {\"width\":390,\"operation\":\"room\",\"view\":\"board\"}": 2.901677,
+      "geometry, rendering, focus and terminal lifecycle: Hosts scope {\"width\":390,\"operation\":\"spaces\",\"view\":\"board\"}": 3.470226,
+      "geometry, rendering, focus and terminal lifecycle: Hosts scope {\"width\":390,\"operation\":\"spaces\",\"view\":\"town\"}": 4.450213,
+      "geometry, rendering, focus and terminal lifecycle: Hosts scope {\"width\":390,\"operation\":\"town-idle-draws\",\"view\":\"town\"}": 8.771843,
+      "geometry, rendering, focus and terminal lifecycle: Hosts scope {\"width\":640,\"height\":350,\"operation\":\"phone-hosts-menu\",\"view\":\"town\"}": 3.076231
+    },
+    "web/src/world/HostsFilter.timeouts.test.ts": {
+      "the shell preserves qualified operational targets: {\"width\":1440,\"operation\":\"worktree-resource-timeout\",\"view\":\"board\"}": 2.271334,
+      "the shell preserves qualified operational targets: {\"width\":390,\"operation\":\"worktree-resource-timeout\",\"view\":\"board\"}": 2.196862
+    },
+    "web/src/world/NeedsYouCard.browser.test.ts": {
+      "Chat and Needs you show Claude's questions and trust choices (1280px)": 1.360461,
+      "Chat and Needs you show Claude's questions and trust choices (390px)": 1.042142,
+      "Needs you expands, opens its asker, badges the phone counter and the tab": 1.805388
+    },
+    "web/src/world/ProductionContexts.animated.test.ts": {
+      "production transport and mounted acceptance: {\"view\":\"town\",\"entry\":\"animated\",\"width\":1440}": 31.855569,
+      "production transport and mounted acceptance: {\"view\":\"town\",\"entry\":\"animated\",\"width\":390}": 31.467928
+    },
+    "web/src/world/ProductionContexts.board.test.ts": {
+      "production transport and mounted acceptance: {\"view\":\"board\",\"entry\":\"\",\"width\":1440}": 31.379417,
+      "production transport and mounted acceptance: {\"view\":\"board\",\"entry\":\"\",\"width\":390}": 30.207924,
+      "production transport and mounted acceptance: {\"view\":\"board\",\"entry\":\"maximum-scale\",\"width\":1440}": 24.760671,
+      "production transport and mounted acceptance: {\"view\":\"board\",\"entry\":\"maximum-scale\",\"width\":390}": 24.764009
+    },
+    "web/src/world/ProductionContexts.test.ts": {
+      "production transport and mounted acceptance: {\"view\":\"uncertain\",\"entry\":\"fallback\",\"width\":1440}": 2.251783,
+      "production transport and mounted acceptance: {\"view\":\"uncertain\",\"entry\":\"fallback\",\"width\":390}": 2.010035,
+      "production transport and mounted acceptance: {\"view\":\"uncertain\",\"entry\":\"popup\",\"width\":1440}": 2.715893,
+      "production transport and mounted acceptance: {\"view\":\"uncertain\",\"entry\":\"popup\",\"width\":390}": 2.461256,
+      "production transport and mounted acceptance: {\"view\":\"uncertain\",\"entry\":\"typing\",\"width\":1440}": 2.530275,
+      "production transport and mounted acceptance: {\"view\":\"uncertain\",\"entry\":\"typing\",\"width\":390}": 2.049646
+    },
+    "web/src/world/ProductionContexts.town.test.ts": {
+      "production transport and mounted acceptance: {\"view\":\"town\",\"entry\":\"\",\"width\":1440}": 47.991704,
+      "production transport and mounted acceptance: {\"view\":\"town\",\"entry\":\"\",\"width\":390}": 37.131623,
+      "production transport and mounted acceptance: {\"view\":\"town\",\"entry\":\"maximum-scale\",\"width\":1440}": 29.14611,
+      "production transport and mounted acceptance: {\"view\":\"town\",\"entry\":\"maximum-scale\",\"width\":390}": 27.931632
+    },
+    "web/src/world/SharedViewCreation.test.ts": {
+      "rendering, focus and terminal lifecycle: shared creation across views at 1440px (chat)": 21.380128,
+      "rendering, focus and terminal lifecycle: shared creation across views at 1440px (creation)": 41.929634,
+      "rendering, focus and terminal lifecycle: shared creation across views at 1440px (retention)": 21.380128,
+      "rendering, focus and terminal lifecycle: shared creation across views at 390px (chat)": 16.25076,
+      "rendering, focus and terminal lifecycle: shared creation across views at 390px (creation)": 25.938376,
+      "rendering, focus and terminal lifecycle: shared creation across views at 390px (retention)": 16.25076
+    },
+    "web/src/world/ShipyardLighthouse.browser.test.ts": {
+      "every Shipyard lighthouse lamp shows above ships at every zoom, on a phone and a desktop (#1148)": 22.92571
+    },
+    "web/src/world/TownOwnerTopology.browser.test.ts": {
+      "Town on its owner's topology (machine, rooms 1/2): every room's controls, one TUI, square buildings, a core start": 31,
+      "Town on its owner's topology (machine, rooms 2/2): every room's controls, one TUI, square buildings, a core start": 31,
+      "Town on its owner's topology (runtime, rooms 1/2): every room's controls, one TUI, square buildings, a core start": 31,
+      "Town on its owner's topology (runtime, rooms 2/2): every room's controls, one TUI, square buildings, a core start": 31
+    },
+    "web/src/world/WorldNavigatorWorktree.test.ts": {
+      "World navigator offers worktree actions on repository workspaces on desktop and phone, inert on a stale host": 4.986124
+    },
+    "web/src/world/WorldTerminalHandoff.test.ts": {
+      "rendering, focus, geometry and terminal lifecycle: World navigator and managed windows (admission)": 27.725456,
+      "rendering, focus, geometry and terminal lifecycle: World navigator and managed windows (authority)": 27.725456,
+      "rendering, focus, geometry and terminal lifecycle: World navigator and managed windows (resources)": 27.725456,
+      "rendering, focus, geometry and terminal lifecycle: World navigator and managed windows (resume)": 27.725456,
+      "rendering, focus, geometry and terminal lifecycle: World navigator and managed windows (shared-inspector)": 27.725456,
+      "rendering, focus, geometry and terminal lifecycle: World navigator and managed windows (shell)": 27.725456,
+      "rendering, focus, geometry and terminal lifecycle: World navigator and managed windows (windows)": 27.725456
+    },
+    "web/src/world/WorldViewErrorBoundary.test.ts": {
+      "a visual presenter failure stays inside its view boundary": 0.544153
+    },
+    "web/src/world/code/CodeView.browser.test.ts": {
+      "Code view: gate, full-bleed frame, folding rail and SSH host IDE": 2.567957
+    },
+    "web/src/world/code/KeptCodeView.browser.test.ts": {
+      "Code view keeps VS Code loaded behind Town and Spaces (#1262)": 2.107121
+    },
+    "web/src/world/groups/GroupsWindow.test.ts": {
+      "Groups panel uses current membership and refuses stale role confirmation at 1280x1440px": 2.230276,
+      "Groups panel uses current membership and refuses stale role confirmation at 1440x2560px": 3.028237,
+      "Groups panel uses current membership and refuses stale role confirmation at 1512x982px": 3.016091,
+      "Groups panel uses current membership and refuses stale role confirmation at 2560x1440px": 2.033905,
+      "Groups panel uses current membership and refuses stale role confirmation at 320x900px": 2.13596,
+      "Groups panel uses current membership and refuses stale role confirmation at 360x900px": 2.702105,
+      "Groups panel uses current membership and refuses stale role confirmation at 390x844px": 2.153952,
+      "Groups panel uses current membership and refuses stale role confirmation at 430x900px": 2.55692
+    },
+    "web/src/world/memory/MemoryLibrary.browser.test.ts": {
+      "the Library browses, edits, conflicts, deletes, adds and searches on a laptop": 4.664785,
+      "the Library browses, edits, conflicts, deletes, adds and searches on a phone": 4.605816
+    },
+    "web/src/world/memory/MemoryLibraryLifecycle.browser.test.ts": {
+      "the Library keeps drafts, hosts and searches to their owner": 1.607957
+    },
+    "web/src/world/town/TownCanvas.extended.test.ts": {
+      "the Office town renders, queues blocked agents and zooms into rooms at 1440px by 900px (extended, 0ms zoom frames)": 35.660752,
+      "the Office town renders, queues blocked agents and zooms into rooms at 390px by 844px (extended, 0ms zoom frames)": 26.626554,
+      "the Office town renders, queues blocked agents and zooms into rooms at 960px by 1080px (extended, 0ms zoom frames)": 37.212419
+    },
+    "web/src/world/town/TownCanvas.fold.test.ts": {
+      "the Office town renders, queues blocked agents and zooms into rooms at 1080px by 1920px (fold, 0ms zoom frames)": 9.519149,
+      "the Office town renders, queues blocked agents and zooms into rooms at 1440px by 900px (fold, 0ms zoom frames)": 8.278105,
+      "the Office town renders, queues blocked agents and zooms into rooms at 2560px by 1440px (fold, 0ms zoom frames)": 14.903798,
+      "the Office town renders, queues blocked agents and zooms into rooms at 390px by 844px (fold, 0ms zoom frames)": 4.623964,
+      "the Office town renders, queues blocked agents and zooms into rooms at 390px by 844px (fold-protected, 0ms zoom frames)": 4.302816,
+      "the Office town renders, queues blocked agents and zooms into rooms at 960px by 1080px (fold, 0ms zoom frames)": 6.957615
+    },
+    "web/src/world/town/TownCanvas.navigation.test.ts": {
+      "the Office town renders, queues blocked agents and zooms into rooms at 1440px by 900px (core, 0ms zoom frames)": 5.43493,
+      "the Office town renders, queues blocked agents and zooms into rooms at 1440px by 900px (navigation, 0ms zoom frames)": 10.251162,
+      "the Office town renders, queues blocked agents and zooms into rooms at 1440px by 900px (places, 0ms zoom frames)": 5.463195,
+      "the Office town renders, queues blocked agents and zooms into rooms at 1440px by 900px (plates, 0ms zoom frames)": 10.476842,
+      "the Office town renders, queues blocked agents and zooms into rooms at 390px by 844px (incremental, 0ms zoom frames)": 5.400904,
+      "the Office town renders, queues blocked agents and zooms into rooms at 390px by 844px (navigation, 0ms zoom frames)": 7.912763,
+      "the Office town renders, queues blocked agents and zooms into rooms at 390px by 844px (places, 0ms zoom frames)": 5.242476,
+      "the Office town renders, queues blocked agents and zooms into rooms at 390px by 844px (plates, 0ms zoom frames)": 6.295642,
+      "the Office town renders, queues blocked agents and zooms into rooms at 390px by 844px (protected, 0ms zoom frames)": 3.778793,
+      "the Office town renders, queues blocked agents and zooms into rooms at 412px by 915px (core, 0ms zoom frames)": 5.001511
+    },
+    "web/src/world/town/TownCanvas.portrait.test.ts": {
+      "the Office town renders, queues blocked agents and zooms into rooms at 1080px by 1920px (extended, 300ms zoom frames)": 35.25135,
+      "the Office town renders, queues blocked agents and zooms into rooms at 1080px by 1920px (extended-controls, 0ms zoom frames)": 37.914345,
+      "the Office town renders, queues blocked agents and zooms into rooms at 1080px by 1920px (extended-moves, 0ms zoom frames)": 37.914345,
+      "the Office town renders, queues blocked agents and zooms into rooms at 1080px by 1920px (extended-reflow, 0ms zoom frames)": 37.914345
+    },
+    "web/src/world/town/TownCanvas.test.ts": {
+      "the Office town renders, queues blocked agents and zooms into rooms at 1440px by 900px (bus, 0ms zoom frames)": 9.088732,
+      "the Office town renders, queues blocked agents and zooms into rooms at 1440px by 900px (max, 0ms zoom frames)": 34.414075,
+      "the Office town renders, queues blocked agents and zooms into rooms at 1440px by 900px (reception, 0ms zoom frames)": 11.994675,
+      "the Office town renders, queues blocked agents and zooms into rooms at 1440px by 900px (recovery, 0ms zoom frames)": 6.632093,
+      "the Office town renders, queues blocked agents and zooms into rooms at 1440px by 900px (typical, 0ms zoom frames)": 33.518102,
+      "the Office town renders, queues blocked agents and zooms into rooms at 390px by 844px (reception, 0ms zoom frames)": 6.958629,
+      "the Office town renders, queues blocked agents and zooms into rooms at 390px by 844px (recovery, 0ms zoom frames)": 4.349935,
+      "the Office town renders, queues blocked agents and zooms into rooms at 390px by 900px (bus, 0ms zoom frames)": 7.175784,
+      "the Office town renders, queues blocked agents and zooms into rooms at 390px by 900px (typical, 0ms zoom frames)": 17.237506
+    },
+    "web/src/world/town/TownFrameBudget.browser.test.ts": {
+      "Town frame budget (composer): display-rate pans, bounded zoom restyles and composer quiet": 27.339457,
+      "Town frame budget (desk-pan): display-rate pans, bounded zoom restyles and composer quiet": 21.38728,
+      "Town frame budget (home-pan): display-rate pans, bounded zoom restyles and composer quiet": 20.44119,
+      "Town frame budget (zoom): display-rate pans, bounded zoom restyles and composer quiet": 20.44119
+    },
+    "web/src/world/useSpacesTabWindowArrangement.browser.test.ts": {
+      "Spaces arrangement keeps terminal windows scoped and hands focus to the right owner": 3.098049
+    },
+    "web/src/world/windows/WindowFrame.test.ts": {
+      "shared window frame coordinates presentation with a coarse pointer": 4.169367,
+      "shared window frame coordinates presentation with a fine pointer": 4.554942,
+      "shared window frame coordinates presentation with a none pointer": 4.147521
+    },
+    "web/src/world/windows/WorldPanel.test.ts": {
+      "a view's panel opens a window, renders its content there and closes with Back": 1.719482
+    }
   },
   "seconds": {
-    "AnswerDeliveries.browser": 3.251,
-    "ApartmentsAvatars.browser": 3.06,
-    "BoardView": 85.314,
-    "ConcurrentContexts": 28.233,
-    "CoreControl.browser": 2.125,
-    "CoreSharedState.browser": 5.705,
-    "CoreTerminalWatch.browser": 5.329,
-    "CoreViewOnly.browser": 1.523,
-    "DeskView.browser": 15.36,
-    "HostsFilter": 152.766,
-    "HostsFilter.actions": 29.036,
-    "HostsFilter.arrangement": 29.404,
-    "HostsFilter.cold": 5.963,
-    "HostsFilter.creation": 19.128,
-    "HostsFilter.inspector-timeout": 2.551,
-    "HostsFilter.navigation": 35.125,
-    "HostsFilter.pending": 6.462,
-    "HostsFilter.resources": 36.161,
-    "HostsFilter.timeouts": 2.318,
-    "NeedsYouCard.browser": 3.346,
-    "ProductionContexts": 14.637,
-    "ProductionContexts.animated": 81.717,
-    "ProductionContexts.board": 120.748,
-    "ProductionContexts.town": 149.832,
-    "SharedViewCreation": 133.268,
-    "ShipyardLighthouse.browser": 16.47,
-    "TownOwnerTopology.browser": 170.387,
-    "WorldNavigatorWorktree": 3.156,
-    "WorldTerminalHandoff": 92.266,
-    "WorldViewErrorBoundary": 0.599,
-    "code/CodeView.browser": 5.04,
-    "groups/GroupsWindow": 11.45,
-    "memory/MemoryLibrary.browser": 6.2,
-    "memory/MemoryLibraryLifecycle.browser": 2.5,
-    "town/TownCanvas": 183.298,
-    "town/TownCanvas.extended": 139.429,
-    "town/TownCanvas.fold": 48.953,
-    "town/TownCanvas.navigation": 57.072,
-    "town/TownCanvas.portrait": 128.234,
-    "useSpacesTabWindowArrangement.browser": 3.122,
-    "windows/WindowFrame": 13.801,
-    "windows/WorldPanel": 1.852
+    "AnswerDeliveries.browser": 3.228511,
+    "ApartmentsAvatars.browser": 2.156933,
+    "BoardView": 109.596571,
+    "ComposerTypingStyle.browser": 2.528776,
+    "ConcurrentContexts": 32.409961,
+    "CoreControl.browser": 46.692705,
+    "CoreSharedState.browser": 5.611518,
+    "CoreTerminalWatch.browser": 5.568817,
+    "CoreViewOnly.browser": 1.629111,
+    "DeskView.browser": 13.989945,
+    "FeatureHosts.browser": 1.178553,
+    "HostsFilter.actions": 39.531424,
+    "HostsFilter.arrangement": 27.448962,
+    "HostsFilter.cold": 12.798894,
+    "HostsFilter.creation": 17.031458,
+    "HostsFilter.inspector-timeout": 3.822727,
+    "HostsFilter.navigation": 62.798102,
+    "HostsFilter.pending": 11.739773,
+    "HostsFilter.resources": 36.691155,
+    "HostsFilter": 172.038424,
+    "HostsFilter.timeouts": 4.468196,
+    "NeedsYouCard.browser": 4.207991,
+    "ProductionContexts.animated": 63.323497,
+    "ProductionContexts.board": 111.112021,
+    "ProductionContexts": 14.018888,
+    "ProductionContexts.town": 142.201069,
+    "SharedViewCreation": 143.129786,
+    "ShipyardLighthouse.browser": 22.92571,
+    "TownOwnerTopology.browser": 124,
+    "WorldNavigatorWorktree": 4.986124,
+    "WorldTerminalHandoff": 194.078192,
+    "WorldViewErrorBoundary": 0.544153,
+    "code/CodeView.browser": 2.567957,
+    "code/KeptCodeView.browser": 2.107121,
+    "groups/GroupsWindow": 19.857446,
+    "memory/MemoryLibrary.browser": 9.270601,
+    "memory/MemoryLibraryLifecycle.browser": 1.607957,
+    "town/TownCanvas.extended": 99.499725,
+    "town/TownCanvas.fold": 48.585447,
+    "town/TownCanvas.navigation": 65.258218,
+    "town/TownCanvas.portrait": 148.994385,
+    "town/TownCanvas": 131.369531,
+    "town/TownFrameBudget.browser": 89.609117,
+    "useSpacesTabWindowArrangement.browser": 3.098049,
+    "windows/WindowFrame": 12.87183,
+    "windows/WorldPanel": 1.719482
+  },
+  "sourceNotes": "Unchanged cases are measured CI JUnit. Listed split cases are estimates: predecessor seconds divided across cases plus 3–8 seconds repeated setup, raised where a local passing split took longer (with 10% headroom). Refresh from this PR CI JUnit to replace estimates.",
+  "estimatedCases": {
+    "web/src/world/WorldTerminalHandoff.test.ts": [
+      "rendering, focus, geometry and terminal lifecycle: World navigator and managed windows (shell)",
+      "rendering, focus, geometry and terminal lifecycle: World navigator and managed windows (windows)",
+      "rendering, focus, geometry and terminal lifecycle: World navigator and managed windows (admission)",
+      "rendering, focus, geometry and terminal lifecycle: World navigator and managed windows (resources)",
+      "rendering, focus, geometry and terminal lifecycle: World navigator and managed windows (resume)",
+      "rendering, focus, geometry and terminal lifecycle: World navigator and managed windows (authority)",
+      "rendering, focus, geometry and terminal lifecycle: World navigator and managed windows (shared-inspector)"
+    ],
+    "web/src/world/TownOwnerTopology.browser.test.ts": [
+      "Town on its owner's topology (machine, rooms 1/2): every room's controls, one TUI, square buildings, a core start",
+      "Town on its owner's topology (machine, rooms 2/2): every room's controls, one TUI, square buildings, a core start",
+      "Town on its owner's topology (runtime, rooms 1/2): every room's controls, one TUI, square buildings, a core start",
+      "Town on its owner's topology (runtime, rooms 2/2): every room's controls, one TUI, square buildings, a core start"
+    ],
+    "web/src/world/SharedViewCreation.test.ts": [
+      "rendering, focus and terminal lifecycle: shared creation across views at 1440px (chat)",
+      "rendering, focus and terminal lifecycle: shared creation across views at 1440px (creation)",
+      "rendering, focus and terminal lifecycle: shared creation across views at 1440px (retention)",
+      "rendering, focus and terminal lifecycle: shared creation across views at 390px (chat)",
+      "rendering, focus and terminal lifecycle: shared creation across views at 390px (creation)",
+      "rendering, focus and terminal lifecycle: shared creation across views at 390px (retention)"
+    ],
+    "web/src/world/BoardView.test.ts": [
+      "capture readiness (assets): controlled assets, resize/view fences and negative controls",
+      "capture readiness (views): controlled assets, resize/view fences and negative controls",
+      "capture readiness (recovery): controlled assets, resize/view fences and negative controls"
+    ],
+    "web/src/world/town/TownFrameBudget.browser.test.ts": [
+      "Town frame budget (home-pan): display-rate pans, bounded zoom restyles and composer quiet",
+      "Town frame budget (zoom): display-rate pans, bounded zoom restyles and composer quiet",
+      "Town frame budget (desk-pan): display-rate pans, bounded zoom restyles and composer quiet",
+      "Town frame budget (composer): display-rate pans, bounded zoom restyles and composer quiet"
+    ],
+    "web/src/world/town/TownCanvas.portrait.test.ts": [
+      "the Office town renders, queues blocked agents and zooms into rooms at 1080px by 1920px (extended-controls, 0ms zoom frames)",
+      "the Office town renders, queues blocked agents and zooms into rooms at 1080px by 1920px (extended-moves, 0ms zoom frames)",
+      "the Office town renders, queues blocked agents and zooms into rooms at 1080px by 1920px (extended-reflow, 0ms zoom frames)"
+    ]
   }
 }

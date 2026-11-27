@@ -256,7 +256,12 @@ test("CI exposes the protected delivery gate and runs the complete repository ch
   });
   expect(workflow.jobs.validation).toBeUndefined();
   expect(worldWorkflow.jobs["web-browser"]).toBeUndefined();
-  expect(workflow.jobs["world-browser"].needs).toBe("validation-scope");
+  expect(workflow.jobs["world-browser"].needs).toEqual([
+    "validation-scope",
+    "pr-description",
+    "dependency-security",
+    "browser-diagnostics",
+  ]);
   expect(workflow.jobs["unit-tests"].strategy?.matrix?.shard).toEqual([1, 2]);
   expect(workflow.jobs["unit-tests"].strategy?.["fail-fast"]).toBe(false);
   expect(workflow.jobs["unit-tests"].needs).toBe("validation-scope");
@@ -373,8 +378,13 @@ test("the latency trend measures the trend suites on quiet runners and reports w
 
 test("all World browser shards and the web browser suites run independently and retain failure evidence", () => {
   expect(workflow.jobs["world-browser"]).toMatchObject({
-    needs: "validation-scope",
-    if: "needs.validation-scope.outputs.world == 'true' && toJSON(fromJSON(needs.validation-scope.outputs.selection).world) != '[]'",
+    needs: [
+      "validation-scope",
+      "pr-description",
+      "dependency-security",
+      "browser-diagnostics",
+    ],
+    if: "!cancelled() && needs.validation-scope.result == 'success' && needs.validation-scope.outputs.world == 'true' && toJSON(fromJSON(needs.validation-scope.outputs.selection).world) != '[]'",
     uses: "./.github/workflows/world-browser.yml",
     with: { lane: "world" },
   });
@@ -811,4 +821,39 @@ test("release package verification extracts into a temp folder tar would unescap
   } finally {
     rmSync(root, { recursive: true, force: true });
   }
+});
+
+test("full CI caps simultaneous runners at fourteen without dropping browser cases", async () => {
+  const models = Bun.YAML.parse(
+    await Bun.file(
+      new URL(
+        "../.github/workflows/behavioral-verification.yml",
+        import.meta.url,
+      ),
+    ).text(),
+  ) as { jobs: Record<string, WorkflowJob> };
+  const unit = workflow.jobs["unit-tests"].strategy!.matrix!.shard as number[];
+  const web = worldWorkflow.jobs["web-shards"].strategy!.matrix!
+    .shard as number[];
+  const model = models.jobs.shards.strategy!.matrix!.shard as number[];
+  const world = worldWorkflow.jobs["world-browser"].strategy!["max-parallel"]!;
+  expect(
+    1 + unit.length + web.length + model.length + world,
+  ).toBeLessThanOrEqual(14);
+  // The early jobs finish before World takes its six runner slots.
+  for (const job of [
+    "pr-description",
+    "dependency-security",
+    "browser-diagnostics",
+  ])
+    expect(workflow.jobs["world-browser"].needs).toContain(job);
+  expect(world).toBe(6);
+  // Wait for their runner slots, but still run selected browser cases if either
+  // early check fails. Delivery independently enforces those failed checks.
+  expect(workflow.jobs["world-browser"].if).not.toContain(
+    "needs.pr-description.result",
+  );
+  expect(workflow.jobs["world-browser"].if).not.toContain(
+    "needs.dependency-security.result",
+  );
 });

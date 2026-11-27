@@ -83,6 +83,9 @@ if (import.meta.main) {
             ? "scripts/run-world-tests.ts"
             : "scripts/run-tests.ts",
           ...files,
+          ...(lane === "world" && shard
+            ? [`--shard=${shard}/${worldBrowserShards.length}`]
+            : []),
           `--parallel=${parallel}`,
           `--max-concurrency=${lane === "world" ? 1 : 2}`,
           `--retry-flaky=${lane === "unit" ? "unit" : "browser"}`,

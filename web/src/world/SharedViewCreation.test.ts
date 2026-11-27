@@ -37,9 +37,17 @@ import { chromeRenderingFlags } from "./testing/chromeRendering";
 
 const chrome =
   Bun.env.CHROME_BIN || Bun.which("google-chrome") || Bun.which("chromium");
-test.skipIf(!chrome).each([1440, 390])(
-  "rendering, focus and terminal lifecycle: shared creation across views at %ipx",
-  async (width) => {
+test
+  .skipIf(!chrome)
+  .each(
+    [1440, 390].flatMap((width) =>
+      ["chat", "creation", "retention"].map(
+        (scenario) => [width, scenario] as const,
+      ),
+    ),
+  )(
+  "rendering, focus and terminal lifecycle: shared creation across views at %ipx (%s)",
+  async (width, scenario) => {
     const dir = await mkdtemp(join(tmpdir(), "world-shared-creation-"));
     const assets = new Map<string, Blob>();
     const result = Promise.withResolvers<string[]>();
@@ -115,7 +123,7 @@ test.skipIf(!chrome).each([1440, 390])(
           "--no-first-run",
           "--no-default-browser-check",
           `--user-data-dir=${join(dir, "profile")}`,
-          server.url.href,
+          `${server.url.href}?scenario=${scenario}`,
         ],
         { stdout: "ignore", stderr: Bun.file(join(dir, "browser.log")) },
       );
