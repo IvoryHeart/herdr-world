@@ -98,6 +98,12 @@ test("queued session delivery is refused after kept replacement", async () => {
   );
 });
 
+test("the recognized replay agent retains its occupant through baseline and kill planning", () => {
+  const states = trace(["connect", "baseline", "plan"]);
+  replayCore(states);
+  expect(states.at(-1)!.c.confirmedOccupant).toBe(0);
+});
+
 test("missing foreground refuses dispatch through the production recipient gate", () => {
   const states = trace([
     "connect",

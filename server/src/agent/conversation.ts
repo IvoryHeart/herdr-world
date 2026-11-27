@@ -279,6 +279,8 @@ export interface ConversationSource {
     target: ConversationTarget & {
       text: string;
       session_fingerprint: string;
+      /** Durable answer's original native foreground; never inferred from a transcript. */
+      foreground_witness?: string;
       /** IDs of the user messages Chat showed; saves a reread over SSH. */
       baseline?: readonly string[];
       /** Internal durable consumers admit immediately before native submission. */

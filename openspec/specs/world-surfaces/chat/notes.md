@@ -11,6 +11,10 @@
 
 **Code:**
 
+- `server/src/adapters/agent-input.ts`
+- `server/src/adapters/herdr-runtime.ts`
+- `server/src/adapters/agent-input.test.ts`
+
 - `web/src/attachmentUploads.ts`
 - `web/src/components/InspectorChat.tsx`
 - `web/src/components/TerminalComposer.tsx`
@@ -32,3 +36,7 @@
 - Folder trust uses its pre-session process witness; do not fabricate a session fingerprint.
 - Successful input is not a confirmed answer; preserve uncertain receipts.
 - CLI ask answers use the durable ask ledger, not Chat's native prompt keys.
+
+## Foreground admission
+
+World agent text requires fresh native evidence of the addressed harness and session in the foreground. A shell, editor or unknown foreground refuses input even if its old agent report remains. An ask also retains its original process witness: after exit or replacement, Reception shows **Not sent** with not-attached evidence, and `herdr-world ask get ID` retains the answer. Old asks without the witness stay retrieval-only. No refused delivery revives for a new agent. Core cancels held native sends on observed foreground changes; neither runtime provides atomic foreground/session conditional typing, so the final native RPC race remains a runtime limitation.

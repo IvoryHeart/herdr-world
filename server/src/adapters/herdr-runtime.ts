@@ -5,6 +5,7 @@ import type {
   RuntimePorts,
   SessionProducers,
 } from "./runtime-ports";
+import { guardAgentInput } from "./agent-input";
 
 /** Untyped native replies are confined to the TUI provider/legacy escape hatch. */
 export type TuiControlClient = {
@@ -111,5 +112,24 @@ export function createTuiPassThrough(
   client: TuiControlClient,
 ): TuiPassThrough {
   if (kind !== "herdr") throw new Error("Raw runtime RPC is TUI-only");
-  return { kind: "herdr", call: (...args) => client.call(...args) };
+  return {
+    kind: "herdr",
+    async call(method, params = {}, ...rest) {
+      if (method === "agent.prompt" || method === "pane.send_input") {
+        const paneId = await guardAgentInput(
+          client,
+          params,
+          method === "pane.send_input",
+        );
+        const native = { ...params };
+        delete native.world_foreground;
+        return client.call(
+          method,
+          method === "agent.prompt" ? { ...native, target: paneId } : native,
+          ...rest,
+        );
+      }
+      return client.call(method, params, ...rest);
+    },
+  };
 }

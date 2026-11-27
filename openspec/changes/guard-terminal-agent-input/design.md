@@ -1,0 +1,16 @@
+## Context
+
+A terminal can survive the agent that asked a question. Core's native ask binding previously accepted a shell foreground; Herdr session reports and transcripts can also linger after the process exits. A plain-text prefix cannot make arbitrary shell input safe.
+
+## Decisions
+
+1. Foreground process evidence authorizes input. Launch argv, saved transcripts and stale status reports do not. Known shell foregrounds are refused even when their wrapper argv mentions a harness. Interpreter processes require a recognized harness invocation.
+2. The shared TUI control boundary checks the requested agent, its live foreground group leader (never just a child agent) and the same terminal/session again before writing. Callers retain their previously checked session through per-call async context, so transport preparation cannot rebind to a replacement. Prompt targets are resolved to an exact pane, and original lease dispatch callbacks still run immediately before the write.
+3. TUI asks capture one SHA-256 witness of pane, harness, foreground group and agent process IDs in the existing recipient JSON. Resolution and final submission compare this exact witness. Historical bindings without it stay retrieval-only. The existing storage catalog lists the field and its bound; no new table or data file is needed.
+4. Both core delivery paths require a recognized foreground harness. Native ask sends re-read terminal.get after durable preparation, compare the captured occupant/foreground and harness, and cancel a queued send on observed foreground or lease changes. Definite refusal records not attached; possible sends retain uncertain recovery without automatic replay.
+
+## Evidence and limits
+
+The focused matrix covers both runtimes and agent exit before answer recording, dispatch and the final input check, plus shell/editor/different harness/unknown/new process with stale session reports. It asserts zero input, Reception refusal, actual ask get and no revival by a replacement. Transport cases enumerate native input methods against refused foreground classes and session replacement around transport preparation. Core queued-send cancellation uses a deterministic held-send event. The core replay instantiates its abstract agent with recognized Claude rather than an unknown executable named `agent`; model actions and invariants are unchanged. Existing shared runtime/effect models retain the generation and opaque-recovery state spaces; this adds a fail-closed admission predicate, so no new Quint state machine is selected. Run the full verification gate for the changed contract owners and retain independent review.
+
+Core and TUI lack atomic conditional input against OS foreground/session. A switch after the final reply and before typing remains an upstream runtime boundary; observed core changes cancel held sends best-effort. Tests use isolated synthetic runtimes and real World storage, not the owner's services, and make no live-platform or exactly-once claim.

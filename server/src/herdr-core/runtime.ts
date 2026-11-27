@@ -1,5 +1,6 @@
 import type { CoreKeysResult, CoreSendResult } from "./delivery-params";
 import { coreOccupantFingerprint } from "./occupant";
+import { coreForegroundHarness } from "./recipient";
 import type {
   ConnectionRuntime,
   ConnectionRuntimeContext,
@@ -786,7 +787,9 @@ export function createCoreConnectionRuntime(
       if (fence.lease.runtime !== self || !fence.occupant)
         throw new CoreFenceError("dispatch", "lease");
       fence.check("dispatch");
-      if (!fence.occupant.foreground)
+      const original = view.terminal(fence.occupant.address);
+      const harness = original && coreForegroundHarness(original);
+      if (!fence.occupant.foreground || !harness)
         throw new CoreFenceError("dispatch", "foreground-changed");
       const current = client;
       if (!current) throw new CoreFenceError("dispatch", "not-actionable");
@@ -811,18 +814,34 @@ export function createCoreConnectionRuntime(
         | undefined;
       if (
         foreground?.pid !== fence.occupant.foreground.pid ||
-        foreground.name !== fence.occupant.foreground.name
+        foreground.name !== fence.occupant.foreground.name ||
+        coreForegroundHarness(record) !== harness
       )
         throw new CoreFenceError("dispatch", "foreground-changed");
       if (authorized && !authorized())
         throw new CoreFenceError("dispatch", "lease");
-      const result = await current.sendText(
-        fence.occupant.address,
-        text,
-        timeoutMs,
-      );
-      fence.check("publication");
-      return result;
+      const cancel = new AbortController();
+      const stopWatching = self.watch(() => {
+        try {
+          fence.check("dispatch");
+          const now = view.terminal(fence.occupant!.address);
+          if (!now || coreForegroundHarness(now) !== harness) cancel.abort();
+        } catch {
+          cancel.abort();
+        }
+      });
+      try {
+        const result = await current.sendText(
+          fence.occupant.address,
+          text,
+          timeoutMs ?? 15_000,
+          cancel.signal,
+        );
+        fence.check("publication");
+        return result;
+      } finally {
+        stopWatching();
+      }
     },
     label: (fence, labels) =>
       write(fence, true, async (current) => {

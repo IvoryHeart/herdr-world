@@ -3,6 +3,8 @@ import {
   type CoreAnswerConnections,
 } from "../herdr-core/ask-recipient";
 import { coreRecipientChange } from "../herdr-core/recipient";
+import { harnessName } from "../herdr-core/harness";
+import { agentForegroundWitness } from "../adapters/agent-input";
 import type { ReadyRuntimeLease } from "../connections/manager";
 import type { CoreConnectionRuntime } from "../herdr-core/runtime";
 import type { Conversation, ConversationSource } from "../agent/conversation";
@@ -121,6 +123,7 @@ export function createAskRecipients(deps: {
     if (
       !occupant ||
       !occupant.foreground ||
+      !harnessName(occupant.foreground.name) ||
       actor.terminal_id !== actor.pane_id ||
       occupant.fingerprint !== actor.agent_session_fingerprint
     )
@@ -179,7 +182,8 @@ export function createAskRecipients(deps: {
     if (occupant.fingerprint !== recipient.reported.fingerprint)
       return {
         state: "unconfirmed",
-        reason: "The asking program changed; answer not sent, use ask get",
+        reason:
+          "Original agent is not attached; answer not delivered, use ask get",
       };
     const delivery = host.delivery?.(
       recipient.pane_id,
@@ -191,7 +195,7 @@ export function createAskRecipients(deps: {
       : {
           state: "unconfirmed",
           reason:
-            "The asking foreground changed or native delivery is unavailable; use ask get",
+            "Original agent is not attached or native delivery is unavailable; answer not delivered, use ask get",
         };
   }
   async function capture(
@@ -225,6 +229,12 @@ export function createAskRecipients(deps: {
     }
     const scheme = chatScheme(conversation);
     if (!scheme || !conversation.session_fingerprint) return;
+    const inputForeground = await agentForegroundWitness(
+      host(lease).call,
+      actor.pane_id,
+      conversation.agent,
+    ).catch(() => null);
+    if (!inputForeground) return;
     const native = await paneActor(host(lease), actor.pane_id);
     const recipient: AnswerRecipient = {
       adapter: "herdr",
@@ -236,6 +246,7 @@ export function createAskRecipients(deps: {
         fingerprint: actor.agent_session_fingerprint,
       },
       conversation: { scheme, fingerprint: conversation.session_fingerprint },
+      input_foreground: inputForeground,
       captured_at: deps.clock.now(),
       service_incarnation: deps.incarnation,
       connection_generation: lease.generation,
@@ -301,7 +312,8 @@ export function createAskRecipients(deps: {
       return change
         ? {
             state: "unconfirmed",
-            reason: "The asking program changed; nothing sent, use ask get",
+            reason:
+              "Original agent is not attached; answer not delivered, use ask get",
           }
         : { state: "attached", core: true, lease };
     }
@@ -367,6 +379,20 @@ export function createAskRecipients(deps: {
         state: "unconfirmed",
         reason:
           "The conversation binding changed or is unverified; use ask get",
+      };
+    const inputForeground = await agentForegroundWitness(
+      host(lease).call,
+      recipient.pane_id,
+      conversation.agent,
+    ).catch(() => null);
+    if (
+      !recipient.input_foreground ||
+      inputForeground !== recipient.input_foreground
+    )
+      return {
+        state: "unconfirmed",
+        reason:
+          "Original agent is not attached to the terminal foreground; answer not delivered, use ask get",
       };
     const after = await paneActor(host(lease), recipient.pane_id);
     if (!lease.isCurrent() || after.state === "unknown")

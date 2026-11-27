@@ -880,10 +880,8 @@ export function createHerdrConversationSource(args: {
           message:
             "Chat could not read the SSH host's clock, so it could not check where the message goes. Nothing was sent; try again, or use the Terminal tab.",
         };
-      // Read the pane immediately before prompting, with no other await in
-      // between. Herdr's prompt takes no expected session (#4764), so a
-      // switch after this reply and before the prompt lands is still
-      // possible; the prompt's reply and the transcripts detect it below.
+      // The final transport rechecks this session and its live foreground.
+      // Herdr still cannot make input conditional atomically (#4764).
       let info = await agentInfo(pane_id);
       let verified: Map<string, string> | undefined;
       if (normalizeAgentName(stringValue(info?.agent)) === "codex") {
@@ -902,7 +900,6 @@ export function createHerdrConversationSource(args: {
         info = await agentInfo(pane_id);
       }
       const agent = normalizeAgentName(stringValue(info?.agent));
-      // The session this native observation ties to the pane, if any.
       const bindingOf = (seen: Record<string, unknown> | null) => {
         const name = normalizeAgentName(stringValue(seen?.agent));
         return seen && SESSION_AGENTS.has(name)
@@ -940,9 +937,7 @@ export function createHerdrConversationSource(args: {
               "Chat is still checking earlier messages. Nothing was sent.",
           };
       }
-      // After every preparation await: no menu where the text goes, then the
-      // agent once more with no await before the prompt (#4764 remains).
-      // Browser baseline IDs cannot supply authority for quoted screen text.
+      // Recheck menus/session before the transport's foreground admission.
       shown ??= await readShown(pane_id);
       if (shown.session_fingerprint !== session_fingerprint) return changed;
       const screenWitness = inputWitness(info);
@@ -957,7 +952,12 @@ export function createHerdrConversationSource(args: {
       if (bindingOf(info)?.fingerprint !== session_fingerprint) return changed;
       if (guard && (!info || !guard(info))) return changed;
       const startedAt = Date.now();
-      const submission = await submitPrompt(args.herdrCall, target, dispatched);
+      const submission = await submitPrompt(
+        args.herdrCall,
+        target,
+        dispatched,
+        info,
+      );
       if (!("result" in submission)) return submission;
       const { result } = submission;
       const endedAt = Date.now();

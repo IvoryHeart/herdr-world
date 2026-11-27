@@ -79,6 +79,29 @@ test("a replacement, changed foreground or retired lease sends nothing", async (
     );
   }
 });
+
+test.each(["bash", "vim", "unknown"])(
+  "a captured %s foreground never admits owner text despite a stale agent report",
+  async (name) => {
+    const { w, address, lease } = await setup();
+    w.fake.foreground(address, {
+      pid: 53000,
+      name,
+      argv: [name],
+      cwd: "/tmp/example",
+    });
+    await w.settle();
+    const fence = CoreOperationFence.admit(lease, address);
+    await expect(
+      lease.runtime.send(
+        fence,
+        "Question: unsafe\nprintf unsafe",
+        async () => true,
+      ),
+    ).rejects.toThrow("foreground-changed");
+    expect(w.fake.deliveredInput).toEqual([]);
+  },
+);
 test("a lost send reply is uncertain and is never retried", async () => {
   const { w, lease, fence } = await setup();
   w.fake.dropNextWriteReply = true;
@@ -88,6 +111,30 @@ test("a lost send reply is uncertain and is never retried", async () => {
   expect(w.fake.calls.filter((c) => c.method === "terminal.send")).toHaveLength(
     1,
   );
+});
+
+test("a held native answer is cancelled when its agent exits to bash", async () => {
+  const { w, address, lease, fence } = await setup();
+  w.fake.holdSends = true;
+  const submitted = Promise.withResolvers<void>();
+  w.fake.onCall = (method) => {
+    if (method === "terminal.send") submitted.resolve();
+  };
+  const sending = lease.runtime
+    .send(fence, "An answer", async () => true)
+    .then(
+      () => null,
+      (error) => error,
+    );
+  await submitted.promise;
+  w.fake.foreground(address, { pid: 53000, name: "bash", argv: ["bash"] });
+  await w.settle();
+  expect(await sending).not.toBeNull();
+  expect(w.fake.deliveredInput).toEqual([]);
+  expect(w.fake.calls.filter((c) => c.method === "terminal.send")).toHaveLength(
+    1,
+  );
+  expect(w.fake.calls.some((c) => c.method === "$/cancelRequest")).toBe(true);
 });
 
 test("recorded release send traffic replays byte-for-byte across split reads", async () => {

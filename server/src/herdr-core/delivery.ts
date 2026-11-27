@@ -205,6 +205,34 @@ export async function deliverCore(
       "unavailable",
       "The saved answer no longer needs delivery. Nothing was sent.",
     );
+  if (options.beforeSubmit) {
+    // Persisting a durable attempt awaited storage. Recheck the native
+    // foreground after that await, including changes not yet in the mirror.
+    try {
+      record = await lease.runtime.inspect(fence);
+    } catch {
+      return refused(
+        "unavailable",
+        "World could not recheck the foreground. Nothing was sent.",
+      );
+    }
+    const lateChange = coreRecipientChange(
+      recipient,
+      coreId,
+      record,
+      view.occupancy(address),
+    );
+    if (lateChange)
+      return refused(
+        lateChange,
+        changedMessage(lateChange, { ...record, remote: false }, nothing),
+      );
+    if (answering && statusWord(record) !== "blocked")
+      return refused(
+        "not-waiting",
+        `It is no longer waiting on a question. ${nothing}`,
+      );
+  }
   if (options.guard && !options.guard())
     return refused(
       "unavailable",

@@ -1,5 +1,5 @@
 import { createHash } from "node:crypto";
-import { harnessName, harnessOfArgv } from "./harness";
+import { foregroundHarness, harnessName, harnessOfArgv } from "./harness";
 
 /**
  * Who a reply is for (delivery.ts): the program a person addressed in a
@@ -27,6 +27,17 @@ export function foregroundOf(record: Occupant): [number, string] | null {
     typeof value.pid === "number" &&
     typeof value.name === "string"
     ? [value.pid, value.name]
+    : null;
+}
+
+/** Launch argv and old status reports cannot prove who owns terminal input. */
+export function coreForegroundHarness(record: Occupant): string | null {
+  const foreground = record.foreground as {
+    argv?: unknown;
+    name?: unknown;
+  } | null;
+  return foregroundOf(record)
+    ? foregroundHarness(foreground?.name, foreground?.argv)
     : null;
 }
 
@@ -95,14 +106,11 @@ export function coreRecipientChange(
   occupancy: number | null = null,
 ): "ended" | "changed" | null {
   if (!record || record.remote || record.state !== "live") return "ended";
-  const fg = record.foreground as { name?: unknown; argv?: unknown } | null;
   const expected =
     harnessOfArgv(record.argv) ??
     harnessName((record.status as { app?: unknown } | null)?.app);
-  if (
-    expected &&
-    expected !== (harnessOfArgv(fg?.argv) ?? harnessName(fg?.name))
-  )
+  const harness = coreForegroundHarness(record);
+  if (foregroundOf(record) && (!harness || (expected && expected !== harness)))
     return "changed";
   const now = coreRecipientToken(coreId, record, occupancy);
   if (!now) return "changed";

@@ -220,7 +220,7 @@ export class CoreProtocolFake {
       address: `t${index + 1}`,
       labels: { x: String(t.x), y: String(t.y) },
       // A kept replacement may reuse the pid; argv still tells them apart.
-      argv: [t.occupant === 0 ? "agent" : "/bin/sh"],
+      argv: [t.occupant === 0 ? "claude" : "/bin/sh"],
       state: "live",
       pid: 100,
       reported: false,
@@ -235,7 +235,7 @@ export class CoreProtocolFake {
     const record = (occupant: number, foreground: boolean) => ({
       ...this.record(0, { ...s.source[0]!, occupant }),
       remote: false,
-      foreground: foreground ? { pid: 101, name: "agent" } : null,
+      foreground: foreground ? { pid: 101, name: "claude" } : null,
     });
     return (
       this.subjects.coreRecipientChange(
@@ -283,7 +283,7 @@ export class CoreProtocolFake {
             born: true,
             x: Number(labels.x),
             y: Number(labels.y),
-            occupant: found.argv[0] === "agent" ? 0 : 1,
+            occupant: found.argv[0] === "claude" ? 0 : 1,
           };
         }
         // A removed terminal has no observable facts. Removal is permanent,
@@ -549,7 +549,7 @@ export class CoreProtocolFake {
         s.planEpoch = s.epoch;
         s.confirmedChild = plan.descendants.some((e) => e.address === "t2");
         s.confirmedOccupant =
-          this.latest!.terminal("t1")?.argv?.[0] === "agent" ? 0 : 1;
+          this.latest!.terminal("t1")?.argv?.[0] === "claude" ? 0 : 1;
         break;
       }
       case "kill": {

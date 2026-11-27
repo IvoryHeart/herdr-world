@@ -513,7 +513,8 @@ describe("a core asker's recipient (M5)", () => {
       await w.settle();
       expect(await recipients.resolve(recipient)).toEqual({
         state: "unconfirmed",
-        reason: "The asking program changed; answer not sent, use ask get",
+        reason:
+          "Original agent is not attached; answer not delivered, use ask get",
       });
       // The replacement cannot speak as the asker either.
       expect(

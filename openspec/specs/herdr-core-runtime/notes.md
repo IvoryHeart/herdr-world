@@ -8,6 +8,11 @@
 
 **Code:**
 
+- `quint/herdr-core-runtime.ts` (recognized foreground in the production replay)
+- `server/src/herdr-core/delivery.ts`, `server/src/herdr-core/delivery.test.ts`
+- `server/src/herdr-core/native-send.test.ts`
+- `server/src/herdr-core/recipient.ts`
+
 - `server/src/herdr-core/host-runtime.ts`
 - `server/src/herdr-core/host-runtime.test.ts`
 - `server/src/herdr-core/town-move.ts`
@@ -352,3 +357,7 @@ with source creation/merge dates and current session-qualified links for agent
 attribution. Missing sources never imply zero. Reads refuse unqualified pane/room
 filters, unsupported windows and arbitrary paths. `usage --fixture` runs a
 synthetic example offline, including an owner wait and a usage limit.
+
+## Foreground admission
+
+World agent text requires fresh native evidence of the addressed harness and session in the foreground. A shell, editor or unknown foreground refuses input even if its old agent report remains. An ask also retains its original process witness: after exit or replacement, Reception shows **Not sent** with not-attached evidence, and `herdr-world ask get ID` retains the answer. Old asks without the witness stay retrieval-only. No refused delivery revives for a new agent. Core cancels held native sends on observed foreground changes; neither runtime provides atomic foreground/session conditional typing, so the final native RPC race remains a runtime limitation.

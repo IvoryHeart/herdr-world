@@ -115,7 +115,7 @@ describe("one message reaches the agent once", () => {
     expect(w.fake.deliveredInput.map((t) => t.foreground)).toEqual(names);
   });
 
-  test("a program that reports status but no list names is reachable too", async () => {
+  test("a status report cannot authorize input to an unknown foreground program", async () => {
     const w = await world();
     const t = w.fake.create({
       argv: ["/opt/example/bin/helper"],
@@ -125,11 +125,36 @@ describe("one message reaches the agent once", () => {
     });
     expect(
       await deliverCore(w.lease(), t, await recipientOf(w, t), message("hi")),
-    ).toMatchObject({ status: "sent" });
+    ).toMatchObject({ status: "refused", reason: "changed" });
+    expect(w.fake.deliveredInput).toEqual([]);
   });
 });
 
 describe("World sends only to the program the person addressed", () => {
+  test("durable preparation cannot reuse an earlier foreground observation", async () => {
+    const w = await world();
+    const t = agent(w);
+    const token = await recipientOf(w, t);
+    const outcome = await deliverCore(
+      w.lease(),
+      t,
+      token,
+      message("Answer from owner"),
+      {
+        async beforeSubmit() {
+          w.fake.terminal(t)!.foreground = {
+            pid: 80000,
+            name: "bash",
+            argv: ["bash"],
+          };
+          return true;
+        },
+      },
+    );
+    expect(outcome).toMatchObject({ status: "refused", reason: "changed" });
+    expect(w.fake.deliveredInput).toEqual([]);
+  });
+
   test("the fresh native read refuses a replacement not yet in the mirror", async () => {
     const w = await world();
     const t = agent(w);
@@ -207,7 +232,7 @@ describe("World sends only to the program the person addressed", () => {
     )!;
     expect(await deliverCore(w.lease(), t, token, message("x"))).toMatchObject({
       status: "refused",
-      reason: "unsupported",
+      reason: "changed",
     });
     expect(w.fake.deliveredInput).toEqual([]);
   });

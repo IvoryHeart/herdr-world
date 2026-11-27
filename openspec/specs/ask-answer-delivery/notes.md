@@ -14,6 +14,14 @@
 
 **Code:**
 
+- `server/src/world/answer-foreground.test.ts`
+- `server/src/world/answer-dispatch.ts`
+- `server/src/adapters/agent-input.ts`
+- `server/src/adapters/agent-input.test.ts`
+- `server/src/herdr-core/runtime.ts`
+- `server/src/herdr-core/recipient.ts`
+- `server/src/storage/catalog.ts`
+
 - `shared/askCommands.ts`
 - `shared/questionAsker.ts`
 - `server/src/cli/world.ts`, `server/src/cli/world.test.ts`
@@ -42,3 +50,7 @@
 - Saved answers and delivery acknowledgements retain their exact asker.
 - A herdr-core default host makes the Herdr connection manager report the core
   ID as its default; never use `defaultId()` as an alert target (#1156).
+
+## Foreground admission
+
+World agent text requires fresh native evidence of the addressed harness and session in the foreground. A shell, editor or unknown foreground refuses input even if its old agent report remains. An ask also retains its original process witness: after exit or replacement, Reception shows **Not sent** with not-attached evidence, and `herdr-world ask get ID` retains the answer. Old asks without the witness stay retrieval-only. No refused delivery revives for a new agent. Core cancels held native sends on observed foreground changes; neither runtime provides atomic foreground/session conditional typing, so the final native RPC race remains a runtime limitation.

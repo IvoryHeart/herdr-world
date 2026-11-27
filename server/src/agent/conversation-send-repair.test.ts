@@ -198,7 +198,10 @@ test("review repair: a definite native non-submission permits the same command t
         text: "/permissions",
         session_fingerprint: fp,
       });
-    await expect(send()).rejects.toThrow("agent_not_ready");
+    expect(await send()).toMatchObject({
+      status: "refused",
+      reason: "changed",
+    });
     expect(state.prompts).toEqual([]);
     const result = await send();
     expect(result.status).toBe("sent");

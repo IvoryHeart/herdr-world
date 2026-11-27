@@ -135,7 +135,7 @@ export function createAnswerDispatcher(deps: {
           return {
             state: refused || !marked ? "refused" : "uncertain",
             reason: refused
-              ? "Core refused the answer or its original occupant/foreground changed; use ask get"
+              ? "Original agent is not attached or core refused the answer; not delivered, use ask get"
               : "The core send outcome is uncertain; never retried automatically, use ask get",
             ...(refused ? { not_submitted: true } : {}),
           };
@@ -197,6 +197,7 @@ export function createAnswerDispatcher(deps: {
             pane_id: recipient.pane_id,
             text: prompt.text,
             session_fingerprint: recipient.conversation.fingerprint,
+            foreground_witness: recipient.input_foreground,
             baseline: binding.conversation.messages
               .filter((message) => message.role === "user")
               .map((message) => message.id),
@@ -235,7 +236,7 @@ export function createAnswerDispatcher(deps: {
           state: retry ? "wait" : "refused",
           reason: retry
             ? "Chat submitted nothing; waiting for admission on the original binding"
-            : "Chat refused the original recipient or state; nothing sent, use ask get",
+            : `Original agent is not attached or Chat refused input; not delivered, use ask get. ${result.message}`,
           not_submitted: true,
         };
       } finally {

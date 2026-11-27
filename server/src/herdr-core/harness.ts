@@ -230,6 +230,22 @@ export function harnessOfArgv(argv: unknown): string | null {
   return harnessInvocation(argv)?.harness ?? null;
 }
 
+/** Input needs the agent itself in front; a shell wrapper may have finished it. */
+export function foregroundHarness(
+  name: unknown,
+  argv?: unknown,
+): string | null {
+  const first = Array.isArray(argv) ? argv[0] : undefined;
+  if (
+    [name, first].some(
+      (value) =>
+        typeof value === "string" && SHELLS.has(base(value).replace(/^-/, "")),
+    )
+  )
+    return null;
+  return harnessOfArgv(argv) ?? harnessName(name);
+}
+
 /**
  * Whether a foreground program could be running a harness out of sight: a
  * shell or interpreter leading its process group (`bash run.sh`,

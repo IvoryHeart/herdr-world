@@ -191,6 +191,15 @@ async function fixture(
           agentSessions: { conversation: source },
           ...herdrRuntimeFixture({
             async call(_method: string, params: Record<string, unknown>) {
+              if (_method === "pane.process_info")
+                return {
+                  process_info: {
+                    pane_id: info(id).pane_id,
+                    shell_pid: 10,
+                    foreground_process_group_id: 20,
+                    foreground_processes: [{ pid: 20, name: state.agent }],
+                  },
+                };
               if (params.pane_id !== info(id).pane_id)
                 throw new Error("pane_not_found: fixture");
               return { pane: info(id) };

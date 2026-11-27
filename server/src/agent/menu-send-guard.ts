@@ -13,6 +13,7 @@ import {
 } from "./pending-prompt";
 import { isSlashCommand } from "../../../shared/conversationInput";
 import type { HerdrCall } from "./session-types";
+import { withAgentInput } from "../adapters/agent-input";
 
 type Refusal = Extract<ConversationSendResult, { status: "refused" }>;
 type SendTarget = Parameters<ConversationSource["send"]>[0];
@@ -237,14 +238,20 @@ export async function submitPrompt(
   call: HerdrCall,
   target: SendTarget,
   dispatched: WeakSet<object>,
+  info: Record<string, unknown> | null = null,
 ): Promise<{ result: unknown } | Refusal> {
   dispatched.add(target);
   try {
     return {
-      result: await call("agent.prompt", {
-        target: target.pane_id,
-        text: target.text,
-      }),
+      result: await withAgentInput(info, () =>
+        call("agent.prompt", {
+          target: target.pane_id,
+          text: target.text,
+          ...(target.foreground_witness
+            ? { world_foreground: target.foreground_witness }
+            : {}),
+        }),
+      ),
     };
   } catch (error) {
     if (
@@ -259,6 +266,8 @@ export async function submitPrompt(
         message:
           "The agent is waiting on a question; answer it first. Nothing was sent.",
       };
+    if (error instanceof Error && /^agent_not_ready:/.test(error.message))
+      return { status: "refused", reason: "changed", message: error.message };
     throw error;
   }
 }
