@@ -293,14 +293,19 @@ jobs:
                   include-hidden-files: true
                   if-no-files-found: warn
                   retention-days: 7
+            - name: Summarize retry evidence
+              if: always()
+              continue-on-error: true
+              run: bun scripts/flaky-tests.ts summarize .agents/delivery
             - name: Retain flaky test evidence
               if: always()
+              continue-on-error: true
               uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7
               with:
                   name: flaky-tests-unit-${{ matrix.shard }}-${{ github.run_attempt }}
-                  path: .agents/delivery/flakes-*.json
+                  path: .agents/delivery/flaky/flaky.json
                   include-hidden-files: true
-                  if-no-files-found: error
+                  if-no-files-found: warn
                   retention-days: 7
 
     world-browser:
@@ -352,23 +357,22 @@ jobs:
                   no-cache: true
             - name: Download flaky test evidence
               if: always() && (needs.unit-tests.result != 'skipped' || needs.world-browser.result != 'skipped' || needs.web-browser.result != 'skipped')
+              continue-on-error: true
               uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8
               with:
-                  pattern: flaky-tests-*
+                  pattern: flaky-tests-*-${{ github.run_attempt }}
                   path: .agents/delivery/flakes
-                  merge-multiple: true
-            - name: Report flaky tests and enforce frequency limit
+            - name: Summarize retry evidence
               if: always()
-              env:
-                  GH_TOKEN: ${{ github.token }}
-                  VALIDATION_MODE: ${{ needs.validation-scope.outputs.mode }}
-              run: bun scripts/flaky-tests.ts gate
-            - name: Retain selected inventory for trusted frequency enforcement
+              continue-on-error: true
+              run: bun scripts/flaky-tests.ts summarize .agents/delivery/flakes
+            - name: Retain combined flaky test evidence
               if: always()
+              continue-on-error: true
               uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7
               with:
                   name: flaky-tests-delivery-${{ github.run_attempt }}
-                  path: .agents/delivery/flakes/inventory-*.json
+                  path: .agents/delivery/flaky/flaky.json
                   include-hidden-files: true
                   if-no-files-found: warn
                   retention-days: 7

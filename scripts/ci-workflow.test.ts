@@ -29,7 +29,12 @@ type WorkflowStep = {
   if?: string;
   "continue-on-error"?: boolean;
   env?: Record<string, string>;
-  with?: { "fetch-depth"?: number; filter?: string; ref?: string };
+  with?: {
+    "fetch-depth"?: number;
+    filter?: string;
+    ref?: string;
+    "persist-credentials"?: boolean;
+  };
   "working-directory"?: string;
 };
 
@@ -86,29 +91,83 @@ const worldWorkflow = Bun.YAML.parse(
   jobs: Record<string, WorkflowJob>;
 };
 
-test("flaky accounting is asynchronous and never owns the required Delivery status", async () => {
+test("flaky reporting uses only a daily schedule or manual default-branch run", async () => {
   const tracker = Bun.YAML.parse(
     await Bun.file(".github/workflows/flaky-tests.yml").text(),
   ) as {
-    on: { workflow_run: { workflows: string[]; types: string[] } };
-    concurrency: { group: string };
+    on: Record<string, unknown>;
+    name: string;
     jobs: Record<string, WorkflowJob>;
+    permissions: Record<string, string>;
+    concurrency: unknown;
   };
-  expect(tracker.on.workflow_run.workflows).toEqual(["CI"]);
-  expect(tracker.on.workflow_run.types).toEqual(["requested", "completed"]);
-  expect(tracker.concurrency.group).toBe("flaky-test-tracking");
-  expect(tracker.jobs.track["timeout-minutes"]).toBe(10);
-  expect(
-    Object.values(tracker.jobs).some((job) => job.name === "Delivery checks"),
-  ).toBe(false);
-  expect(workflow.jobs.delivery.needs).not.toContain("track");
-  const gate = workflow.jobs.delivery.steps.find(
-    (step) => step.run === "bun scripts/flaky-tests.ts gate",
+  expect(Object.keys(tracker.on).sort()).toEqual([
+    "schedule",
+    "workflow_dispatch",
+  ]);
+  expect(tracker.on.schedule).toEqual([{ cron: "17 4 * * *" }]);
+  expect(tracker.name).toBe("Daily flaky tests");
+  expect(Object.keys(tracker.jobs)).toEqual(["report"]);
+  expect(tracker.permissions).toEqual({
+    contents: "read",
+    actions: "read",
+    issues: "write",
+  });
+  expect(tracker.concurrency).toEqual({
+    group: "daily-flaky-tests",
+    "cancel-in-progress": false,
+  });
+  const job = tracker.jobs.report;
+  expect(job.if).toContain("github.event.repository.default_branch");
+  expect(job.steps[0]!.with?.ref).toBe(
+    "${{ github.event.repository.default_branch }}",
   );
-  expect(gate?.if).toBe("always()");
-  const source = await Bun.file("scripts/flaky-tests.ts").text();
-  expect(source.includes('"Flaky accounting"')).toBe(true);
-  expect(source.includes('context: "Delivery checks"')).toBe(false);
+  expect(job.steps[0]!.with?.["persist-credentials"]).toBe(false);
+  expect(
+    job.steps
+      .filter((step: WorkflowStep) => step.run?.includes("flaky-tests.ts"))
+      .map((step: WorkflowStep) => step.run),
+  ).toEqual(["bun scripts/flaky-tests.ts daily"]);
+  expect(
+    workflow.jobs.delivery.steps.some((step) =>
+      /flaky-tests\.ts (gate|track|pending)/.test(step.run || ""),
+    ),
+  ).toBe(false);
+  const download = workflow.jobs.delivery.steps.find(
+    (step) => step.name === "Download flaky test evidence",
+  );
+  expect(download?.with).toMatchObject({
+    pattern: "flaky-tests-*-${{ github.run_attempt }}",
+  });
+  expect(download?.with).not.toHaveProperty("merge-multiple");
+  for (const step of workflow.jobs.delivery.steps.filter((step) =>
+    /flaky|retry/i.test(step.name || ""),
+  )) {
+    expect(step["continue-on-error"]).toBe(true);
+  }
+});
+
+test("retry summaries and flaky.json artifacts stay inside existing test jobs and cannot fail them", () => {
+  for (const job of [
+    workflow.jobs["unit-tests"],
+    worldWorkflow.jobs["world-browser"],
+    worldWorkflow.jobs["web-shards"],
+  ]) {
+    const summarize = job.steps.find((step) =>
+      step.run?.startsWith("bun scripts/flaky-tests.ts summarize"),
+    );
+    expect(summarize?.if).toBe("always()");
+    expect(summarize?.["continue-on-error"]).toBe(true);
+    expect(summarize?.env?.GH_TOKEN).toBeUndefined();
+    const upload = job.steps.find(
+      (step) => step.name === "Retain flaky test evidence",
+    );
+    expect(upload?.if).toBe("always()");
+    expect(upload?.["continue-on-error"]).toBe(true);
+    expect((upload?.with as Record<string, unknown>)?.path).toBe(
+      ".agents/delivery/flaky/flaky.json",
+    );
+  }
 });
 
 test("World stability label selects fresh full evidence and three consecutive passes", () => {
@@ -369,7 +428,11 @@ test("unit shards run four files at a time, build only for their consumers and r
   expect(
     job.steps.find((step) => step.name === "Retain flaky test evidence")?.if,
   ).toBe("always()");
-  expect(job.steps.some((step) => step["continue-on-error"])).toBe(false);
+  expect(
+    job.steps
+      .filter((step) => step["continue-on-error"])
+      .map((step) => step.name),
+  ).toEqual(["Summarize retry evidence", "Retain flaky test evidence"]);
   expect(
     workflow.jobs["validation-scope"].steps.find(
       (step) => step.id === "unit-comparison",
@@ -491,9 +554,11 @@ test("all World browser shards and the web browser suites run independently and 
     "inputs.lane == 'world' && toJSON(fromJSON(inputs.selection).world) != '[]'",
   );
   expect(world?.["continue-on-error"] ?? false).toBe(false);
-  expect(world.steps.filter((step) => step["continue-on-error"])).toHaveLength(
-    0,
-  );
+  expect(
+    world.steps
+      .filter((step) => step["continue-on-error"])
+      .map((step) => step.name),
+  ).toEqual(["Summarize retry evidence", "Retain flaky test evidence"]);
   expect(world?.["runs-on"]).toBe("ubuntu-latest");
   expect(world?.strategy?.matrix?.shard).toBe(
     "${{ fromJSON(inputs.selection).worldShards }}",
@@ -535,7 +600,11 @@ test("all World browser shards and the web browser suites run independently and 
     uses: "./.github/workflows/world-browser.yml",
     with: { lane: "web" },
   });
-  expect(web.steps.filter((step) => step["continue-on-error"])).toHaveLength(0);
+  expect(
+    web.steps
+      .filter((step) => step["continue-on-error"])
+      .map((step) => step.name),
+  ).toEqual(["Summarize retry evidence", "Retain flaky test evidence"]);
   expect(
     web?.steps.find(
       (step) =>

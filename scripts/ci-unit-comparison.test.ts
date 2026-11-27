@@ -277,7 +277,7 @@ test("the real comparison command completes all twenty pairs and retains separat
             "utf8",
           ),
         ),
-      ).toEqual({ files: ["scripts/example.test.ts"], flaky: [] });
+      ).toEqual({ files: ["scripts/example.test.ts"], flaky: [], retried: [] });
     }
     expect(readFileSync(join(root, "summary.md"), "utf8")).toContain(
       "20 paired passes",
