@@ -47,7 +47,8 @@ source-name comparisons and current-tree fingerprints.
 
 Admit all three existing World case workers in CI. Native tracing remains
 exclusive across the shared Chrome, while behaviour cases may use the other
-slots. Locally the CPU count sets the worker/context bound. Keep all assertions,
+slots. Locally the CPU count sets the worker/context bound within the existing
+eighteen-worker planner ceiling. Keep all assertions,
 per-case and per-file deadlines, model memory reservations and CI job counts.
 Retain raw fixture/context phase records with JUnit. Admission wait is not scene
 execution and must not be double-counted when refreshing scheduling estimates.

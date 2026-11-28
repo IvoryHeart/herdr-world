@@ -167,7 +167,8 @@ selected lane to succeed; unselected lanes must be skipped. There are no interve
 repository, web-browser or behavioral aggregate runners in the PR graph.
 Each World runner admits its three existing case workers; browser-wide native
 tracing drains the shared browser and remains exclusive. Local World runs bound
-workers and contexts by the available CPU count. Raw fixture/context phase records
+workers and contexts by the available CPU count and the existing eighteen-worker
+planner ceiling. Raw fixture/context phase records
 are retained beside JUnit so admission wait can be separated from execution.
 Capture/probe tools join the runner's managed Chrome and dispose only their own
 context; standalone tools own a queued session, including one owner for repeated
