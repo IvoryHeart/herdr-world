@@ -104,7 +104,9 @@ test
         result.promise,
         page.exited,
         "Shared creation browser",
-        25_000,
+        // Main gave all three scenarios of a width 120 s together; CI's
+        // creation scenario alone takes about 25-30 s.
+        60_000,
       );
       phases.mark("scene");
       if (observed.length) console.info("Shared creation failures", observed);
