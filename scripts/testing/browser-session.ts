@@ -635,6 +635,8 @@ export async function toolBrowserSession(
   } = {},
   connection?: Record<string, string>,
 ) {
+  if (!connection && !process.env.HERDR_TEST_BROWSER && !Bun.which(chrome))
+    throw new Error(`Chrome executable is unavailable: ${chrome}`);
   const release = connection
     ? () => {}
     : await acquireCheckSlot("browser", { lane: "capture/probe tool" });

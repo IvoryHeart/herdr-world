@@ -33,6 +33,9 @@ if (mode === "chrome-spawn") {
   mock.module(
     fileURLToPath(new URL("../check-lock.ts", import.meta.url)),
     () => ({
+      acquireCheckSlot: async () => {
+        throw new Error("Unexpected browser admission in board-only fixture");
+      },
       acquireAllCheckSlots: async () => {
         waiting.resolve();
         await admission.promise;
@@ -65,7 +68,14 @@ if (mode === "chrome-spawn") {
   delete process.env.CI;
   process.env.CHROME_BIN = "synthetic-unexecuted-browser";
   const result = import("./run").then(() => "completed", String);
-  await waiting.promise;
+  await Promise.race([
+    waiting.promise,
+    result.then((error) => {
+      throw new Error(
+        `Scale fixture completed before queue admission: ${error}`,
+      );
+    }),
+  ]);
   if (mode === "output-reuse") {
     mkdirSync(out, { recursive: true });
     writeFileSync(join(out, "complete.json"), '{"complete":true,"rows":120}');
