@@ -27,13 +27,14 @@ export async function browserCase(
   profile: boolean,
   seconds: number,
   interaction = false,
+  connection?: Record<string, string>,
 ) {
   const chrome =
     process.env.CHROME_BIN ??
     Bun.which("google-chrome") ??
     Bun.which("chromium");
   if (!chrome) throw new Error("Chrome is required for the scale matrix");
-  const session = await toolBrowserSession(chrome, { gpu: false });
+  const session = await toolBrowserSession(chrome, { gpu: false }, connection);
   const child = session.browser;
   let cdp: CDP | undefined;
   try {
