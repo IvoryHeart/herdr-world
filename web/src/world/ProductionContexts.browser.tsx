@@ -758,6 +758,15 @@ async function run() {
       const { count } = await (
         await fetch("/input-complete?phase=" + stage)
       ).json();
+      // CDP can acknowledge a key dispatch before the page receives its
+      // keydown task. A snapshot of pendingInputs misses that admitted key
+      // under concurrent rendering. Drain the actual acknowledgements before
+      // retiring the phase; keep the exact count assertion below.
+      await observeCondition(
+        () =>
+          acknowledgements.filter((ack) => ack.phase === stage).length >= count,
+        "Admitted native input did not receive its acknowledgement",
+      );
       await Promise.all([...pendingInputs]);
       check(
         acknowledgements.filter((ack) => ack.phase === stage).length === count,
