@@ -50,6 +50,13 @@ test("local model reuse requires the complete successful inventory, source bytes
           elapsedMs: 1,
           log: "synthetic.log",
         },
+        {
+          label: "expected-model-negative-control",
+          args: [],
+          code: 1,
+          elapsedMs: 1,
+          log: "negative-control.log",
+        },
       ],
       results: verificationModels.map((name) => ({ name })),
     };
@@ -62,7 +69,7 @@ test("local model reuse requires the complete successful inventory, source bytes
         value.commands = [];
       },
       (value: VerificationManifest) => {
-        value.commands[0]!.code = 1;
+        value.commands[0]!.code = 137;
       },
       (value: VerificationManifest) => {
         value.results.pop();

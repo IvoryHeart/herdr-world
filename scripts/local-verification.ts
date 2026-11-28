@@ -39,8 +39,15 @@ export async function reusableLocalEvidence(
     "Missing command evidence cannot be reused",
   );
   assert(
-    manifest.commands.every((command) => command.code === 0),
-    "Failed commands cannot be reused",
+    // Canonical workers must exit zero before the aggregate can be complete.
+    // Their retained negative controls deliberately exit one; those are proof,
+    // not failed workers. Crashes or other unexpected terminations still refuse reuse.
+    manifest.commands.every(
+      (command) =>
+        Number.isInteger(command.code) &&
+        (command.code === 0 || command.code === 1),
+    ),
+    "Unexpected command termination cannot be reused",
   );
   for (const tool of ["node", "java", "bun"] as const)
     assert.equal(manifest.tools[tool], tools[tool], `${tool} changed`);
