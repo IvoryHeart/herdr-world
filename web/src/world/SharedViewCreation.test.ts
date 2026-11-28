@@ -33,6 +33,7 @@ import {
   waitForBrowserFixture,
 } from "../browserChrome";
 import { InputDriver } from "./browserAcceptanceFixture";
+import { casePhases } from "./testing/casePhases";
 import { chromeRenderingFlags } from "./testing/chromeRendering";
 
 const chrome =
@@ -48,6 +49,7 @@ test
   )(
   "rendering, focus and terminal lifecycle: shared creation across views at %ipx (%s)",
   async (width, scenario) => {
+    const phases = casePhases(`SharedViewCreation ${width}px ${scenario}`);
     const dir = await mkdtemp(join(tmpdir(), "world-shared-creation-"));
     const assets = new Map<string, Blob>();
     const result = Promise.withResolvers<string[]>();
@@ -110,6 +112,8 @@ test
     let browser: ReturnType<typeof Bun.spawn> | undefined;
     try {
       for (const [path, output] of bundle.assets) assets.set(path, output);
+      phases.mark("setup");
+      void pageRequested.promise.then(() => phases.mark("load"));
       browser = Bun.spawn(
         [
           chrome!,
@@ -136,6 +140,7 @@ test
         "Shared creation browser",
         120_000,
       );
+      phases.mark("scene");
       if (observed.length) console.info("Shared creation failures", observed);
       expect(observed).toEqual([]);
     } finally {
@@ -144,6 +149,7 @@ test
       if (browser) await browser.exited;
       server.stop(true);
       await rm(dir, { recursive: true, force: true });
+      phases.done();
     }
   },
   150_000 + BROWSER_STARTUP_TIMEOUT_MS,

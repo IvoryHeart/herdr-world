@@ -1,7 +1,7 @@
 import { connectCapture } from "./testing/connectCapture";
 import { captureScene, resizeCapture } from "./testing/captureScene";
 import { captureResumeViewports } from "./testing/resumeVisualCapture";
-import { expect, test } from "bun:test";
+import { afterAll, expect, test } from "bun:test";
 import { existsSync } from "node:fs";
 import { mkdtemp, readFile, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
@@ -11,6 +11,7 @@ import {
   BROWSER_STARTUP_TIMEOUT_MS,
   waitForBrowserFixture,
 } from "../browserChrome";
+import { casePhases } from "./testing/casePhases";
 import { chromeRenderingFlags } from "./testing/chromeRendering";
 
 const chrome =
@@ -19,6 +20,72 @@ const chrome =
   existsSync("/Applications/Google Chrome.app/Contents/MacOS/Google Chrome")
     ? "/Applications/Google Chrome.app/Contents/MacOS/Google Chrome"
     : Bun.which("google-chrome") || Bun.which("chromium"));
+
+// Every case loads the same bundle: build it once per test process.
+let bundleDirectory: Promise<string> | undefined;
+let bundle: ReturnType<typeof Bun.build> | undefined;
+afterAll(async () => {
+  if (bundleDirectory)
+    await rm(await bundleDirectory, { recursive: true, force: true });
+});
+function handoffBuild() {
+  bundle ??= build();
+  return bundle;
+}
+async function build() {
+  return Bun.build({
+    entrypoints: [join(import.meta.dir, "WorldTerminalHandoff.browser.tsx")],
+    outdir: await (bundleDirectory ??= mkdtemp(
+      join(tmpdir(), "world-terminal-handoff-bundle-"),
+    )),
+    target: "browser",
+    define: { __HERDR_WORLD_VERSION__: JSON.stringify("9.8.7-test") },
+    plugins: [
+      assetUrlImports,
+      {
+        name: "created-opener-completion",
+        setup(builder) {
+          builder.onLoad(
+            { filter: /useWorldCreatedTerminal\.ts$/ },
+            async (args) => {
+              const source = await Bun.file(args.path).text();
+              if (source.split("await opening;").length !== 2)
+                throw new Error("Created-terminal opener completion changed");
+              return {
+                contents:
+                  'import { createdOpenerCompleted } from "./testing/handoffAdmissionClock";\n' +
+                  source.replace(
+                    "await opening;",
+                    "try { await opening; } finally { createdOpenerCompleted(node.id); }",
+                  ),
+                loader: "ts",
+              };
+            },
+          );
+        },
+      },
+      {
+        name: "vite-raw-svg",
+        setup(builder) {
+          builder.onResolve({ filter: /\.svg\?raw$/ }, (args) => ({
+            path: Bun.resolveSync(
+              args.path.slice(0, -"?raw".length),
+              dirname(args.importer),
+            ),
+            namespace: "vite-raw-svg",
+          }));
+          builder.onLoad(
+            { filter: /.*/, namespace: "vite-raw-svg" },
+            async (args) => ({
+              contents: `export default ${JSON.stringify(await Bun.file(args.path).text())}`,
+              loader: "js",
+            }),
+          );
+        },
+      },
+    ],
+  });
+}
 
 test
   .skipIf(!chrome)
@@ -33,6 +100,7 @@ test
   ])(
   "rendering, focus, geometry and terminal lifecycle: World navigator and managed windows (%s)",
   async (scenario) => {
+    const phases = casePhases(`WorldTerminalHandoff ${scenario}`);
     const dir = await mkdtemp(join(tmpdir(), "world-terminal-handoff-"));
     const assets = new Map<string, Blob>();
     const captureDir = Bun.env.WORLD_WINDOW_CAPTURE_DIR;
@@ -159,90 +227,14 @@ test
     });
     let browser: ReturnType<typeof Bun.spawn> | undefined;
     try {
-      const build = await Bun.build({
-        entrypoints: [
-          join(import.meta.dir, "WorldTerminalHandoff.browser.tsx"),
-        ],
-        outdir: dir,
-        target: "browser",
-        define: { __HERDR_WORLD_VERSION__: JSON.stringify("9.8.7-test") },
-        plugins: [
-          assetUrlImports,
-          {
-            name: "created-opener-clock-and-completion",
-            setup(builder) {
-              builder.onLoad(
-                { filter: /createdTerminalAdmission\.ts$/ },
-                async (args) => {
-                  const source = await Bun.file(args.path).text();
-                  if (
-                    !source.includes("const timer = setTimeout(") ||
-                    !source.includes("clearTimeout(timer);")
-                  )
-                    throw new Error("Created-terminal timer port changed");
-                  return {
-                    contents:
-                      'import { admissionTimers } from "./testing/handoffAdmissionClock";\n' +
-                      source
-                        .replace(
-                          "const timer = setTimeout(",
-                          "const timer = admissionTimers.setTimeout(",
-                        )
-                        .replace(
-                          "clearTimeout(timer);",
-                          "admissionTimers.clearTimeout(timer);",
-                        ),
-                    loader: "ts",
-                  };
-                },
-              );
-              builder.onLoad(
-                { filter: /useWorldCreatedTerminal\.ts$/ },
-                async (args) => {
-                  const source = await Bun.file(args.path).text();
-                  if (source.split("await opening;").length !== 2)
-                    throw new Error(
-                      "Created-terminal opener completion changed",
-                    );
-                  return {
-                    contents:
-                      'import { createdOpenerCompleted } from "./testing/handoffAdmissionClock";\n' +
-                      source.replace(
-                        "await opening;",
-                        "try { await opening; } finally { createdOpenerCompleted(node.id); }",
-                      ),
-                    loader: "ts",
-                  };
-                },
-              );
-            },
-          },
-          {
-            name: "vite-raw-svg",
-            setup(builder) {
-              builder.onResolve({ filter: /\.svg\?raw$/ }, (args) => ({
-                path: Bun.resolveSync(
-                  args.path.slice(0, -"?raw".length),
-                  dirname(args.importer),
-                ),
-                namespace: "vite-raw-svg",
-              }));
-              builder.onLoad(
-                { filter: /.*/, namespace: "vite-raw-svg" },
-                async (args) => ({
-                  contents: `export default ${JSON.stringify(await Bun.file(args.path).text())}`,
-                  loader: "js",
-                }),
-              );
-            },
-          },
-        ],
-      });
+      const build = await handoffBuild();
       expect(build.success).toBe(true);
       for (const output of build.outputs) {
         assets.set(`/${basename(output.path)}`, output);
       }
       const browserLog = join(dir, "browser.log");
+      phases.mark("build");
+      void pageRequested.promise.then(() => phases.mark("load"));
       browser = Bun.spawn(
         [
           chrome!,
@@ -275,6 +267,7 @@ test
         // Measured case weights schedule work; they are not runtime deadlines.
         resumeCaptureDir ? 220_000 : 180_000,
       );
+      phases.mark("scene");
       if (Array.isArray(observed) && observed.length)
         console.info("World handoff failure detail", JSON.stringify(observed));
       expect(observed).toEqual([]);
@@ -283,6 +276,7 @@ test
       if (browser) await browser.exited;
       server.stop(true);
       await rm(dir, { recursive: true, force: true });
+      phases.done();
     }
   },
   250_000 + BROWSER_STARTUP_TIMEOUT_MS,

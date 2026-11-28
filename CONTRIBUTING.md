@@ -331,10 +331,17 @@ builds production assets once, instead of building the web app during both type
 checking and compilation.
 
 The protected CI job names remain unchanged. `bun run check:delivery` runs all
-local lanes: static checks first (later lanes read the build), then behavioral
-verification alongside units and World browser suites, followed by the other
-Chrome-driven tests in the same browser slot. It does not replace native platform
-acceptance or CI resource accounting. No suite asserts
+local lanes: static checks first (later lanes read the build), then units
+alongside World browser suites, the other Chrome-driven tests in the same browser
+slot, and behavioral verification last. Verification reuses a passing gate on
+identical inputs ([verification](verification/README.md)). The other
+Chrome-driven tests run as isolated contexts of one shared Chrome per test
+process (`web/src/testing/sharedChrome.ts`), with up to four test processes and
+one page per core. `bun run test:timings [lane…]` runs each lane (`static`,
+`units`, `world`, `web`, `verification`) alone and writes wall time, cgroup CPU,
+peak memory, load, runner milestones and the slowest files and cases to
+`.agents/delivery/timings.md`; repeat lanes it marks as measured under load.
+It does not replace native platform acceptance or CI resource accounting. No suite asserts
 a wall-clock budget: input delays are reported by the non-blocking World latency
 trend ([development](docs/development.md)). Each fixture still exercises its own
 concurrent production contexts and deadlines.

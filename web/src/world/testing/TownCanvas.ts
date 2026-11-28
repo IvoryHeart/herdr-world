@@ -9,6 +9,7 @@ import {
   waitForBrowserFixture,
   waitForChromePort,
 } from "../../browserChrome";
+import { casePhases } from "./casePhases";
 import { chromeRenderingFlags } from "./chromeRendering";
 import { connectCapture } from "./connectCapture";
 import {
@@ -61,6 +62,9 @@ export function registerTownCanvasCases(group: keyof typeof townCanvasCases) {
   test.skipIf(!chrome).each(townCanvasCases[group] as TownCanvasCase[])(
     "the Office town renders, queues blocked agents and zooms into rooms at %ipx by %ipx (%s, %ims zoom frames)",
     async (width, height, scale, flightFrameDelay) => {
+      const phases = casePhases(
+        `TownCanvas ${width}x${height} ${scale} ${flightFrameDelay}ms`,
+      );
       const dir = await mkdtemp(join(tmpdir(), "office-town-test-"));
       const assets = new Map<string, Blob>();
       const result = Promise.withResolvers<unknown>();
@@ -112,12 +116,14 @@ export function registerTownCanvasCases(group: keyof typeof townCanvasCases) {
           ],
           { stdout: "ignore", stderr: Bun.file(browserLog) },
         );
-        devtools = await openAtExactViewport(
-          await waitForChromePort(browser, join(dir, "profile"), browserLog),
-          fixtureUrl,
-          width,
-          height,
+        const port = await waitForChromePort(
+          browser,
+          join(dir, "profile"),
+          browserLog,
         );
+        phases.mark("chrome");
+        void pageRequested.promise.then(() => phases.mark("load"));
+        devtools = await openAtExactViewport(port, fixtureUrl, width, height);
         const failures = await waitForBrowserFixture(
           pageRequested.promise,
           result.promise,
@@ -155,6 +161,7 @@ export function registerTownCanvasCases(group: keyof typeof townCanvasCases) {
             `${error.message}: ${state?.result.value ?? "browser unavailable"}`,
           );
         });
+        phases.mark("scene");
         expect(failures).toEqual([]);
       } finally {
         devtools?.close();
@@ -164,6 +171,7 @@ export function registerTownCanvasCases(group: keyof typeof townCanvasCases) {
         }
         server.stop(true);
         await rm(dir, { recursive: true, force: true });
+        phases.done();
       }
     },
     LARGE_TOWN_FIXTURE_MS + 15_000 + BROWSER_STARTUP_TIMEOUT_MS,

@@ -290,7 +290,7 @@ bun run test <path>           # focused Bun test
 bun run test:quick            # non-Chromium suite
 CHROME_BIN=/path/to/chromium bun run test:browser
 bun run test:world            # all World browser acceptance suites
-bun run test:world --shard=1/18 --parallel=1 # case shard with heavy-scene isolation
+bun run test:world --shard=1/6 --parallel=1 # case shard with heavy-scene isolation
 bun run test --web-browser    # Chrome-driven suites outside World, as CI's web job runs them
 bun run build:site            # landing page/tutorial
 bun run check                 # repository checks and tests
@@ -299,7 +299,7 @@ bun run check:delivery        # full local gate, including behavioral verificati
 
 Use `bun run test <path>` for every ordinary test, including focused cases.
 
-World's 18 browser shards (at most six concurrent jobs) balance individual case durations from
+World's six browser shards (one job each, within the sixteen-job cap) balance individual case durations from
 `scripts/world-browser-timings.json` across three process-isolated workers each.
 The runner honors `--parallel=1` for CI's heavy-scene batch and `--parallel=2`
 for its lightweight batch; three logical timing queues do not override that limit.
@@ -320,6 +320,12 @@ until CI supplies their first observations. Keep all assertions when splitting;
 each case must create its own browser profile and fixture state. World handoff
 cases select shell, windows, admission, resources, resume, authority or shared
 Inspector checks; the shared-creation cases select Chat, creation or retention.
+
+The long World cases record where their time goes (`web/src/world/testing/casePhases.ts`):
+setup, Chrome start, page load, the scene or scripted steps, and teardown. Each run
+writes a slowest-first table to `.agents/delivery/world-<label>-phases.md`, and CI
+adds it to the World job summary. The runner builds every shared fixture bundle once
+per job; a fixture it does not prepare is built once per test process.
 
 Feature discovery uses committed `server/src/features/index.gen.ts` and
 `web/src/features/index.gen.ts` indexes. After adding or removing a feature's

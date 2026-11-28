@@ -345,6 +345,10 @@ the 38.4-second local estimate; weights never set test deadlines. Both batches
 publish distinct JUnit/timing artifacts; a failed batch stops the runner. Web
 browser shards retain two-file concurrency.
 
+Each World job summary ends with a per-case phase table (setup, Chrome start,
+page load, scene or steps, teardown; `scripts/world-case-phases.ts`), so a slow
+case shows whether startup or the scene itself costs the time.
+
 For repeated World acceptance, add the `world-browser-stability` PR label before
 opening the PR or before its next CI run. It selects the full fresh plan, even
 for metadata events, and runs each of the six World shards three consecutive

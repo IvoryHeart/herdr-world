@@ -23,6 +23,7 @@ import {
   waitForChromePort,
 } from "../../browserChrome";
 import { worldBrowserBundle } from "./worldBrowserBundle";
+import { casePhases } from "./casePhases";
 import { chromeRenderingFlags } from "./chromeRendering";
 import { recordLatency } from "./latencyTrend";
 import { productionWorkCeilings, workViolations } from "./workCeilings";
@@ -40,6 +41,9 @@ export function registerProductionContextTests(group: ProductionContextGroup) {
     )(
     "production transport and mounted acceptance: %j",
     async ({ view, entry, width }) => {
+      const phases = casePhases(
+        `ProductionContexts ${view}${entry ? ` ${entry}` : ""} ${width}px`,
+      );
       const dir = await mkdtemp(join(tmpdir(), "world-production-contexts-"));
       const bundle = await worldBrowserBundle("ProductionContexts");
       const fixture =
@@ -530,6 +534,8 @@ export function registerProductionContextTests(group: ProductionContextGroup) {
       });
       let browser: ReturnType<typeof Bun.spawn> | undefined;
       try {
+        phases.mark("setup");
+        void pageRequested.promise.then(() => phases.mark("load"));
         browser = Bun.spawn(
           [
             chrome!,
@@ -563,6 +569,7 @@ export function registerProductionContextTests(group: ProductionContextGroup) {
           "Production context acceptance deadline",
           90_000,
         );
+        phases.mark("scene");
         if (view === "uncertain")
           expect(
             calls.some(
@@ -724,6 +731,7 @@ export function registerProductionContextTests(group: ProductionContextGroup) {
         if (browser) await browser.exited;
         server.stop(true);
         await rm(dir, { recursive: true, force: true });
+        phases.done();
       }
     },
     // Also allow fixture/build setup and cleanup outside the browser watchdog.

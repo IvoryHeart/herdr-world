@@ -1,3 +1,4 @@
+import { appendFileSync, writeFileSync } from "node:fs";
 import { mkdtemp, rm, mkdir } from "node:fs/promises";
 import { availableParallelism, tmpdir } from "node:os";
 import { join } from "node:path";
@@ -15,6 +16,7 @@ import {
   worldCaseConcurrency,
   worldCaseTestArgs,
 } from "./world-browser-cases";
+import { casePhasesTable, readCasePhases } from "./world-case-phases";
 
 // Named suites narrow the shard, or select whole files without --shard.
 const allArgs = process.argv.slice(2);
@@ -53,6 +55,12 @@ const label = shard
   ? `shard-${shard.replace("/", "-of-")}`
   : (Bun.env.HERDR_WORLD_TEST_LABEL ?? "local");
 await mkdir(".agents/delivery", { recursive: true });
+// Cases append their phase seconds here (web/src/world/testing/casePhases.ts).
+const phasesFile = join(
+  process.cwd(),
+  `.agents/delivery/world-${label}.phases.jsonl`,
+);
+await rm(phasesFile, { force: true });
 // World runs take the browser slot. A nested runner already holds its
 // parent's slot and skips acquisition.
 const release = await acquireCheckSlot("browser", { lane: `world ${label}` });
@@ -71,6 +79,10 @@ try {
     await buildWorldBrowserBundle("town/TownCanvas", directory);
   if (files.some((path) => path.includes("/SharedViewCreation")))
     await buildWorldBrowserBundle("SharedViewCreation", directory);
+  if (files.some((path) => path.includes("/TownOwnerTopology")))
+    await buildWorldBrowserBundle("TownOwnerTopology", directory);
+  if (files.some((path) => path.includes("/TownFrameBudget")))
+    await buildWorldBrowserBundle("testing/town-scale/TownScale", directory);
   const run = async (
     paths: string[],
     suffix: string,
@@ -108,6 +120,7 @@ try {
           ...process.env,
           CHROME_BIN: chrome,
           HERDR_WORLD_TEST_ASSETS: directory,
+          HERDR_WORLD_TEST_PHASES: phasesFile,
           HERDR_TEST_EXCLUDE_WORLD_BROWSER: "0",
           ...heldEnv("browser"),
         },
@@ -145,6 +158,12 @@ try {
     );
   } else {
     process.exitCode = await run(files, "");
+  }
+  const phases = casePhasesTable(label, readCasePhases(phasesFile));
+  if (phases) {
+    writeFileSync(`.agents/delivery/world-${label}-phases.md`, phases);
+    if (Bun.env.GITHUB_STEP_SUMMARY)
+      appendFileSync(Bun.env.GITHUB_STEP_SUMMARY, `${phases}\n`);
   }
   console.info(
     `[world-test-runner] ${label}: completed in ${((performance.now() - began) / 1000).toFixed(1)} seconds`,

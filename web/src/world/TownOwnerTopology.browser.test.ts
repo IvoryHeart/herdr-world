@@ -17,9 +17,10 @@ import {
   waitForBrowserFixture,
   waitForChromePort,
 } from "../browserChrome";
-import { buildWorldBrowserBundle } from "./testing/browserBundles";
+import { casePhases } from "./testing/casePhases";
 import { chromeRenderingFlags } from "./testing/chromeRendering";
 import { connectCapture } from "./testing/connectCapture";
+import { worldBrowserBundle } from "./testing/worldBrowserBundle";
 
 // One machine as its owner runs it (#1198): two Herdr TUI connections on one
 // socket, a herdr-core, an unreachable SSH remote. In both Town layouts, real
@@ -194,8 +195,10 @@ test
   )(
   "Town on its owner's topology (%s, rooms %i/2): every room's controls, one TUI, square buildings, a core start",
   async (mode, part) => {
+    const phases = casePhases(`TownOwnerTopology ${mode} ${part}/2`);
     const dir = await mkdtemp(join(tmpdir(), "town-owner-topology-"));
-    const { assets } = await buildWorldBrowserBundle("TownOwnerTopology", dir);
+    const bundle = await worldBrowserBundle("TownOwnerTopology");
+    const { assets } = bundle;
     const snapshots = new Map([
       ["", JSON.stringify(await ownerSnapshot(false))],
       ["t9", JSON.stringify(await ownerSnapshot(true))],
@@ -219,7 +222,7 @@ test
         if (path === "/") requested.resolve();
         const asset =
           path === "/"
-            ? Bun.file(join(dir, "TownOwnerTopology/index.html"))
+            ? Bun.file(join(bundle.directory, "index.html"))
             : assets.get(path);
         if (asset) return new Response(asset);
         if (path.startsWith("/world/") || path.endsWith(".svg")) {
@@ -255,9 +258,11 @@ test
       const exited = child.exited.then(async (code) => {
         throw new Error(`Chrome exited ${code}: ${await Bun.file(log).text()}`);
       });
+      phases.mark("setup");
       connection = await connectCapture(
         await waitForChromePort(child, profile, log),
       );
+      phases.mark("chrome");
       const { command } = connection;
       await command("Emulation.setEmulatedMedia", {
         features: [{ name: "prefers-reduced-motion", value: "reduce" }],
@@ -793,11 +798,13 @@ test
           expect(after.failures).toEqual([]);
         }
       }
+      phases.mark("steps");
     } finally {
       connection?.close();
       await stopChrome(child);
       server.stop(true);
       await rm(dir, { recursive: true, force: true });
+      phases.done();
     }
   },
   240000,

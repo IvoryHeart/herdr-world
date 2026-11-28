@@ -9,7 +9,8 @@ import {
   waitForBrowserFixture,
   waitForChromePort,
 } from "../../browserChrome";
-import { buildWorldBrowserBundle } from "../testing/browserBundles";
+import { casePhases } from "../testing/casePhases";
+import { worldBrowserBundle } from "../testing/worldBrowserBundle";
 import { SWIFTSHADER_FLAGS } from "../testing/chromeRendering";
 import { gestureTrace } from "../testing/frameTrace";
 import { connectCapture } from "../testing/connectCapture";
@@ -79,11 +80,9 @@ const UNDRAWN_SHARE = 1 / 20;
 test.skipIf(!chrome).each(["home-pan", "zoom", "desk-pan", "composer"])(
   "Town frame budget (%s): display-rate pans, bounded zoom restyles and composer quiet",
   async (phase) => {
+    const phases = casePhases(`TownFrameBudget ${phase}`);
     const dir = await mkdtemp(join(tmpdir(), "town-frame-budget-"));
-    const { assets } = await buildWorldBrowserBundle(
-      "testing/town-scale/TownScale",
-      dir,
-    );
+    const { assets } = await worldBrowserBundle("testing/town-scale/TownScale");
     const requested = Promise.withResolvers<void>();
     const loaded = Promise.withResolvers<void>();
     const server = Bun.serve({
@@ -113,6 +112,7 @@ test.skipIf(!chrome).each(["home-pan", "zoom", "desk-pan", "composer"])(
     try {
       const profile = join(dir, "profile"),
         log = join(dir, "chrome.log");
+      phases.mark("setup");
       child = Bun.spawn(
         [
           chrome!,
@@ -145,6 +145,7 @@ test.skipIf(!chrome).each(["home-pan", "zoom", "desk-pan", "composer"])(
       connection = await connectCapture(
         await waitForChromePort(child, profile, log),
       );
+      phases.mark("load");
       const { command, on } = connection;
       const evaluate = async (expression: string, deadlineMs?: number) => {
         const reply = await command(
@@ -411,11 +412,13 @@ test.skipIf(!chrome).each(["home-pan", "zoom", "desk-pan", "composer"])(
         expect(typingDraws).toBeLessThanOrEqual(4);
         expect(resumedDraws).toBeGreaterThan(typingDraws);
       }
+      phases.mark("steps");
     } finally {
       connection?.close();
       await stopChrome(child);
       server.stop(true);
       await rm(dir, { recursive: true, force: true });
+      phases.done();
     }
   },
   120000 + BROWSER_STARTUP_TIMEOUT_MS,
