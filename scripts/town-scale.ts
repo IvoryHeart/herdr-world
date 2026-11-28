@@ -17,6 +17,10 @@ import { mkdir, mkdtemp, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { basename, join, resolve } from "node:path";
 import { Cdp } from "./town-golden";
+import {
+  assetUrlImports,
+  rawSvgImports,
+} from "../web/src/world/testing/assetUrlImports";
 
 export const townScaleViewports = [
   { name: "laptop", width: 1512, height: 982 },
@@ -70,6 +74,7 @@ export async function runTownScale(options: {
     });
     const browser = session.browser;
     const build = await Bun.build({
+      plugins: [rawSvgImports, assetUrlImports],
       entrypoints: [page],
       outdir: join(scratch, "bundle"),
       target: "browser",

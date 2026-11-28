@@ -18,6 +18,10 @@ import { mkdir, mkdtemp, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { basename, join, resolve } from "node:path";
 import { Cdp } from "./town-golden";
+import {
+  assetUrlImports,
+  rawSvgImports,
+} from "../web/src/world/testing/assetUrlImports";
 import { socialCardHtml, socialCards } from "./site-social-card";
 
 type ZoomStep = "all" | "in" | "out";
@@ -128,6 +132,7 @@ export async function runSiteScreenshots(options: {
     });
     const browser = session.browser;
     const build = await Bun.build({
+      plugins: [rawSvgImports, assetUrlImports],
       entrypoints: [page],
       outdir: join(scratch, "bundle"),
       target: "browser",
