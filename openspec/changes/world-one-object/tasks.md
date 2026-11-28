@@ -135,7 +135,10 @@ important now, one world is the most important bit." The agent record comes firs
 colour and look follow once the other steps are on the World path. The step keeps
 its number so references to it stay valid.
 
-Needs the agent and place records of `world-agent-identity` (tasks 3, 6, 7.2 and 7.3).
+Needs the agent records of `world-agent-identity` (tasks 3 and 6), place identity
+(the `place` binding of its design §4, where a core room is the `herdr-app` space ID
+plus the core's durable ID), and the copies of tasks 7.2 and 7.3 onto agents and
+places.
 
 - [ ] 3.1 The shared colour and look resolver (`world-agent-identity` task 8.1) runs on
   the service. `world.snapshot` carries each agent's, place's and room's resolved

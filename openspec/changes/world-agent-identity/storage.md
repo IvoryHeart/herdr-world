@@ -16,7 +16,7 @@ none pending. A retired table is kept one release and never deleted automaticall
 | Table | Holds | Limit |
 | --- | --- | --- |
 | `entities` | one row per agent (later: place, note, crew, conversation) | none: never trimmed |
-| `facts` | each entity's fields, one row per field and item, with its owner | 4 KiB per value; never trimmed |
+| `facts` | each entity's fields, one row per field and item; indexed by `(field, item)`; each field's owner is declared once in the catalog, not per row | 4 KiB per value; never trimmed |
 
 ## Folded into `entities` and `facts`, then retired
 
@@ -24,7 +24,7 @@ none pending. A retired table is kept one release and never deleted automaticall
 | --- | --- | --- |
 | `board_colors` | agent `colour`; host, room and tab `place` colour | step 3, colour and look (last), with tasks 7.2 and 7.3 |
 | `board_appearance` | agent `look` and `status_text`; tab place status | step 3, with task 7.3 |
-| `board_desk_pins` | agent `town.pin` and rank | step 6, pins (pin) and step 9 (rank) |
+| `board_desk_pins` | the entity's one `pin` and its `town.rank` (no second pin field) | step 6, pins (pin) and step 9 (rank) |
 | `board_room_pins` | room place `town.spot` | step 9, placement and order, with task 7.2 |
 | `board_anchors`, `board_offsets`, `board_folded` | agent or note `board.place`, `board.folded` | step 9 |
 | `board_pinned` | the one pin per entity | step 6 |
@@ -32,14 +32,15 @@ none pending. A retired table is kept one release and never deleted automaticall
 | `board_groups`, `board_spawns` | `crew` entities with `member` items; agent `spawned_by` | step 8 |
 | `board_group_changes` | history entries in `ledger_changes` | step 8 |
 | `profile_legacy_assignments`, `profile_imported_connections` | agent `profile` (finishes the import) | step 12, profiles and Town Master |
-| `board_meta` | nothing: the World revision | step 14, once no `board_*` table is live |
 
 ## Gain an agent reference, stay as records
 
 | Table | Change | When |
 | --- | --- | --- |
 | `terminal_marks` | Desk marks and watchlist gain `agent_id`, keep their lifetimes | task 7.4 |
-| `apartment_residents`, `apartment_evictions` | residents gain `agent_id`; folding them into conversation items is a later Apartments step, not scheduled | task 7.4 |
+| `apartment_residents` | residents gain `agent_id` (task 7.4); then Apartments reads agent `conversation` items and stops writing the table (task 7.5). Pre-agent sessions match no agent and nothing proves which agent ran them, so they stay and keep displaying; the table retires only if the check finds none pending | tasks 7.4, 7.5 |
+| `apartment_evictions` | gains `agent_id`; stays, as the user's list of sessions never to return | task 7.4 |
+| `usage-activity.json` (data file) | per-agent rows gain `agent_id`; stays, keyed by agent and day | task 7.4 |
 | `world_bindings` | gains the agent `seat` policy | task 4.1 (this change) |
 
 ## Stay as they are
@@ -53,7 +54,14 @@ none pending. A retired table is kept one release and never deleted automaticall
 | `agent_profiles`, `profile_chimes`, `profile_store_meta` | launch profiles and chime settings; an agent's profile assignment moves in step 12, the profiles do not |
 | `auto_sync_runs` | run status |
 | `board_notes`, `board_strings`, `board_shapes`, `board_elements` | authored Board records; not in a World-as-one step |
-| `core_topology` | World is herdr-core's source for rooms and tabs; its rooms become `place` entities with task 7.2, retirement not scheduled |
+| `board_meta` | the Board revision and family flags; it stays while any `board_*` table above is live |
+| `core_topology` | migration acknowledgement, created-ID provenance and checkout metadata only ([app layout design](../../specs/herdr-core-runtime/app-layout-design.md)); core room membership and names come from the `herdr-app` document. Its rows never become places: a core room place binds to the `herdr-app` space ID plus the core's durable ID (task 7.2), and folder-fallback groups are derived, not places |
 
-Count: 43 tables today, 45 after this change, and 29 once steps 3, 6, 8, 9, 12 and
-14 retire the 16 tables in the folded list.
+Count: 43 tables today and 45 after this change. Steps 3, 6, 8, 9 and 12 retire the
+15 tables in the folded list, leaving 30 live tables (`board_meta` stays with the
+authored Board tables). Retired tables stay in the file as `retired_*` for one
+release and are not counted.
+
+Rollback: an older release refuses the newer `world.sqlite` and names its
+pre-upgrade snapshot, which restores every old row; rolling back a retiring step
+renames its `retired_*` tables back ([design](design.md#4-storage-and-migration)).

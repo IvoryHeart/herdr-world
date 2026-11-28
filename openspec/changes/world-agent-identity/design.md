@@ -131,21 +131,37 @@ The agent is the first kind in the single-model plan's two unified tables,
 `entities` and `facts`. They are the only tables this change adds. Hosts, rooms
 and tabs that carry their own colour, spot or status become `place` entities in
 the same tables later (task 7.2), and so do the other kinds the World-as-one steps
-move (notes, crews, conversations). Seat bindings stay in `world_bindings`, IDs
-come from `world_ids`, and every change is a history entry in `ledger_changes`.
+move (notes, crews, conversations). Seat and place bindings stay in
+`world_bindings` and IDs come from `world_ids`. Agent IDs belong to one World
+instance: they are issued by its `world.sqlite`, and another World on another
+machine issues its own, so an ID never names an agent across Worlds.
 
 | Table | Columns | Identity | Limit |
 | --- | --- | --- | --- |
 | `entities` | `id` (in `world_ids`), `kind` (`agent` for now), `created_at`, `ended_at` | the World ID, `a-` and eight symbols for an agent, never reused | none: never trimmed; the user decides |
-| `facts` | `entity_id`, `field`, `item`, `value` (JSON), `owner`, `revision`, `updated_at` | `(entity_id, field, item)`; `item` is empty for a single value | 4 KiB per value; rows never trimmed |
+| `facts` | `entity_id`, `field`, `item`, `value` (JSON), `revision`, `updated_at`; index `(field, item)` | `(entity_id, field, item)`; `item` is empty for a single value | 4 KiB per value; rows never trimmed |
 
-- **`owner`** is `world` for a value World owns (colour, pin, the user's choices)
-  or the adapter that owns it (`herdr`, `core`, `claude`, `codex`) for a last-known
-  source value World keeps, such as the name or the harness. When a source takes a
-  field over, the source wins and the old World value stays in history.
+- **One owner per field, declared once.** A field's owner is declared with
+  `declareData` in `server/src/storage/catalog.ts`, never per row: `world` for a
+  value World owns, or `observed` with the source adapter for a last-known value
+  World keeps from a runtime or harness. When a source takes a field over later,
+  the declaration changes once, the source wins, and the old World value stays in
+  history.
+- **Who writes.** Store writes come from exactly two places: the World command
+  executor, for World-owned fields and End, and the resolver, for observed fields
+  and new agents. No view, adapter or migration writes around them.
+- **History.** Only commands are history entries in `ledger_changes`. Observed
+  updates (a label, a new conversation, a new agent the resolver admits) record
+  nothing; the observation they come from is the evidence. Until World-as-one step
+  13 replaces it, `ledger_changes` is still trimmed at 2,000 entries, so an agent
+  command's history entry is not yet kept forever; the record itself is.
+- **`name` is World-owned, with a runtime mirror.** World stores a name only when a
+  rename command sets it (World-as-one step 5.2); the command writes the record,
+  then the runtime's tab or pane name. Until a name is stored, the agent's name is
+  its seat's runtime name, read from the observation and never copied.
 - **`item`** makes a field hold several values without a table of its own. The
   conversation history is the field `conversation` with one item per conversation,
-  keyed `<host>/<harness>/<conversation ID>`, and a value holding first and last
+  keyed `<harness>/<conversation ID>`, and a value holding the host, first and last
   seen and the source. The current conversation is the field `conversation.current`,
   whose value names one of those items. Later relations (group membership, a
   `works on` link to a PR) are items keyed by the other entity's ID. This is why
@@ -155,14 +171,29 @@ come from `world_ids`, and every change is a history entry in `ledger_changes`.
   Live, away and unresolved are derived on each revision from the seat binding and
   the current observation, so a World restart shows every agent unresolved until
   its terminal is seen again, as section 1 requires.
-- **Fields this change writes:** `harness` and `name` and `folder` (labels, owned by
-  the runtime or harness, last known), and `conversation` and `conversation.current`
-  (owned by the harness). Each World-as-one step registers the fields it moves and
-  deletes the old store's writer for them in the same PR. Nothing is registered ahead
-  of its step.
+- **Fields this change declares:** `harness` and `folder` (observed labels, last
+  known) and `conversation` and `conversation.current` (observed, owned by the
+  harness). Each World-as-one step declares the fields it moves and deletes the old
+  store's writer for them in the same PR. Nothing is declared ahead of its step.
 - **Store operations:** create, set label, append conversation, set fact and end,
   each one transaction in the World store's single writer, each raising the World
   revision once. None deletes a row; there is no trim.
+
+**Place identity.** A place entity binds through `world_bindings` with a `place`
+policy, one row per place:
+
+| Place | Bound to | Close |
+| --- | --- | --- |
+| Host | the host's connection ID | never: a host place outlives its connections |
+| Herdr TUI room | the workspace ID on its connection, witnessed by its terminals | ends when Herdr closes the workspace |
+| herdr-core room | the `herdr-app` document's space ID plus the core's durable ID (the [app layout design](../../specs/herdr-core-runtime/app-layout-design.md)) | ends when the space leaves the document |
+| Tab | the tab ID on its connection, witnessed by its terminals | ends on close, like `tab-colour` |
+
+Core room membership and names come from the `herdr-app` document. `core_topology`
+keeps only migration acknowledgement, created-ID provenance and checkout metadata;
+it is never a source of membership or names, and its rows never become places.
+Folder-fallback groups for terminals the document does not cover are derived on
+each revision and are not places: nothing is stored for them.
 
 The table inventory, and which World-as-one step folds each old table into these
 two tables, is in [storage.md](storage.md).
@@ -199,17 +230,27 @@ saved, so nothing is copied for it.
    copied and none pending. A pending row (an offline host, a tab with two agents)
    therefore keeps displaying and stays available to copy later, for as long as it
    takes. A retired table is renamed `retired_*`, kept for one release and never
-   deleted automatically. Rollback means restoring the named snapshot.
-5. Before any copy, World stops deleting the facts it will copy (task 7.1).
-   `appearance.prune` no longer deletes colours and appearance rows when a terminal
-   disappears; it only hides them, as the continuity check already does, because
-   each row carries its terminal witness. A closed tab's colour and desk pin
-   (`tabClosedOps`) are not deleted either. They are keyed by tab ID alone, and an
-   older Herdr can reuse a tab ID, so the row is kept and marked closed instead:
-   the tab colour's `tab-colour` binding already ends on close, and readers skip a
-   row whose binding has ended; a desk pin gets the same closed mark in its own
-   row. A reused ID therefore never shows an old colour or pin. An away agent keeps
-   its colour and look like its other fields.
+   deleted automatically.
+5. **Rollback.** An older release refuses a newer `world.sqlite` and names the
+   pre-upgrade snapshot (`world.sqlite.v<version>.<snapshot>.bak`); restoring it
+   gives that release every old row unchanged. Agent records made since are not in
+   that snapshot; the newer file is preserved beside it. Rolling back a retiring
+   step renames its `retired_*` tables back to their names, so nothing has to be
+   copied back: the rows were never deleted.
+6. Before any copy, World stops deleting the facts it will copy (task 7.1).
+   `appearance.prune` no longer deletes appearance rows when a terminal
+   disappears, and a closed tab (`tabClosedOps`) no longer deletes its colour or
+   desk pin. Each such row moves, in its own table, to a closed key,
+   `["closed", <revision>, <key>]`, where `<revision>` is the Board revision that
+   closed it. No live key has that form and one key closes at most once per
+   revision, so a reused tab or pane ID writes a new live row and never
+   overwrites or shows the closed one. Closed rows keep their binding ID, now
+   ended; they are left out of the layout and appearance limits (2,000 entries in
+   `board-store.ts`), never trimmed, and never sent to the views. A desk pin closes
+   under a declared `desk-pin` close policy in `world_bindings`, the same as
+   `tab-colour`: the runtime's close event confirmed by an absence read, never a
+   listing gap alone. Task 7.3 copies a closed row only to the agent its witness
+   proves. An away agent keeps its colour and look like its other fields.
 
 ## 5. One record for every view
 
@@ -262,10 +303,11 @@ the agent through one selector over that replica (`agent_id` of a terminal, then
 the record), never by matching names, tabs or harness IDs. Town desks, Desk records and Board agent cards key on
 `agent_id`; the old desk and card keys become derived lookups. A view never decides
 which agent a terminal is. Two agents with the same name stay two desks, and away
-and unresolved agents never appear as duplicates. A cross-view test renders Town,
-Desk, Board and the CLI's view from one snapshot and compares, per agent ID, the
-name, colour, look, status text, room, host group, pin, groups and conversation
-state.
+and unresolved agents never appear as duplicates. The cross-view test
+(`server/src/world/world-cross-view.test.ts`) gains `agent_id`, state and name per
+agent with the snapshot (task 6.1); each later step adds its field (colour, look,
+status text, room, host group, pin, groups, conversation state), so Town, Desk,
+Board and the CLI's view from one snapshot always agree per agent ID.
 
 ## 6. Quint assessment
 
@@ -289,7 +331,7 @@ The whole-record fields add no new authority. Each is a single-writer field on a
 agent ID, applied in revision order like every owned fact; which agent a field
 attaches to is the identity question the model already explores. The migration's
 "copy only when the key is unique" rule is the model's ambiguity rule, and the
-cross-view test (task 8.4) is the check that views agree.
+cross-view test (task 6.1, extended by task 8.4) is the check that views agree.
 
 It is not yet maintained evidence: there is no implementation to replay. Task 5
 moves it into `quint/` with an adapter over the real resolver, a coverage entry and
