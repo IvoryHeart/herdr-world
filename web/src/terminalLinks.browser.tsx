@@ -521,6 +521,9 @@ async function runTouch() {
   {
     const url = "https://example.com/composer";
     const state = store.get();
+    const resizes = () =>
+      calls.filter((c) => c.method === "terminal.resize").length;
+    const resized = resizes();
     requestTerminalComposer({
       connectionId: state.activeConnectionId!,
       generation: state.connectionGeneration,
@@ -530,7 +533,9 @@ async function runTouch() {
       () => !!document.querySelector(".terminal-composer"),
       "the Composer opens",
     );
-    // Opening it resizes the terminal; Herdr then repaints, as here.
+    // Opening it resizes the terminal; Herdr then repaints, as here. A press
+    // before that resize lands aims at the old geometry.
+    await until(() => resizes() > resized, "the Composer resizes the terminal");
     await settle();
     await frame(["", `see ${url} now`]);
     await done();

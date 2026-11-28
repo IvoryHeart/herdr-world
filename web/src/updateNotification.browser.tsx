@@ -309,7 +309,8 @@ async function checkDismissPointerIsolation() {
     );
   }
   const originalClear = store.clearNotice;
-  // The repeat-dismissal guard expires on the shared clock: advance past it.
+  // The repeat-dismissal guard runs on a held clock: it lasts until the
+  // fixture advances past it, however slowly a loaded browser delivers input.
   const time = installAdvanceableClock();
   try {
     for (const kind of ["notice", "update", "reload"] as const) {
