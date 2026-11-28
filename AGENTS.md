@@ -4,13 +4,16 @@
 
 World is one object. The service derives it from the sources of record, every view only displays it, and every change goes back through it to its source. Design: [`openspec/changes/world-one-object/`](openspec/changes/world-one-object/design.md); code map: [world-model notes](openspec/specs/world-model/notes.md).
 
-**Sources of record.** Each fact has one owner, and the owner wins when World disagrees; [sources.md](openspec/changes/world-one-object/sources.md) lists every fact:
+**Sources of record.** Each fact has one owner, and the owner wins when World disagrees; [sources.md](openspec/changes/world-one-object/sources.md) lists every fact. Every system outside World is an integration; some are built in and always available, others are connected when needed:
 
-- Runtimes: the Herdr TUI owns rooms (workspaces), tabs and panes with their names, order and cwd, plus agent kind and status; herdr-core owns terminals and their labels.
-- Git and forges: branches, status, diffs, worktrees, pull requests and checks.
-- Harness files: transcripts, running sessions, harness settings, skills, memory, usage and login.
-- Deployments: other local World instances and releases. Integrations: their rows, Jira, the Vault's secrets, weather.
-- World's own stores: `world.sqlite` (Board, colours, pins, groups, interest, profiles, Town Master, asks, Bin, agent records, core rooms in `core_topology`, history), `settings.json` (repository, worktree and UI settings), `connections.json` (host profiles).
+- Herdr TUI (runtime, built in): its workspaces (rooms), tabs and panes with their names, order and cwd, plus agent kind and status.
+- herdr-core (runtime, built in): its terminals and their labels; its rooms and tabs live in World's `core_topology` store.
+- More runtimes will be added. Each is its own integration and owns its own entities; never assume Herdr TUI and herdr-core are the only two.
+- Git and forges (built in): branches, status, diffs, worktrees, pull requests and checks.
+- Harness files (built in): transcripts, running sessions, harness settings, skills, memory, usage and login.
+- Deployments (built in): other local World instances and releases.
+- Connected integrations, for example Jira (the issues and bugs assigned to you); their secrets live in the Vault.
+- World's own stores: World owns the facts no integration owns (Board, colours, pins, groups, profiles, asks, history and more) in `world.sqlite`, `settings.json` and `connections.json`. `server/src/storage/catalog.ts` lists every table, file and key.
 
 **Views only display it.** Town, Desk, Board, Spaces and the CLI read the published object: the service derives it once and serves it as `world.snapshot` under one revision, each browser holds one replica, and the CLI reads it on the service. A view never keeps its own copy, derives a fact itself (a name, colour, room, grouping, status) or writes to a runtime or store around World. Per-browser presentation (camera, zoom, selection, open windows, drafts) is not a World fact; if another view, browser or the CLI must agree on it, it is one.
 
@@ -22,13 +25,13 @@ World is one object. The service derives it from the sources of record, every vi
 4. Observe: a store commit is its own observation. A runtime acknowledgement only moves the host's epoch; World takes the value from the first read that started after it.
 5. Publish: the new revision reaches every view in every browser and the CLI.
 
-Until then the pending value sits in the browser replica, shared by all its views. Every command and its outcome is a history entry in `ledger_changes`.
+Until then the pending value sits in the browser replica, shared by all its views. Every accepted command and its outcome is a history entry in `ledger_changes`.
 
-Example: a room's name is owned by Herdr (or by `core_topology` for a core room). Renaming it in Town calls `renameRoomThroughWorld` → `world.command` → `workspace.rename` on that room's connection → the next read sees the new name → every view shows it. A new shared setting lives in `settings.json` (listed in `server/src/storage/catalog.ts`), is published in `world.snapshot` and changes through a `world.command`, as "Group runtimes" does (`server/src/world/setting-commands.ts`); never in browser storage.
+Example: a room's name is owned by the Herdr TUI (or by `core_topology` for a herdr-core room). Renaming it in Town calls `renameRoomThroughWorld` → `world.command` → `workspace.rename` on that room's connection → the next read sees the new name → every view shows it. A new shared setting lives in `settings.json` (listed in `server/src/storage/catalog.ts`), is published in `world.snapshot` and changes through a `world.command`, as "Group runtimes" does (`server/src/world/setting-commands.ts`); never in browser storage.
 
 **Where things are.** Derivation, revision and epoch fence: `server/src/world/snapshot.ts`, shared derivations in `shared/` (`shared/hostGrouping.ts`). Commands: `server/src/world/commands.ts`, `server/src/service/world-commands.ts`. History: `server/src/world/world-ledger.ts`. Browser replica and pending values: `web/src/world/runtimeStore.ts`, `web/src/world/worldReplica.ts`, `web/src/world/worldCommands.ts`. Model: `quint/world-write-path.qnt`. Cross-view test (one snapshot; every view and the CLI agree): `server/src/world/world-cross-view.test.ts`.
 
-**Migration status.** The move is under way, one fact per step, in [tasks.md](openspec/changes/world-one-object/tasks.md). A fact is on the World path when its step is ticked there and views change it only through `world.command`. So far: grouping (also in the cross-view test) and room renames. Agent and tab names, colours, pins, status, order and Spaces' own refresh still have view-side derivation (`web/src/world/worldObject.ts`) or direct runtime writes (`web/src/store.ts`); never add to them.
+**Migration status.** The move is under way, one fact per step, in [tasks.md](openspec/changes/world-one-object/tasks.md). A fact is on the World path when its step is ticked there and views change it only through `world.command`. So far: grouping (also in the cross-view test) and room renames. Agent and tab names, colours, pins, status, order and Spaces' own refresh still have view-side derivation (`web/src/world/worldObject.ts`) or direct runtime writes (`web/src/store.ts`); never add to them. This section follows the migration: a PR that moves a fact onto the World path, or changes a source, store or path named here, updates this section in the same PR.
 
 **When you change something.** New state joins the World object and its source of record, not a view: derive it on the service, publish it in `world.snapshot`, write it through a World command and add it to the cross-view test. A fix that works in one view only is not a fix.
 
