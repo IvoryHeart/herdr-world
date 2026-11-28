@@ -82,6 +82,9 @@ export async function testChromeFlags(chrome: string): Promise<string[]> {
     // Chrome per job means one SwiftShader pool, which follows the CPU
     // affinity; raster threads stay within the job's CPUs too.
     "--enable-webgl",
+    // 2D canvases draw on the CPU: through SwiftShader the website film's
+    // full-motion frames took 48 s on four CPUs instead of 7 s.
+    "--disable-accelerated-2d-canvas",
     `--num-raster-threads=${Math.min(4, jobCpus())}`,
     ...(await chromeRenderingFlags(chrome)),
     // Containers running as root have no usable sandbox.
