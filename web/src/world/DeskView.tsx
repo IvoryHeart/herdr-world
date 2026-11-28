@@ -148,8 +148,6 @@ export function partitionDesk(
   return { needs, review, working, quiet };
 }
 
-export { useMediaQuery } from "./deskMediaQuery";
-
 export type DeskMode = "now" | "agents" | "reviewed";
 const DESK_MODES: { mode: DeskMode; label: string }[] = [
   { mode: "now", label: "Now" },

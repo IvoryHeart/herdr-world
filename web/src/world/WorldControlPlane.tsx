@@ -16,7 +16,7 @@ import {
 } from "./agentProfiles";
 import type { AgentStartFrom } from "./agentStarts";
 import { useDeskReveal } from "./deskReveal";
-import { DeskView } from "./DeskView";
+import { LazyDeskView } from "./LazyDeskView";
 import { useStableCallback } from "./useStableCallback";
 import { KeptCodeView } from "./code/KeptCodeView";
 import { GroupsWindow } from "./groups/GroupsWindow";
@@ -80,7 +80,7 @@ const TownView = memo(lazyWithReload("world-town", () => import("./TownView")));
 const BoardView = memo(
   lazyWithReload("world-board", () => import("./BoardView")),
 );
-const MemoDeskView = memo(DeskView);
+const MemoDeskView = memo(LazyDeskView);
 
 const AgentLauncherDialog = lazyWithReload("world-agent-launcher", () =>
   import("./AgentLauncherDialog").then((module) => ({

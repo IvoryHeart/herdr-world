@@ -995,7 +995,6 @@
       "web/src/world/DeskView.tsx#DeskBoard",
       "web/src/world/DeskView.tsx#agentDirectory",
       "web/src/world/DeskView.tsx#agentFolder",
-      "web/src/world/DeskView.tsx#default",
       "web/src/world/DeskView.tsx#deskShortcut",
       "web/src/world/DeskView.tsx#focusIndexOf",
       "web/src/world/DeskView.tsx#matchesQuery",

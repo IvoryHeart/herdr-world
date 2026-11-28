@@ -22,7 +22,7 @@ import {
   Layers,
   Plus,
 } from "lucide-react";
-import { WorktreeLifecycleDialog } from "./WorktreeLifecycleDialog";
+import { LazyWorktreeLifecycleDialog } from "./LazyWorktreeLifecycleDialog";
 import {
   WORKSPACE_PINS_STORAGE_KEY,
   parseWorkspacePins,
@@ -990,7 +990,7 @@ export function WorkspaceTree({
         open={createOpen}
         onClose={() => setCreateOpen(false)}
       />
-      <WorktreeLifecycleDialog
+      <LazyWorktreeLifecycleDialog
         open={!!lifecycleWorkspaceId}
         workspaceId={lifecycleWorkspaceId}
         onClose={() => setLifecycleWorkspaceId(null)}

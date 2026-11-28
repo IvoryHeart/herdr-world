@@ -33,6 +33,41 @@ export function onlyBundledDiffThemes(): Plugin {
   };
 }
 
+// Town's first frame loads WorldFoundationApp and everything it imports
+// statically. Lazy views and dialogs (Desk, Board, Groups…) share many of those
+// modules, and each distinct sharing set would otherwise become its own small
+// startup file. Keep the shared app modules in one startup chunk (#1479).
+export const WORLD_FOUNDATION_APP = fileURLToPath(
+  new URL("./src/world/WorldFoundationApp.tsx", import.meta.url),
+);
+export function worldStartupSharedChunk() {
+  let startup: Set<string> | undefined;
+  return (
+    id: string,
+    ctx: {
+      getModuleInfo(
+        id: string,
+      ): { importers: string[]; importedIds: string[] } | null;
+    },
+  ) => {
+    if (!startup) {
+      startup = new Set();
+      const pending = [WORLD_FOUNDATION_APP];
+      for (let next = pending.pop(); next; next = pending.pop()) {
+        if (startup.has(next)) continue;
+        startup.add(next);
+        pending.push(...(ctx.getModuleInfo(next)?.importedIds ?? []));
+      }
+    }
+    if (!startup.has(id) || /node_modules/.test(id)) return null;
+    const known = startup;
+    const info = ctx.getModuleInfo(id);
+    return info?.importers.some((importer) => !known.has(importer))
+      ? "world-startup"
+      : null;
+  };
+}
+
 // In dev, the web app talks to the bridge through Vite's proxy so the
 // frontend can use a relative /ws URL (same origin, no hardcoded port).
 export default defineConfig(({ mode }) => {
@@ -92,6 +127,12 @@ export default defineConfig(({ mode }) => {
       target: ["es2020", "edge88", "firefox78", "chrome87", "safari14"],
       // The asset check follows static imports from the entry, excluding lazy features.
       manifest: true,
+      // No public source maps (#1479): the maps weigh more than twice the
+      // whole 14 MiB asset budget, and their source paths are relative to this
+      // output directory, so a build outside the checkout would publish the
+      // builder's folders. `bun scripts/web-bundle-report.ts` builds hidden
+      // maps for local size and debugging work.
+      sourcemap: false,
       // Build straight into the server's static dir so the backend can serve it.
       outDir: "../server/public",
       emptyOutDir: true,
@@ -153,6 +194,10 @@ export default defineConfig(({ mode }) => {
                 name: "syntax-extra",
                 includeDependenciesRecursively: false,
                 test: /@shikijs\/langs\/dist\/(clojure|crystal|elixir|elm|erlang|fsharp|groovy|haskell|kotlin|common-lisp|lua|r|scala)\.mjs$/,
+              },
+              {
+                debugName: "world-startup",
+                name: worldStartupSharedChunk(),
               },
             ],
           },
