@@ -29,7 +29,12 @@ type WorkflowStep = {
   if?: string;
   "continue-on-error"?: boolean;
   env?: Record<string, string>;
-  with?: { "fetch-depth"?: number; filter?: string; ref?: string };
+  with?: {
+    "fetch-depth"?: number;
+    filter?: string;
+    ref?: string;
+    "persist-credentials"?: boolean;
+  };
   "working-directory"?: string;
 };
 
@@ -232,6 +237,84 @@ test("Delivery evidence conditions reference only declared dependencies", () => 
   for (const step of delivery.steps) {
     for (const match of step.if?.matchAll(/needs\.([\w-]+)\./g) ?? [])
       expect(delivery.needs).toContain(match[1]!);
+  }
+});
+
+test("flaky reporting uses only a daily schedule or manual default-branch run", async () => {
+  const tracker = Bun.YAML.parse(
+    await Bun.file(".github/workflows/flaky-tests.yml").text(),
+  ) as {
+    on: Record<string, unknown>;
+    name: string;
+    jobs: Record<string, WorkflowJob>;
+    permissions: Record<string, string>;
+    concurrency: unknown;
+  };
+  expect(Object.keys(tracker.on).sort()).toEqual([
+    "schedule",
+    "workflow_dispatch",
+  ]);
+  expect(tracker.on.schedule).toEqual([{ cron: "17 4 * * *" }]);
+  expect(tracker.name).toBe("Daily flaky tests");
+  expect(Object.keys(tracker.jobs)).toEqual(["report"]);
+  expect(tracker.permissions).toEqual({
+    contents: "read",
+    actions: "read",
+    issues: "write",
+  });
+  expect(tracker.concurrency).toEqual({
+    group: "daily-flaky-tests",
+    "cancel-in-progress": false,
+  });
+  const job = tracker.jobs.report;
+  expect(job.if).toContain("github.event.repository.default_branch");
+  expect(job.steps[0]!.with?.ref).toBe(
+    "${{ github.event.repository.default_branch }}",
+  );
+  expect(job.steps[0]!.with?.["persist-credentials"]).toBe(false);
+  expect(
+    job.steps
+      .filter((step: WorkflowStep) => step.run?.includes("flaky-tests.ts"))
+      .map((step: WorkflowStep) => step.run),
+  ).toEqual(["bun scripts/flaky-tests.ts daily"]);
+  expect(
+    workflow.jobs.delivery.steps.some((step) =>
+      /flaky-tests\.ts (gate|track|pending)/.test(step.run || ""),
+    ),
+  ).toBe(false);
+  const download = workflow.jobs.delivery.steps.find(
+    (step) => step.name === "Download flaky test evidence",
+  );
+  expect(download?.with).toMatchObject({
+    pattern: "flaky-tests-*-${{ github.run_attempt }}",
+  });
+  expect(download?.with).not.toHaveProperty("merge-multiple");
+  for (const step of workflow.jobs.delivery.steps.filter((step) =>
+    /flaky|retry/i.test(step.name || ""),
+  )) {
+    expect(step["continue-on-error"]).toBe(true);
+  }
+});
+
+test("retry summaries and flaky.json artifacts stay inside existing test jobs and cannot fail them", () => {
+  for (const job of [
+    workflow.jobs["unit-tests"],
+    worldWorkflow.jobs["world-browser"],
+  ]) {
+    const summarize = job.steps.find((step) =>
+      step.run?.startsWith("bun scripts/flaky-tests.ts summarize"),
+    );
+    expect(summarize?.if).toBe("always()");
+    expect(summarize?.["continue-on-error"]).toBe(true);
+    expect(summarize?.env?.GH_TOKEN).toBeUndefined();
+    const upload = job.steps.find(
+      (step) => step.name === "Retain flaky test evidence",
+    );
+    expect(upload?.if).toBe("always()");
+    expect(upload?.["continue-on-error"]).toBe(true);
+    expect((upload?.with as Record<string, unknown>)?.path).toBe(
+      ".agents/delivery/flaky/flaky.json",
+    );
   }
 });
 
@@ -492,7 +575,11 @@ test("unit shards run four files at a time, build only for their consumers and r
   expect(
     job.steps.find((step) => step.name === "Retain flaky test evidence")?.if,
   ).toBe("always()");
-  expect(job.steps.some((step) => step["continue-on-error"])).toBe(false);
+  expect(
+    job.steps
+      .filter((step) => step["continue-on-error"])
+      .map((step) => step.name),
+  ).toEqual(["Summarize retry evidence", "Retain flaky test evidence"]);
   expect(
     workflow.jobs["validation-scope"].steps.find(
       (step) => step.id === "unit-comparison",
@@ -614,9 +701,11 @@ test("World shards and packed web suites retain their partitions and failure evi
   expect(world?.needs).toBeUndefined();
   expect(world?.if).toBe("toJSON(fromJSON(inputs.selection).world) != '[]'");
   expect(world?.["continue-on-error"] ?? false).toBe(false);
-  expect(world.steps.filter((step) => step["continue-on-error"])).toHaveLength(
-    0,
-  );
+  expect(
+    world.steps
+      .filter((step) => step["continue-on-error"])
+      .map((step) => step.name),
+  ).toEqual(["Summarize retry evidence", "Retain flaky test evidence"]);
   expect(world?.["runs-on"]).toBe("ubuntu-latest");
   expect(world?.strategy?.matrix?.shard).toBe(
     "${{ fromJSON(inputs.selection).worldShards }}",
@@ -663,9 +752,11 @@ test("World shards and packed web suites retain their partitions and failure evi
       (step) => step.name === "Run affected non-browser tests",
     ),
   );
-  expect(packed.steps.filter((step) => step["continue-on-error"])).toHaveLength(
-    0,
-  );
+  expect(
+    packed.steps
+      .filter((step) => step["continue-on-error"])
+      .map((step) => step.name),
+  ).toEqual(["Summarize retry evidence", "Retain flaky test evidence"]);
   expect(
     packed.steps.find(
       (step) => step.run === "bun scripts/ci-tests.ts web ${{ matrix.web }}/2",
@@ -1141,7 +1232,11 @@ test("Static checks retain concurrent command logs even after failure", () => {
   ).toMatchObject({
     if: "${{ !cancelled() && matrix.group != '' }}",
   });
-  expect(job.steps.filter((step) => step["continue-on-error"])).toHaveLength(0);
+  expect(
+    job.steps
+      .filter((step) => step["continue-on-error"])
+      .map((step) => step.name),
+  ).toEqual(["Summarize retry evidence", "Retain flaky test evidence"]);
   expect(
     job.steps.find((step) => step.name === "Upload static check logs"),
   ).toMatchObject({

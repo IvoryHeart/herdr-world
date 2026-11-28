@@ -82,7 +82,7 @@ failures even if retry recovers them. Normal PRs execute the unit lane once.
 Comparison jobs have a separate 120-minute allowance; individual test deadlines
 and the normal 20-minute job limit are unchanged. `unit-evidence-*` retains JUnit,
 command logs, case/file inventories and elapsed times; the job summary records the
-twenty completed pairs. `flaky-tests-*` evidence and its Delivery gate remain required.
+twenty completed pairs. Retry-once verdicts remain required; `flaky-tests-*` accounting evidence is informational.
 
 ## Scope and scheduling
 
@@ -173,43 +173,57 @@ failure, missing recovery evidence, crash or isolation-tripwire violation stays 
 Models, static checks, privacy and PR-description checks never retry. Local test
 commands do not enable recovery by default.
 
-The trusted tracker accepts only runs whose head repository is this repository.
-It skips fork runs before downloading artifacts and independently checks the
-Actions API source identity before accessing issue history or writing issues or
-statuses; a missing identity is rejected. Fork tests still run and report their
-local retry results, but cannot add repository-wide flaky history.
+Each test job writes **Flaky tests** in its own summary and uploads a small
+`flaky.json` in a `flaky-tests-*` artifact. It lists every test that needed a retry,
+including a test that fails twice. The existing **Delivery checks** job combines
+these into `flaky-tests-delivery-<attempt>` and a summary. Reporting, artifact
+upload and download failures are informational: each step uses `continue-on-error`.
+No issue-history lookup or frequency limit can fail Delivery. A test that fails
+its retry still fails its test job.
 
-Every test shard retains `flaky-tests-*` JSON artifacts, including failed jobs and
-previous attempts of a rerun. **Delivery checks** lists every recovered file and
-case under **Flaky tests**, and checks the open issue history with a read-only
-token. A test that flakes on more than three distinct CI runs in seven days
-blocks runs selecting its file, including a later first-pass success. Attempts
-of the same run count once; occurrences exactly seven days old still count.
-Once breached, the open cause stays blocked until explicit fix or quarantine;
-waiting for the original window to expire does not clear it.
+**Daily flaky tests** runs once a day at **04:17 UTC**, or through **Actions → Daily
+flaky tests → Run workflow** on the default branch. It uses default-branch code
+with issue-write permission and reads the consolidated `flaky.json` artifacts as
+validated data. It starts no workflow in response to CI requests or completions;
+cancelled and skipped CI runs are excluded, as are fork or unidentified source
+repositories. Fork jobs still show their own retry summaries. Concurrent daily or
+manual requests coalesce to one active run and at most one pending run.
 
-The trusted **Flaky test tracking** workflow uses default-branch code, reads the
-source run's artifacts as data, and serializes updates across branches. It creates
-one open issue labelled `flaky` per file/case, preserving the run links and owner
-notes. Close the issue after fixing the cause; another flake after closure starts
-a new issue. To quarantine explicitly, the owner adds `flaky-quarantined` to its
-open issue (create that label if needed). Quarantine exempts only the frequency
-limit: tests still run and a second failure still fails CI. No automatic skip,
-quarantine or issue closure occurs.
+The daily report updates one issue titled **Flaky tests**, labelled `flaky`, with
+each test, its retry count and a link to its latest run attempt. The window covers
+completed CI runs **created in the last 24 hours** on this repository's branches.
+Each test counts once per run attempt across duplicate shard evidence; different
+attempts count separately. Run discovery continues through short pages until an
+empty page. The managed section is a fresh snapshot; text outside it is preserved.
+The same issue is reused even if closed, without reopening it. Previous per-cause
+issues and accounting receipts remain historical and have no gating effect.
 
-While accounting is pending, the trusted workflow holds a `Delivery checks`
-commit status, then records success or failure after updating history. GitHub
-[requires both a same-named status and check to pass](https://docs.github.com/en/pull-requests/how-tos/merge-and-close-pull-requests/troubleshooting-required-status-checks),
-so concurrently finishing runs cannot erase a fourth occurrence. History/API
-errors keep accounting red or pending. The tracker becomes active when its
-workflow reaches the default branch; a stacked preview still exercises the
-read-only gate and complete synthetic runner/policy regressions.
+A source artifact/API error is shown under **Incomplete evidence** while other
+runs remain listed; only the daily job fails. Fix the artifact/API problem and
+use **Run workflow** to refresh the current window. Artifacts remain available for
+seven days, but a delayed report does not reconstruct days outside its 24-hour
+window. Reused/docs-only runs have no retry evidence; rollout's old inventory
+artifacts are ignored. Scheduled runs can be delayed by GitHub.
 
-To inspect it in GitHub, open a PR's **Checks**, select **Delivery checks**, then
-read **Flaky tests** in its summary. Open **Actions → Flaky test tracking** for
-issue-update evidence, or **Issues → Labels → flaky** for causes and run links.
-The focused `scripts/test-retry.test.ts` fixtures deliberately fail once and pass,
-fail twice, crash and trip the isolation guard without creating real flaky issues.
+**Ruleset notes:** the main ruleset requires only the **Delivery checks check
+run**. There are no flaky accounting commit statuses or additional required
+checks. Daily reporting never delays a PR or a merge, regardless of retry counts,
+reporting failures or runner queues.
+
+During rollout, old tracker statuses already attached to a PR's head SHA remain.
+If Delivery checks is green but an old Delivery checks commit status is pending
+or failed, push a new commit to the PR branch. Rerunning CI keeps that SHA and
+cannot clear its legacy status. New heads receive no accounting commit status
+once this workflow change reaches the default branch.
+
+After merge, inspect two real PRs: **Conversation → Show all checks** should show
+merge readiness as soon as Delivery checks succeeds, with no pending Delivery
+checks commit status. **Actions** should show no new **Flaky test tracking** runs
+for either PR, including cancelled CI runs. Read the test-job summaries or download
+`flaky-tests-delivery-<attempt>` for `flaky.json`; use **Daily flaky tests → Run
+workflow**, then inspect **Issues → Flaky tests** for counts and latest run links.
+The `scripts/test-retry.test.ts` fixtures exercise transient and persistent
+failures locally without creating repository issues. No World preview is needed.
 
 Release/nightly infrastructure failures retain their separate one-time automatic
 failed-job retry. Main's issue remains visible through its infrastructure retry.
