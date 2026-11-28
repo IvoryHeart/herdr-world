@@ -20,7 +20,7 @@ import {
   WORLD_OFFICE_PREFERENCES_CHANGED_EVENT,
   type OfficeInspectorPresentation,
 } from "./officePreferences";
-import { useMediaQuery } from "./DeskView";
+import { useMediaQuery } from "./deskMediaQuery";
 import { hasValidSelectedConnection } from "./worldInspectorSelection";
 import { type WorldControlPlaneProps } from "./worldControlPlaneContract";
 import { townScaleRuntime } from "./town/townScaleRuntime";

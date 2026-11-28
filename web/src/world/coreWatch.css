@@ -9,6 +9,11 @@
   color: var(--text);
 }
 
+/* The tab's stand-in while the watch loads holds focus for its first key. */
+.core-watch[data-core-watch-loading]:focus {
+  outline: none;
+}
+
 .core-watch-head {
   display: flex;
   align-items: center;

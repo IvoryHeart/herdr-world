@@ -1,5 +1,5 @@
 import { fileURLToPath } from "node:url";
-import { defineConfig } from "vite";
+import { defineConfig, type Plugin } from "vite";
 import react from "@vitejs/plugin-react";
 import { currentBuildVersion } from "../scripts/build-version";
 import { precompressAssetsPlugin } from "../scripts/precompress-assets";
@@ -10,6 +10,64 @@ const appVersion = currentBuildVersion(
   packageJson.version,
 );
 
+// Diffs request only Pierre's default pair (DEFAULT_THEMES in @pierre/diffs),
+// yet its theme registry names every Shiki and Pierre theme as a lazy import,
+// which shipped about 1.6 MB of themes no page could load. Every other theme
+// resolves to one module that refuses to load. A theme picker would widen this.
+export const BUNDLED_DIFF_THEMES = new Set(["pierre-dark", "pierre-light"]);
+export const UNBUNDLED_THEME = "\0herdr-world-unbundled-theme";
+export function onlyBundledDiffThemes(): Plugin {
+  return {
+    name: "herdr-world-bundled-diff-themes",
+    enforce: "pre",
+    resolveId(source) {
+      const theme =
+        /^@shikijs\/themes\/([\w-]+)$/.exec(source)?.[1] ??
+        /^@pierre\/theme\/(pierre-[\w-]+)$/.exec(source)?.[1];
+      if (theme && !BUNDLED_DIFF_THEMES.has(theme)) return UNBUNDLED_THEME;
+    },
+    load(id) {
+      if (id === UNBUNDLED_THEME)
+        return 'throw new Error("This syntax theme is not bundled with Herdr World");';
+    },
+  };
+}
+
+// Town's first frame loads WorldFoundationApp and everything it imports
+// statically. Lazy views and dialogs (Desk, Board, Groups…) share many of those
+// modules, and each distinct sharing set would otherwise become its own small
+// startup file. Keep the shared app modules in one startup chunk (#1479).
+export const WORLD_FOUNDATION_APP = fileURLToPath(
+  new URL("./src/world/WorldFoundationApp.tsx", import.meta.url),
+);
+export function worldStartupSharedChunk() {
+  let startup: Set<string> | undefined;
+  return (
+    id: string,
+    ctx: {
+      getModuleInfo(
+        id: string,
+      ): { importers: string[]; importedIds: string[] } | null;
+    },
+  ) => {
+    if (!startup) {
+      startup = new Set();
+      const pending = [WORLD_FOUNDATION_APP];
+      for (let next = pending.pop(); next; next = pending.pop()) {
+        if (startup.has(next)) continue;
+        startup.add(next);
+        pending.push(...(ctx.getModuleInfo(next)?.importedIds ?? []));
+      }
+    }
+    if (!startup.has(id) || /node_modules/.test(id)) return null;
+    const known = startup;
+    const info = ctx.getModuleInfo(id);
+    return info?.importers.some((importer) => !known.has(importer))
+      ? "world-startup"
+      : null;
+  };
+}
+
 // In dev, the web app talks to the bridge through Vite's proxy so the
 // frontend can use a relative /ws URL (same origin, no hardcoded port).
 export default defineConfig(({ mode }) => {
@@ -17,7 +75,7 @@ export default defineConfig(({ mode }) => {
     mode === "development" || process.env.HERDR_WORLD_BUILD_DEVTOOLS === "1";
   return {
     // Hashed /assets/* ship with brotli and gzip variants (#1245).
-    plugins: [react(), precompressAssetsPlugin()],
+    plugins: [react(), onlyBundledDiffThemes(), precompressAssetsPlugin()],
     define: {
       __HERDR_WORLD_VERSION__: JSON.stringify(appVersion),
       // World's development tools (event traces, renderer counters) exist only
@@ -39,6 +97,14 @@ export default defineConfig(({ mode }) => {
               },
             ]),
         {
+          // Diffs always use Shiki's WASM engine ("shiki-wasm"); keep the
+          // never-selected JavaScript regex engine out of the app and worker.
+          find: /^shiki\/engine\/javascript$/,
+          replacement: fileURLToPath(
+            new URL("./src/shikiJavaScriptEngine.ts", import.meta.url),
+          ),
+        },
+        {
           find: /^shiki\/wasm$/,
           replacement: fileURLToPath(
             new URL("./src/shikiWasm.ts", import.meta.url),
@@ -54,12 +120,19 @@ export default defineConfig(({ mode }) => {
     },
     worker: {
       format: "es",
+      plugins: () => [onlyBundledDiffThemes()],
     },
     build: {
       // Retain Vite 5's browser baseline instead of Vite 7's newer default.
       target: ["es2020", "edge88", "firefox78", "chrome87", "safari14"],
       // The asset check follows static imports from the entry, excluding lazy features.
       manifest: true,
+      // No public source maps (#1479): the maps weigh more than twice the
+      // whole 14 MiB asset budget, and their source paths are relative to this
+      // output directory, so a build outside the checkout would publish the
+      // builder's folders. `bun scripts/web-bundle-report.ts` builds hidden
+      // maps for local size and debugging work.
+      sourcemap: false,
       // Build straight into the server's static dir so the backend can serve it.
       outDir: "../server/public",
       emptyOutDir: true,
@@ -108,18 +181,23 @@ export default defineConfig(({ mode }) => {
                 name: "code-preview",
                 test: /node_modules[\\/](?:@codemirror|@lezer|codemirror)[\\/]/,
               },
-              {
-                // Theme presets are small and share their lazy highlighting boundary.
-                name: "highlight-themes",
-                test: /@shikijs\/themes\/dist\/.*\.mjs$/,
-              },
+              // Rare grammars share one lazy chunk per family, but only the
+              // grammars named here: one they embed (javascript, css, shell,
+              // markdown, c, java…) keeps its own chunk, so a common
+              // language's diff never fetches the whole family.
               {
                 name: "syntax-config",
+                includeDependenciesRecursively: false,
                 test: /@shikijs\/langs\/dist\/(awk|diff|docker|ini|json5|jsonl|make|nginx|proto|toml|xml|yaml)\.mjs$/,
               },
               {
                 name: "syntax-extra",
+                includeDependenciesRecursively: false,
                 test: /@shikijs\/langs\/dist\/(clojure|crystal|elixir|elm|erlang|fsharp|groovy|haskell|kotlin|common-lisp|lua|r|scala)\.mjs$/,
+              },
+              {
+                debugName: "world-startup",
+                name: worldStartupSharedChunk(),
               },
             ],
           },

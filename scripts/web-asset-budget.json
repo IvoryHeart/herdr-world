@@ -1,7 +1,8 @@
 {
-  "bytes": 17301504,
+  "bytes": 14680064,
   "files": 212,
   "history": [
-    "2026-11-22: Seed at the owner-approved 16.5 MiB interim ceiling from #1220; retain the 212-file limit. Startup and help-picture limits stay separate."
+    "2026-11-22: Seed at the owner-approved 16.5 MiB interim ceiling from #1220; retain the 212-file limit. Startup and help-picture limits stay separate.",
+    "2026-11-22: Lower to 14.0 MiB after #1230 dropped unused Shiki/Pierre themes, Shiki's JavaScript regex engine and the oversized Herdr icon (measured 14,492,051 B, 208 files)."
   ]
 }

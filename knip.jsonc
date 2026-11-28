@@ -48,6 +48,7 @@
       "ignoreIssues": {
         "src/shiki.ts": ["exports"],
         "src/shikiWasm.ts": ["exports"],
+        "src/shikiJavaScriptEngine.ts": ["exports"],
         "src/world/devtools/release.ts": ["exports", "types"]
       },
       // Vite reads HTML and worker URLs. Literal/lazy import() edges are followed.
@@ -60,6 +61,7 @@
         "src/world/devtools/release.ts!",
         "src/shiki.ts!",
         "src/shikiWasm.ts!",
+        "src/shikiJavaScriptEngine.ts!",
         "src/**/*.{test,spec,browser}.{ts,tsx}",
         "src/**/testing/**/*.{ts,tsx}",
         "src/**/*.{fixture,cases,browserMock}.{ts,tsx}"
