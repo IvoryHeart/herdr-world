@@ -1,5 +1,5 @@
 import { withTestClock } from "./testing/testClock";
-import { clock } from "./testing/installTestClock";
+import { clock } from "./testing/installLightTownRenderer";
 import { isBackPending } from "../systemBack";
 import { observeCondition } from "./testing/browserEvents";
 import { installTownMasterFixture } from "./testing/townMasterFixture";

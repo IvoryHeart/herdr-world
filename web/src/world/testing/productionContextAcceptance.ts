@@ -564,7 +564,10 @@ export function registerProductionContextTests(group: ProductionContextGroup) {
               (Bun.env.WORLD_TRACE_PREFIX ? "&trace=1" : ""),
           ],
           { stdout: "ignore", stderr: Bun.file(dir + "/browser.log") },
-          { exclusive: traceTimeline || view !== "uncertain" },
+          // Only CDP tracing is browser-wide. Native rendering and work-count
+          // assertions remain real in independent case-owned contexts; quiet
+          // latency measurements belong to the dedicated trend workflow.
+          { exclusive: traceTimeline },
         );
         await browser.start();
         // Keep both observation/render phases and the deliberate 20-second stall

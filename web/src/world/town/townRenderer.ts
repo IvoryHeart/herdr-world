@@ -10,12 +10,9 @@ import {
   type TownSearchPulseClock,
 } from "./townSelectionEffects";
 /**
- * Pixi renderer for the Office town.
- *
- * Baked layers (ground chunks, interiors, façades and roofs) are uploaded once
- * per layout. Desks, agents and effects are retained sprites updated in place.
- * Drawing goes through the shared World frame scheduler, so ambient motion
- * pauses while the user types in a terminal and input budgets hold.
+ * Pixi Town renderer: baked layers upload once per layout; retained sprites
+ * update in place. The shared World frame scheduler pauses ambient motion
+ * while the user types, preserving input budgets.
  */
 
 import { Application, Container, Graphics, Sprite } from "pixi.js";
@@ -35,6 +32,8 @@ export type { TownFrameTrace } from "./townDiagnostics";
 export { townRendererFailed } from "./townDiagnostics";
 import { DEVTOOLS } from "../devtools/flag";
 import { createTownRaster } from "./townRenderSurface";
+import { clock as browserClock } from "../../clock";
+import { nextTownTask } from "./townBrowserClock";
 
 import {
   TownActors,
@@ -148,10 +147,6 @@ const kindOf = (agent: OfficeAgent) => {
       ? "gemini"
       : "claude";
 };
-
-/** Yield to the browser so pending input runs before the next setup step. */
-export const nextTownTask = () =>
-  new Promise<void>((resolve) => window.setTimeout(resolve, 0));
 
 export async function createTownRenderer(
   element: HTMLElement,
@@ -302,13 +297,13 @@ export async function createTownRenderer(
   let last = 0;
   let clock = 0;
   let ambient = new TownAmbient(clock);
-  let ambientTimer: ReturnType<typeof setTimeout> | null = null;
+  let ambientTimer: ReturnType<typeof browserClock.setTimeout> | null = null;
   // A frame woken only for drifting atmosphere counts apart, unless anything
   // else was `wanted` since the last frame (atmosphereFrames).
   let atmosphereWake = false;
   let wanted = false;
   const cancelAmbient = () => {
-    if (ambientTimer !== null) clearTimeout(ambientTimer);
+    if (ambientTimer !== null) browserClock.clearTimeout(ambientTimer);
     ambientTimer = null;
   };
   const visible = (sprite: Sprite | Graphics) =>
@@ -734,13 +729,22 @@ export async function createTownRenderer(
       !(animated && frames?.motionAllowed && ambient.next === clock);
     forced = false;
     const render = !onlyFilling || now - lastRender >= TOWN_FILL_RENDER_MS;
+    // Resize flights still commit the HUD after materialization. Fence those
+    // commits too; ambient actors/weather never hold capture readiness.
+    const capturePending =
+      materializing ||
+      cameraMoved ||
+      camera.flying ||
+      camera.gliding ||
+      transitioning ||
+      roofsMoving;
     surface.draw(
       render,
       () => {
         lighting.render(townSkyIsClear(sky));
         app.renderer.render(app.stage);
       },
-      () => onDrawn?.(materializing),
+      () => onDrawn?.(capturePending),
     );
     if (render) lastRender = now;
     stats.level = level;
@@ -783,7 +787,7 @@ export async function createTownRenderer(
     const wakeAt = Math.min(motionAt, ambient.change, driftAt);
     if (next) frames?.request(next);
     else if (Number.isFinite(wakeAt))
-      ambientTimer = setTimeout(
+      ambientTimer = browserClock.setTimeout(
         () => {
           ambientTimer = null;
           forced = true;

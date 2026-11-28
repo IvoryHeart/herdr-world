@@ -23,6 +23,27 @@ import "../../../styles/tokens.css";
 import "../../../styles/base.css";
 import "../../world.css";
 
+// Only the composer work-count case drives logical time. Native pan/zoom
+// performance and screenshot consumers keep their real clock and renderer.
+import {
+  installTestClock,
+  withTestClock,
+  presentTestFrame,
+} from "../testClock";
+import { injectTownRenderSurface } from "../../town/townRenderSurface";
+import { frameRenderSurface } from "../townRenderSurface";
+const fixtureClock =
+  new URLSearchParams(location.search).get("clock") === "manual"
+    ? installTestClock()
+    : undefined;
+if (fixtureClock)
+  injectTownRenderSurface(() =>
+    frameRenderSurface(
+      (run) => fixtureClock.real.requestAnimationFrame!(run),
+      (id) => fixtureClock.real.cancelAnimationFrame!(id),
+    ),
+  );
+
 const noAction = () => {};
 const unavailable = async () => "returned" as const;
 const roomActions: TownRoomActions = {
@@ -232,4 +253,30 @@ async function idle(frames: number) {
   for (let i = 0; i < frames; i++) await frame();
   return recording.stop();
 }
-Object.assign(window, { townScale: { ...scale, pan, idle } });
+Object.assign(window, {
+  townScale: {
+    ...scale,
+    renders: () => renderCost.length,
+    pan,
+    idle,
+    ready: fixtureClock
+      ? withTestClock(fixtureClock, scale.ready)
+      : scale.ready,
+    zoom: (step: "all" | "in") =>
+      fixtureClock
+        ? withTestClock(fixtureClock, scale.zoom(step))
+        : scale.zoom(step),
+    async advance(ms: number) {
+      if (!fixtureClock) throw new Error("Manual scene clock required");
+      await presentTestFrame(fixtureClock, ms);
+    },
+    async untilDraws(after: number, count: number) {
+      if (!fixtureClock) throw new Error("Manual scene clock required");
+      await fixtureClock.until(
+        () => renderCost.length - after > count,
+        "Town did not resume after input",
+      );
+      return renderCost.length;
+    },
+  },
+});

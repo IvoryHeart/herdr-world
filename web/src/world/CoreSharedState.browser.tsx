@@ -1,5 +1,5 @@
 import { withTestClock } from "./testing/testClock";
-import { clock as fixtureTime } from "./testing/installTestClock";
+import { clock as fixtureTime } from "./testing/installLightTownRenderer";
 import { createRoot } from "react-dom/client";
 import { flushSync } from "react-dom";
 import { bridge } from "../api";

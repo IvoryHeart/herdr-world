@@ -1,14 +1,40 @@
 import { parse } from "@babel/parser";
 
-/** Executable inline scripts in HTML literals; JSON/data scripts are inert. */
+/** Executable HTML scripts and CDP evaluate literals; JSON/data scripts are inert. */
 export function inlineBrowserScripts(path: string, source: string): string[] {
-  if (!/<script\b/i.test(source)) return [];
+  if (!/<script\b|\bevaluat(?:e|ion)\b|Runtime\.evaluate/i.test(source))
+    return [];
   const ast = parse(source, {
     sourceType: "unambiguous",
     plugins: path.endsWith("x") ? ["typescript", "jsx"] : ["typescript"],
   });
   const scripts: string[] = [];
+  const literal = (node: any): string | undefined =>
+    node?.type === "StringLiteral"
+      ? node.value
+      : node?.type === "TemplateLiteral"
+        ? node.quasis
+            .map((part: any) => part.value.cooked ?? part.value.raw)
+            .join("__herdrTemplateValue")
+        : undefined;
   const visit = (node: any) => {
+    if (node.type === "CallExpression") {
+      const callee = node.callee;
+      const name =
+        callee.type === "Identifier" ? callee.name : callee.property?.name;
+      if (name === "evaluate") {
+        const script = literal(node.arguments[0]);
+        if (script !== undefined) scripts.push(script);
+      }
+      if (literal(node.arguments[0]) === "Runtime.evaluate") {
+        const expression = node.arguments[1]?.properties?.find(
+          (property: any) =>
+            (property.key?.name ?? property.key?.value) === "expression",
+        );
+        const script = literal(expression?.value);
+        if (script !== undefined) scripts.push(script);
+      }
+    }
     const html =
       node.type === "StringLiteral"
         ? node.value

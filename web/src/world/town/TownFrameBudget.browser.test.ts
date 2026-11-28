@@ -131,7 +131,7 @@ test.skipIf(!chrome).each(["home-pan", "zoom", "desk-pan", "composer"])(
           "--no-first-run",
           "--no-default-browser-check",
           `--user-data-dir=${profile}`,
-          server.url.href,
+          server.url.href + (phase === "composer" ? "?clock=manual" : ""),
         ],
         { stdout: "ignore", stderr: Bun.file(log) },
         { exclusive: true },
@@ -202,7 +202,11 @@ test.skipIf(!chrome).each(["home-pan", "zoom", "desk-pan", "composer"])(
         };
       };
       const draws = () =>
-        evaluate("window.__HERDR_TOWN_RENDERER__.frames") as Promise<number>;
+        evaluate(
+          phase === "composer"
+            ? "window.townScale.renders()"
+            : "window.__HERDR_TOWN_RENDERER__.frames",
+        ) as Promise<number>;
 
       /**
        * Frames shown during the gesture, and how many of them had a tile not
@@ -325,7 +329,7 @@ test.skipIf(!chrome).each(["home-pan", "zoom", "desk-pan", "composer"])(
         value = 0;
       if (phase === "composer") {
         const idle = await draws();
-        await evaluate("new Promise((r) => setTimeout(r, 2000))");
+        await evaluate("window.townScale.advance(2000)");
         idleDraws = (await draws()) - idle;
         // A headless page has no window focus; without it no focus events fire.
         await command("Emulation.setFocusEmulationEnabled", { enabled: true });
@@ -345,21 +349,14 @@ test.skipIf(!chrome).each(["home-pan", "zoom", "desk-pan", "composer"])(
             text: "a",
           });
           await command("Input.dispatchKeyEvent", { ...key, type: "keyUp" });
-          await evaluate("new Promise((r) => setTimeout(r, 100))");
+          await evaluate("window.townScale.advance(100)");
         }
         typingDraws = (await draws()) - typed;
         const resumed = await draws();
         // This is a frame-count assertion, not a one-second speed budget.
         // Shared software-rendering CPUs may present only one frame per second.
         const afterResume = await evaluate(
-          `new Promise((resolve) => {
-            const sample = () => {
-              const frames = window.__HERDR_TOWN_RENDERER__.frames;
-              if (frames - ${resumed} > ${typingDraws}) resolve(frames);
-              else requestAnimationFrame(sample);
-            };
-            sample();
-          })`,
+          `window.townScale.untilDraws(${resumed}, ${typingDraws})`,
           MEASURE_DEADLINE_MS,
         );
         resumedDraws = afterResume - resumed;
@@ -411,6 +408,7 @@ test.skipIf(!chrome).each(["home-pan", "zoom", "desk-pan", "composer"])(
       }
       if (phase === "composer") {
         // Ambient motion keeps its own pace, not the display's.
+        expect(idleDraws).toBeGreaterThan(0);
         expect(idleDraws).toBeLessThanOrEqual(64);
         expect(value).toBe(TYPED_KEYS);
         // Typing in the composer quiets Town's motion, then it resumes.

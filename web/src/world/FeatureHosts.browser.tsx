@@ -1,4 +1,4 @@
-import { clock as fixtureTime } from "./testing/installTestClock";
+import { clock as fixtureTime } from "./testing/installLightTownRenderer";
 import { createRoot } from "react-dom/client";
 import { STARTER_PROFILES } from "../../../shared/agentProfile";
 import { bridge } from "../api";

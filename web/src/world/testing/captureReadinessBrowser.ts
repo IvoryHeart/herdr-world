@@ -240,6 +240,14 @@ export function registerCaptureReadinessTests() {
             height: 1440,
           });
         }
+        // A resize receipt covers the final camera/topology and its HUD,
+        // rather than an intermediate materialized frame of that flight.
+        expect(
+          await evaluate(`(() => {
+          const renderer = window.__HERDR_TOWN_RENDERER__;
+          return !renderer?.flying && !renderer?.transitioning;
+        })()`),
+        ).toBe(true);
         if (scenario === "views") {
           await evaluate("captureFixture.retainHiddenTown()");
           for (const view of ["board", "desk"] as const) {

@@ -1,4 +1,4 @@
-import { clock as fixtureTime } from "./testing/installTestClock";
+import { clock as fixtureTime } from "./testing/installLightTownRenderer";
 import { checkDeskRevealHook } from "./testing/deskRevealHookAcceptance";
 import { checkDeskOtherHosts } from "./testing/deskOtherHostsAcceptance";
 import { bridge } from "../api";

@@ -1,4 +1,4 @@
-import { clock as fixtureTime } from "./testing/installTestClock";
+import { clock as fixtureTime } from "./testing/installLightTownRenderer";
 import { presentTestFrame } from "./testing/testClock";
 import { flushSync } from "react-dom";
 import { createRoot } from "react-dom/client";

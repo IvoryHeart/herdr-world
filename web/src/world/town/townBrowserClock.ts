@@ -18,3 +18,7 @@ export const townBrowserFrames: TownFrames = {
     return () => clock.cancelAnimationFrame(frame);
   },
 };
+
+/** Yield an ordinary task between renderer setup steps so pending input runs. */
+export const nextTownTask = () =>
+  new Promise<void>((resolve) => clock.setTimeout(resolve, 0));

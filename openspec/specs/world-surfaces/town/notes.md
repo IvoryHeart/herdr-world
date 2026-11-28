@@ -39,7 +39,7 @@
 
 **Tests:**
 
-- `web/src/world/town/TownCanvas.test.ts`, `web/src/world/town/TownCanvas.fold.test.ts`; `web/src/world/testing/townRenderSurface.test.ts` (native submission, coalescing and disposal); `web/src/world/testing/testClock.test.ts` (timer/task/frame ordering).
+- `web/src/world/town/TownCanvas.test.ts`, `web/src/world/town/TownCanvas.fold.test.ts`; `web/src/world/testing/townRenderSurface.test.ts` (native submission, coalescing and disposal); `web/src/world/testing/testClock.test.ts` (timer/task/frame ordering).; `web/src/world/testing/installLightTownRenderer.ts`, `lightTownRenderer.ts`, `lightTownRenderer.test.ts` and `web/src/world/town/townRendererPort.ts`: behaviour-only renderer port, real camera/actors/DOM authority, no pixels or ambient ticker; native rendering suites retain Pixi.; `web/src/world/testing/captureReadinessBrowser.ts`: capture fences include camera/topology/roof settling; stale receipts are discarded.
 - `web/src/world/town/townLayout.test.ts`; places: `web/src/world/town/townPlaces.test.ts`, `web/src/world/town/townPlaces.browser.ts` (TownCanvas `places` cases); town center ring: `web/src/world/town/townCenterBuildings.dom.test.ts`
 - `web/src/world/town/townReceptionFilter.test.ts`
 - `web/src/world/town/townQuietWork.test.ts`; plaques and top-row taps: `web/src/world/town/townRoomPlates.browser.ts` (TownCanvas `plates` cases)

@@ -1652,12 +1652,6 @@
       },
       "reason": "Legacy native time; migrate this owner to the injected clock/scheduler port."
     },
-    "web/src/world/town/townRenderer.ts": {
-      "counts": {
-        "setTimeout": 2
-      },
-      "reason": "Legacy native time; migrate this owner to the injected clock/scheduler port."
-    },
     "web/src/world/town/townScaleUsage.ts": {
       "counts": {
         "Date.now": 1
@@ -1751,14 +1745,6 @@
     "web/src/world/WorldFoundationApp.tsx": {
       "counts": {
         "requestAnimationFrame": 1
-      },
-      "reason": "Legacy native time; migrate this owner to the injected clock/scheduler port."
-    },
-    "web/src/world/worldFrameScheduler.ts": {
-      "counts": {
-        "setTimeout": 2,
-        "requestAnimationFrame": 1,
-        "performance.now": 2
       },
       "reason": "Legacy native time; migrate this owner to the injected clock/scheduler port."
     },

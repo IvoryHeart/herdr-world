@@ -359,3 +359,19 @@ test("new short unit polling waits fail while an existing allowance only shrinks
     1,
   );
 });
+
+test("CDP evaluate literals cannot conceal fixed browser waits", async () => {
+  const { inlineBrowserScripts } = await import(
+    "./testing/inline-browser-scripts"
+  );
+  const source = [
+    'await evaluate("new Promise((r) => setTimeout(r, 2000))");',
+    "await page.evaluate(`Bun.sleep(${delay})`);",
+    'await command("Runtime.evaluate", {expression: "new Promise((resolve) => setTimeout(resolve, 100))"});',
+    'const data = "Bun.sleep(1000)";',
+  ].join("\n");
+  const scripts = inlineBrowserScripts("browser.test.ts", source);
+  expect(scripts).toHaveLength(3);
+  for (const script of scripts)
+    expect(scanSource("inline.browser.ts", script).pauses).toHaveLength(1);
+});

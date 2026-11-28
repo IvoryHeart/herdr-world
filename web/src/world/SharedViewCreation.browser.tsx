@@ -1,4 +1,4 @@
-import { clock as fixtureTime } from "./testing/installTestClock";
+import { clock as fixtureTime } from "./testing/installLightTownRenderer";
 import { withTestClock } from "./testing/testClock";
 import { isBackPending } from "../systemBack";
 import { observeCondition } from "./testing/browserEvents";

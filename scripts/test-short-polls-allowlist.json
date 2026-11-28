@@ -1,150 +1,150 @@
 {
   "version": 1,
-  "description": "Legacy short unit polling sleeps. Replace with event/fake clock; each count may only shrink.",
+  "description": "Fixed sleeps a test file may still hold (#1419). Counts only go down: fix a file, then run bun scripts/check-test-waits.ts --update.",
   "files": {
     "scripts/verification-checker.test.ts": {
       "pauses": 1,
-      "reason": "Legacy unit fixture polls external progress; migrate its owner to an event or injected clock."
+      "reason": "Checker fixture samples progress from an external verification process; expose diagnostic completion before replacing this poll."
     },
     "server/src/assistant/claude-driver.test.ts": {
       "pauses": 1,
-      "reason": "Legacy unit fixture polls external progress; migrate its owner to an event or injected clock."
+      "reason": "Legacy assistant fixture coordinates child/provider completion on native scheduling; expose the completion signal before removing this wait."
     },
     "server/src/bridge/endpoint-terminal-session.test.ts": {
       "pauses": 1,
-      "reason": "Legacy unit fixture polls external progress; migrate its owner to an event or injected clock."
+      "reason": "Legacy bridge protocol/terminal fixtures use native socket, process or output-flush scheduling; await the corresponding protocol/flush completion."
     },
     "server/src/bridge/ssh-openssh.test.ts": {
       "pauses": 1,
-      "reason": "Legacy unit fixture polls external progress; migrate its owner to an event or injected clock."
+      "reason": "Legacy bridge protocol/terminal fixtures use native socket, process or output-flush scheduling; await the corresponding protocol/flush completion."
     },
     "server/src/bridge/ssh-tunnel.test.ts": {
       "pauses": 1,
-      "reason": "Legacy unit fixture polls external progress; migrate its owner to an event or injected clock."
+      "reason": "Legacy bridge protocol/terminal fixtures use native socket, process or output-flush scheduling; await the corresponding protocol/flush completion."
     },
     "server/src/bridge/terminal-bridge.test.ts": {
       "pauses": 8,
-      "reason": "Legacy unit fixture polls external progress; migrate its owner to an event or injected clock."
+      "reason": "Legacy bridge protocol/terminal fixtures use native socket, process or output-flush scheduling; await the corresponding protocol/flush completion."
     },
     "server/src/config/session-secret.test.ts": {
       "pauses": 2,
-      "reason": "Legacy unit fixture polls external progress; migrate its owner to an event or injected clock."
+      "reason": "Secret-file fixture samples native concurrent file creation; replace the poll with a file/child completion event."
     },
     "server/src/connections/agent-status-subscription.test.ts": {
       "pauses": 1,
-      "reason": "Legacy unit fixture polls external progress; migrate its owner to an event or injected clock."
+      "reason": "Legacy connection handshake/reconnect fixtures still use native process/socket scheduling; expose handshake/progress completion and drive reconnect deadlines."
     },
     "server/src/connections/profile-process.test.ts": {
       "pauses": 4,
-      "reason": "Legacy unit fixture polls external progress; migrate its owner to an event or injected clock."
+      "reason": "Legacy connection handshake/reconnect fixtures still use native process/socket scheduling; expose handshake/progress completion and drive reconnect deadlines."
     },
     "server/src/connections/profile-service.test.ts": {
       "pauses": 1,
-      "reason": "Legacy unit fixture polls external progress; migrate its owner to an event or injected clock."
+      "reason": "Legacy connection handshake/reconnect fixtures still use native process/socket scheduling; expose handshake/progress completion and drive reconnect deadlines."
     },
     "server/src/connections/runtime.test.ts": {
       "pauses": 5,
-      "reason": "Legacy unit fixture polls external progress; migrate its owner to an event or injected clock."
+      "reason": "Legacy connection handshake/reconnect fixtures still use native process/socket scheduling; expose handshake/progress completion and drive reconnect deadlines."
     },
     "server/src/connections/ssh-preflight-recovery.test.ts": {
       "pauses": 1,
-      "reason": "Legacy unit fixture polls external progress; migrate its owner to an event or injected clock."
+      "reason": "Legacy connection handshake/reconnect fixtures still use native process/socket scheduling; expose handshake/progress completion and drive reconnect deadlines."
     },
     "server/src/connections/subscription-loop.test.ts": {
       "pauses": 1,
-      "reason": "Legacy unit fixture polls external progress; migrate its owner to an event or injected clock."
+      "reason": "Legacy connection handshake/reconnect fixtures still use native process/socket scheduling; expose handshake/progress completion and drive reconnect deadlines."
     },
     "server/src/herdr-core/connections.test.ts": {
       "pauses": 1,
-      "reason": "Legacy unit fixture polls external progress; migrate its owner to an event or injected clock."
+      "reason": "Legacy core fixtures coordinate native process, watch/event-stream and replay progress; migrate each remaining lifecycle owner to explicit completion or its scheduler."
     },
     "server/src/herdr-core/core.live.test.ts": {
       "pauses": 1,
-      "reason": "Legacy unit fixture polls external progress; migrate its owner to an event or injected clock."
+      "reason": "Legacy core fixtures coordinate native process, watch/event-stream and replay progress; migrate each remaining lifecycle owner to explicit completion or its scheduler."
     },
     "server/src/herdr-core/float-shell.test.ts": {
       "pauses": 1,
-      "reason": "Legacy unit fixture polls external progress; migrate its owner to an event or injected clock."
+      "reason": "Legacy core fixtures coordinate native process, watch/event-stream and replay progress; migrate each remaining lifecycle owner to explicit completion or its scheduler."
     },
     "server/src/herdr-core/logout.test.ts": {
       "pauses": 1,
-      "reason": "Legacy unit fixture polls external progress; migrate its owner to an event or injected clock."
+      "reason": "Legacy core fixtures coordinate native process, watch/event-stream and replay progress; migrate each remaining lifecycle owner to explicit completion or its scheduler."
     },
     "server/src/herdr-core/process-group.test.ts": {
       "pauses": 1,
-      "reason": "Legacy unit fixture polls external progress; migrate its owner to an event or injected clock."
+      "reason": "Legacy core fixtures coordinate native process, watch/event-stream and replay progress; migrate each remaining lifecycle owner to explicit completion or its scheduler."
     },
     "server/src/herdr-core/testing/desktop-pane.ts": {
       "pauses": 1,
-      "reason": "Legacy unit fixture polls external progress; migrate its owner to an event or injected clock."
+      "reason": "Legacy core fixtures coordinate native process, watch/event-stream and replay progress; migrate each remaining lifecycle owner to explicit completion or its scheduler."
     },
     "server/src/herdr-core/testing/live-world.ts": {
       "pauses": 1,
-      "reason": "Legacy unit fixture polls external progress; migrate its owner to an event or injected clock."
+      "reason": "Legacy core fixtures coordinate native process, watch/event-stream and replay progress; migrate each remaining lifecycle owner to explicit completion or its scheduler."
     },
     "server/src/herdr-core/watches.test.ts": {
       "pauses": 1,
-      "reason": "Legacy unit fixture polls external progress; migrate its owner to an event or injected clock."
+      "reason": "Legacy core fixtures coordinate native process, watch/event-stream and replay progress; migrate each remaining lifecycle owner to explicit completion or its scheduler."
     },
     "server/src/herdr-core/windows.live.test.ts": {
       "pauses": 1,
-      "reason": "Legacy unit fixture polls external progress; migrate its owner to an event or injected clock."
+      "reason": "Legacy core fixtures coordinate native process, watch/event-stream and replay progress; migrate each remaining lifecycle owner to explicit completion or its scheduler."
     },
     "server/src/herdr-core/windows.test.ts": {
       "pauses": 1,
-      "reason": "Legacy unit fixture polls external progress; migrate its owner to an event or injected clock."
+      "reason": "Legacy core fixtures coordinate native process, watch/event-stream and replay progress; migrate each remaining lifecycle owner to explicit completion or its scheduler."
     },
     "server/src/herdr-core/worktrees.live.test.ts": {
       "pauses": 1,
-      "reason": "Legacy unit fixture polls external progress; migrate its owner to an event or injected clock."
+      "reason": "Legacy core fixtures coordinate native process, watch/event-stream and replay progress; migrate each remaining lifecycle owner to explicit completion or its scheduler."
     },
     "server/src/herdr-core/world-read-model.test.ts": {
       "pauses": 1,
-      "reason": "Legacy unit fixture polls external progress; migrate its owner to an event or injected clock."
+      "reason": "Legacy core fixtures coordinate native process, watch/event-stream and replay progress; migrate each remaining lifecycle owner to explicit completion or its scheduler."
     },
     "server/src/http/herdr-setup.test.ts": {
       "pauses": 1,
-      "reason": "Legacy unit fixture polls external progress; migrate its owner to an event or injected clock."
+      "reason": "Setup HTTP fixture samples asynchronous pinned-release metadata loading; await its response/readiness signal."
     },
     "server/src/ide/instances.test.ts": {
       "pauses": 1,
-      "reason": "Legacy unit fixture polls external progress; migrate its owner to an event or injected clock."
+      "reason": "Legacy IDE fixtures coordinate native subprocess/startup and instance liveness; expose readiness/exit signals and drive recovery deadlines."
     },
     "server/src/ide/service.test.ts": {
       "pauses": 2,
-      "reason": "Legacy unit fixture polls external progress; migrate its owner to an event or injected clock."
+      "reason": "Legacy IDE fixtures coordinate native subprocess/startup and instance liveness; expose readiness/exit signals and drive recovery deadlines."
     },
     "server/src/ide/testing/process-tree-stand-in.ts": {
       "pauses": 1,
-      "reason": "Legacy unit fixture polls external progress; migrate its owner to an event or injected clock."
+      "reason": "Legacy IDE fixtures coordinate native subprocess/startup and instance liveness; expose readiness/exit signals and drive recovery deadlines."
     },
     "server/src/rpc/core-shared.test.ts": {
       "pauses": 1,
-      "reason": "Legacy unit fixture polls external progress; migrate its owner to an event or injected clock."
+      "reason": "Legacy shared RPC fixtures wait for remote event/reply delivery; await the owning RPC acknowledgement."
     },
     "server/src/shipyard/service.test.ts": {
       "pauses": 1,
-      "reason": "Legacy unit fixture polls external progress; migrate its owner to an event or injected clock."
+      "reason": "Concurrent reader fixture samples native read completion and retired generations; expose the admitted-read completion signal."
     },
     "server/src/usage/claude-fuel-board.test.ts": {
       "pauses": 2,
-      "reason": "Legacy unit fixture polls external progress; migrate its owner to an event or injected clock."
+      "reason": "Fuel-board fixture samples ingestion of a real synthetic tap file; await the source refresh publication."
     },
     "server/src/workspace/auto-sync.test.ts": {
       "pauses": 1,
-      "reason": "Legacy unit fixture polls external progress; migrate its owner to an event or injected clock."
+      "reason": "Auto-sync fixture samples background Git completion; expose command completion through its injected execution port."
     },
     "server/src/world/apartments.test.ts": {
       "pauses": 1,
-      "reason": "Legacy unit fixture polls external progress; migrate its owner to an event or injected clock."
+      "reason": "Apartments fixture samples source refresh publication; replace its poll with an admitted refresh event."
     },
     "web/src/components/FilePreviewPdf.test.ts": {
       "pauses": 1,
-      "reason": "Legacy unit fixture polls external progress; migrate its owner to an event or injected clock."
+      "reason": "PDF fixture samples lazy module/frame loading; await the module or frame load event."
     },
     "web/src/world/memory/libraryArtefactReader.dom.test.tsx": {
       "pauses": 1,
-      "reason": "Legacy unit fixture polls external progress; migrate its owner to an event or injected clock."
+      "reason": "Artefact reader fixture waits for asynchronous file deletion/re-read publication; replace with the reader completion signal."
     }
   }
 }

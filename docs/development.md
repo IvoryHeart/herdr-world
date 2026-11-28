@@ -117,7 +117,8 @@ advance. `bun run check:test-waits` checks every test and imported test helper.
 Browser fixed pauses and polling sleeps are forbidden, including short sleeps.
 Legacy unit pauses remain counted with reasons in
 `scripts/test-waits-allowlist.json`; legacy short unit polling ticks are counted in
-`scripts/test-short-polls-allowlist.json`. Both allowances only shrink. Direct native
+`scripts/test-short-polls-allowlist.json`. Both allowances only shrink.
+CDP evaluate literals are checked too; inert JSON/data remains data. Legacy
 production clock readers and schedulers are counted by operation and file in
 `scripts/clock-ports-allowlist.json`; callback defaults, qualified globals, timer
 imports and current-time Date constructors are covered too. First adoption is
@@ -127,8 +128,7 @@ allowlists to their current counts.
 
 `bun run test` owns one Chrome for the selected browser files. Every case gets
 an isolated incognito context; closing it cannot close a sibling's targets.
-Local web runners admit at most eight contexts and World runners four,
-bounded by available cores. CPU
+Local runners admit at most eight contexts, bounded by available cores. CPU
 canvas rendering preserves the former web fixtures' rendering mode while
 Town keeps WebGL; a saturated shared canvas GPU queue must not block input. The managed
 runner launches one Chrome even with `HERDR_WORLD_TEST_GPU=1`: it checks that
@@ -146,11 +146,20 @@ sandbox through the host's installed Chrome AppArmor profile when needed.
 Manual-clock Town fixtures step the real scene and camera on injected frames.
 Their raster port submits the latest state once per native frame and acknowledges
 only the actual draw; scene budgets and gap diagnostics still run every step.
-Production submits every requested raster immediately. Native frame-budget and
-transport performance fixtures retain the production renderer and clock.
+Production submits every requested raster immediately. Behaviour fixtures explicitly
+install `testing/installLightTownRenderer.ts`: the real scene, layout, camera,
+actors, semantic controls and World actions run behind `TownRendererHandle`, with
+no Pixi textures/effects or ambient ticker. The light renderer never certifies
+screenshot readiness. Town idle, raster, animation and native transport/frame
+performance cases keep Pixi. Only the composer work-count phase drives the clock;
+its two-second sample and 100 ms key cadence retain every original assertion.
+Capture readiness waits for camera/topology/roof settling as well as materialization;
+ambient animation continues and stale receipts still fail without saving an image.
 Layout, scrolling and media-query checks explicitly await native frames after
-stepping test time. Browser-wide traces and native performance cases have exclusive admission; other cases
-share up to eight contexts locally, bounded by the available cores. Pointer
+stepping test time. Browser-wide traces have exclusive admission. Native work-count cases share the
+bounded contexts with real rendering/input; the separate latency-trend workflow
+measures delays on a quiet runner. Cases share up to eight contexts locally,
+bounded by the available cores. Pointer
 fixtures use native per-page touch emulation, retaining actual CSS media queries.
 
 Run `bun run test:timings` for isolated sequential static, unit, World browser,

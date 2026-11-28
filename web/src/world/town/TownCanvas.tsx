@@ -1,3 +1,5 @@
+import { createTownRenderer } from "./townRendererPort";
+import { nextTownTask } from "./townBrowserClock";
 import { useDrawReadiness } from "../useDrawReadiness";
 import "../worldAsks.css";
 import { TownBoard, type TownQuietMarks } from "./TownBoard";
@@ -60,12 +62,7 @@ import { TownHostRect } from "./townHostRect";
 import { TownWorldTransform } from "./townWorldTransform";
 import { townSummary, type TownSummary } from "./townSummary";
 import { townCalls } from "./TownRail";
-import {
-  createTownRenderer,
-  nextTownTask,
-  townRendererFailed,
-  type TownRendererHandle,
-} from "./townRenderer";
+import { townRendererFailed, type TownRendererHandle } from "./townRenderer";
 import {
   advancePixiSystemTicker,
   holdPixiSystemTicker,

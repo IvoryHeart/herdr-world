@@ -226,7 +226,7 @@ test.skipIf(!chrome).each([1440, 390])(
           server.url.href,
         ],
         { stdout: "ignore", stderr: Bun.file(join(dir, "browser.log")) },
-        { exclusive: true },
+        { exclusive: Boolean(Bun.env.WORLD_TRACE_PREFIX) },
       );
       await browser.start();
       const observed = await waitForBrowserFixture(
