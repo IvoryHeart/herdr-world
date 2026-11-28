@@ -1,5 +1,7 @@
 import { withTestClock } from "./testing/testClock";
 import { clock } from "./testing/installTestClock";
+import { isBackPending } from "../systemBack";
+import { observeCondition } from "./testing/browserEvents";
 import { installTownMasterFixture } from "./testing/townMasterFixture";
 import {
   admissionClock,
@@ -6251,7 +6253,13 @@ async function run() {
       () => spacesMore()?.getAttribute("aria-expanded") === "true",
       "direct Spaces opens More",
     );
-    await advance();
+    await until(
+      () => Number(history.state?.herdrBack) >= 1,
+      "direct Spaces More registered its Back guard",
+    );
+    const moreBackTraversed = new Promise<Event>((resolve) =>
+      window.addEventListener("popstate", resolve, { once: true }),
+    );
     document
       .querySelector<HTMLButtonElement>('button[aria-label="Back to Town"]')!
       .click();
@@ -6259,9 +6267,14 @@ async function run() {
       () => spacesMore()?.getAttribute("aria-expanded") === "false",
       "direct Spaces Back closes More first",
     );
+    await withTestClock(clock, moreBackTraversed);
     check(
       window.location.pathname === "/spaces",
       `direct Spaces Back left for ${window.location.pathname} while More was open`,
+    );
+    await observeCondition(
+      () => !isBackPending(),
+      "More's owned history traversal completed",
     );
     document
       .querySelector<HTMLButtonElement>('button[aria-label="Back to Town"]')!

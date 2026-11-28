@@ -725,7 +725,11 @@ async function run() {
         () =>
           acknowledgements.some((ack) => ack.phase === stage) &&
           receivedFrames > 0 &&
-          presentedFrames > 0,
+          presentedFrames > 0 &&
+          // The fast scale fixture can finish before the output workload has
+          // exercised its existing minimum. Admit that work before stopping it.
+          (stage !== "refresh" ||
+            (receivedFrames > 500 && presentedFrames > 10)),
         "Mounted input and terminal frames did not complete",
       );
       await frames(4);
