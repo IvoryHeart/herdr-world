@@ -15,6 +15,7 @@ import { __storeTesting, store } from "./store";
 import "./styles/tokens.css";
 import "./styles/base.css";
 import "./styles/vendor.css";
+import { installAdvanceableClock } from "./testing/advanceableClock";
 
 const failures: string[] = [];
 const check = (value: unknown, message: string) => {
@@ -308,6 +309,8 @@ async function checkDismissPointerIsolation() {
     );
   }
   const originalClear = store.clearNotice;
+  // The repeat-dismissal guard expires on the shared clock: advance past it.
+  const time = installAdvanceableClock();
   try {
     for (const kind of ["notice", "update", "reload"] as const) {
       for (const touch of [false, true, null]) {
@@ -406,8 +409,8 @@ async function checkDismissPointerIsolation() {
             touchPoints: [{ ...point, id: 2 }],
           });
           if (kind === "notice") {
-            const started = performance.now();
-            await until(() => performance.now() - started > 550);
+            time.advance(550);
+            await frame();
           }
           await input("Input.dispatchTouchEvent", {
             type: "touchEnd",
@@ -469,8 +472,8 @@ async function checkDismissPointerIsolation() {
           });
         await frame();
         check(dismissals === 1, `${kind}: unrelated answer stopped working`);
-        const ended = performance.now();
-        await until(() => performance.now() - ended > 550);
+        time.advance(550);
+        await frame();
         for (const type of ["mousePressed", "mouseReleased"])
           await input("Input.dispatchMouseEvent", {
             ...point,
@@ -483,6 +486,7 @@ async function checkDismissPointerIsolation() {
       }
     }
   } finally {
+    time.restore();
     store.clearNotice = originalClear;
     for (const type of ["pointerdown", "pointerup", "click"])
       document.removeEventListener(type, trace, true);

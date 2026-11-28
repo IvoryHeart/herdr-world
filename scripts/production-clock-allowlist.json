@@ -131,7 +131,6 @@
     "web/src/components/TerminalComposer.tsx": 1,
     "web/src/components/TerminalThemeDialog.tsx": 1,
     "web/src/components/TerminalView.tsx": 14,
-    "web/src/components/Toast.tsx": 5,
     "web/src/components/useAgentHistoryWindow.ts": 1,
     "web/src/components/useTabReorderDrag.ts": 1,
     "web/src/components/ViewportDebugOverlay.tsx": 1,
