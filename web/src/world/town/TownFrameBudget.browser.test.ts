@@ -65,6 +65,20 @@ const RASTER_PER_PAN_FRAME = [1.5, 4];
  * (about 150 tasks per home pan) and fails RASTER_PER_PAN_FRAME.
  */
 const UNDRAWN_SHARE = 1 / 20;
+/**
+ * Ambient motion keeps its own pace in real time, so the composer phase
+ * counts Town's draws over a stretch of the page's own presented frames: it
+ * waits on animation frames until their timestamps span `ms`, not on a timer.
+ */
+const framesSpanning = (ms: number) => `new Promise((resolve) => {
+  let first;
+  const frame = (at) => {
+    first ??= at;
+    if (at - first >= ${ms}) resolve(at - first);
+    else requestAnimationFrame(frame);
+  };
+  requestAnimationFrame(frame);
+})`;
 
 test.skipIf(!chrome).each(["home-pan", "zoom", "desk-pan", "composer"])(
   "Town frame budget (%s): display-rate pans, bounded zoom restyles and composer quiet",
@@ -101,7 +115,9 @@ test.skipIf(!chrome).each(["home-pan", "zoom", "desk-pan", "composer"])(
       // Its own Chrome (a distinct launch set): the trace reads every
       // renderer in the browser, so no other case's frames may share it.
       page = await openChromePage({
-        viewport: { width: 1512, height: 982 },
+        // The frame ceilings were measured on CI's pinned Chrome, whose
+        // 1512x982 headless window gave a 1512x782 page.
+        viewport: { width: 1512, height: 782 },
         pixels: true,
         launchFlags: SWIFTSHADER_FLAGS,
       });
@@ -288,7 +304,7 @@ test.skipIf(!chrome).each(["home-pan", "zoom", "desk-pan", "composer"])(
         value = 0;
       if (phase === "composer") {
         const idle = await draws();
-        await evaluate("new Promise((r) => setTimeout(r, 2000))");
+        await evaluate(framesSpanning(2000));
         idleDraws = (await draws()) - idle;
         // A headless page has no window focus; without it no focus events fire.
         await command("Emulation.setFocusEmulationEnabled", { enabled: true });
@@ -308,7 +324,7 @@ test.skipIf(!chrome).each(["home-pan", "zoom", "desk-pan", "composer"])(
             text: "a",
           });
           await command("Input.dispatchKeyEvent", { ...key, type: "keyUp" });
-          await evaluate("new Promise((r) => setTimeout(r, 100))");
+          await evaluate(framesSpanning(100));
         }
         typingDraws = (await draws()) - typed;
         const resumed = await draws();

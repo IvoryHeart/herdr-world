@@ -185,10 +185,10 @@ test.skipIf(!chrome).each([1440, 390])(
       for (const output of build.outputs)
         assets.set(`/${basename(output.path)}`, output);
       browser = await openChromePage({
-        // Headless Chrome never made a window narrower than 500 pixels or
-        // taller than 857 here; the 390 budgets were measured in that page.
-        viewport:
-          width < 500 ? { width: 500, height: 857 } : { width, height: 1000 },
+        // The work ceilings were measured on CI's pinned Chrome, where a
+        // headless 1440x1000 window gave a 1440x800 page and a 390-pixel one a
+        // 500x800 page: the cards Board mounts follow the page size.
+        viewport: { width: Math.max(width, 500), height: 800 },
       });
       void browser.navigate(server.url.href).catch(() => {});
       const observed = await waitForBrowserFixture(

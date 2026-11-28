@@ -534,7 +534,10 @@ export function registerProductionContextTests(group: ProductionContextGroup) {
         phases.mark("setup");
         void pageRequested.promise.then(() => phases.mark("load"));
         browser = await openChromePage({
-          viewport: { width, height: 1100 },
+          // The case budgets were measured on CI's pinned Chrome, where a
+          // headless window `width`x1100 gave a page at least 500 pixels wide
+          // and 900 tall.
+          viewport: { width: Math.max(width, 500), height: 900 },
           // The case budgets presented frames: Town draws for real.
           pixels: true,
         });
