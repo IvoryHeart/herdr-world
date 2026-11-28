@@ -29,7 +29,8 @@ export async function checkTownBuildingSigns(
         renderer.frames > before &&
         renderer.level === "town" &&
         !renderer.flying,
-      "recovery proof never reached roof level through normal camera input",
+      () =>
+        `recovery proof never reached roof level through normal camera input: ${JSON.stringify({ before, frames: renderer.frames, level: renderer.level, flying: renderer.flying, zoom: renderer.zoom, ready: renderer.ready })}`,
     );
   };
   const signs = () => [
