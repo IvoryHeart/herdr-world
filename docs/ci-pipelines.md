@@ -7,7 +7,7 @@ required. The native launchd shim reports have been removed.
 | --- | --- |
 | Pre-commit | Read-only formatting/lint and staged agent-file guard |
 | Pre-push | Read-only formatting and privacy scan of every pushed ref, including tags |
-| Privacy | One scan for each PR open/synchronize/reopen, plus explicit bot dispatches |
+| Privacy | A step of Delivery checks for each PR open/synchronize/reopen and dispatch; a title/description edit runs only CI's Privacy guard job |
 | PR CI | Linux static, affected units, browser shards and behavioral verification; description policy remains in CI |
 | Merge queue | Fresh Linux validation of the queue's combined commit; the same required Delivery checks aggregate |
 | Native checks | Tags and nightly only, including packaging changes |
@@ -86,9 +86,15 @@ twenty completed pairs. Retry-once verdicts remain required; `flaky-tests-*` acc
 
 ## Scope and scheduling
 
-CI listens to PR open/synchronize/reopen. It does not listen to `edited`.
+CI listens to PR open/synchronize/reopen, `labeled`, `edited` and `closed`.
 `labeled` starts jobs only for release previews, browser stability and latency
-opt-ins on open PRs. Unrelated labels and closed PRs start no runners.
+opt-ins on open PRs. Unrelated labels start no runners. A title/description
+`edited` event runs only the privacy scan; a base change re-runs the scope.
+A PR's new commit, reopen or close cancels its older code run (one concurrency
+group per PR); label and description events use a separate group and never
+cancel code checks. Main pushes, merge groups and dispatches are never
+cancelled. A close also runs one small job that cancels the PR's still-running
+side-workflow runs.
 PR CI validates the proposed merge and uses one selection from
 `scripts/validation-scope.ts`. Scope includes both sides of renames and the
 complete PR, even if incremental unit scope narrows. Unknown/configuration
@@ -233,9 +239,11 @@ There are no automatic revert branches or PRs.
 
 Pages already follows site/spec/tutorial/Help/film inputs and now also follows
 release identity and changelog changes. Latency and Town golden workflows filter
-PR/main paths; only the latency opt-in label starts a labelled run. Asset headroom
-runs for browser/build/budget inputs and remains advisory. Privacy no longer runs
-again on all branch pushes. The local privacy hook still guards branch/tag
+PR/main paths to the Town renderer (and, for latency, its measured suites and
+scripts); their nightly runs cover everything else. Only the latency opt-in label
+starts a labelled run. Asset headroom runs only for web build inputs (never web
+tests or fixtures) and budget scripts, and remains advisory. Privacy is a step of
+Delivery checks, not a separate workflow. The local privacy hook still guards branch/tag
 publication. The broken automatic Help refresh workflow was removed; targeted
 manual Help capture remains available when a help entry changes. The broken OpenSpec archive bot was also removed; the
 pinned archive helper still supports reviewed synchronization PRs with ordered
@@ -244,9 +252,9 @@ runners or writes a bot branch on main pushes.
 
 Only CI subscribes directly to merge groups. Its reusable World browser and
 behavioral workflows run through the same aggregate. Privacy scans each PR's
-additions and metadata before queueing, with no separate required queue check.
-Pages deployment, latency, Town golden images and asset headroom remain side
-workflows on their existing inputs. Dependency maintenance/security reporting,
+additions and metadata in Delivery checks before queueing, with no separate
+required queue check. Pages deployment, latency, Town golden images and asset
+headroom remain side workflows on their own inputs. Dependency maintenance/security reporting,
 labels, upstream automation, main health, retry handlers, release preparation,
 publication and native/manual acceptance keep their existing events. None is
 an additional required merge-group report.
@@ -327,11 +335,16 @@ cache is keyed by its committed lock and revalidated by setup; it contains no ru
 evidence. A failure before execution can have no manifest: upload warns in that
 case, while the primary step stays red and aggregation still refuses missing evidence.
 
-World browser shards run full scenes one file at a time. Two simultaneous
-SwiftShader scenes competed for hosted-runner CPUs and caused progressive-control,
-focus and capture-fencing failures. The explicit lightweight DOM/transport list in
+Each World browser shard runs its three case queues side by side, one
+process-isolated queue each, in one shared Chrome with a browser context per
+case (`scripts/world-browser-cases.ts`). Two simultaneous SwiftShader scenes once
+competed for hosted-runner CPUs and caused progressive-control, focus and
+capture-fencing failures; behaviour cases now draw with the null renderer (only
+cases that read pixels draw), SwiftShader's threads are limited to the job's
+CPUs, and the queues are packed by recorded case time so each stays under
+150 seconds. The explicit lightweight DOM/transport list in
 `scripts/world-browser-suites.ts` runs two files concurrently in a separate batch;
-new suites default to isolation. Cases within each World file remain serial.
+new suites default to the queued scene batch. Cases within each World file remain serial.
 Each case keeps private profiles, ports, RPC state and result gates, and retains
 every viewport, assertion and existing deadline. Pointer journeys clear hover
 cards between actions: camera moves can leave a previously hovered room summary

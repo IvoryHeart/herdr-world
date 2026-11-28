@@ -337,7 +337,7 @@ type PrivacyRequest = {
 };
 /** Pre-push scans the intended description (`HERDR_WORLD_PR_BODY`) or the
  * existing PR's, plus the existing title. With no PR or no `gh` access there is
- * nothing remote to scan; Privacy CI rescans metadata on every PR event. */
+ * nothing remote to scan; CI rescans metadata on every PR event. */
 function prePushMetadata(cwd: string): PrivacyFinding[] {
   let pull: { title?: string; body?: string } = {};
   try {

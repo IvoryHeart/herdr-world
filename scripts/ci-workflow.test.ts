@@ -77,7 +77,7 @@ const workflow = Bun.YAML.parse(
     };
   };
   permissions: { actions: string };
-  concurrency: { group: string; "cancel-in-progress": boolean };
+  concurrency: { group: string; "cancel-in-progress": string | boolean };
   jobs: Record<string, WorkflowJob>;
 };
 
@@ -353,6 +353,19 @@ test("a closed or merged PR's edit or label skips every job before it takes a ru
     );
   for (const [name, job] of Object.entries(workflow.jobs)) {
     if (name === "validation-scope") continue;
+    if (name === "cancel-closed") {
+      // Only a close event, which is what it cancels runs for.
+      expect(job.if).toBe(
+        "github.event_name == 'pull_request' && github.event.action == 'closed'",
+      );
+      continue;
+    }
+    if (name === "privacy-metadata") {
+      // An open PR's title or description edit only.
+      expect(job.if).toContain("github.event.action == 'edited'");
+      expect(job.if).toContain("github.event.pull_request.state == 'open'");
+      continue;
+    }
     if (name === "browser-diagnostics") {
       // Manual dispatch only; never a PR event.
       expect(job.if).toStartWith("github.event_name == 'workflow_dispatch'");
@@ -365,6 +378,91 @@ test("a closed or merged PR's edit or label skips every job before it takes a ru
       expect(job.if).toContain(SCOPE_RAN);
     }
   }
+});
+
+function evaluateEvent(value: string | boolean, github: object): unknown {
+  if (typeof value === "boolean") return value;
+  const format = (template: string, ...args: unknown[]) =>
+    template.replace(/\{(\d+)\}/g, (_, n) => String(args[Number(n)]));
+  const run = (expression: string) =>
+    new Function(
+      "github",
+      "format",
+      // Expressions read a missing property as null, as Actions does.
+      `return (${expression.replace(/\bgithub((?:\.[\w-]+)+)/g, (path) => path.replaceAll(".", "?."))})`,
+    )(github, format);
+  const whole = /^\$\{\{([^]*)\}\}$/.exec(value);
+  if (whole && !whole[1]!.includes("}}")) return run(whole[1]!);
+  return value.replace(/\$\{\{([^]*?)\}\}/g, (_, expression: string) =>
+    String(run(expression)),
+  );
+}
+
+test("a PR's new commit, reopen or close cancels its older code run; metadata events, main, merge groups and dispatches never cancel", () => {
+  const pr = (action: string, extra: object = {}) => ({
+    event_name: "pull_request",
+    workflow: "CI",
+    ref: "refs/pull/7/merge",
+    sha: "a".repeat(40),
+    event: { action, pull_request: { number: 7 }, ...extra },
+  });
+  const decide = (github: object) => ({
+    group: evaluateEvent(workflow.concurrency.group, github),
+    cancel: !!evaluateEvent(workflow.concurrency["cancel-in-progress"], github),
+  });
+  const code = decide(pr("synchronize"));
+  expect(code).toEqual({ group: "ci-CI-pr-7-code", cancel: true });
+  for (const action of ["opened", "reopened", "closed"])
+    expect(decide(pr(action))).toEqual(code);
+  // A base change re-runs the code checks, so it joins the code group.
+  expect(decide(pr("edited", { changes: { base: { ref: {} } } }))).toEqual(
+    code,
+  );
+  // Labels and description edits never cancel a running code run.
+  for (const action of ["labeled", "edited"])
+    expect(decide(pr(action))).toEqual({
+      group: "ci-CI-pr-7-metadata",
+      cancel: false,
+    });
+  expect(
+    decide({
+      ...pr("synchronize"),
+      event: { action: "synchronize", pull_request: { number: 8 } },
+    }).group,
+  ).toBe("ci-CI-pr-8-code");
+  // Every main commit retains its own run so an owner tag can await it.
+  const main = {
+    event_name: "push",
+    workflow: "CI",
+    ref: "refs/heads/main",
+    sha: "b".repeat(40),
+    event: {},
+  };
+  expect(decide(main)).toEqual({
+    group: `ci-CI-${"b".repeat(40)}`,
+    cancel: false,
+  });
+  for (const event_name of ["merge_group", "workflow_dispatch"])
+    expect(
+      decide({
+        ...main,
+        event_name,
+        ref: "refs/heads/gh-readonly-queue/main/x",
+      }),
+    ).toEqual({
+      group: "ci-CI-refs/heads/gh-readonly-queue/main/x",
+      cancel: false,
+    });
+  // The close event also cancels the PR's other workflows' runs, never its own.
+  const cancel = workflow.jobs["cancel-closed"]!;
+  expect(cancel["runs-on"]).toBe("ubuntu-latest");
+  expect((cancel as { permissions?: unknown }).permissions).toEqual({
+    actions: "write",
+  });
+  const run = cancel.steps[0]!.run!;
+  expect(run).toContain('--branch "$HEAD_REF" --event pull_request');
+  expect(run).toContain('select(.status != "completed")');
+  expect(run).toContain('[ "$id" = "$GITHUB_RUN_ID" ] && continue');
 });
 
 test("delivery checks the combined lanes, current audit and PR description", () => {
@@ -462,14 +560,11 @@ test("CI exposes the protected delivery gate and runs the complete repository ch
     "synchronize",
     "reopened",
     "labeled",
+    "edited",
+    "closed",
   ]);
   expect(workflow.permissions.actions).toBe("read");
-  // Every main commit retains its own run so an owner tag can await it.
-  expect(workflow.concurrency["cancel-in-progress"]).toBe(false);
   expect(workflow.on.push).toEqual({ branches: ["main"] });
-  expect(workflow.concurrency.group).toContain(
-    "(github.event_name == 'push' && github.sha)",
-  );
   const delivery = workflow.jobs.delivery;
 
   expect(delivery?.name).toBe("Delivery checks");
@@ -652,8 +747,7 @@ test("the latency trend measures the trend suites on quiet runners and reports w
   const push = trend.on.push as { branches: string[]; paths: string[] };
   expect(push.branches).toEqual(["main"]);
   for (const path of [
-    "web/src/**",
-    "shared/**",
+    "web/src/world/town/**",
     "bun.lock",
     "scripts/run-world-tests.ts",
     "scripts/world-browser-suites.ts",
@@ -664,6 +758,7 @@ test("the latency trend measures the trend suites on quiet runners and reports w
   expect(push.paths.some((path) => path.startsWith("server/"))).toBe(false);
   expect(trend.on.pull_request).toMatchObject({
     types: ["labeled", "synchronize"],
+    paths: push.paths,
   });
   expect(trend.on.schedule).toEqual([{ cron: "53 3 * * *" }]);
   const measure = trend.jobs.measure!;
@@ -687,6 +782,101 @@ test("the latency trend measures the trend suites on quiet runners and reports w
   expect(JSON.stringify(trend)).not.toContain("--retry");
   // Nothing required waits on it.
   expect(workflow.jobs["world-latency-trend"]).toBeUndefined();
+});
+
+/** GitHub's `paths` filter: the last matching pattern decides, `!` excludes. */
+function pathsTrigger(patterns: string[], changed: string[]): boolean {
+  return changed.some((file) =>
+    patterns.reduce(
+      (on, pattern) =>
+        pattern.startsWith("!")
+          ? on && !new Bun.Glob(pattern.slice(1)).match(file)
+          : on || new Bun.Glob(pattern).match(file),
+      false,
+    ),
+  );
+}
+
+test("side workflows start a PR run only when their own inputs change", async () => {
+  const read = async (name: string) =>
+    Bun.YAML.parse(
+      await Bun.file(
+        new URL(`../.github/workflows/${name}`, import.meta.url),
+      ).text(),
+    ) as {
+      on: Record<string, { paths?: string[] } | undefined>;
+    };
+  const cases: Record<string, { runs: string[]; skips: string[] }> = {
+    // Golden images and the latency trend: Town and its renderer.
+    "town-golden.yml": {
+      runs: [
+        "web/src/world/town/townRenderer.ts",
+        "web/src/world/devtools/renderer.ts",
+        "web/src/world/testing/town-golden/scene.ts",
+        "tools/chrome/test-chrome.json",
+        "bun.lock",
+      ],
+      skips: [
+        "web/src/world/board/BoardView.tsx",
+        "web/src/components/AgentChat.browser.tsx",
+        "web/src/store.ts",
+        "server/src/world/snapshot.ts",
+        "scripts/affected.ts",
+      ],
+    },
+    "world-latency-trend.yml": {
+      runs: [
+        "web/src/world/town/townRenderer.ts",
+        "web/src/world/ConcurrentContexts.test.ts",
+        "web/src/world/ProductionContexts.browser.tsx",
+        "scripts/latency-trend.ts",
+      ],
+      skips: [
+        "web/src/components/AgentChat.tsx",
+        "web/src/store.ts",
+        "shared/protocol.ts",
+        "server/src/world/snapshot.ts",
+      ],
+    },
+    // Asset headroom: what the web build reads, never its tests.
+    "web-asset-headroom.yml": {
+      runs: [
+        "web/src/store.ts",
+        "web/src/world/town/townRenderer.ts",
+        "web/index.html",
+        "web/vite.config.ts",
+        "shared/protocol.ts",
+        "scripts/web-asset-headroom.ts",
+        "bun.lock",
+      ],
+      skips: [
+        "web/src/store.test.ts",
+        "web/src/components/AgentChat.browser.tsx",
+        "web/src/world/town/TownCanvas.cases.ts",
+        "web/src/world/testing/TownCanvas.ts",
+        "web/src/testing/sharedChrome.ts",
+        "shared/protocol.test.ts",
+        "server/src/world/snapshot.ts",
+      ],
+    },
+  };
+  for (const [name, { runs, skips }] of Object.entries(cases)) {
+    const on = (await read(name)).on;
+    const paths = on.pull_request!.paths!;
+    expect(on.push?.paths).toEqual(paths);
+    for (const file of runs)
+      expect([name, file, pathsTrigger(paths, [file])]).toEqual([
+        name,
+        file,
+        true,
+      ]);
+    for (const file of skips)
+      expect([name, file, pathsTrigger(paths, [file])]).toEqual([
+        name,
+        file,
+        false,
+      ]);
+  }
 });
 
 test("World shards and packed web suites retain their partitions and failure evidence", () => {

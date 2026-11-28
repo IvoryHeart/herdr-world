@@ -147,10 +147,10 @@ each commit introduced since `origin/main`; `bun run check:privacy --range
 pushed ref, including tags and multiple refs. Before pushing, save the intended
 description and set `HERDR_WORLD_PR_BODY=<file>`; the same privacy step scans that
 file, or the existing PR description when no file is supplied, and the existing PR
-title. The independent **Privacy guard** CI check runs once per PR change,
-including title/description edits, which it scans from the event payload;
-explicit bot dispatches cover token-created PRs. It no longer duplicates every
-branch push. `bun run check:pr-body <file>` also checks description privacy,
+title. CI scans once per PR change inside the required **Delivery checks** job; a
+title or description edit starts only CI's small **Privacy guard** job, which
+scans the event payload. A dispatched CI run (token-created release PRs) scans
+its branch since `origin/main`. No separate privacy workflow runs per push. `bun run check:pr-body <file>` also checks description privacy,
 including hidden Markdown comments and code blocks.
 
 The guard checks full messages and added lines in every introduced commit, so

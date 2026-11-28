@@ -1,21 +1,25 @@
 name: Town golden images
 
 # Advisory during the scene-model migration. Never a Delivery checks dependency.
+# Runs only for Town renderer paths; the nightly run covers everything else.
 on:
     pull_request:
         types: [opened, synchronize, reopened]
         paths:
-            - "web/**"
-            - "shared/**"
+            - "web/src/world/town/**"
+            - "web/src/world/devtools/renderer.ts"
+            - "web/src/world/testing/town-golden/**"
+            - "web/public/**"
+            - "shared/terminalColor.ts"
             - "scripts/town-golden*"
             - "scripts/capture-*"
             - "scripts/test-chrome*"
             - "scripts/ci-golden-scope*"
             - "scripts/ci-content-key.ts"
-            - "scripts/affected.ts"
             - "scripts/chrome-*"
             - "tools/chrome/**"
             - "package.json"
+            - "web/package.json"
             - "bun.lock"
             - ".github/workflows/town-golden.yml"
     schedule:
@@ -23,17 +27,20 @@ on:
     push:
         branches: [main]
         paths:
-            - "web/**"
-            - "shared/**"
+            - "web/src/world/town/**"
+            - "web/src/world/devtools/renderer.ts"
+            - "web/src/world/testing/town-golden/**"
+            - "web/public/**"
+            - "shared/terminalColor.ts"
             - "scripts/town-golden*"
             - "scripts/capture-*"
             - "scripts/test-chrome*"
             - "scripts/ci-golden-scope*"
             - "scripts/ci-content-key.ts"
-            - "scripts/affected.ts"
             - "scripts/chrome-*"
             - "tools/chrome/**"
             - "package.json"
+            - "web/package.json"
             - "bun.lock"
             - ".github/workflows/town-golden.yml"
     workflow_dispatch:

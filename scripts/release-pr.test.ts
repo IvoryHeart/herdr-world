@@ -138,13 +138,6 @@ if (args[0] === 'pr') {
         .map((line) => JSON.parse(line)),
     ).toEqual([
       ["workflow", "run", "ci.yml", "--ref", "release-please--branches--main"],
-      [
-        "workflow",
-        "run",
-        "privacy.yml",
-        "--ref",
-        "release-please--branches--main",
-      ],
     ]);
     const query = JSON.parse(readFileSync(join(root, "query"), "utf8"));
     expect(query).toEqual([

@@ -2,13 +2,14 @@ name: Web asset headroom
 
 # Judges each PR's web asset delta against current main, not only the main it
 # was tested on, so budget sums are caught before merge (scripts/web-asset-headroom.ts).
+# Only web build inputs start it; test files and fixtures never do.
 on:
   pull_request:
     types: [opened, synchronize, reopened]
-    paths: ["web/**", "shared/**", "package.json", "bun.lock", "scripts/*web-asset*", ".github/workflows/web-asset-headroom.yml"]
+    paths: ["web/index.html", "web/herdr-setup-preview.html", "web/vite.config.ts", "web/tsconfig.json", "web/package.json", "web/public/**", "web/src/**", "!web/src/**/*.test.ts", "!web/src/**/*.test.tsx", "!web/src/**/*.browser.ts", "!web/src/**/*.browser.tsx", "!web/src/**/*.cases.ts", "!web/src/**/*.fixture.*", "!web/src/**/*.browserMock.*", "!web/src/**/testing/**", "shared/**", "!shared/**/*.test.ts", "package.json", "bun.lock", "scripts/build-version.ts", "scripts/precompress-assets.ts", "scripts/*web-asset*", ".github/workflows/web-asset-headroom.yml"]
   push:
     branches: [main]
-    paths: ["web/**", "shared/**", "package.json", "bun.lock", "scripts/*web-asset*", ".github/workflows/web-asset-headroom.yml"]
+    paths: ["web/index.html", "web/herdr-setup-preview.html", "web/vite.config.ts", "web/tsconfig.json", "web/package.json", "web/public/**", "web/src/**", "!web/src/**/*.test.ts", "!web/src/**/*.test.tsx", "!web/src/**/*.browser.ts", "!web/src/**/*.browser.tsx", "!web/src/**/*.cases.ts", "!web/src/**/*.fixture.*", "!web/src/**/*.browserMock.*", "!web/src/**/testing/**", "shared/**", "!shared/**/*.test.ts", "package.json", "bun.lock", "scripts/build-version.ts", "scripts/precompress-assets.ts", "scripts/*web-asset*", ".github/workflows/web-asset-headroom.yml"]
 
 permissions:
   contents: read

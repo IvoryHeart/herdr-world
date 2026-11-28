@@ -5,14 +5,19 @@ name: World latency trend
 # same CPU model. It reports and never blocks: CI's World shards assert what
 # does not depend on the runner, and no branch rule requires this workflow.
 # Main pushes add to the baseline; a pull request is measured while it carries
-# the latency-trend label.
+# the latency-trend label. Only Town/render paths and the measured suites
+# start a run; the nightly run covers everything else.
 on:
     push:
         branches: [main]
         paths:
-            - web/src/**
+            - web/src/world/town/**
+            - web/src/world/devtools/renderer.ts
+            - web/src/world/ProductionContexts*
+            - web/src/world/ConcurrentContexts*
+            - web/src/world/testing/**
+            - web/src/testing/**
             - web/package.json
-            - shared/**
             - package.json
             - bun.lock
             - tools/chrome/**
@@ -26,9 +31,13 @@ on:
     pull_request:
         types: [labeled, synchronize]
         paths:
-            - web/src/**
+            - web/src/world/town/**
+            - web/src/world/devtools/renderer.ts
+            - web/src/world/ProductionContexts*
+            - web/src/world/ConcurrentContexts*
+            - web/src/world/testing/**
+            - web/src/testing/**
             - web/package.json
-            - shared/**
             - package.json
             - bun.lock
             - tools/chrome/**

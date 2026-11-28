@@ -119,6 +119,8 @@ test("CI and release jobs install once from the workspace root", () => {
         (file === "ci.yml" &&
           [
             "homebrew-preview",
+            "cancel-closed",
+            "privacy-metadata",
             "validation-scope",
             "pr-description",
             "validation",

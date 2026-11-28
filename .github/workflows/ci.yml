@@ -1,8 +1,10 @@
 name: CI
 
 on:
+    # `edited` scans title/description privacy only; `closed` cancels the
+    # PR's remaining runs. Neither starts a test job.
     pull_request:
-        types: [opened, synchronize, reopened, labeled]
+        types: [opened, synchronize, reopened, labeled, edited, closed]
     # The queue must validate its combined commit afresh, independently of PR proof.
     merge_group:
         types: [checks_requested]
@@ -33,12 +35,57 @@ permissions:
     issues: read
 
 concurrency:
-    # Each main SHA receives its own lightweight evidence report.
-    group: ci-${{ github.workflow }}-${{ github.event.pull_request.number || (github.event_name == 'push' && github.sha) || github.ref }}
-    # PR events queue and inspect existing evidence for that head/tree.
-    cancel-in-progress: false
+    # A PR's new commit, reopen or close cancels its older code run; label and
+    # description events run in their own group and never cancel code checks.
+    # Each main SHA, merge group and dispatch keeps its own uncancelled run.
+    group: ci-${{ github.workflow }}-${{ github.event.pull_request.number && format('pr-{0}-{1}', github.event.pull_request.number, (github.event.action == 'labeled' || (github.event.action == 'edited' && !github.event.changes.base)) && 'metadata' || 'code') || (github.event_name == 'push' && github.sha) || github.ref }}
+    cancel-in-progress: ${{ github.event_name == 'pull_request' && github.event.action != 'labeled' && !(github.event.action == 'edited' && !github.event.changes.base) }}
 
 jobs:
+    # A closed or merged PR's code run is already cancelled by the concurrency
+    # group above; this cancels the PR's other pull_request runs (golden
+    # images, asset headroom, latency trend) that are still queued or running.
+    cancel-closed:
+        name: Cancel the closed PR's runs
+        if: github.event_name == 'pull_request' && github.event.action == 'closed'
+        runs-on: ubuntu-latest
+        timeout-minutes: 5
+        permissions:
+            actions: write
+        steps:
+            - name: Cancel queued and running PR runs
+              env:
+                  GH_TOKEN: ${{ github.token }}
+                  GH_REPO: ${{ github.repository }}
+                  HEAD_REF: ${{ github.event.pull_request.head.ref }}
+                  HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+              run: |
+                  gh run list --branch "$HEAD_REF" --event pull_request --limit 100 \
+                    --json databaseId,status,headSha \
+                    --jq '.[] | select(.status != "completed") | .databaseId' |
+                  while read -r id; do
+                    [ "$id" = "$GITHUB_RUN_ID" ] && continue
+                    gh run cancel "$id" || echo "::warning::Run $id could not be cancelled"
+                  done
+    # A title or description edit scans the PR metadata only; code events scan
+    # in Delivery checks, the required job.
+    privacy-metadata:
+        name: Privacy guard
+        if: github.event_name == 'pull_request' && github.event.action == 'edited' && !github.event.changes.base && github.event.pull_request.state == 'open'
+        runs-on: ubuntu-latest
+        timeout-minutes: 5
+        steps:
+            # The PR's merge commit holds both its base and head commits.
+            - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+              with:
+                  fetch-depth: 0
+                  persist-credentials: false
+            - uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2
+              with:
+                  bun-version: "1.4.4"
+                  no-cache: true
+            - name: Scan introduced commits and PR metadata without exposing matches
+              run: bun scripts/check-privacy.ts --event "$GITHUB_EVENT_PATH"
     browser-diagnostics:
         name: Browser lifecycle (${{ matrix.suite }}, ${{ matrix.order }})
         if: github.event_name == 'workflow_dispatch' && inputs.browser_diagnostics
@@ -115,7 +162,7 @@ jobs:
     # starts no runner: GitHub has no workflow-level condition, only skipped jobs.
     validation-scope:
         name: Validation scope
-        if: github.event_name != 'pull_request' || (github.event.pull_request.state == 'open' && (github.event.action != 'labeled' || contains(fromJSON('["release-preview","world-browser-stability","latency-trend"]'), github.event.label.name)))
+        if: github.event_name != 'pull_request' || (github.event.pull_request.state == 'open' && (github.event.action != 'edited' || github.event.changes.base) && (github.event.action != 'labeled' || contains(fromJSON('["release-preview","world-browser-stability","latency-trend"]'), github.event.label.name)))
         runs-on: ubuntu-latest
         outputs:
             mode: ${{ steps.scope.outputs.mode || 'full' }}
@@ -350,6 +397,17 @@ jobs:
               with:
                   bun-version: "1.4.4"
                   no-cache: true
+            # Scans each PR change once (the local hook guards pushes), and a
+            # dispatched release branch since main; a finding fails Delivery
+            # checks without printing the match.
+            - name: Scan introduced commits and PR metadata without exposing matches
+              if: github.event_name == 'pull_request' || github.event_name == 'workflow_dispatch'
+              run: |
+                  if [ "$GITHUB_EVENT_NAME" = workflow_dispatch ]; then
+                    bun run check:privacy
+                  else
+                    bun scripts/check-privacy.ts --event "$GITHUB_EVENT_PATH"
+                  fi
             - name: Download flaky test evidence
               if: always() && (needs.unit-tests.result != 'skipped' || needs.world-browser.result != 'skipped')
               continue-on-error: true
