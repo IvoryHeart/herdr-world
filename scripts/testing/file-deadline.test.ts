@@ -6,7 +6,7 @@ import { spawnTestBatch } from "./file-deadline";
 
 test.each(
   [1, 2].flatMap((parallel) =>
-    ["module", "sync", "beforeAll", "test", "afterAll"].map(
+    ["import", "module", "sync", "beforeAll", "test", "afterAll"].map(
       (phase) => [phase, parallel] as const,
     ),
   ),
@@ -17,8 +17,13 @@ test.each(
     const file = join(directory, "hung.test.ts");
     try {
       await writeFile(
+        join(directory, "hung-import.ts"),
+        'import { jest } from "bun:test"; jest.useFakeTimers(); await new Promise(() => {});',
+      );
+      await writeFile(
         file,
-        `import { jest, beforeAll, afterAll, test } from "bun:test";
+        `${phase === "import" ? 'import "./hung-import.ts";' : ""}
+import { jest, beforeAll, afterAll, test } from "bun:test";
 jest.useFakeTimers();
 const hang = () => new Promise<void>(() => {});
 ${phase === "module" ? "await hang();" : phase === "sync" ? "for (;;) {}" : ""}
@@ -44,13 +49,20 @@ ${phase === "afterAll" ? "afterAll(hang);" : ""}
           stderr: "pipe",
         },
       );
-      const [code, , stderr] = await Promise.all([
-        child.exited,
-        new Response(child.stdout).text(),
-        new Response(child.stderr).text(),
-      ]);
-      expect(code).toBe(124);
-      expect(stderr).toContain(`[test-file-timeout] ${file} exceeded 100 ms`);
+      // A broken watchdog must fail this regression without leaving its child alive.
+      const supervisor = setTimeout(() => child.kill("SIGKILL"), 1500);
+      try {
+        const [code, , stderr] = await Promise.all([
+          child.exited,
+          new Response(child.stdout).text(),
+          new Response(child.stderr).text(),
+        ]);
+        expect(code).toBe(124);
+        expect(stderr).toContain(`[test-file-timeout] ${file} exceeded 100 ms`);
+      } finally {
+        clearTimeout(supervisor);
+        child.kill("SIGKILL");
+      }
     } finally {
       await rm(directory, { recursive: true, force: true });
     }

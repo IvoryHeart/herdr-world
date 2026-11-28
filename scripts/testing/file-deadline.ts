@@ -9,6 +9,7 @@ import {
 } from "node:fs";
 import { join } from "node:path";
 import { tmpdir } from "node:os";
+import { createHash } from "node:crypto";
 
 /** A wrapper-owned real-time boundary; stopped clocks cannot stop it. */
 export const FILE_TIMEOUT_MS = 120_000;
@@ -19,7 +20,9 @@ export function fileDeadline(file: string) {
   const directory = process.env[FILE_DEADLINES_ENV];
   if (!directory)
     throw new Error("File deadlines require scripts/run-tests.ts");
-  const marker = join(directory, `${crypto.randomUUID()}.json`);
+  // The loader starts the deadline before imports; evaluation reuses that marker.
+  const identity = createHash("sha256").update(file).digest("hex");
+  const marker = join(directory, `${identity}.json`);
   writeFileSync(marker + ".tmp", JSON.stringify({ file }));
   renameSync(marker + ".tmp", marker);
   return () => rmSync(marker, { force: true });

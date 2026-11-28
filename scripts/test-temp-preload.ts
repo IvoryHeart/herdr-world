@@ -13,14 +13,19 @@ if (!process.env[ISOLATION])
 // Bun's per-case timeout alone does not bound a whole test file.
 import { plugin } from "bun";
 import { readFileSync } from "node:fs";
+import { fileDeadline } from "./testing/file-deadline";
 const deadlineModule = new URL("./testing/file-deadline.ts", import.meta.url)
   .pathname;
 plugin({
   name: "test-file-deadline",
   setup(build) {
-    build.onLoad({ filter: /\.(?:test|spec)\.[cm]?[jt]sx?$/ }, ({ path }) => ({
-      contents: `import { afterAll as __fileDeadlineAfterAll } from "bun:test"; import { fileDeadline as __startFileDeadline } from ${JSON.stringify(deadlineModule)}; const __clearFileDeadline = __startFileDeadline(${JSON.stringify(path)});\n${readFileSync(path, "utf8")}\n__fileDeadlineAfterAll(__clearFileDeadline);`,
-      loader: path.endsWith("x") ? "tsx" : "ts",
-    }));
+    build.onLoad({ filter: /\.(?:test|spec)\.[cm]?[jt]sx?$/ }, ({ path }) => {
+      // Static imports evaluate before the injected prefix can run.
+      fileDeadline(path);
+      return {
+        contents: `import { afterAll as __fileDeadlineAfterAll } from "bun:test"; import { fileDeadline as __startFileDeadline } from ${JSON.stringify(deadlineModule)}; const __clearFileDeadline = __startFileDeadline(${JSON.stringify(path)});\n${readFileSync(path, "utf8")}\n__fileDeadlineAfterAll(__clearFileDeadline);`,
+        loader: path.endsWith("x") ? "tsx" : "ts",
+      };
+    });
   },
 });
