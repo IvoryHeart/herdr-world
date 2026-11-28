@@ -621,9 +621,12 @@ test("split core controls retain every fault exactly once and keep replay separa
   const split = [
     ...coreControlPart("controls-1"),
     ...coreControlPart("controls-2"),
+    ...coreControlPart("controls-3"),
   ];
   expect([...split].sort()).toEqual([...full].sort());
   expect(new Set(split).size).toBe(full.length);
+  for (const part of ["controls-1", "controls-2", "controls-3"])
+    expect(coreControlPart(part).length).toBeGreaterThan(0);
   expect(coreControlPart("replay")).toEqual([]);
   expect(() => coreControlPart("foreign")).toThrow("Invalid core model part");
 });

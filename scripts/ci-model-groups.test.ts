@@ -9,8 +9,17 @@ import {
 } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { resolve } from "node:path";
-import { retainGroupResources, runModelGroup } from "./ci-model-groups";
-import { verificationGroup } from "./ci-model-plan";
+import {
+  retainGroupResources,
+  runModelGroup,
+  runsDiagnosticControl,
+} from "./ci-model-groups";
+import {
+  DIAGNOSTIC_CONTROL_JOB,
+  diagnosticControlGroup,
+  verificationGroup,
+  verificationJob,
+} from "./ci-model-plan";
 import { readVerificationResources } from "./verification-resources";
 
 test("the production group runs four parts concurrently and omits only validated cache hits", async () => {
@@ -97,6 +106,29 @@ test("every packed part retains the actual shared resource limit and failure rec
       "Missing or duplicate group part",
     );
     expect(await readdir(runs)).toHaveLength(3);
+  } finally {
+    await rm(root, { recursive: true, force: true });
+  }
+});
+
+test("the failing-candidate control runs once per run, only where browser-refresh misses", async () => {
+  const root = await mkdtemp(resolve(tmpdir(), "diagnostic-control-"));
+  try {
+    const owner = diagnosticControlGroup();
+    expect(verificationGroup(owner)).toContain(DIAGNOSTIC_CONTROL_JOB);
+    expect(verificationJob(DIAGNOSTIC_CONTROL_JOB).model).toBe(
+      "browser-refresh",
+    );
+    // A full run reuses nothing: exactly one group exercises the control.
+    const groups = [1, 2, 3, 4].filter((group) =>
+      runsDiagnosticControl(root, group),
+    );
+    expect(groups).toEqual([owner]);
+    // Reused browser-refresh evidence (unchanged tooling) skips it.
+    const reused = `.agents/verification/runs/ci-shard-${DIAGNOSTIC_CONTROL_JOB}-reused`;
+    await mkdir(resolve(root, reused), { recursive: true });
+    await writeFile(resolve(root, reused, "manifest.json"), "{}");
+    expect(runsDiagnosticControl(root, owner)).toBe(false);
   } finally {
     await rm(root, { recursive: true, force: true });
   }

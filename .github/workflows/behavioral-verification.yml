@@ -20,8 +20,8 @@ jobs:
     name: Behavioral models (${{ matrix.shard }}/4)
     strategy:
       fail-fast: false
-      # Retain every model partition within the PR run's fourteen-runner cap.
-      max-parallel: 5
+      # Every model partition within the full run's sixteen-job cap.
+      max-parallel: 4
       matrix:
         shard: [1, 2, 3, 4]
     runs-on: ubuntu-24.04
@@ -78,9 +78,10 @@ jobs:
       - name: Run all accepted models within enforced resource limits
         if: steps.reuse.outputs.reused != 'true'
         run: bun scripts/ci-model-groups.ts run ${{ matrix.shard }}
+      # Once per run: only the group owning browser-refresh, when it misses.
       - name: Exercise a failing candidate and verify retained diagnostics
         if: steps.reuse.outputs.reused != 'true'
-        run: bun run verification:diagnostic-control
+        run: bun scripts/ci-model-groups.ts control ${{ matrix.shard }}
       - name: Prepare passing model evidence for reuse
         if: steps.reuse.outputs.reused != 'true'
         run: bun scripts/ci-model-groups.ts save ${{ matrix.shard }}

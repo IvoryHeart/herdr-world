@@ -44,13 +44,13 @@ const headers = (): Shard[] =>
       })),
     }));
 
-test("every maintained model group is required, with four IDE and three core parts", () => {
+test("every maintained model group is required, with four IDE and four core parts", () => {
   const all = verificationJobs
     .map((_, index) => verificationShard(index + 1))
     .flat();
   expect([...new Set(all)].sort()).toEqual([...verificationModels].sort());
   expect(all.filter((model) => model === "ide-lifecycle")).toHaveLength(4);
-  expect(all.filter((model) => model === "herdr-core-runtime")).toHaveLength(3);
+  expect(all.filter((model) => model === "herdr-core-runtime")).toHaveLength(4);
   for (const index of [0, verificationJobs.length + 1, 1.5, NaN])
     expect(() => verificationShard(index)).toThrow();
 });

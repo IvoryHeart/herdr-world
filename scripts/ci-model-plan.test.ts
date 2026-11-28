@@ -40,7 +40,7 @@ test("every model owns a job; heavy models retain all disjoint parts", () => {
     verificationJobs
       .filter((job) => job.model === "herdr-core-runtime")
       .map((job) => job.part),
-  ).toEqual(["replay", "controls-1", "controls-2"]);
+  ).toEqual(["replay", "controls-1", "controls-2", "controls-3"]);
   expect(
     verificationJobs.filter((job) => job.model === "observation-base"),
   ).toHaveLength(1);

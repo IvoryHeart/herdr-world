@@ -1019,16 +1019,19 @@ test("accepted behavioral evidence stays unfiltered whenever its protected depen
   expect((artifact.with as { path?: string }).path).toContain(
     ".agents/verification/diagnostics/**",
   );
-  expect(
-    job.steps.find(
-      (step) => step.run === "bun run verification:diagnostic-control",
-    )?.["continue-on-error"],
-  ).toBeUndefined();
+  // The failing-candidate control runs once per run, in the group owning
+  // browser-refresh (see ci-model-groups.ts control), never in every group.
+  const control = job.steps.find(
+    (step) =>
+      step.run === "bun scripts/ci-model-groups.ts control ${{ matrix.shard }}",
+  );
+  expect(control?.if).toBe("steps.reuse.outputs.reused != 'true'");
+  expect(control?.["continue-on-error"]).toBeUndefined();
   expect(
     job.steps.some(
       (step) => step.run === "bun run verification:diagnostic-control",
     ),
-  ).toBe(true);
+  ).toBe(false);
   expect(workflow.jobs.delivery.needs).toContain("behavioral");
   expect(workflow.jobs.behavioral.uses).toBe(
     "./.github/workflows/behavioral-verification.yml",
@@ -1086,9 +1089,7 @@ test("model and diagnostic checks fail immediately and retain original evidence"
     steps.filter((step) => step.run?.includes("ci-model-groups.ts run")),
   ).toHaveLength(1);
   expect(
-    steps.filter(
-      (step) => step.run === "bun run verification:diagnostic-control",
-    ),
+    steps.filter((step) => step.run?.includes("ci-model-groups.ts control")),
   ).toHaveLength(1);
   const artifact = steps.find(
     (step) => step.name === "Retain source-bound evidence manifests",

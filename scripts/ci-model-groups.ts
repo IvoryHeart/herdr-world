@@ -4,7 +4,12 @@ import { existsSync, appendFileSync } from "node:fs";
 import { mkdir, readdir, readFile, writeFile } from "node:fs/promises";
 import { resolve } from "node:path";
 import { modelCache, modelCacheKey } from "./ci-model-cache";
-import { MODEL_GROUP_WORKERS, verificationGroup } from "./ci-model-plan";
+import {
+  DIAGNOSTIC_CONTROL_JOB,
+  MODEL_GROUP_WORKERS,
+  diagnosticControlGroup,
+  verificationGroup,
+} from "./ci-model-plan";
 import { runVerificationShard } from "./ci-verification";
 import { runVerificationPool } from "./verification-pool";
 import {
@@ -23,6 +28,14 @@ function misses(root: string, group: number) {
           `.agents/verification/runs/ci-shard-${index}-reused/manifest.json`,
         ),
       ),
+  );
+}
+
+/** Whether this group must exercise the failing-candidate control. @internal */
+export function runsDiagnosticControl(root: string, group: number) {
+  return (
+    group === diagnosticControlGroup() &&
+    misses(root, group).includes(DIAGNOSTIC_CONTROL_JOB)
   );
 }
 
@@ -92,6 +105,29 @@ if (import.meta.main) {
       process.env.GITHUB_OUTPUT!,
       `reused=${misses(root, group).length === 0}\n`,
     );
+  } else if (action === "control") {
+    if (!runsDiagnosticControl(root, group)) {
+      console.info(
+        `Diagnostic control: group ${diagnosticControlGroup()} owns it${group === diagnosticControlGroup() ? " and reused its evidence" : ""}.`,
+      );
+    } else {
+      const control = Bun.spawn(
+        [process.execPath, "run", "verification:diagnostic-control"],
+        { cwd: root, stdio: ["inherit", "inherit", "inherit"] },
+      );
+      const forward = (signal: NodeJS.Signals) => () => control.kill(signal);
+      const term = forward("SIGTERM");
+      const int = forward("SIGINT");
+      process.on("SIGTERM", term);
+      process.on("SIGINT", int);
+      try {
+        const code = await control.exited;
+        assert.equal(code, 0, "Diagnostic control failed");
+      } finally {
+        process.off("SIGTERM", term);
+        process.off("SIGINT", int);
+      }
+    }
   } else if (action === "save") {
     for (const index of misses(root, group))
       await modelCache(root, "save", index);
