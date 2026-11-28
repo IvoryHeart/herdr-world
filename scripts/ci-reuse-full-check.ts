@@ -43,7 +43,8 @@ type Run = {
 };
 
 /**
- * The ci.yml job and steps that check the description before choosing the scope.
+ * Scope identity and legacy description-step identity used when reading older runs.
+ * Current CI checks descriptions in a separate leaf and chooses scope independently.
  * @internal
  */
 export const SCOPE_JOB = "Validation scope";
@@ -59,7 +60,7 @@ export const SCOPE_STEP = "Determine validation scope";
 export const HOLD_STEP = "Hold the head's red result";
 
 /**
- * The run failed only because `check:pr-body` rejected the description: the
+ * A legacy run failed only because `check:pr-body` rejected the description: the
  * scope job failed at the description step and never chose a scope, so every
  * code job was skipped and only the report jobs failed after it.
  */
@@ -103,12 +104,60 @@ function testedNothing(run: Run, jobs: Job[]): boolean {
 }
 
 /**
+ * A failed description leaf must be checked with the corrected event payload,
+ * not held for a rerun of the old payload. All code leaves must have succeeded
+ * or been skipped, possibly carried over from an earlier failed-jobs attempt.
+ * The failed description and Delivery must belong to the current attempt.
+ * This permits fresh validation only: failed Delivery evidence
+ * remains a barrier to reuse, including failures while aggregating manifests.
+ */
+function descriptionLeafOnlyFailure(run: Run, jobs: Job[]): boolean {
+  if (
+    run.conclusion !== "failure" ||
+    jobs.some(
+      (job) =>
+        job.run_id !== run.id ||
+        !Number.isSafeInteger(job.run_attempt) ||
+        job.run_attempt < 1 ||
+        job.run_attempt > run.run_attempt,
+    )
+  )
+    return false;
+  const matches = (name: string, conclusion: string, step?: string) => {
+    const matching = jobs.filter((job) => job.name === name);
+    return (
+      matching.length === 1 &&
+      matching[0].conclusion === conclusion &&
+      (conclusion !== "failure" ||
+        matching[0].run_attempt === run.run_attempt) &&
+      (!step ||
+        matching[0].steps.find((entry) => entry.name === step)?.conclusion ===
+          conclusion)
+    );
+  };
+  return (
+    matches(SCOPE_JOB, "success", SCOPE_STEP) &&
+    matches("PR description", "failure", DESCRIPTION_STEP) &&
+    matches("Delivery checks", "failure") &&
+    jobs.every(
+      ({ name, conclusion }) =>
+        name === "PR description" ||
+        name === "Delivery checks" ||
+        conclusion === "success" ||
+        conclusion === "skipped",
+    )
+  );
+}
+
+/**
  * The head's latest result on this PR is red. A title, description or label
  * change retests nothing, so it holds that red result instead of running the
  * code jobs again (#1373: an edit after an infrastructure failure doubled the
  * PR's macOS demand). Returns the red run's ID. The newest finished run that
  * tested code decides, on any base; a pass, a cancelled run or an unfinished
  * one is no red result to hold, and the event validates as before.
+ * A description-leaf-only failure also permits fresh validation with the new
+ * body; it remains failed evidence for reuse.
  *
  * @internal
  */
@@ -129,7 +178,9 @@ export async function redHeadResult(
     )
       continue;
     if (run.conclusion === "failure" || run.conclusion === "timed_out") {
-      if (testedNothing(run, await jobsForRun(run.id))) continue;
+      const jobs = await jobsForRun(run.id);
+      if (testedNothing(run, jobs) || descriptionLeafOnlyFailure(run, jobs))
+        continue;
       return run.id;
     }
     return undefined;
@@ -608,7 +659,7 @@ if (import.meta.main) {
     const sha = process.env.GITHUB_SHA ?? "";
     const runId = Number(process.env.GITHUB_RUN_ID);
     let mode = process.env.GITHUB_EVENT_NAME === "push" ? "hold" : "full";
-    // Only main pushes reuse; dispatches and Release always validate fully.
+    // Only main pushes reuse; merge groups and dispatches always validate fully.
     if (
       process.env.GITHUB_EVENT_NAME === "push" &&
       process.env.GITHUB_REF === "refs/heads/main" &&

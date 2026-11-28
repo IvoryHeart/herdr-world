@@ -4,7 +4,11 @@
  */
 export function assertQuintBackend(args: readonly string[]) {
   const expected =
-    args[0] === "run" ? "typescript" : args[0] === "verify" ? "tlc" : null;
+    args[0] === "run" || args[0] === "test"
+      ? "typescript"
+      : args[0] === "verify"
+        ? "tlc"
+        : null;
   if (!expected) return;
   if (
     args.filter((arg) => arg === "--backend").length !== 1 ||

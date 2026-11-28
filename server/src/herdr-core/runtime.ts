@@ -1,5 +1,6 @@
 import type { CoreKeysResult, CoreSendResult } from "./delivery-params";
 import { coreOccupantFingerprint } from "./occupant";
+import { foregroundInputRefusal } from "../adapters/agent-input";
 import type {
   ConnectionRuntime,
   ConnectionRuntimeContext,
@@ -719,6 +720,20 @@ export function createCoreConnectionRuntime(
     terminal: (address: string) => mirror.terminal(address),
     occupancy: (address: string) => mirror.occupancy(address),
   };
+  const inspectInput = async (current: CoreClient, address: string) => {
+    try {
+      return await current.getTerminal(address);
+    } catch (error) {
+      throw new Error(
+        "agent_input_unavailable: The terminal could not be checked. Try again shortly. Nothing was sent.",
+        { cause: error },
+      );
+    }
+  };
+  const checkInput = (record: CoreTerminalRecord) => {
+    const reason = foregroundInputRefusal(record.foreground);
+    if (reason) throw new Error(`agent_not_ready: ${reason}`);
+  };
   const self: CoreConnectionRuntime = {
     identity,
     runtime: "herdr-core",
@@ -768,12 +783,15 @@ export function createCoreConnectionRuntime(
         return write(
           fence,
           true,
-          (current) =>
-            current.sendText(fence.occupant!.address, request.text, {
+          async (current) => {
+            checkInput(await inspectInput(current, fence.occupant!.address));
+            fence.check("dispatch");
+            return current.sendText(fence.occupant!.address, request.text, {
               ...(options as { cancel: AbortSignal; timeoutMs?: number }),
               force: request.force,
               onlyIfIdle: request.onlyIfIdle,
-            }),
+            });
+          },
           false,
         );
       const text = request;
@@ -786,8 +804,6 @@ export function createCoreConnectionRuntime(
       if (fence.lease.runtime !== self || !fence.occupant)
         throw new CoreFenceError("dispatch", "lease");
       fence.check("dispatch");
-      if (!fence.occupant.foreground)
-        throw new CoreFenceError("dispatch", "foreground-changed");
       const current = client;
       if (!current) throw new CoreFenceError("dispatch", "not-actionable");
       const expected = coreOccupantFingerprint(
@@ -799,7 +815,8 @@ export function createCoreConnectionRuntime(
       // Core resolves current OS foreground in get. Never use a history read,
       // forced send, caller, or a harness side channel. The queue race after
       // this check belongs to core (Q3).
-      const record = await current.getTerminal(fence.occupant.address);
+      const record = await inspectInput(current, fence.occupant.address);
+      checkInput(record);
       fence.check("dispatch");
       if (
         coreOccupantFingerprint(fence.occupant.coreId, record) !== expected ||
@@ -810,19 +827,34 @@ export function createCoreConnectionRuntime(
         | { pid?: number; name?: string }
         | undefined;
       if (
-        foreground?.pid !== fence.occupant.foreground.pid ||
-        foreground.name !== fence.occupant.foreground.name
+        foreground?.pid !== fence.occupant.foreground?.pid ||
+        foreground?.name !== fence.occupant.foreground?.name
       )
         throw new CoreFenceError("dispatch", "foreground-changed");
       if (authorized && !authorized())
         throw new CoreFenceError("dispatch", "lease");
-      const result = await current.sendText(
-        fence.occupant.address,
-        text,
-        timeoutMs,
-      );
-      fence.check("publication");
-      return result;
+      const cancel = new AbortController();
+      const stopWatching = self.watch(() => {
+        try {
+          fence.check("dispatch");
+          const now = view.terminal(fence.occupant!.address);
+          if (!now || foregroundInputRefusal(now.foreground)) cancel.abort();
+        } catch {
+          cancel.abort();
+        }
+      });
+      try {
+        const result = await current.sendText(
+          fence.occupant.address,
+          text,
+          timeoutMs ?? 15_000,
+          cancel.signal,
+        );
+        fence.check("publication");
+        return result;
+      } finally {
+        stopWatching();
+      }
     },
     label: (fence, labels) =>
       write(fence, true, async (current) => {
@@ -836,7 +868,11 @@ export function createCoreConnectionRuntime(
       write(
         fence,
         true,
-        (current) => current.keys(fence.occupant!.address, keys, control),
+        async (current) => {
+          checkInput(await inspectInput(current, fence.occupant!.address));
+          fence.check("dispatch");
+          return current.keys(fence.occupant!.address, keys, control);
+        },
         false,
       ),
     watch: (listener) => {

@@ -13,11 +13,16 @@
 - `scripts/coverage.ts`
 - `scripts/coverage.test.ts`
 - `quint/models.ts`
+- `scripts/ci-model-plan.ts`, `scripts/ci-model-inputs.ts`, `scripts/ci-model-cache.ts` (independent model input closures and main-only evidence reuse)
+- `scripts/ci-model-parts.ts`, `scripts/ci-verification.ts` (complete split-model evidence and canonical aggregation)
+- `tools/quint/model-resources.json`, `tools/quint/tlc-ci.json` (owner-approved four-CPU model-only CI envelope)
 - `scripts/features.ts`
 - `scripts/build-pages.ts`
 - `scripts/pages-features.ts`
 - `scripts/openspec-notes.ts`
+- `scripts/openspec-check.test.ts` (strict requirement lengths and archived-task gate)
 - `scripts/check-knowledge-map.ts`
+- `scripts/check-pr-body.ts` (permits only lossless current-spec length repairs)
 - `web/src/features/FeatureHosts.tsx`
 - `quint/`
 - `docs/design/`
@@ -33,11 +38,15 @@
 - `server/src/testing/`
 - `web/src/features/`
 - `web/src/testing/`
-- `release-please-config.json`
+- `release-please-config.json` (patch increments by default; explicit dispatch overrides select minor/major releases)
 - `.release-please-manifest.json`
 - `version.txt`
 - `scripts/release-plan.ts`
-- `scripts/release-validation.test.ts`
+- `scripts/release-pr.test.ts` (actual workflow shell/config and ephemeral CLI version override; automatic same-repository CI dispatch)
+- `scripts/release-validation.test.ts` (publisher ordering and tag-only Homebrew release environment; npm keeps OIDC)
+- `scripts/ci-merge-queue.test.ts` (merge-group trigger, Linux graph and queue checkout, exact Delivery checks name, full validation without PR reuse, and side-workflow event audit)
+- `scripts/dependabot-event.ts` (GitHub event sender and PR author identity gate)
+- `scripts/dependabot-policy.test.ts` (bot impact-line exemption, exact metadata identities, retained privacy and test scope)
 - `scripts/release-publication.test.ts`
 - `scripts/release-seal.ts` (seal record of every contract job's result; Release reuses retained bytes only from an all-green record of the same run)
 - `herdr-plugin.toml`
@@ -47,6 +56,13 @@
 - `scripts/release-walk.ts`
 - `scripts/release-channel-upgrade.py`
 - `scripts/release-npm-smoke.ts`
+- `scripts/test-retry.ts` and `scripts/test-retry.test.ts` (CI-only scoped file/case recovery and JUnit proof)
+- `scripts/flaky-test-policy.ts` and `scripts/flaky-test-policy.test.ts` (file/case identity, distinct-run ledger, seven-day limit and explicit quarantine)
+- `scripts/flaky-tests.ts` and `scripts/flaky-tests.test.ts` (Delivery summary/read-only gate; same-repository source admission, trusted serialized issue updates and commit status)
+- `.github/workflows/flaky-tests.yml` (default-branch tracker; skips fork runs before downloading same-repository candidate artifacts as data)
+- `scripts/ci-tests.ts`, `scripts/run-tests.ts`, `scripts/run-world-tests.ts` (retry opt-in and shared browser assets)
+- `scripts/ci-unit-shards.ts`, `scripts/ci-unit-timings.json`, `scripts/ci-unit-timings.ts` (four timed unit partitions, build consumers and JUnit timing refresh)
+- `scripts/ci-unit-shards.test.ts`, `scripts/ci-unit-comparison.ts`, `scripts/ci-unit-comparison.test.ts` (complete unit inventory and twenty required serial/parallel controls for scheduler changes)
 - `scripts/pipeline-retry.ts`
 - `server/src/config/service-executable.ts`
 - `server/src/cli/update-finish.ts`
@@ -55,6 +71,7 @@
 - `server/src/config/service-discovery.ts`
 - `server/src/config/service-uninstall.test.ts`
 - `scripts/`
+- `.github/workflows/behavioral-verification.yml`, `scripts/ci-workflow.test.ts` (unconditional current-tree type/notices checks alongside reusable model shards)
 - `.github/workflows/`
 - `.githooks/`
 - `site/`
@@ -79,8 +96,31 @@
 - Agent discovery starts with native OpenSpec capability and active-change lists,
   then capability specs, notes and their Code paths. Public feature rendering
   belongs to `build:site`; internal notes parsing also serves source-ownership checks.
+- Verified Dependabot PR events waive only description impact lines; both sender
+  and author must be `dependabot[bot]` with type `Bot`. The usual test selection
+  remains authoritative. Exact bot metadata identities and unchanged license
+  attribution rules are documented in [contributor guidance](../../../CONTRIBUTING.md#privacy-before-publication).
+- OpenSpec 2.1.1 uses project-scoped skills; keep the adapted `world-openspec-*`
+  files unchanged when refreshing ignored stock workflows. `spec:check` validates
+  current/active contracts strictly and checks archived task completion.
 
 ## Usage reference
+
+- **Merge queue.** After owner approval, a PR joins main's queue and CI validates
+  its combined commit with current main under **Delivery checks**, without PR
+  result reuse. GitHub merges after checks and review requirements pass. Only CI
+  subscribes directly to merge groups; see [CI ownership](../../../docs/ci-pipelines.md).
+
+- **Flaky tests.** Open a PR's Checks → Delivery checks → Flaky tests for every
+  recovered file/case. Issues labelled `flaky` retain occurrences and run links.
+  More than three runs in seven days blocks the file until the owner closes the
+  fixed cause or explicitly adds `flaky-quarantined`; quarantine never excuses
+  a second failure. See [CI guidance](../../../docs/ci-pipelines.md#flaky-tests).
+
+- **Unit scheduling.** Open a PR's Checks → Non-browser tests for the four timed
+  shards. Scheduling changes must complete twenty serial/parallel pairs in each
+  shard; job summaries and `unit-evidence-*` artifacts retain counts, JUnit and
+  timings. See [unit evidence](../../../docs/ci-pipelines.md#non-browser-units).
 
 ## World update notifications
 

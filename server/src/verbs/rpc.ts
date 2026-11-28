@@ -239,8 +239,6 @@ export const rpcVerbs = [
     "world",
     object({ source: Type.Unknown(), destination: Type.Unknown() }),
   ),
-  rpc("world.appearance.patch", "reconcilable", "world"),
-  rpc("world.appearance.rename", "reconcilable", "world"),
   rpc("world.ask.answer", "reconcilable", "world"),
   rpc("world.ask.deliveries.get", "read", "world"),
   rpc("world.ask.delivery.close", "reconcilable", "world"),
@@ -376,17 +374,6 @@ export const rpcVerbs = [
     object({
       connection_id: text,
       connection_generation: Type.Integer({ minimum: 0 }),
-    }),
-  ),
-  rpc(
-    "world.core.room.rename",
-    "reconcilable",
-    "world",
-    object({
-      connection_id: text,
-      connection_generation: Type.Integer({ minimum: 0 }),
-      workspace_id: text,
-      label: text,
     }),
   ),
   rpc(
@@ -541,25 +528,7 @@ export const rpcVerbs = [
   ),
   rpc("world.float.hide", "reconcilable", "world", object({ stream: text })),
   rpc("world.float.stop", "reconcilable", "world", object({ stream: text })),
-  rpc("world.desk.get", "read", "world"),
-  rpc("world.desk.observe", "reconcilable", "world"),
-  rpc("world.desk.open", "reconcilable", "world"),
-  rpc("world.desk.review", "reconcilable", "world"),
   rpc("world.focused.observe", "reconcilable", "world"),
-  // World's skill per harness on the service's host; browser (operator) only.
-  rpc(
-    "world.integration.install",
-    "reconcilable",
-    "world",
-    object({ harness: text }),
-  ),
-  rpc("world.integration.list", "read", "world"),
-  rpc(
-    "world.integration.uninstall",
-    "reconcilable",
-    "world",
-    object({ harness: text }),
-  ),
   // Installed web IDEs for the Code view and their World-owned servers.
   rpc("world.ide.status", "read", "world"),
   rpc("world.ide.enable", "reconcilable", "world", object({ provider: text })),
@@ -596,6 +565,41 @@ export const rpcVerbs = [
   rpc("world.profiles.delete", "reconcilable", "world"),
   rpc("world.profiles.get", "read", "world"),
   rpc("world.profiles.save", "reconcilable", "world"),
+  // A change through World: entity, field, expected and new value.
+  rpc(
+    "world.command",
+    "reconcilable",
+    "world",
+    Type.Union([
+      object({
+        id: text,
+        entity: object({
+          kind: Type.Literal("room"),
+          connection_id: text,
+          generation: Type.Integer({ minimum: 0 }),
+          room_id: text,
+        }),
+        field: text,
+        expected: Type.String({ maxLength: 4096 }),
+        value: text,
+      }),
+      // A World setting: "Group runtimes" (world-one-object step 2).
+      object({
+        id: text,
+        entity: object({
+          kind: Type.Literal("setting"),
+          key: Type.Literal("runtimeGrouping"),
+        }),
+        field: Type.Literal("value"),
+        expected: Type.Union([
+          Type.Literal("machine"),
+          Type.Literal("runtime"),
+          Type.Null(),
+        ]),
+        value: Type.Union([Type.Literal("machine"), Type.Literal("runtime")]),
+      }),
+    ]),
+  ),
   rpc("world.snapshot", "read", "world"),
   rpc("world.town_master.set", "reconcilable", "world"),
   rpc("world.watchlist.list", "read", "world"),

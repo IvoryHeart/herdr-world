@@ -1,70 +1,89 @@
 import { expect, test } from "bun:test";
-import { assertDeliveryResults } from "./ci-delivery-result";
+import {
+  assertDeliveryResults,
+  type DeliveryResults,
+} from "./ci-delivery-result";
 import type { ValidationSelection } from "./validation-scope";
 
 const selection = (
-  packaging: boolean,
-  browser = false,
-  verification = false,
+  world: boolean,
+  web: boolean,
+  verification: boolean,
+  packaging = false,
 ): ValidationSelection => ({
   full: false,
   tooling: false,
   documentation: false,
   reason: "fixture",
   unit: [],
-  world: browser ? ["fixture"] : [],
+  world: world ? ["fixture"] : [],
   worldShards: [],
-  web: [],
+  web: web ? ["fixture"] : [],
   packaging,
   verification,
 });
 
-test("aggregate accepts exactly the selected lanes; failure, cancellation and missing results block", () => {
+test("delivery requires every leaf: failure, cancellation, skipped and missing evidence block", () => {
   for (const mode of ["full", "scoped", "tooling", "docs", "reuse"]) {
-    for (const native of [false, true]) {
-      if (!["full", "scoped"].includes(mode) && native) continue;
-      for (const browser of mode === "scoped"
-        ? [false, true]
-        : [mode === "full"])
-        for (const verification of mode === "scoped"
+    for (const packaging of [false, true]) {
+      if (!["full", "scoped"].includes(mode) && packaging) continue;
+      for (const event of [
+        "pull_request",
+        "push",
+        "merge_group",
+        "workflow_dispatch",
+      ]) {
+        for (const world of mode === "scoped"
           ? [false, true]
-          : [mode === "full"]) {
-          const plan = selection(native, browser, verification);
-          const expected = [
-            "success",
-            mode === "reuse" ? "skipped" : "success",
-            browser ? "success" : "skipped",
-            verification ? "success" : "skipped",
-          ];
-          const check = (rows: Array<string | undefined>) =>
-            assertDeliveryResults(
-              mode,
-              rows[0],
-              rows[1],
-              rows[2],
-              rows[3],
-              plan,
-            );
-          expect(check(expected)).toBeUndefined();
-          for (let index = 0; index < expected.length; index++)
-            for (const result of [
-              "failure",
-              "cancelled",
-              undefined,
-              expected[index] === "success" ? "skipped" : "success",
-            ]) {
-              const rows: Array<string | undefined> = [...expected];
-              rows[index] = result;
-              expect(() => check(rows)).toThrow();
+          : [mode === "full"])
+          for (const web of mode === "scoped"
+            ? [false, true]
+            : [mode === "full"])
+            for (const verification of mode === "scoped"
+              ? [false, true]
+              : [mode === "full"]) {
+              const plan = selection(world, web, verification, packaging);
+              const expected: DeliveryResults = {
+                scope: "success",
+                description: event === "pull_request" ? "success" : "skipped",
+                security: mode === "reuse" ? "skipped" : "success",
+                static: mode === "reuse" ? "skipped" : "success",
+                unit: ["docs", "reuse"].includes(mode) ? "skipped" : "success",
+                world: world ? "success" : "skipped",
+                web: web ? "success" : "skipped",
+                behavioral: verification ? "success" : "skipped",
+              };
+              const check = (results: DeliveryResults) =>
+                assertDeliveryResults(mode, results, plan, event);
+              expect(check(expected)).toBeUndefined();
+              for (const key of Object.keys(expected) as Array<
+                keyof DeliveryResults
+              >)
+                for (const result of [
+                  "failure",
+                  "cancelled",
+                  undefined,
+                  expected[key] === "success" ? "skipped" : "success",
+                ]) {
+                  expect(() => check({ ...expected, [key]: result })).toThrow();
+                }
             }
-        }
+      }
     }
   }
 });
 
-test("unknown modes and missing scoped plans cannot pass", () => {
+test("unknown modes, held results and missing scoped plans cannot pass", () => {
+  const results: DeliveryResults = {
+    scope: "success",
+    description: "success",
+    security: "success",
+    static: "success",
+    unit: "success",
+    world: "skipped",
+    web: "skipped",
+    behavioral: "skipped",
+  };
   for (const mode of [undefined, "unknown", "hold", "scoped"])
-    expect(() =>
-      assertDeliveryResults(mode, "success", "success", "skipped", "skipped"),
-    ).toThrow();
+    expect(() => assertDeliveryResults(mode, results)).toThrow();
 });

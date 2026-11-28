@@ -1,0 +1,31 @@
+{
+  "id": "world-write-path",
+  "area": "World publication and commands (room rename write path)",
+  "owner": "server/src/world/snapshot.ts",
+  "requirement": "openspec/changes/world-one-object/specs/world-model/spec.md",
+  "properties": "One revision orders every published value, including a settled command whose final value is unchanged; a per-host epoch fence discards reads that started before a newer one was admitted; a command names the entity, field and expected value, refuses when the current value differs, and is sent only on the entity's own connection and generation; it settles only with a read that started after the acknowledgement; a browser adopts only newer revisions and holds the pending value for every view until the outcome is published; every accepted command and its outcome are recorded in the World ledger; a restart settles a recorded command in flight as uncertain and republishes from the source",
+  "existingTests": [
+    "quint/world-write-path.test.ts",
+    "server/src/world/commands.test.ts",
+    "server/src/world/snapshot.test.ts",
+    "web/src/world/worldReplica.test.ts"
+  ],
+  "acceptedDelivery": "https://github.com/IvoryHeart/herdr-world/pull/1406",
+  "status": "pending",
+  "technique": "design-model-with-production-replay",
+  "assessment": "Bounded model of one room on one host with two screens in one browser, source changes, late and lost reads, lost commands that may still land, reconnects and one World restart. Nine named scenarios pass; three seeds of 2,000 simulated runs check the safety invariant. Exhaustive TLC did not finish within ten minutes, so the gate samples. Seven scenarios replay through the real WorldSnapshotService, composeWorldCommands and two browser WorldRuntimeStore replicas over a synthetic Herdr runtime. Two model flags (no fence, no compare-and-set) and three production mutants (snapshot admission fence, compare-and-set, publish on settle) are rejected.",
+  "remaining": "Independent review. Exhaustive exploration; herdr-core rename is covered by unit tests, not replay; several hosts and browsers in different tabs are not modelled; other commands join as they move onto the path.",
+  "requiredChecks": ["bun run check", "bun run verification:gate"],
+  "partialEvidence": {
+    "models": ["quint/world-write-path.qnt"],
+    "contracts": ["verification/contracts/world-write-path.md"],
+    "tests": [
+      "quint/world-write-path.test.ts",
+      "server/src/world/commands.test.ts",
+      "server/src/world/snapshot.test.ts",
+      "web/src/world/worldReplica.test.ts"
+    ],
+    "checks": ["bun run verification:gate"],
+    "review": "New design contract pending PR review."
+  }
+}

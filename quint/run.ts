@@ -1,9 +1,11 @@
+import { prepareModelVerification } from "./model-verification";
 import { runTapLockVerification } from "./claude-tap-lock-verification";
 import { composedCases, replayTracesPerSeed } from "./composed-cases";
 import { runRegistryVerification } from "./connection-registry-verification";
 import { runCoreVerification } from "./herdr-core-verification";
 import { runSeenVerification } from "./herdr-core-seen";
 import { runMoveVerification } from "./agent-move-verification";
+import { runWritePathVerification } from "./world-write-path-verification";
 import { runIdeLifecycleVerification } from "./ide-lifecycle-verification";
 import { replayEffectRecovery } from "./effect-recovery";
 import { verificationModels } from "./models";
@@ -378,6 +380,7 @@ const cases = [
 type CommandResult = { code: number; ms: number; log: string; args: string[] };
 
 const commands: CommandResult[] = [];
+const independentCommands: Promise<unknown>[] = [];
 let commandPublication = Promise.resolve();
 let activeLabel = "setup";
 let failedLabel: string | undefined;
@@ -387,6 +390,11 @@ const implementationMutation = (
   name: Model,
   fault: ImplementationFault = "primary",
 ) => mutateImplementation(name, fault, { root, output });
+
+/** CI splits controls into independent jobs; local runs keep one at a time. */
+const controlWorkers = () =>
+  Number(process.env.HERDR_VERIFICATION_CONTROL_WORKERS || 1);
+const modelPart = process.env.HERDR_VERIFICATION_MODEL_PART || "full";
 
 async function command(
   label: string,
@@ -437,7 +445,12 @@ async function command(
         "--server-endpoint",
         `127.0.0.1:${port}`,
         "--tlc-config",
-        resolve(root, "tools/quint/tlc.json"),
+        resolve(
+          root,
+          process.env.HERDR_VERIFICATION_MODEL_CI === "1"
+            ? "tools/quint/tlc-ci.json"
+            : "tools/quint/tlc.json",
+        ),
       ],
       signal,
     );
@@ -662,6 +675,7 @@ export async function runReviewedQuintModels(
                 ? "full-sequential"
                 : "focused",
             models: runCases.map((item) => item.name),
+            ...(modelPart === "full" ? {} : { part: modelPart }),
           },
           complete: false,
           sourceRevision: revision.stdout.trim(),
@@ -687,6 +701,7 @@ export async function runReviewedQuintModels(
         "herdr-core-seen": runSeenVerification,
         "ide-lifecycle": runIdeLifecycleVerification,
         "agent-move": runMoveVerification,
+        "world-write-path": runWritePathVerification,
       } as const;
       if (item.name in composed) {
         const { name } = item;
@@ -697,6 +712,10 @@ export async function runReviewedQuintModels(
           command,
           mutate: (fault?: ImplementationFault) =>
             implementationMutation(name, fault),
+          signal: cancellation.signal,
+          controlWorkers: controlWorkers(),
+          part: modelPart,
+          withControlWorker: checkerSessions.withWorker,
         });
         results.push(result);
         console.log(JSON.stringify(result));
@@ -709,7 +728,8 @@ export async function runReviewedQuintModels(
           artifacts,
           command,
           signal: cancellation.signal,
-          controlWorkers: Number(process.env.HERDR_CORE_CONTROL_WORKERS || 1),
+          controlWorkers: controlWorkers(),
+          part: modelPart,
           withControlWorker: checkerSessions.withWorker,
           mutate: (fault) =>
             implementationMutation("herdr-core-runtime", fault),
@@ -722,6 +742,12 @@ export async function runReviewedQuintModels(
       const traceCount = replayTracesPerSeed(item.name);
       const model = `quint/${item.name}.qnt`;
       await command(`${item.name}-types`, ["typecheck", model]);
+      const verification = prepareModelVerification(
+        item.name,
+        command,
+        cancellation,
+      );
+      independentCommands.push(verification.drain);
       const simulation = await command(`${item.name}-simulation`, [
         "run",
         model,
@@ -752,24 +778,6 @@ export async function runReviewedQuintModels(
         assert(match && Number(match[1]) > 0, `missing witness ${witness}`);
         witnessCounts[witness] = Number(match[1]);
       }
-      const verification = await command(`${item.name}-verification`, [
-        "verify",
-        model,
-        "--backend",
-        "tlc",
-        "--invariant",
-        "safety",
-        "--verbosity",
-        "3",
-        ...(item.name === "space-admission"
-          ? ["--init", "allConfigurations", "--step", "hold"]
-          : []),
-      ]);
-      assert.match(
-        verification,
-        /No violation found/,
-        "verification did not report success",
-      );
       const witnessesBySeed: Record<string, Record<string, number>> = {
         "42": witnessCounts,
       };
@@ -808,6 +816,7 @@ export async function runReviewedQuintModels(
           witnessesBySeed[String(seed)]![witness] = Number(match[1]);
         }
       }
+      await verification.finish();
       const files = (await readdir(output))
         .filter((file) =>
           new RegExp(
@@ -1234,6 +1243,7 @@ export async function runReviewedQuintModels(
             ? "full-sequential"
             : "focused",
         models: runCases.map((item) => item.name),
+        ...(modelPart === "full" ? {} : { part: modelPart }),
       },
       sourceRevision: revision.stdout.trim(),
       sourceInputs: inputs,
@@ -1277,6 +1287,8 @@ export async function runReviewedQuintModels(
     );
     console.log(`Evidence: ${artifacts}`);
   } catch (error) {
+    cancellation.abort(error);
+    await Promise.allSettled(independentCommands);
     await mkdir(output, { recursive: true });
     const label = failedLabel ?? activeLabel;
     const failure = {

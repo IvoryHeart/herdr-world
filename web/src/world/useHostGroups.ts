@@ -1,44 +1,29 @@
-import { useMemo } from "react";
-import { useStoreSelector } from "../store";
-import {
-  type HostGroupOf,
-  hostGroupOf,
-  type WorldHost,
-  worldHosts,
-} from "../worldHosts";
-import { useRuntimeGrouping } from "./runtimeGrouping";
+import { useSyncExternalStore } from "react";
+import type { HostGrouping } from "../../../shared/hostGrouping";
+import { type HostGroupOf, hostGroupOf } from "../worldHosts";
+import { worldRuntimeStore } from "./runtimeStore";
+
+const publishedHostGrouping = () => worldRuntimeStore.get().hostGrouping;
 
 /**
- * Whether two catalogues group alike: the same runtimes, in order, with the
- * same names and machines. A runtime's state or generation changes no group,
- * so it re-renders no view that groups by it.
- *
- * @internal
+ * How World groups its runtimes, as published under the replica's revision
+ * (`host_grouping`, shared/hostGrouping.ts). Town, Desk, the navigator,
+ * Board, Spaces and the Hosts control all read this one value; the replica
+ * keeps its object while it is unchanged, so a revision that regroups
+ * nothing re-renders no view that reads it.
  */
-export function sameHostGrouping(
-  a: readonly WorldHost[],
-  b: readonly WorldHost[],
-) {
-  return (
-    a === b ||
-    (a.length === b.length &&
-      a.every(
-        (host, index) =>
-          host.id === b[index]!.id &&
-          host.label === b[index]!.label &&
-          host.machine === b[index]!.machine,
-      ))
+export function useHostGrouping(): HostGrouping | undefined {
+  return useSyncExternalStore(
+    worldRuntimeStore.subscribe,
+    publishedHostGrouping,
+    publishedHostGrouping,
   );
 }
 
 /**
- * Each connection's group under World's "Group runtimes" setting, read from
- * the one host catalogue (worldHosts.ts). Desk, the navigator and Board group
- * by this; Town's buildings apply the same `runtimeGroupKey`. Groups give a
- * key and label only: a runtime's live state comes from World, not from here.
+ * Each connection's published group. Groups give a key and label only: a
+ * runtime's live state comes from World, not from here.
  */
 export function useHostGroupOf(): HostGroupOf {
-  const hosts = useStoreSelector(worldHosts, sameHostGrouping);
-  const grouping = useRuntimeGrouping();
-  return useMemo(() => hostGroupOf(hosts, grouping), [hosts, grouping]);
+  return hostGroupOf(useHostGrouping());
 }

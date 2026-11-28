@@ -191,3 +191,23 @@ describe("Agent kinds from the host", () => {
     ).toEqual(["claude", "codex"]);
   });
 });
+
+test("a refused launch brief is Not sent rather than uncertain", async () => {
+  const h = herdr();
+  const result = await launchAgent(
+    async (method, params) => {
+      if (method === "agent.prompt")
+        throw new Error(
+          "agent_not_ready: Original agent is not attached. Nothing was sent.",
+        );
+      return h.call(method, params);
+    },
+    request({ text: "Check the tests" }),
+  );
+  expect(result).toMatchObject({
+    status: "failed",
+    message: expect.stringContaining("Not sent."),
+  });
+  expect(JSON.stringify(result)).not.toContain("agent_not_ready:");
+  expect(JSON.stringify(result)).not.toContain("may not");
+});

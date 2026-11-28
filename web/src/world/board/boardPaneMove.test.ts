@@ -8,6 +8,7 @@ import {
   requestAgentHandoff,
   workspaceRoom,
 } from "../town/townRuntimeMove";
+import { townMoveNotice, townMoveResult } from "../town/townMoves";
 
 function fixture() {
   const spaces = [
@@ -216,6 +217,31 @@ test("a refused move shows the service's own reason and words, not a blanket bus
     reason: "start_failed",
     message,
   });
+});
+
+test("a move that landed while its desk details stayed behind says so", async () => {
+  const { model, request } = fixture();
+  const target = model.tabs.find(
+    (tab) => tab.hostKey !== request.target.hostKey,
+  )!;
+  const room = workspaceRoom(model.workspaceByKey.get(target.workspaceKey)!);
+  const source = cardAgentAddress(request.target, request.targetWorkspace);
+  const message =
+    "Its desk details stayed behind: the Board refused the change. Its colour, pin and links stay on its old desk.";
+  const call = (async () => ({
+    status: "moved",
+    target: { tab_id: "t9", workspace_id: "w9" },
+    message,
+  })) as never;
+  const outcome = await requestAgentHandoff(source, room, call);
+  expect(outcome).toEqual({
+    status: "moved",
+    tab_id: "t9",
+    workspace_id: "w9",
+    message,
+  });
+  expect(townMoveNotice("Ada", outcome, "t1")).toBe(`Ada moved. ${message}`);
+  expect(townMoveResult(outcome)).toBe("moved");
 });
 
 test("Move to… offers only rooms of another runtime: a second view of the same Herdr is not one", () => {

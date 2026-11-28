@@ -8,6 +8,10 @@
 
 **Code:**
 
+- `server/src/herdr-core/delivery.ts`, `server/src/herdr-core/delivery.test.ts`
+- `server/src/herdr-core/native-send.test.ts`
+- `server/src/herdr-core/recipient.ts`
+
 - `server/src/herdr-core/host-runtime.ts`
 - `server/src/herdr-core/host-runtime.test.ts`
 - `server/src/herdr-core/town-move.ts`
@@ -28,10 +32,18 @@
 - `server/src/world/agent-rehome.ts`
 - `server/src/rpc/agent-move.ts`
 - `shared/agentMove.ts`
+- `web/src/world/town/townRuntimeMove.ts` (handoff request and its toast outcome)
+- `web/src/world/moveBoardRefuses.ts` (`?moveBoardRefuses=1` testing switch)
 - `server/src/herdr-core/shared-state.ts` (`waitsWithoutResult`: started-harness readiness)
 - `server/src/herdr-core/harness-start.test.ts`
 - `server/src/herdr-core/testing/capture-harness-start.ts`
 - `server/src/herdr-core/testing/recorded/core-0.1.21-harness-start.json`
+- `server/src/herdr-core/core.live.test.ts` (native status in the unified read model)
+- `server/src/herdr-core/harnesses.live.test.ts` (ready, blocked and completed reports)
+- `scripts/herdr-core-smoke.ts` (checksum-verified newest-release live suites)
+- `scripts/release-walk/contract.py`, `scripts/release-walk/assets.py` (pinned
+  release-walk core download and receipt version)
+- `scripts/check-homebrew-runtime.rb` (Homebrew install acceptance fixture)
 - `server/src/herdr-core/`
 
 **Pitfalls:**
@@ -124,13 +136,16 @@ no control for it. Platform and harness limits apply across the table.
   A newer TUI using a supported protocol can connect; it is outside this verified
   version range. Upgrade World for an unsupported protocol. Never downgrade a
   live server to make it connect.
-- **herdr-core:** **0.1.21** is the verified baseline. There is no version pin
-  or read-only certification gate: older and newer releases can connect when
+- **herdr-core:** **0.1.22** is the verified baseline, also checked against
+  **0.1.21**. There is no version pin or read-only certification gate: older
+  and newer releases can connect when
   they provide the required methods and features. A missing feature is refused
   with a reason. Before 0.1.21, attaching an observer can move a terminal to
   core's headless size; World reports the move. The daily and manual
   [release smoke](../../../docs/development.md#herdr-core-release-smoke) checks newer
   releases for drift without changing your installed runtime.
+  Release-walk acceptance pins **0.1.22** for repeatable runtime downloads and
+  receipts; install previews and fake release fixtures use the same baseline.
 
 ### Runtime limits
 
@@ -140,7 +155,7 @@ no control for it. Platform and harness limits apply across the table.
   World can install core on local Windows x64; Windows SSH setup is manual.
   Windows hosts support terminals and native runtime controls, but not the
   Unix-based file, Git, worktree, transcript-history or usage tools.
-- **Core releases:** unreleased changes after **0.1.21** wait for the next
+- **Core releases:** unreleased changes after **0.1.22** wait for the next
   core release. Released versions retain read-write support; the smoke flags
   drift. The [protocol questions](spec.md#upstream-questions-q1q11)
   record the remaining upstream boundaries.
@@ -195,7 +210,13 @@ no control for it. Platform and harness limits apply across the table.
   Codex keeps one conversation open at a time, so a Codex agent closes first
   and then resumes in the new room; if it doesn't start there it resumes back
   in its own room, and if that fails too the message says which `codex
-  resume` command continues it. A Claude copy that reports a new
+  resume` command continues it. If the Codex agent starts there but the
+  Board refuses its desk, the original has already closed: the toast says it
+  moved and that its desk details stayed behind (colour, pin and links stay
+  on the old desk). Testing switch: open World with `?moveBoardRefuses=1`
+  (the page drops it at once; it lasts until a reload, `=0` turns it off) and
+  every move to another runtime asks the service to refuse its desk rehome
+  (`web/src/world/moveBoardRefuses.ts`). A Claude copy that reports a new
   conversation instead of its own is closed and the move goes the same way.
   Two connections that reach the same Herdr are one runtime: Move to…
   doesn't offer the other's rooms as another runtime, and a move between them
@@ -352,3 +373,7 @@ with source creation/merge dates and current session-qualified links for agent
 attribution. Missing sources never imply zero. Reads refuse unqualified pane/room
 filters, unsupported windows and arbitrary paths. `usage --fixture` runs a
 synthetic example offline, including an owner wait and a usage limit.
+
+## Foreground admission
+
+See [Foreground admission](../ask-answer-delivery/notes.md#foreground-admission) for agent input checks, restarts and wrapper scripts.

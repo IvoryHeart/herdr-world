@@ -23,6 +23,7 @@ const leaf = {
   stale: false,
   actionable: true,
   connectionId: "studio",
+  generation: 3,
   terminalId: "term-original",
   pane: { pane_id: "p1" },
 };
@@ -50,6 +51,10 @@ test("Open agent is an explicit route to a fresh original terminal, without chan
     name: "Original asker",
     location: "Lantern · Studio",
     target: { key: "agent-current", terminal: false },
+    terminal: {
+      nodeId: "leaf-current",
+      target: { connectionId: "studio", generation: 3, paneId: "p1" },
+    },
   });
   for (const retired of [
     { ...leaf, connectionId: "other" },

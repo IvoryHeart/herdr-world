@@ -13,6 +13,8 @@ import { fixtureHost, fixtureWorld } from "./board/boardFixture";
 import { worldWithAppearance, visibleAppearanceColors } from "./appearance";
 import { projectBoard } from "./board/boardModel";
 import { projectWorldOffice } from "./herdrOfficeProjection";
+import { townDeskColors } from "./town/townModel";
+import { resolveTerminalByKeys } from "./terminalColor";
 import type { BridgeControlMsg } from "../api";
 const empty = (): BoardDocument => ({
   version: 1,
@@ -22,7 +24,7 @@ const empty = (): BoardDocument => ({
   layout: { anchors: {}, offsets: {}, pinned: {}, folded: [], colors: {} },
 });
 
-test("two independent browser document clients converge through normal shared revisions", async () => {
+test("two browser colour edits converge in Town and Board through shared revisions", async () => {
   let document = empty();
   const controls = new Set<(event: BridgeControlMsg) => void>();
   const client: BoardClient = {
@@ -56,25 +58,50 @@ test("two independent browser document clients converge through normal shared re
   a.start();
   b.start();
   await Promise.all([a.refresh(), b.refresh()]);
+  const host = fixtureHost("alpha", [
+    {
+      label: "Synthetic workspace",
+      tabs: [{ label: "Synthetic reviewer", panes: [["working"]] }],
+    },
+  ]);
+  const world = fixtureWorld([host]);
+  const leaf = world.leaves[0]!;
+  const town = projectWorldOffice(world, 0),
+    board = projectBoard(world);
+  const expectColours = (page: BoardDocumentStore, color: "pink" | "teal") => {
+    const colors = visibleAppearanceColors(page.get().document, [
+      host.connection,
+    ]);
+    expect([...townDeskColors(town, colors).values()]).toEqual([color]);
+    expect(
+      board.tabs.map(
+        (tab) => resolveTerminalByKeys(colors, tab.key, tab.workspaceKey).color,
+      ),
+    ).toEqual([color]);
+  };
   const target = {
     connection_id: "alpha",
     connection_generation: 1,
     kind: "tab" as const,
-    native_id: "tab-1",
-    color_key: "alpha:tab-1",
-    witness: ["terminal-1"],
+    native_id: leaf.tabId,
+    color_key: `alpha:${leaf.tabId}`,
+    witness: [leaf.terminalId],
   };
   expect(
     await a.appearance(target, { status: "Checking", color: "pink" }),
   ).toBeNull();
   await b.refresh();
   expect(b.get().document).toEqual(a.get().document);
+  expectColours(a, "pink");
+  expectColours(b, "pink");
   expect(await b.appearance(target, { color: "teal" })).toBeNull();
   await a.refresh();
   expect(appearanceFor(a.get().document?.appearance, target)?.status).toBe(
     "Checking",
   );
   expect(a.get().document?.layout.colors?.[target.color_key]).toBe("teal");
+  expectColours(a, "teal");
+  expectColours(b, "teal");
   a.stop();
   b.stop();
 });

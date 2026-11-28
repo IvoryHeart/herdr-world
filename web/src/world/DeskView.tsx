@@ -43,14 +43,15 @@ import { AgentState } from "../components/AgentMark";
 import { needsYouLeafKey, openNeedsYou } from "./needsYou";
 import type { WorldDeskStore } from "./deskStateStore";
 import type { DeskRevealResult } from "./deskReveal";
-import { DeskOtherHosts, deskHostLabel } from "./DeskOtherHosts";
+import { DeskOtherHosts } from "./DeskOtherHosts";
+import { deskHostLabel } from "./deskOtherHostsModel";
 import { useHostGroupOf } from "./useHostGroups";
 import { leafPinnedBy, useDeskPins } from "./useDeskPins";
 import { useGreetingAnchor } from "./townMasterGreeting";
 import { keyTakenByViewSearch } from "./viewSearchShortcut";
 import { useFoldingSearch, usePhoneViewport } from "./useFoldingSearch";
 import { ListFilter } from "lucide-react";
-export { otherHostSummaries } from "./DeskOtherHosts";
+export { otherHostSummaries } from "./deskOtherHostsModel";
 import "./DeskView.css";
 import { MadeSummary, artefactsMade, useAgentArtefacts } from "./MadeSummary";
 

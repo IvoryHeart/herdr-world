@@ -104,6 +104,27 @@ seconds without renewal, and stale reports have no open link. See the
 [Shipyard API guide](shipyard-api.md#local-instance-registry) for bounds and CLI
 try commands. No discovery probes or additional servers are started by Shipyard.
 
+## Waiting in tests
+
+Tests react instead of pausing. Await the event, promise, message, DOM change or
+counted read the case checks; when code gives no signal, add one to the code
+under test (as `afterAskPeerReads` does) rather than polling. To prove that
+something does not happen, count the cycles that would have done it. Product
+timers take their durations from `shared/timings.ts`; a test runs the same real
+timers on the few-millisecond set with `useTestTimings()` or `withTestTimings()`
+from `shared/testing/timings.ts`, and a spawned process with
+`--preload ./shared/testing/timings-preload.ts`. Production code never switches
+the set. `bun run check:test-waits` (static lane) fails on a new fixed sleep in a
+test file; `scripts/test-waits-allowlist.json` only shrinks. Every pausing line
+counts, including each call of a pausing helper and pauses inside one. A tick of
+at most 10 ms is exempt only directly in a loop that polls, where every
+iteration checks the thing it waits for: its condition or a conditional exit
+reads observable state, or it leaves after real work succeeds in `try`. A tick
+in a loop bounded only by a count (`i = i + 1`), a collection or elapsed time
+(`Date.now() - started < 500`), one whose exit only a counter gates, or a
+callback declared in a loop (a test body) counts. After removing sleeps, `bun scripts/check-test-waits.ts --update`
+lowers its entry.
+
 ## Development tools
 
 To inspect the Claude limits ownership repair without a live account, open
@@ -143,7 +164,7 @@ bun run test:install-linux
 # Reuse an already packaged candidate instead of rebuilding it:
 bun run test:install-linux --reuse --version 0.0.0-rc.1
 # Pin the real core release; the default is latest:
-bun run test:install-linux --core-version 0.1.21
+bun run test:install-linux --core-version 0.1.22
 # Diagnose one scenario:
 bun run test:install-linux --reuse --version 0.0.0-rc.1 --case stopped
 ```
@@ -486,7 +507,8 @@ PR CI and Release run the remaining repository checks with one file worker and u
 to two concurrent cases, preserving the upstream test configuration. Both call the
 [shared World browser workflow](../.github/workflows/world-browser.yml), which runs
 six separate runners, each with one file worker and one active case, and
-**Web browser tests**. Browser jobs install the Chrome for Testing build pinned in
+the web browser lane (**Web browser shards** in PR CI). Browser jobs install the
+Chrome for Testing build pinned in
 [`tools/chrome/test-chrome.json`](../tools/chrome/test-chrome.json) (checksum
 verified, cached) and print its version and the runner's CPU, so a browser
 update is a reviewed change rather than a runner-image roll-out. Ubuntu 24.04
@@ -503,13 +525,14 @@ World browser suites between the six shards, discovering `*.test.ts` and
 until measured, and stale weights add no suites. Shared bundle entries are
 discovered from `web/src/world/*.browser.tsx`. Inventory checks reject missing
 or duplicate assignments. The required Delivery checks status succeeds only when
-repository validation, every World shard and the web browser job pass.
+every applicable static, dependency, unit, World/web browser and model leaf,
+along with PR description policy, passes.
 Markdown-only and exact-head reuse keep their existing shorter paths.
 PR CI supplies Linux source/browser evidence; main reports the same immutable
 PR result without heavy checks. Release tags build/test installed channel bytes
 before sealing. Release-please updates version/changelog metadata and dispatches
-ordinary PR CI automatically. **Web browser tests** runs the Chrome-driven suites outside
-World (`webBrowserSuites`) one file at a time.
+ordinary PR CI automatically. The web browser lane runs the Chrome-driven suites
+outside World (`webBrowserSuites`) one file at a time.
 
 Each World run writes JUnit results and per-file timings under `.agents/delivery/`.
 CI uploads them as `world-browser-N-attempt-M` artifacts, and the web job's JUnit results as `web-browser-attempt-M`, including on test failure. Compare
@@ -604,8 +627,8 @@ production frontend/server builds and OpenSpec contracts. Generated output belon
 ignored directories and must not be committed.
 
 Its static checks come from the same lane as `check:delivery` and `check:changed`.
-That lane checks source types without invoking server's asset-building
-`pretypecheck`, then builds and validates production assets once. `check:commit`
+Its independent commands concurrently check source types without invoking server's
+asset-building `pretypecheck`, and build and validate production assets once. `check:commit`
 is the read-only format/lint guard used by the Git hook; `check:source` adds the
 asset-building type check and tests for release preparation and tag validation.
 `precommit` remains a compatibility alias for `check:source`. See the

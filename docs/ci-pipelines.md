@@ -9,8 +9,9 @@ required. The native launchd shim reports have been removed.
 | Pre-push | Read-only formatting and privacy scan of every pushed ref, including tags |
 | Privacy | One scan for each PR open/synchronize/reopen, plus explicit bot dispatches |
 | PR CI | Linux static, affected units, browser shards and behavioral verification; description policy remains in CI |
+| Merge queue | Fresh Linux validation of the queue's combined commit; the same required Delivery checks aggregate |
 | Native checks | Tags and nightly only, including packaging changes |
-| Main CI | Report the merged PR's successful identical tree; missing evidence raises the main issue, without running suites |
+| Main CI | Report the merged PR's successful identical tree; missing evidence raises the main issue; independent model jobs warm PR evidence caches |
 | Release tag | Build each native package once, test installed channels and agents, audit shipped dependencies, then seal |
 | Nightly native | Full native/platform and running-service channel upgrade signal; maintain one issue on failure |
 | Main gate | Keep one red-main issue, retry infrastructure once, close on a later green main; never open revert PRs |
@@ -22,13 +23,58 @@ required. The native launchd shim reports have been removed.
 `bun run typecheck:quick` checks all three TypeScript projects. Use focused
 `bun run test <path>` while iterating. `check:static` retains notices,
 size, formatting/lint, types, build, site and OpenSpec checks; CI runs that lane
-alongside non-browser shards. `check:changed` remains an explicit local affected
+alongside non-browser shards. Its independent commands run concurrently, each
+with a separate `static-*.log` in `.agents/delivery/lanes/`; any failure fails the
+lane after all commands finish. The terminal names the first completed failure,
+and CI's Static checks summary lists every command, outcome, duration and log.
+CI splits the same commands across three Static checks matrix runners: `build`
+runs the production build, `types` runs both type commands, and `repository` runs
+the other ten checks. This avoids CPU contention on a single hosted runner;
+local `check:static` still runs all thirteen concurrently. Each runner publishes
+its own summary and `static-check-logs-<group>` artifact, including failed checks.
+Every matrix runner must pass; failure never cancels another group. Documentation
+changes retain their existing `check:docs` command on one repository runner.
+Checkout retains full Git history for ratchets, filtering historical file blobs.
+Static checks never retry. `check:changed` remains an explicit local affected
 check and `check:delivery` an explicit complete local gate. Neither is a push hook.
 `check:source` is a local compatibility command, not a release gate.
 `check:pr-body <file> <base-ref>` validates the exact committed PR description in
 CI and before handoff. `check:dead` is read-only unless given `--prune`.
 `check:privacy --range <base-ref> <head-ref>` scans committed additions; the hook
 instead checks every actual pushed ref. Do not bypass hooks.
+
+### Non-browser units
+
+CI packs the selected unit files onto four runners using the committed
+`scripts/ci-unit-timings.json` table. Each runner executes four files at a time,
+with the existing maximum of two concurrent cases. The longest files start first;
+new files always run with a one-second scheduling estimate. The four partitions
+are disjoint and cover the complete selection.
+
+The build consumers listed in `scripts/ci-unit-shards.ts` stay on the first shard.
+Only a shard selecting those files runs `bun run build`; ordinary scoped units
+need no build. Packing includes a 25-second build allowance. The other shards run
+from clean checkouts without generated assets, so a new undeclared consumer fails
+instead of silently acquiring a second build. Static checks retain their own build.
+
+The timing table was bootstrapped from Bun 1.4.4 Linux x64 serial JUnit. It records
+the outer file-suite time, including setup, without counting nested describe
+suites twice. Its versioned millisecond format also feeds Bun’s `--timings`,
+which makes the parallel runner start the longest files first. To refresh it, download the `unit-evidence-*` artifacts and pass
+their serial JUnit reports to
+`bun scripts/ci-unit-timings.ts <serial-junit.xml> ... > scripts/ci-unit-timings.json`.
+Multiple observations use the median per file. Timing changes select full validation.
+
+Changes to the CI unit job, CI test entry, test runner, unit packing, timing or
+comparison implementation require **twenty serial/parallel pairs on every unit
+shard** before Delivery passes. The order alternates between serial first and
+parallel first. Each pair uses the same selected files and existing retry policy;
+first-attempt JUnit must retain every case and skip, with zero new parallel
+failures even if retry recovers them. Normal PRs execute the unit lane once.
+Comparison jobs have a separate 120-minute allowance; individual test deadlines
+and the normal 20-minute job limit are unchanged. `unit-evidence-*` retains JUnit,
+command logs, case/file inventories and elapsed times; the job summary records the
+twenty completed pairs. `flaky-tests-*` evidence and its Delivery gate remain required.
 
 ## Scope and scheduling
 
@@ -42,20 +88,116 @@ changes select full Linux validation. Packaging scope remains descriptive; every
 PR check runs on Linux. Native storage/plugin/launchd checks and running upgrades
 belong to the nightly or release candidate, never a PR matrix.
 
+Runtime-loaded check assets have explicit ownership: `__snapshots__/<test>.snap`
+selects that adjacent test, Town golden PNGs select their existing advisory
+**Town golden images** comparison, and help WebP files plus
+`web/src/help/pictures.json` belong to the static lane's `help:check` (and its
+affected tests). Asset-only edits do not select production boot or World runtime
+journeys. Missing consumers and unknown assets keep the full-mode fallback;
+deletions and both sides of renames retain their consumers. Golden comparisons
+remain advisory and help picture generation remains an explicit capture command.
+
+Scope checks out the complete Git history with `filter: blob:none`. The PR
+description policy runs as its own leaf after scope, alongside static checks,
+units, dependency security, World and web browser shards, and model shards.
+**Delivery checks** depends directly on those leaves and requires each selected
+lane to succeed; unselected lanes must be skipped. There are no intervening
+repository, web-browser or behavioral aggregate runners in the PR graph.
+Delivery downloads the model manifests and resource receipts, applies the same
+complete source/tool/model/resource checks, and retains the canonical evidence
+artifact. This aggregation needs Bun and Git, without Node, Java, dependency
+installation or checker setup. Cache admission checks the installed pinned
+shard tools. Each bundle retains their full Node/Java/Bun and platform identity;
+aggregation recomputes the key from that receipt and the current input closure,
+then checks every case's tools and origin artifacts. It never probes Delivery's
+unrelated Node/Java installations. Missing or altered receipts fail closed.
+A direct manual **Behavioral verification** run
+still aggregates its own shards and retains the same canonical artifact.
+
 Main reports passing full or scoped PR evidence only when immutable checkout
 proof establishes an identical tree. A newer red/cancelled verdict is never
 skipped; absent proof or API errors keep a red metadata result without starting
-another suite. Nightly catches integration/platform failures as one advisory issue.
+another suite in that aggregate. An independent **Main model evidence** job runs
+the model lane fresh and saves successful per-model evidence in main's cache scope.
+Model shards restore exact keys before dependency/checker installation; only a
+validated receipt skips model execution. A separate unconditional job installs
+the locked development tooling and runs `verification:typecheck` and
+`verification:notices:check` once on the current tree, including Quint tests
+that do not invalidate model keys. Its failure blocks Delivery even when every
+model reuses evidence; it needs no Java or checker installation. Merge groups, manual runs and nightly/release checks
+stay fresh. Nightly catches integration/platform failures as one advisory issue.
 PR reuse still requires the same scope and checkout/base/head identities.
 The stability opt-in explicitly requests fresh repeated browser passes.
 
-A failing unit, browser or behavioral test step retries once inside its existing
-job. A second failure fails the job. Before a behavioral retry, the failed
-run and resource receipts move into retained `retries/` diagnostics. The aggregate
-reads only the current `runs/` and `resources/`, keeping its one-receipt-per-shard
-check intact. Release/nightly infrastructure failures
-receive one automatic failed-job retry; main's issue remains visible through its
-infrastructure retry. There are no automatic revert branches or PRs.
+If only **PR description** and **Delivery checks** fail, with scope successful
+and all code leaves successful or skipped in the same run, correcting the
+body and adding an eligible label permits fresh validation. This also works after
+**Re-run failed jobs**: successful/skipped leaves may carry earlier attempts,
+while the failed description and Delivery must belong to the current attempt.
+Failed Delivery evidence is still not reusable, and an earlier code failure still holds the head
+red. Rerunning the description job alone replays its original event body.
+
+After the owner approves a PR, it joins the merge queue for `main`. GitHub
+combines it with current main and any preceding queued PRs, then sends
+[`merge_group: checks_requested`](https://docs.github.com/en/actions/reference/workflows-and-actions/events-that-trigger-workflows#merge_group).
+CI checks out that queue commit and runs the same Linux static, dependency,
+unit, browser and behavioral lanes as PR validation, with a full selection.
+It reports **Delivery checks** on the queue commit and never reuses a green PR
+result. The static ratchet uses the queue's immutable base SHA as its integration target.
+Once the queue's checks pass and review requirements hold, GitHub merges the PR.
+FirstMate enables the queue in the ruleset after this workflow change merges;
+the workflow does not change repository settings.
+
+### Flaky tests
+
+CI retries a failed **unit file** or exact **browser case** once inside its existing
+job. Passing files and unrelated browser cases run once; World retries reuse the
+already-built browser assets. A recovered case is recorded as **flaky**; a second
+failure, missing recovery evidence, crash or isolation-tripwire violation stays red.
+Models, static checks, privacy and PR-description checks never retry. Local test
+commands do not enable recovery by default.
+
+The trusted tracker accepts only runs whose head repository is this repository.
+It skips fork runs before downloading artifacts and independently checks the
+Actions API source identity before accessing issue history or writing issues or
+statuses; a missing identity is rejected. Fork tests still run and report their
+local retry results, but cannot add repository-wide flaky history.
+
+Every test shard retains `flaky-tests-*` JSON artifacts, including failed jobs and
+previous attempts of a rerun. **Delivery checks** lists every recovered file and
+case under **Flaky tests**, and checks the open issue history with a read-only
+token. A test that flakes on more than three distinct CI runs in seven days
+blocks runs selecting its file, including a later first-pass success. Attempts
+of the same run count once; occurrences exactly seven days old still count.
+Once breached, the open cause stays blocked until explicit fix or quarantine;
+waiting for the original window to expire does not clear it.
+
+The trusted **Flaky test tracking** workflow uses default-branch code, reads the
+source run's artifacts as data, and serializes updates across branches. It creates
+one open issue labelled `flaky` per file/case, preserving the run links and owner
+notes. Close the issue after fixing the cause; another flake after closure starts
+a new issue. To quarantine explicitly, the owner adds `flaky-quarantined` to its
+open issue (create that label if needed). Quarantine exempts only the frequency
+limit: tests still run and a second failure still fails CI. No automatic skip,
+quarantine or issue closure occurs.
+
+While accounting is pending, the trusted workflow holds a `Delivery checks`
+commit status, then records success or failure after updating history. GitHub
+[requires both a same-named status and check to pass](https://docs.github.com/en/pull-requests/how-tos/merge-and-close-pull-requests/troubleshooting-required-status-checks),
+so concurrently finishing runs cannot erase a fourth occurrence. History/API
+errors keep accounting red or pending. The tracker becomes active when its
+workflow reaches the default branch; a stacked preview still exercises the
+read-only gate and complete synthetic runner/policy regressions.
+
+To inspect it in GitHub, open a PR's **Checks**, select **Delivery checks**, then
+read **Flaky tests** in its summary. Open **Actions → Flaky test tracking** for
+issue-update evidence, or **Issues → Labels → flaky** for causes and run links.
+The focused `scripts/test-retry.test.ts` fixtures deliberately fail once and pass,
+fail twice, crash and trip the isolation guard without creating real flaky issues.
+
+Release/nightly infrastructure failures retain their separate one-time automatic
+failed-job retry. Main's issue remains visible through its infrastructure retry.
+There are no automatic revert branches or PRs.
 
 ## Side workflows
 
@@ -70,6 +212,15 @@ pinned archive helper still supports reviewed synchronization PRs with ordered
 archives and rollback at a conflicting delta. Neither retired workflow consumes
 runners or writes a bot branch on main pushes.
 
+Only CI subscribes directly to merge groups. Its reusable World browser and
+behavioral workflows run through the same aggregate. Privacy scans each PR's
+additions and metadata before queueing, with no separate required queue check.
+Pages deployment, latency, Town golden images and asset headroom remain side
+workflows on their existing inputs. Dependency maintenance/security reporting,
+labels, upstream automation, main health, retry handlers, release preparation,
+publication and native/manual acceptance keep their existing events. None is
+an additional required merge-group report.
+
 ## Audited flaky cases
 
 The November 24 audit includes failures preceding fixes already in the integration
@@ -83,7 +234,7 @@ base. Keep those fixes and their assertions:
 | Owner topology | Plaque cards open on the real click contract (`18811673d`) and camera readiness gates pointer input. |
 | Lighthouse lamps | Hold overflow catalogue responses explicitly; visible and overflow lanes settle independently (`fe80db7a6`). |
 | Windows Board after-commit | Reap the child after stdio close before reopening/removing its tree (`740a1dfa3`); the crash marker remains the actual commit boundary. |
-| Behavioral timeout | Core controls have a dedicated shard, bounded parallel faults and reused checker sessions (`fe80db7a6`); complete verification remains mandatory, with one in-job retry of a failed test step. |
+| Behavioral timeout | Core controls have a dedicated shard, bounded parallel faults and reused checker sessions (`fe80db7a6`); complete verification remains mandatory, with one in-job retry per failed file/case (models never retry). |
 | Core/Codex listing | Disable pinned Codex startup updates in the transparent recorder, including cached-update controls (`efddfb837`); every launched identity must still appear in World and CLI. |
 
 Local targeted runs cover the browser cases, fixture/recorder regressions and
@@ -98,28 +249,29 @@ explicit consumers. Model-backed owners select behavioral verification;
 model-free owners retain affected tests and inventory checks. World runtime
 changes select production/concurrent context suites. Non-browser and web test
 inventories are disjoint; browser shards retain the pinned Chrome and existing
-isolation rules. Each failed test step retries once; timing gates remain separate. See the nightly
+isolation rules. Only failed unit files or browser cases retry once; models never retry and timing gates remain separate. See the nightly
 latency signal for measured input delays.
 
-Three verification runners partition the complete accepted model inventory by
-longest-first measured work (`scripts/verification-timings.json`). Both tables
-name their source CI run; update weights from retained JUnit/manifest durations
-when rebalancing, with each original case/model retained exactly once. Weights
-are planning estimates, not timing assertions; new model inputs require a weight.
-Changes to the shared assignment algorithm or model weights run verification. Each
-runs the maintained focused workers inside the enforced 4 GiB/no-swap/two-CPU
-envelope with the existing OOM/cancellation and diagnostic controls. The
+The maintained plan (`scripts/ci-model-plan.ts`) gives each model its own job;
+IDE lifecycle has four jobs and core runtime has three. Every original check,
+replay, witness, production control and sensitivity case remains required.
+Each model CI job uses four TLC workers inside an enforced 4 GiB/no-swap/four-CPU
+envelope, with the existing OOM/cancellation and diagnostic controls. The
 payload and supervisor occupy separate delegated cgroups: the memory limit and
 peak cover the whole payload, while the surviving supervisor retains accounting
 after payload-wide OOM kills. The service-wide CPU quota covers both siblings.
 Shard artifacts cannot establish canonical success. The aggregate downloads all group
 artifacts, selects each newest attempt, requires complete model coverage and
 current source/tool identity, and verifies every group's retained accounting.
-It publishes one canonical manifest including the three resource records. The
+It publishes one canonical manifest including every resource record and requires
+every expected part before combining a split model. The
 single-machine canonical gate is unchanged and still rejects filters.
-The long core runtime model owns a dedicated shard. Its independent fault controls
-run two at a time within that shard's existing resource envelope. Each worker
-reuses its owned checker sequentially, avoiding a JVM startup for each fault.
+IDE lifecycle separates replay from three exhaustive groups containing the default,
+deep and eight flag checks. Core runtime separates positive replay/sensitivity
+from two exhaustive fault-control groups. Observation base and space admission
+each own a job; space admission runs independent exhaustive verification alongside
+sampling. Each control worker reuses its owned checker sequentially, avoiding a
+JVM startup for each check.
 Each command retains its 240-second deadline; the session shares the existing
 outer worker deadline, memory cap and cancellation/drain. A checker failure
 ends the worker instead of relaunching a failed check. Every model fault, trace
@@ -182,12 +334,30 @@ all four suites, paired over two quiet runners with a fresh quiet check before
 each suite. This reduces that workflow from five jobs to three; queue delays
 remain visible in health reports.
 
-`Repository validation`, `Web browser tests`, `Behavioral
-verification`, `Delivery checks` and both macOS report names remain. Leaf jobs
-report their check results immediately on completion; aggregate jobs require
-success from all applicable leaves. No crew automation or branch protection is
-changed. Actual elapsed CI times come from workflow runs, rather than from a
-claimed bound on shared hosted runners.
+PR CI reports `Validation scope`, `PR description`, the static, dependency,
+unit, World browser, web browser and model leaves, and `Delivery checks`.
+Leaf jobs report their check results immediately on completion; Delivery
+requires success from all applicable leaves. Advisory macOS reports remain in
+their own workflows. No crew automation or branch protection is changed.
+Actual elapsed CI times come from workflow runs, rather than from a claimed
+bound on shared hosted runners.
+
+Open **Actions → CI → a run → Summary → Delivery checks → Run timings** to see
+the observed critical path, the last-completing dependency at each workflow
+join, the longest execution, and each job's execution and runner wait. Reusable
+workflows show their last leaf at the join. The read-only report runs after
+successful, failed, held or reused validation and never changes a check verdict.
+It reads only the current run attempt; on partial reruns it does not silently
+mix earlier attempts' jobs into the table. Elapsed time starts at the run's
+original `created_at`, including any delay before a rerun.
+
+Runner wait is job `created_at` → `started_at`, excluding dependency waits before
+the job enters GitHub's queue. The sum can exceed wall time because jobs wait in
+parallel. Skipped jobs are excluded; missing timestamps or API failures are
+reported as unavailable. Delivery is still running while it writes the summary,
+so run `created_at` → report time is a lower bound. For acceptance measurements,
+use the completed job's `completed_at` from the Actions API; downstream preview
+jobs and the workflow's later `updated_at` do not extend Delivery check time.
 
 The size ratchet evaluates the proposed merge into the target against main's
 ratchet policy. A branch behind main inherits main's lowered ceilings, while a
@@ -214,17 +384,17 @@ run before push; affected browser suites and applicable complete model groups
 run in CI. Gate/configuration and unknown inputs still select everything. The
 budgets are targets: two minutes before push, eight minutes median PR feedback
 and about ten jobs for web-only work. Native-sensitive changes retain their full
-platform assertions and can exceed that target. Main executes everything fresh.
+platform assertions and can exceed that target. Main model warming executes fresh checks.
 
-`scripts/ci-content-key.ts` walks the maintained import graph from the runner or
-compiled application entries, including the standalone storage worker. Explicit
-inventories bind models, adapters, seeds, tooling/locks, workflow commands,
-packaged public assets and notices. Newly imported production dependencies and
-new inventory files enter the hash automatically. Unresolved relative imports
-widen to every tracked byte. The shared model runner imports all adapters, so its
-closure is deliberately conservative; this is not a manually maintained list of
-production owners. Group membership, actual Bun/Node/Java identities, OS and
-architecture also enter each model key.
+Model keys (`scripts/ci-model-inputs.ts`, `scripts/ci-model-cache.ts`) follow the
+selected model, its Quint imports, adapters, shared runners/helpers, transitive
+production replay inputs, seeds and locked tools. Runtime dispatch selects that
+model's adapter branches; another model's source and unrelated workflows do not
+enter its key. Missing imports refuse reusable evidence. Actual Bun/Node/Java
+identities, OS, architecture and check-part identity enter each model key.
+Installer keys retain `scripts/ci-content-key.ts`'s production entry/worker,
+workflow, packaged asset and notice closure, widening unresolved imports to
+every tracked byte. Neither key omits newly imported production dependencies.
 
 On a PR, an exact model-cache hit is validated against current fingerprints,
 canonical group membership, complete original manifests, current tools and the
@@ -239,7 +409,7 @@ content hash and origin run/revision for each group. Reuse does not claim a new
 execution at the current revision. The checker cache is separate. Main, nightly
 and release events never restore model results. GitHub cache visibility still
 applies: default-branch evidence is available to PRs; unrelated branch-local
-caches are not a global trusted store. A miss always executes.
+caches are not a global trusted store. Only successful main-push model jobs save reusable evidence. A miss always executes.
 
 Installer package keys bind the same production input graph plus platform,
 runner-image version and frozen stable baseline. The synthetic RC build number

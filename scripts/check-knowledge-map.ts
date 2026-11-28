@@ -55,8 +55,43 @@ export function assessKnowledgeMapImpact(
   return { ok: uncovered.length === 0, uncovered };
 }
 
-/** Feature contracts are deltas; only archive-only PRs synchronize current specs. */
-export function assessSpecEdits(paths: readonly string[]): string[] {
+/** Only move an overlong body's exact words into one new scenario; retain all else. */
+function losslessShortening(before: string, after: string): boolean {
+  const old = before.split(/^### Requirement: /m);
+  const next = after.split(/^### Requirement: /m);
+  if (old.length !== next.length || old[0] !== next[0]) return false;
+  const words = (text: string) => text.trim().split(/\s+/).join(" ");
+  return old.slice(1).every((block, index) => {
+    const changed = next[index + 1]!;
+    if (block === changed) return true;
+    const start = block.indexOf("\n#### Scenario: ");
+    const end = changed.indexOf("\n#### Scenario: ");
+    if (start < 0 || end < 0) return false;
+    const title = block.slice(0, block.indexOf("\n"));
+    if (changed.slice(0, changed.indexOf("\n")) !== title) return false;
+    const body = block.slice(title.length, start).trim();
+    const shortened = changed.slice(title.length, end).trim();
+    if (body.length <= 500 || !shortened || shortened.length > 500)
+      return false;
+    const scenarios = block.slice(start).trim();
+    const replacement = changed.slice(end).trim();
+    if (!replacement.endsWith(scenarios)) return false;
+    const added = replacement.slice(0, -scenarios.length).trim();
+    const detail =
+      /^#### Scenario: [^\n]+\n\n- \*\*WHEN\*\* [^\n]+\n- \*\*THEN\*\*(?:[ \t]+|\n)([\s\S]+)$/.exec(
+        added,
+      )?.[1];
+    return (
+      detail !== undefined && words(`${shortened} ${detail}`) === words(body)
+    );
+  });
+}
+
+/** Feature contracts are deltas; archives and lossless length repairs are exceptions. */
+export function assessSpecEdits(
+  paths: readonly string[],
+  readSpec?: (path: string) => readonly [string, string] | undefined,
+): string[] {
   const direct = paths.filter((p) => /^openspec\/specs\/.+\/spec\.md$/.test(p));
   const archiveOnly =
     paths.some((p) => p.startsWith("openspec/changes/archive/")) &&
@@ -65,9 +100,15 @@ export function assessSpecEdits(paths: readonly string[]): string[] {
         p.startsWith("openspec/changes/") ||
         /^openspec\/specs\/.+\/(spec|notes)\.md$/.test(p),
     );
-  return direct.length && !archiveOnly
+  const invalid = archiveOnly
+    ? []
+    : direct.filter((path) => {
+        const versions = readSpec?.(path);
+        return !versions || !losslessShortening(...versions);
+      });
+  return invalid.length
     ? [
-        `Put contract edits in openspec/changes/<slug>/specs/; current specs synchronize in the archive PR: ${direct.join(", ")}`,
+        `Put contract edits in openspec/changes/<slug>/specs/; current specs synchronize in the archive PR: ${invalid.join(", ")}`,
       ]
     : [];
 }

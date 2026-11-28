@@ -1,4 +1,5 @@
 import { createHash } from "node:crypto";
+import { withAgentInput } from "../adapters/agent-input";
 import { posix, win32 } from "node:path";
 import type {
   AssistantAction,
@@ -975,12 +976,14 @@ export async function prepareAssistantAction(args: {
             throw new Error("Pane occupant changed");
           let result: unknown;
           try {
-            result = await dispatch((beforeSend) =>
-              runtime.tui.call(
-                "agent.prompt",
-                { target: paneId, text: prompt },
-                5000,
-                beforeSend,
+            result = await withAgentInput(frozen.agent, () =>
+              dispatch((beforeSend) =>
+                runtime.tui.call(
+                  "agent.prompt",
+                  { target: paneId, text: prompt },
+                  5000,
+                  beforeSend,
+                ),
               ),
             );
           } catch (error) {

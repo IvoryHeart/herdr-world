@@ -1,3 +1,4 @@
+import { withAgentInput, agentInputFailure } from "../adapters/agent-input";
 import { AGENT_KIND, agentNameFor } from "../../../shared/agentProfile";
 
 /**
@@ -228,10 +229,12 @@ export async function launchAgent(
         if (!text) return { status: "started", ...created() };
         if (!request.isCurrent()) return stale();
         try {
-          const sent = await call("agent.prompt", {
-            target: created().pane_id,
-            text,
-          });
+          const sent = await withAgentInput(agent, () =>
+            call("agent.prompt", {
+              target: created().pane_id,
+              text,
+            }),
+          );
           if (
             isRecord(sent) &&
             isRecord(sent.agent) &&
@@ -244,6 +247,13 @@ export async function launchAgent(
             ...created(),
           };
         } catch (error) {
+          const admission = agentInputFailure(error);
+          if (admission)
+            return {
+              status: "failed",
+              message: admission.message,
+              ...created(),
+            };
           return {
             status: "uncertain",
             message: `The prompt may not have been sent: ${message(error)}`,

@@ -1,3 +1,13 @@
+import {
+  requestTerminalComposer,
+  takeTerminalComposerRequest,
+  terminalComposerRequestKey,
+} from "./terminalComposerRequest";
+import {
+  readTerminalComposerDraft,
+  clearTerminalComposerDraft,
+} from "../terminalComposer";
+import { CoreTerminalComposer } from "./CoreTerminalComposer";
 import { useDrawReadiness } from "./useDrawReadiness";
 import { useRef, useState } from "react";
 import { createRoot } from "react-dom/client";
@@ -49,7 +59,7 @@ const notice = (
       state === "uncertain"
         ? "Service restarted before a submission receipt."
         : state === "refused"
-          ? `${name}'s session changed after it asked, so World didn't send your answer.`
+          ? "The agent isn't running in that terminal any more; it's a shell now. Nothing was sent."
           : "Waiting for Studio to reconnect.",
   },
   can_resend: state === "uncertain",
@@ -150,6 +160,10 @@ function Fixture() {
       recipient={(entry) => ({
         name: entry.ask.actor.label,
         location: "Studio · Lantern",
+        terminal: {
+          nodeId: "leaf-beacon",
+          target: { connectionId: "studio", generation: 3, paneId: "w1:p1" },
+        },
         target: {
           name: entry.ask.actor.label,
           key: `agent-${entry.ask.actor.label}`,
@@ -157,6 +171,13 @@ function Fixture() {
         },
       })}
       open={(target) => opens.push(target.key!)}
+      compose={(notice) => {
+        requestTerminalComposer(
+          { connectionId: "studio", generation: 3, paneId: "w1:p1" },
+          notice.ask.answer?.text,
+        );
+        opens.push("terminal-composer");
+      }}
     />
   );
   return (
@@ -344,6 +365,98 @@ Object.assign(window, {
       "Not-sent answer cannot open its current agent",
     );
     check(calls.length === 0, "Opening agent replayed answer");
+    const refused = document.querySelector(
+      '[aria-label="Answer delivery to Beacon"]',
+    )!;
+    check(
+      refused.textContent!.includes(
+        "The agent isn't running in that terminal any more; it's a shell now",
+      ),
+      "Not sent hides why delivery stopped",
+    );
+    check(
+      refused.textContent!.includes("herdr-world ask get q-changed"),
+      "Full retrieval command missing",
+    );
+    let copied = "";
+    Object.defineProperty(navigator, "clipboard", {
+      configurable: true,
+      value: {
+        writeText: async (text: string) => {
+          copied = text;
+        },
+      },
+    });
+    const control = (label: string) =>
+      [...refused.querySelectorAll<HTMLButtonElement>("button")].find(
+        (entry) => entry.textContent === label,
+      )!;
+    control("Copy answer").click();
+    await frame();
+    check(
+      copied === original[2]!.ask.answer!.text,
+      "Copy answer lost the saved owner text",
+    );
+    const composerTarget = {
+      connectionId: "studio",
+      generation: 3,
+      paneId: "w1:p1",
+    };
+    const draftKey = terminalComposerRequestKey(composerTarget);
+    clearTerminalComposerDraft(draftKey);
+    control("Put in Terminal composer").click();
+    check(
+      opens[opens.length - 1] === "terminal-composer",
+      "Recovery did not open Terminal",
+    );
+    check(
+      takeTerminalComposerRequest({ ...composerTarget, generation: 4 }) ===
+        false,
+      "Recovery crossed a runtime generation",
+    );
+    check(
+      takeTerminalComposerRequest(composerTarget),
+      "Recovery did not request the qualified composer",
+    );
+    check(
+      readTerminalComposerDraft(draftKey) === original[2]!.ask.answer!.text,
+      "Recovery did not prepare the saved answer draft",
+    );
+    const host = document.createElement("div");
+    document.body.append(host);
+    const composerRoot = createRoot(host);
+    const typed: unknown[] = [];
+    composerRoot.render(
+      <CoreTerminalComposer
+        target={{ connectionId: "studio", generation: 3, address: "w1:p1" }}
+        type={async (data) => {
+          typed.push(data);
+        }}
+        terminal={{ current: null }}
+        onError={(message) => errors.push(message)}
+      />,
+    );
+    await frame();
+    requestTerminalComposer(composerTarget);
+    await frame();
+    const editor = host.querySelector<HTMLTextAreaElement>(
+      ".terminal-composer-input",
+    );
+    check(
+      editor?.value === original[2]!.ask.answer!.text,
+      "Core recovery lost the answer in its real editor",
+    );
+    check(
+      !!editor && editor.getBoundingClientRect().height > 0,
+      "Core recovery editor is hidden on desktop or phone",
+    );
+    check(typed.length === 0, "Opening the core composer typed input");
+    composerRoot.unmount();
+    host.remove();
+
+    check(calls.length === 0, "Owner recovery sent or replayed input");
+    clearTerminalComposerDraft(draftKey);
+
     button("Send again…").click();
     await frame();
     button("Send again").click();

@@ -1,3 +1,4 @@
+import { RUNTIME_GROUPING_SETTING_KEY } from "../../../shared/hostGrouping";
 import type { BridgeRpcContext } from "./context";
 
 /** Bridge-global methods: ping, status, assistant and pausing other clients. */
@@ -37,13 +38,17 @@ async function dispatchBridgeRpc(rpc: BridgeRpcContext): Promise<false | void> {
     method === "bridge.ui_settings.update"
   ) {
     try {
+      // An explicit "Group runtimes" choice is a World command, recorded in
+      // history; only the browser's one-time legacy offer comes this way.
+      if (
+        method === "bridge.ui_settings.update" &&
+        params?.key === RUNTIME_GROUPING_SETTING_KEY &&
+        params.only_if_absent !== true
+      )
+        throw new Error("Group runtimes changes through world.command");
       const result = await rpc.services.uiSettings(method, params ?? {});
-      if (method === "bridge.ui_settings.update") {
-        // Other browsers follow the change without reloading.
-        const line = JSON.stringify({ ui_settings: result });
-        for (const client of clients)
-          if (client !== ws) safeSend(client, line, "ui-settings");
-      }
+      // Every browser follows the change through the World publication.
+      if (method === "bridge.ui_settings.update") rpc.services.publishWorld?.();
       sendReply({ id, result }, "ui-settings");
     } catch (error) {
       sendError("ui-settings-error", error);

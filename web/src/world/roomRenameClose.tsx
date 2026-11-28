@@ -1,7 +1,8 @@
 /**
  * Renaming and closing a room (a Herdr workspace), shared by Town and Board:
  * the same dialogs, the same confirmation, and the same calls on the room's
- * own connection and the runtime generation it was observed in.
+ * own connection and the runtime generation it was observed in. A rename is
+ * a World command on either runtime (worldCommands.ts).
  */
 
 import { ConfirmDialog, TextInputDialog } from "../components/ModalDialogs";
@@ -11,8 +12,8 @@ import {
   closeCoreRoom,
   coreKillConfirmation,
   coreKillPlan,
-  renameCoreRoom,
 } from "./coreControl";
+import { renameRoomThroughWorld } from "./worldCommands";
 import { confirmCoreKill } from "./CoreKillConfirm";
 import { coreAlsoEndedText } from "../../../shared/coreKill";
 
@@ -51,25 +52,16 @@ export async function renameRoom(
 ) {
   const value = label.trim();
   if (!value || value === from) return;
+  const scene = sceneClient(room.connectionId);
+  if (!scene) {
+    await renameRoomThroughWorld(room, from, value);
+    return;
+  }
   try {
-    if (room.core) {
-      await renameCoreRoom(room, room.workspaceId, value);
-      return;
-    }
-    const scene = sceneClient(room.connectionId);
-    await (scene
-      ? scene.call("workspace.rename", {
-          workspace_id: room.workspaceId,
-          label: value,
-        })
-      : store.renameQualifiedWorkspace(
-          {
-            connectionId: room.connectionId,
-            runtimeGeneration: room.generation,
-          },
-          room.workspaceId,
-          value,
-        ));
+    await scene.call("workspace.rename", {
+      workspace_id: room.workspaceId,
+      label: value,
+    });
   } catch (cause) {
     reportFailure("Room rename", cause);
   }

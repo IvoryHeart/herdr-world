@@ -5,7 +5,7 @@ import { join } from "node:path";
 import { openWorldLedger } from "../../storage/world-storage";
 import { openWorldWriter } from "../../storage/world-writer";
 import { systemScheduler, type Scheduler } from "../../service/ports";
-import { handleDeskRpc } from "../../rpc/desk";
+import { handleDeskRpc } from "../../features/desk/rpc";
 import type { BridgeRpcContext } from "../../rpc/context";
 import { WorldDeskStore } from "../../../../web/src/world/deskStateStore";
 import {

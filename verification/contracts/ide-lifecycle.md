@@ -99,6 +99,10 @@ The `ide-lifecycle` case of `bun run verification:gate` runs these checks:
    - the old start epoch;
    - the old queue.
 
+Checks 1, 2 and 4 are independent. In CI the model owns a two-CPU shard and
+runs them two at a time, longest first; local runs keep one at a time. Every
+check, bound and expected result is the same either way.
+
 ## Counterexamples found and fixed
 
 The model found two faults in the first implementation. Each is kept as a

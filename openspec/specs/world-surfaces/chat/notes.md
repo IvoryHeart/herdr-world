@@ -11,6 +11,17 @@
 
 **Code:**
 
+- `web/src/components/TerminalComposer.css` (shared editor styles, including desktop answer recovery)
+- `web/src/world/terminalComposerRequest.ts`, `web/src/world/CoreTerminalComposer.tsx`
+
+- `server/src/adapters/agent-input.ts`
+- `server/src/adapters/herdr-runtime.ts`
+- `server/src/adapters/agent-input.test.ts`
+- `server/src/service/rpc-dispatch.ts`
+- `server/src/service/terminal-input.test.ts`
+- `web/src/terminalComposer.ts`
+- `web/src/terminalPaste.ts`
+
 - `web/src/attachmentUploads.ts`
 - `web/src/components/InspectorChat.tsx`
 - `web/src/components/TerminalComposer.tsx`
@@ -32,3 +43,5 @@
 - Folder trust uses its pre-session process witness; do not fabricate a session fingerprint.
 - Successful input is not a confirmed answer; preserve uncertain receipts.
 - CLI ask answers use the durable ask ledger, not Chat's native prompt keys.
+
+See [Foreground admission](../../ask-answer-delivery/notes.md#foreground-admission) for send checks, temporary failures, restarts and wrapper scripts. Explicit Terminal composer submissions, draft insertion and paste keep their existing terminal authority in shells and editors. Recovery from Outbox prepares a draft for the owner to review and send.

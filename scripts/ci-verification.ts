@@ -1,7 +1,7 @@
 import { readVerificationResources } from "./verification-resources";
 import assert from "node:assert/strict";
-import { balanceShards } from "./balance-shards";
-import timings from "./verification-timings.json";
+import { verificationJobs, verificationJob } from "./ci-model-plan";
+import { combineModelParts } from "./ci-model-parts";
 import { mkdir, readFile, readdir, writeFile } from "node:fs/promises";
 import { relative, resolve } from "node:path";
 import { randomUUID } from "node:crypto";
@@ -19,24 +19,11 @@ import {
 } from "./verification-process";
 import { publishVerificationEvidence } from "./verification-publication";
 import execution from "../tools/quint/execution.json";
-import limits from "../tools/quint/resources.json";
+import limits from "../tools/quint/model-resources.json";
 
-export const CI_VERIFICATION_SHARDS = 3;
+export const CI_VERIFICATION_SHARDS = verificationJobs.length;
 export function verificationShard(index: number): string[] {
-  assert(
-    Number.isInteger(index) && index >= 1 && index <= CI_VERIFICATION_SHARDS,
-    "Invalid verification shard",
-  );
-  // The core control pool owns two CPUs. Keep its isolation structural even
-  // after a faster timing refresh; balance all remaining models over two groups.
-  return [
-    ["herdr-core-runtime"],
-    ...balanceShards(
-      verificationModels.filter((model) => model !== "herdr-core-runtime"),
-      timings.seconds,
-      CI_VERIFICATION_SHARDS - 1,
-    ),
-  ][index - 1]!;
+  return [verificationJob(index).model];
 }
 
 type Case = {
@@ -114,11 +101,7 @@ export async function runVerificationShard(
   signal: AbortSignal,
 ) {
   const models = verificationShard(index);
-  const core = models.includes("herdr-core-runtime");
-  assert(
-    !core || models.length === 1,
-    "Parallel core controls require a dedicated shard",
-  );
+  const job = verificationJob(index);
   const identity = await source(root, signal);
   const output = resolve(
     root,
@@ -154,7 +137,9 @@ export async function runVerificationShard(
             graceMs: execution.workerGraceMs,
             env: {
               ...process.env,
-              HERDR_CORE_CONTROL_WORKERS: core ? "2" : "1",
+              HERDR_VERIFICATION_CONTROL_WORKERS: "1",
+              HERDR_VERIFICATION_MODEL_CI: "1",
+              HERDR_VERIFICATION_MODEL_PART: job.part,
             },
           },
         );
@@ -228,7 +213,13 @@ export async function aggregateCIShards(
     Number(process.env.GITHUB_RUN_ATTEMPT || 1),
   );
   const resourceRecords = await readVerificationResources(root);
-  const records = [];
+  const records: Array<{
+    model: string;
+    path: string;
+    elapsedMs: number;
+    manifest: VerificationManifest;
+    index: number;
+  }> = [];
   const accounting: unknown[] = [];
   const identity = await source(root, signal);
   for (const shard of selected) {
@@ -312,6 +303,7 @@ export async function aggregateCIShards(
       // binds today's complete inventory and explicitly records reuse above.
       records.push({
         ...record,
+        index: shard.index,
         manifest: reused
           ? {
               ...manifest,
@@ -324,7 +316,7 @@ export async function aggregateCIShards(
   }
   const manifest = await aggregateVerificationEvidence(
     root,
-    records,
+    await combineModelParts(root, records),
     verificationModels,
     execution.workers * CI_VERIFICATION_SHARDS,
   );
@@ -353,8 +345,9 @@ if (import.meta.main) {
   const args = process.argv.slice(2);
   assert(
     args.length === 1 &&
-      (args[0] === "aggregate" || /^[123]\/3$/.test(args[0]!)),
-    "Use ci-verification.ts i/3 | aggregate",
+      (args[0] === "aggregate" ||
+        new RegExp(`^([1-9][0-9]*)/${CI_VERIFICATION_SHARDS}$`).test(args[0]!)),
+    `Use ci-verification.ts i/${CI_VERIFICATION_SHARDS} | aggregate`,
   );
   const cancellation = new AbortController();
   const stop = () => cancellation.abort(new Error("CI verification cancelled"));
@@ -365,7 +358,7 @@ if (import.meta.main) {
     await (args[0] === "aggregate"
       ? aggregateCIShards
       : (root: string, signal: AbortSignal) =>
-          runVerificationShard(root, Number(args[0]![0]), signal))(
+          runVerificationShard(root, Number(args[0]!.split("/")[0]), signal))(
       resolve(import.meta.dir, ".."),
       cancellation.signal,
     );

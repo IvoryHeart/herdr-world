@@ -78,7 +78,8 @@
     and every desk, agent and action stays on its own runtime's connection.
     **Settings → This World → Group runtimes → One per runtime** gives each
     runtime its own building again (**One per machine** is the default); the
-    same setting groups World's navigator and Desk (`web/src/world/runtimeGrouping.ts`).
+    setting changes only Town's buildings: hosts stay machines in the navigator,
+    Desk, Board and the Hosts control (`shared/hostGrouping.ts`).
     Two Herdr TUI connections to the same socket (the startup default and a
     saved profile) show its rooms once, through the writable one.
   - The Town board counts the whole town, every building, in four one-word
@@ -967,6 +968,12 @@
 
 The overlay's initial 3D translation establishes its compositor layer before
 input moves it. The motion-only raster hint is removed at rest so text can
-rerasterize at the settled zoom. Frame acceptance records explicit gesture
-boundaries and still refuses presented missing content; two-CPU runs expose the
-first-pan promotion race without changing the assertions.
+rerasterize at the settled zoom. The frame budget
+(`web/src/world/town/TownFrameBudget.browser.test.ts`) records explicit gesture
+boundaries and counts each shown frame once, by its presentation time: Chrome
+reports some frames twice, adding a FORKED or STATE_PRESENTED_PARTIAL reporter
+for a main frame shown in them. When raster falls behind on two starved cores,
+the moving layer can show a frame before a tile it uncovered is drawn (#1384),
+so at most 1 in 20 shown frames per pan or zoom may have such a tile.
+Re-rasterizing the overlay while it moves, the pre-#1318 patchy drawing, fails
+the raster budget instead.

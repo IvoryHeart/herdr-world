@@ -20,6 +20,7 @@ import {
   type TerminalInputMode,
 } from "../terminalInputMode";
 import type { CoreWatchTarget } from "./coreInspectorTerminal";
+import { subscribeTerminalComposerRequest } from "./terminalComposerRequest";
 
 const PASTE_MARKERS = /\x1b\[20[01]~/g;
 
@@ -43,9 +44,21 @@ export function CoreTerminalComposer({
 }) {
   const { mobile } = useLayoutPreferences();
   const [mode, setMode] = useState<TerminalInputMode>(readTerminalInputMode);
+  const [requested, setRequested] = useState(false);
   const keyRows = useMemo(() => chatKeyRows(), []);
   const current = useRef(true);
   const { connectionId, generation, address } = target;
+  useEffect(
+    () =>
+      subscribeTerminalComposerRequest(
+        { connectionId, generation, paneId: address },
+        () => {
+          setRequested(true);
+          setMode("composer");
+        },
+      ),
+    [connectionId, generation, address],
+  );
   // The draft outlives this composer: the core connection's generation holds
   // its scope (useCoreTerminalDrafts), so closing, reopening or a lost stream
   // keep it.
@@ -63,7 +76,7 @@ export function CoreTerminalComposer({
     }),
     [connectionId, generation],
   );
-  if (!mobile) return null;
+  if (!mobile && !requested) return null;
   // sendTerminalComposerText's pane requests, typed instead: text, then Enter.
   const keyboard = {
     call: async (_method: string, params: Record<string, unknown> = {}) => {
@@ -83,6 +96,7 @@ export function CoreTerminalComposer({
   return (
     <div className="core-watch-composer">
       <TerminalComposer
+        open={mobile || requested}
         draftKey={terminalComposerDraftKey(connectionId, generation, address)}
         paneId={address}
         mode={mode}
@@ -110,7 +124,7 @@ export function CoreTerminalComposer({
           if (run.amount === "full") term.scrollPages(sign);
           else term.scrollLines(sign * Math.max(1, Math.floor(term.rows / 2)));
         }}
-        onClose={() => undefined}
+        onClose={() => setRequested(false)}
         onSubmit={(text, submit) =>
           sendTerminalComposerText(keyboard, address, text, submit)
         }

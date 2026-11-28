@@ -1,12 +1,12 @@
-import { type CliRuntime, currentRuntime } from "../cli/command";
+import { type CliRuntime, currentRuntime } from "../../cli/command";
 import {
   installWorldIntegration,
   isWorldHarness,
   uninstallWorldIntegration,
   worldIntegrationStatus,
-} from "../cli/integration";
-import { WORLD_HARNESSES } from "../cli/integration-paths";
-import type { BridgeRpcContext } from "./context";
+} from "../../cli/integration";
+import { WORLD_HARNESSES } from "../../cli/integration-paths";
+import type { FeatureRpcHandler } from "../contract";
 
 /**
  * World's own skill per harness on the service's host (world.integration.*).
@@ -14,12 +14,12 @@ import type { BridgeRpcContext } from "./context";
  * user's environment decides the folders, exactly as for the CLI.
  */
 export async function handleWorldIntegrationRpc(
-  rpc: BridgeRpcContext,
+  rpc: Parameters<FeatureRpcHandler>[0],
+  runtimeFor: () => CliRuntime = currentRuntime,
 ): Promise<void> {
   const { id, method, params, sendError, sendReply } = rpc;
   try {
-    const runtime: CliRuntime =
-      rpc.services.worldIntegrationRuntime?.() ?? currentRuntime();
+    const runtime = runtimeFor();
     if (method === "world.integration.list") {
       sendReply(
         {

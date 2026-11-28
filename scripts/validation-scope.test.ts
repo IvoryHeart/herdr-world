@@ -22,6 +22,57 @@ import {
   webBrowserSuites,
 } from "./world-browser-suites";
 import { ciTestBatches, selectedCITests } from "./ci-tests";
+import { goldenInputsChanged } from "./ci-golden-scope";
+
+test("tracked snapshot, golden and help assets retain their check without selecting runtime journeys", () => {
+  const { tracked } = gitChanges(process.cwd(), "HEAD");
+  const assets = buildGraph(process.cwd(), tracked);
+  const snapshot = "server/src/cli/__snapshots__/world.test.ts.snap";
+  const snapshots = selectValidation(assets, [snapshot]);
+  expect(snapshots).toMatchObject({
+    full: false,
+    world: [],
+    web: [],
+    verification: false,
+  });
+  expect(snapshots.unit).toContain("server/src/cli/world.test.ts");
+  const goldens = tracked.filter((path) =>
+    /^web\/src\/world\/testing\/town-golden\/images\/.*\.png$/.test(path),
+  );
+  expect(goldens.length).toBeGreaterThan(0);
+  const golden = selectValidation(assets, goldens);
+  expect(golden).toMatchObject({
+    full: false,
+    world: [],
+    web: [],
+    verification: false,
+  });
+  for (const path of goldens)
+    expect(goldenInputsChanged(assets, [path])).toBe(true);
+  const help = tracked.filter(
+    (path) => path.startsWith("web/public/help/") && path.endsWith(".webp"),
+  );
+  expect(help.length).toBeGreaterThan(0);
+  const pictures = selectValidation(assets, [
+    ...help,
+    "web/src/help/pictures.json",
+  ]);
+  expect(pictures).toMatchObject({
+    full: false,
+    world: [],
+    web: [],
+    verification: false,
+  });
+  expect(pictures.unit).toContain("scripts/help-check.test.ts");
+  // No image-shaped allowlist can cover an unrelated unknown input.
+  const unknown = "web/public/unknown.png";
+  expect(
+    selectValidation(
+      { ...assets, files: new Set([...assets.files, unknown]) },
+      [goldens[0]!, unknown],
+    ).full,
+  ).toBe(true);
+});
 
 test("only the explicit agent tooling paths qualify", () => {
   const allowed = [
@@ -307,11 +358,31 @@ test("the CI runner executes only its selected lane and rejects invalid selector
 test("CI unit and web partitions are disjoint and exhaustive", () => {
   const selection = selectValidation(graph, ["package.json"]);
   for (const lane of ["unit", "web"] as const) {
-    const first = selectedCITests(selection, lane, "1/2");
-    const second = selectedCITests(selection, lane, "2/2");
-    expect([...first, ...second].sort()).toEqual([...selection[lane]].sort());
-    expect(first.some((path) => second.includes(path))).toBe(false);
-    expect(() => selectedCITests(selection, lane, "3/2")).toThrow();
+    const count = lane === "unit" ? 4 : 2;
+    const files = Array.from({ length: count }, (_, index) =>
+      selectedCITests(selection, lane, `${index + 1}/${count}`),
+    ).flat();
+    expect(files.sort()).toEqual([...selection[lane]].sort());
+    expect(new Set(files).size).toBe(files.length);
+    expect(() =>
+      selectedCITests(selection, lane, `${count + 1}/${count}`),
+    ).toThrow();
+  }
+});
+
+test("unit scheduling and timing inputs always select full validation", () => {
+  for (const path of [
+    "scripts/ci-unit-shards.ts",
+    "scripts/ci-unit-timings.ts",
+    "scripts/ci-unit-timings.json",
+    "scripts/ci-unit-comparison.ts",
+  ]) {
+    const selection = selectValidation(
+      { ...graph, files: new Set([...graph.files, path]) },
+      [path],
+    );
+    expect(selection.full).toBe(true);
+    expect(selection.unit).toContain(unit);
   }
 });
 
@@ -656,12 +727,24 @@ if (process.argv.includes("--parallel=${failingBatch === "isolated" ? 1 : 2}") &
       for (let pass = 1; pass <= runs; pass++) {
         const prefix = `shard-5-of-6${runs > 1 ? `-pass-${pass}` : ""}`;
         expected.push({
-          args: [selection.world[0], "--parallel=1", "--max-concurrency=1"],
+          args: [
+            selection.world[0],
+            "--parallel=1",
+            "--max-concurrency=1",
+            "--retry-flaky=browser",
+            `--flake-report=.agents/delivery/flakes-world-all-${pass}-1-${process.env.GITHUB_RUN_ATTEMPT || "local"}.json`,
+          ],
           label: `${prefix}-isolated`,
         });
         if (pass === failingPass && failingBatch === "isolated") break;
         expected.push({
-          args: [selection.world[1], "--parallel=2", "--max-concurrency=1"],
+          args: [
+            selection.world[1],
+            "--parallel=2",
+            "--max-concurrency=1",
+            "--retry-flaky=browser",
+            `--flake-report=.agents/delivery/flakes-world-all-${pass}-2-${process.env.GITHUB_RUN_ATTEMPT || "local"}.json`,
+          ],
           label: `${prefix}-parallel`,
         });
         if (pass === failingPass) break;
@@ -696,3 +779,99 @@ test("area files and shared metadata select the inventory check and preserve mod
     }
   }
 });
+
+test.each(["unit", "world", "web"])(
+  "an empty %s CI shard retains empty evidence and starts no test process",
+  (lane) => {
+    const root = mkdtempSync(join(tmpdir(), "ci-empty-shard-"));
+    try {
+      const child = Bun.spawnSync(
+        [
+          process.execPath,
+          join(import.meta.dir, "ci-tests.ts"),
+          lane,
+          lane === "world" ? "1" : lane === "unit" ? "1/4" : "1/2",
+        ],
+        {
+          cwd: root,
+          env: {
+            ...process.env,
+            HERDR_CI_SELECTION: JSON.stringify({
+              unit: [],
+              world: [],
+              web: [],
+            }),
+          },
+          stdout: "pipe",
+          stderr: "pipe",
+        },
+      );
+      expect(child.exitCode).toBe(0);
+      expect(child.stderr.toString()).toBe("");
+      expect(child.stdout.toString()).toContain("no affected suites");
+      const file =
+        lane === "world" ? "1" : lane === "unit" ? "1-of-4" : "1-of-2";
+      const report = join(
+        root,
+        `.agents/delivery/flakes-${lane}-${file}-empty-${process.env.GITHUB_RUN_ATTEMPT || "local"}.json`,
+      );
+      expect(JSON.parse(readFileSync(report, "utf8"))).toEqual({
+        files: [],
+        flaky: [],
+      });
+    } finally {
+      rmSync(root, { recursive: true, force: true });
+    }
+  },
+);
+
+test.each(["unit", "web"])(
+  "%s CI reports preserve the workflow upload path and opt into scoped retry",
+  (lane) => {
+    const root = mkdtempSync(join(tmpdir(), "ci-report-path-"));
+    try {
+      mkdirSync(join(root, "scripts"));
+      writeFileSync(
+        join(root, "scripts/run-tests.ts"),
+        'await Bun.write("args.json", JSON.stringify(process.argv.slice(2)));',
+      );
+      const selection = {
+        unit: ["scripts/example.test.ts"],
+        web: ["web/src/Example.browser.test.ts"],
+        world: [],
+      };
+      const child = Bun.spawnSync(
+        [
+          process.execPath,
+          join(import.meta.dir, "ci-tests.ts"),
+          lane,
+          lane === "unit" ? "1/4" : "1/2",
+        ],
+        {
+          cwd: root,
+          env: {
+            ...process.env,
+            HERDR_CI_SELECTION: JSON.stringify(selection),
+          },
+          stdout: "pipe",
+          stderr: "pipe",
+        },
+      );
+      expect(child.exitCode).toBe(0);
+      expect(child.stderr.toString()).toBe("");
+      const args = JSON.parse(readFileSync(join(root, "args.json"), "utf8"));
+      expect(args).toContain(
+        `--reporter-outfile=.agents/delivery/${lane === "web" ? "web-browser-1-of-2" : "unit-1-of-4"}.xml`,
+      );
+      expect(args).toContain(
+        `--retry-flaky=${lane === "unit" ? "unit" : "browser"}`,
+      );
+      expect(args).toContain(`--parallel=${lane === "unit" ? 4 : 2}`);
+      expect(args).toContain("--max-concurrency=2");
+      if (lane === "unit")
+        expect(args).toContain("--timings=scripts/ci-unit-timings.json");
+    } finally {
+      rmSync(root, { recursive: true, force: true });
+    }
+  },
+);

@@ -44,24 +44,33 @@ frame.onload = async () => {
 };
 </script></body>`;
 
+// Town's art, built once for both runs.
+let townArt: Promise<{ success: boolean; text: string }> | undefined;
+const buildTownArt = () =>
+  (townArt ??= Bun.build({
+    entrypoints: [join(film, "town-art.ts")],
+    format: "iife",
+    target: "browser",
+  }).then(async (build) => ({
+    success: build.success,
+    text: build.success ? await build.outputs[0]!.text() : "",
+  })));
+
+// Each run has its own server, browser and profile, so both run side by side.
 for (const [query, motion] of [
   ["render", "full motion"],
   ["embed&live", "reduced motion"],
 ] as const) {
-  test.skipIf(!chrome)(
+  test.concurrent.skipIf(!chrome)(
     `the website film renders every frame with Town's art (?${query}, ${motion})`,
     async () => {
       const dir = await mkdtemp(join(tmpdir(), "pages-film-test-"));
       const { promise, resolve } = Promise.withResolvers<unknown>();
       let child: ReturnType<typeof Bun.spawn> | undefined;
       let timer: ReturnType<typeof setTimeout> | undefined;
-      const build = await Bun.build({
-        entrypoints: [join(film, "town-art.ts")],
-        format: "iife",
-        target: "browser",
-      });
-      expect(build.success).toBe(true);
-      const townArt = await build.outputs[0]!.text();
+      const built = await buildTownArt();
+      expect(built.success).toBe(true);
+      const art = built.text;
       const server = Bun.serve({
         hostname: "127.0.0.1",
         port: 0,
@@ -76,7 +85,7 @@ for (const [query, motion] of [
               headers: { "Content-Type": "text/html" },
             });
           if (path === "/film/town-art.js")
-            return new Response(townArt, {
+            return new Response(art, {
               headers: { "Content-Type": "text/javascript" },
             });
           if (path === "/film/")

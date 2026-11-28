@@ -111,5 +111,10 @@ export function createWorldAskPeers(deps: {
     stop() {
       peers?.stop();
     },
+    /** Settles after `count` more sibling reads; see `AskPeers.afterReads`. */
+    afterReads: (count = 1) =>
+      peers
+        ? peers.afterReads(count)
+        : Promise.reject(new Error("not started")),
   };
 }

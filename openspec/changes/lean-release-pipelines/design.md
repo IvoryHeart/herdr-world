@@ -3,7 +3,17 @@
 Use release-please's standard simple strategy and generic annotated TOML updater,
 in PR-only mode. Squash-merged fix/feat titles replace fragments. The owner tags
 before the next release-please run. GITHUB_TOKEN-created PR checks are dispatched
-automatically using the action output.
+automatically by resolving its same-repository standard manifest PR branch.
+The pinned release-please CLI's `release-pr` command preserves PR-only mode and
+passes a dispatched `release_as` through `--release-as` in manifest mode. The v4
+action reads that input but drops it in its manifest loader. Validate explicit
+versions with the publication version pattern before invoking the CLI; omit the
+flag for scheduled/default runs. Keep overrides ephemeral and configure the
+package with release-please's `versioning: "always-bump-patch"`: every release
+bumps the patch by default regardless of the fix/feat mix; minor and major
+versions require an explicit `release_as`. Direct workflow/config subprocess
+tests and upstream dry runs check version selection; the real tag-plan fixture
+checks RC promotion.
 After all channels publish, the tag workflow completes release-please's label
 lifecycle on the single merged release PR whose merge commit equals the validated
 tag commit. Pending and already-tagged labels permit an interrupted relabel to
@@ -23,7 +33,9 @@ Use softprops for GitHub assets, npm publish --provenance for tarballs and misla
 for the tap proposal. Mislav updates only the first URL. Our existing product
 Formula generator owns all four platform URLs and the launcher; the standard
 create-pull-request action completes mislav's same branch with those tested inputs
-and the tap's own install check. Find/reuse an existing proposal before invoking
+and the tap's own install check. Only `homebrew-pr` uses the tag-only `release`
+environment, where `HOMEBREW_TAP_TOKEN` lives; npm keeps OIDC trusted publishing
+without an environment. Find/reuse an existing proposal before invoking
 mislav; serialized release runs prevent duplicate proposals. Compare existing
 GitHub bytes/npm integrity before skipping them.
 Explicit job status conditions keep downstream publication running when a full
@@ -32,7 +44,24 @@ accepts only that intentional skip, requiring every publisher and label job to
 succeed.
 
 Linux PR jobs retry failed test steps once within the job. Main reports immutable
-PR proof without running heavy jobs; absence stays visible in the main-red issue.
+PR proof; absence stays visible in the main-red issue. An independent main-only
+job warms per-model evidence caches for PRs. Its model jobs use four TLC workers
+and a 400% CPU quota (owner approval, 2026-11-26); other lanes and the local
+resource command retain their existing envelope. Each model has its own content
+closure and exact tool identity. IDE lifecycle splits into replay plus three
+exhaustive check jobs, core runtime into replay plus two fault-control jobs, and
+other models each have a job. Space admission overlaps independent exhaustive
+verification and sampling. Partial scopes never substitute for canonical evidence;
+Delivery requires every expected part, complete origin receipts and resource proof.
+Only main saves caches; PRs validate them before tool installation, and misses
+run the affected checks. Queue, nightly and release model execution stays fresh.
+Merge-group checks run the existing Linux graph with a full selection on the
+queue commit. The non-PR selector never queries PR reuse for a merge group;
+the required aggregate keeps the exact `Delivery checks` name. Checkout uses
+the event SHA and static ratchets use the queue base SHA. Only CI subscribes
+directly; reusable browser/behavioral workflows stay in its graph and side
+workflows retain their existing triggers. GitHub owns approval, queue ordering,
+rebuilding groups and merging; repository settings stay with the owner.
 Nightly provides native/storage/plugin and running upgrade signal without a gate.
 Keep stable Homebrew opt registration and owned-service migration before cleanup.
 

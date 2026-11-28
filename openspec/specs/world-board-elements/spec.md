@@ -48,18 +48,23 @@ issue targets without fetching or executing embeds or forge actions.
 ### Requirement: Exact runtime authority and private bounded reads
 
 Every project read SHALL use the saved immutable connection ID and an explicitly
-supplied current generation through the shared TUI/core Files seam. Offline,
-retired or stale sources SHALL NOT fall back to another host or cached topology.
-Results SHALL be discarded if the request, element or runtime changes in flight.
-Sources SHALL stay project-relative, including symlink checks, and replies SHALL
-omit absolute roots and filesystem error details. Board SHALL NOT cache source
-content or send it to an agent automatically.
+supplied current generation through the shared TUI/core Files seam.
 
-World SHALL bound elements to 500, inline text to 16,000 characters, source text
-to 64 KiB, directory listings to 32 entries and simultaneous source reads to
-eight. Existing Board/document/writer bounds SHALL continue to apply. Missing,
-binary, unsupported, stale and busy sources SHALL have explicit refusal or
-unavailable results. Truncation SHALL be explicit and preserve UTF-8 boundaries.
+#### Scenario: Project read fencing and limits
+
+- **WHEN** World reads a Board element's project source
+- **THEN** Offline,
+  retired or stale sources SHALL NOT fall back to another host or cached topology.
+  Results SHALL be discarded if the request, element or runtime changes in flight.
+  Sources SHALL stay project-relative, including symlink checks, and replies SHALL
+  omit absolute roots and filesystem error details. Board SHALL NOT cache source
+  content or send it to an agent automatically.
+
+  World SHALL bound elements to 500, inline text to 16,000 characters, source text
+  to 64 KiB, directory listings to 32 entries and simultaneous source reads to
+  eight. Existing Board/document/writer bounds SHALL continue to apply. Missing,
+  binary, unsupported, stale and busy sources SHALL have explicit refusal or
+  unavailable results. Truncation SHALL be explicit and preserve UTF-8 boundaries.
 
 #### Scenario: Reconnection during a source read
 - **WHEN** a named generation retires before its read completes

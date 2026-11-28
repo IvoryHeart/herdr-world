@@ -8,7 +8,29 @@ import { worldCliToken } from "../config/session-secret";
 import { readJsonBody } from "./json-body";
 import { renderLoginPage } from "./login-page";
 
-const AUTH_COOKIE = "herdr_world_auth";
+/**
+ * Before #1250 every World used this one name. Browsers share cookies across
+ * ports of a host, so Worlds on one host logged each other out; a session
+ * this World signed under it still counts once and moves to the new name.
+ */
+const LEGACY_AUTH_COOKIE = "herdr_world_auth";
+const AUTH_COOKIE_PREFIX = `${LEGACY_AUTH_COOKIE}_`;
+/** Versioned and NUL-terminated like the credential fingerprint's label. */
+const AUTH_COOKIE_ID_LABEL = "herdr-world:session-cookie-name:v1\0";
+/**
+ * Other Worlds' live session cookies a browser keeps on one host. Every
+ * fresh preview has its own secret and so its own cookie; without a bound
+ * they would pile up for their lifetime until request headers outgrow the
+ * server's limit (Bun answers 431 at about 16 KB, some 80 cookies). One is
+ * about 210 bytes, so 48 stay near 10 KB: the bound only bites for a
+ * browser that has held dozens of Worlds within a month, never for the few
+ * a person switches between.
+ */
+const OTHER_WORLD_COOKIES_KEPT = 48;
+const HOUR_SECONDS = 60 * 60;
+/** Longest return path a login carries; longer ones land on `/`. */
+const RETURN_PATH_MAX_LENGTH = 2048;
+const RETURN_PATH_BASE = "http://world.invalid";
 const AUTH_TOKEN_TTL_SECONDS = 30 * 24 * 60 * 60;
 const LOGIN_WINDOW_MS = 60_000;
 const LOGIN_MAX_ATTEMPTS = 20;
@@ -41,6 +63,124 @@ function base64UrlDecode(value: string) {
     padded.replace(/-/g, "+").replace(/_/g, "/"),
     "base64",
   ).toString("utf8");
+}
+
+/**
+ * The session cookie name of the World with this signing secret. Cookies
+ * are scoped to a host but not to its port, so each World names its own: a
+ * short digest of its secret, stable across restarts and ports, that tells
+ * nothing about the secret itself.
+ */
+function authCookieName(sessionSecret: string): string {
+  const id = createHmac("sha256", Buffer.from(sessionSecret, "hex"))
+    .update(AUTH_COOKIE_ID_LABEL)
+    .digest("hex")
+    .slice(0, 12);
+  return `${AUTH_COOKIE_PREFIX}${id}`;
+}
+
+function thisHour(): number {
+  return Math.floor(Date.now() / 1000 / HOUR_SECONDS);
+}
+
+/**
+ * A World session cookie's value: the signed token, then the hour this
+ * World last set it (`<token>.h<hour>`), which only orders pruning and is
+ * not signed. The legacy cookie holds the bare token.
+ */
+function readCookieValue(value: string): { token: string; seenHour?: number } {
+  const parts = value.split(".");
+  const seen = parts[2]?.match(/^h(\d{1,9})$/);
+  return parts.length === 3 && seen
+    ? { token: `${parts[0]}.${parts[1]}`, seenHour: Number(seen[1]) }
+    : { token: value };
+}
+
+/**
+ * Another World's cookie as pruning sees it: the hour it was last set (else
+ * its token's issue hour), and whether it can still sign anyone in. Only
+ * the unsigned payload is readable here, so a cookie whose payload is not
+ * a World token's, or whose expiry has passed, is dead for every World.
+ */
+function otherWorldCookie(value: string): { seenHour: number; live: boolean } {
+  const { token, seenHour } = readCookieValue(value);
+  try {
+    const { iat, exp } = JSON.parse(base64UrlDecode(token.split(".")[0]!)) as {
+      iat?: unknown;
+      exp?: unknown;
+    };
+    if (typeof iat !== "number" || typeof exp !== "number")
+      return { seenHour: -1, live: false };
+    return {
+      seenHour: seenHour ?? Math.floor(iat / HOUR_SECONDS),
+      live: exp > Date.now() / 1000,
+    };
+  } catch {
+    return { seenHour: -1, live: false };
+  }
+}
+
+/** Every World session cookie in a Cookie header, by name. */
+function worldCookies(header: string | null): Map<string, string> {
+  const cookies = new Map<string, string>();
+  for (const part of header?.split(";") ?? []) {
+    const separator = part.indexOf("=");
+    if (separator < 0) continue;
+    const key = part.slice(0, separator).trim();
+    if (key !== LEGACY_AUTH_COOKIE && !key.startsWith(AUTH_COOKIE_PREFIX))
+      continue;
+    if (!cookies.has(key)) cookies.set(key, part.slice(separator + 1).trim());
+  }
+  return cookies;
+}
+
+/**
+ * The same-origin path and query a login returns to, or null when `raw` is
+ * not one: only a relative path (no scheme, no `//`, no backslash, no
+ * control character), never the login page, and never with a `token`.
+ * @internal Exported for its open-redirect tests.
+ */
+export function safeReturnPath(raw: string | null): string | null {
+  if (
+    !raw ||
+    raw.length > RETURN_PATH_MAX_LENGTH ||
+    !raw.startsWith("/") ||
+    raw.startsWith("//") ||
+    // Backslashes read as slashes, and browsers drop tabs and newlines
+    // from addresses, so `/\t/host` would become `//host`.
+    raw.includes("\\") ||
+    hasControlCharacter(raw)
+  )
+    return null;
+  let url: URL;
+  try {
+    url = new URL(raw, RETURN_PATH_BASE);
+  } catch {
+    return null;
+  }
+  if (url.origin !== RETURN_PATH_BASE) return null;
+  if (url.searchParams.has("token")) url.searchParams.delete("token");
+  const path = `${url.pathname}${url.search}`;
+  // Dot segments can normalise `/.//host` into `//host`.
+  if (path.startsWith("//") || path.includes("\\")) return null;
+  if (url.pathname === "/login") return null;
+  return path;
+}
+
+function hasControlCharacter(text: string): boolean {
+  for (let i = 0; i < text.length; i++) {
+    const code = text.charCodeAt(i);
+    if (code < 0x20 || code === 0x7f) return true;
+  }
+  return false;
+}
+
+/** `/login`, carrying the request's own path and query when it has one. */
+function loginLocation(url: URL): string {
+  const next = safeReturnPath(`${url.pathname}${url.search}`);
+  return next && next !== "/"
+    ? `/login?next=${encodeURIComponent(next)}`
+    : "/login";
 }
 
 export function createAuthHandlers(args: {
@@ -191,13 +331,76 @@ export function createAuthHandlers(args: {
     return `${payload}.${sign(payload)}`;
   }
 
-  function authCookie(): string {
-    return `${AUTH_COOKIE}=${signedToken()}; HttpOnly; SameSite=Lax; Path=/; Max-Age=${AUTH_TOKEN_TTL_SECONDS}${args.secureCookies ? "; Secure" : ""}`;
+  const cookieName = authRequired
+    ? authCookieName(args.sessionSecret)
+    : `${AUTH_COOKIE_PREFIX}open`;
+
+  function cookieAttributes(maxAge: number): string {
+    return `HttpOnly; SameSite=Lax; Path=/; Max-Age=${maxAge}${args.secureCookies ? "; Secure" : ""}`;
   }
 
-  function authCookieHeaders(req: Request): Record<string, string> {
-    // Reauthentication keeps every live tab on the same session token.
-    return isAuthed(req) ? {} : { "set-cookie": authCookie() };
+  function clearCookie(name: string): string {
+    return `${name}=; ${cookieAttributes(0)}`;
+  }
+
+  /** Seconds the token has left, from its verified payload. */
+  function remainingSeconds(token: string): number {
+    try {
+      const { exp } = JSON.parse(base64UrlDecode(token.split(".")[0]!)) as {
+        exp: number;
+      };
+      return Math.max(1, exp - Math.floor(Date.now() / 1000));
+    } catch {
+      return AUTH_TOKEN_TTL_SECONDS;
+    }
+  }
+
+  /**
+   * This World's cookie set to `token`, stamped with this hour, for the
+   * time the token has left. Moving a legacy session keeps its token, so Web
+   * Push and open sockets keep their session; the legacy name is then
+   * cleared. Other Worlds' cookies that can no longer sign anyone in go;
+   * live ones beyond the kept number go least recently seen first: they are
+   * other Worlds' logins, so only a bound, never all of them.
+   */
+  function sessionCookieHeaders(
+    req: Request,
+    token: string,
+  ): [string, string][] {
+    const fromLegacy = ownLegacySession(req);
+    const headers: [string, string][] = [
+      [
+        "set-cookie",
+        `${cookieName}=${token}.h${thisHour()}; ${cookieAttributes(remainingSeconds(token))}`,
+      ],
+    ];
+    if (fromLegacy)
+      headers.push(["set-cookie", clearCookie(LEGACY_AUTH_COOKIE)]);
+    const live: { name: string; seenHour: number }[] = [];
+    for (const [name, value] of worldCookies(req.headers.get("cookie"))) {
+      if (name === cookieName || (fromLegacy && name === LEGACY_AUTH_COOKIE))
+        continue;
+      const other = otherWorldCookie(value);
+      if (other.live) live.push({ name, seenHour: other.seenHour });
+      else headers.push(["set-cookie", clearCookie(name)]);
+    }
+    const excess = live.length - OTHER_WORLD_COOKIES_KEPT;
+    if (excess > 0)
+      for (const { name } of live
+        .sort((left, right) => left.seenHour - right.seenHour)
+        .slice(0, excess))
+        headers.push(["set-cookie", clearCookie(name)]);
+    return headers;
+  }
+
+  function authCookieHeaders(req: Request): [string, string][] {
+    // Reauthentication keeps every live tab on the same session token, and
+    // leaves a current cookie and its expiry alone.
+    const session = authedSession(req);
+    if (!session) return sessionCookieHeaders(req, signedToken());
+    return currentCookie(req, session)
+      ? []
+      : sessionCookieHeaders(req, session.token);
   }
 
   function secretsEqual(actual: string, expected: string): boolean {
@@ -228,14 +431,65 @@ export function createAuthHandlers(args: {
     }
   }
 
+  /**
+   * This World's session in the request: its own cookie, or else the legacy
+   * shared one when this World signed it. No other name is ever accepted, so
+   * logout can clear every session cookie a later request could use.
+   */
+  function authedSession(
+    req: Request,
+  ): { token: string; legacy: boolean; seenHour?: number } | null {
+    if (!authRequired) return null;
+    const header = req.headers.get("cookie");
+    const own = parseCookie(header, cookieName);
+    if (own !== null) {
+      const { token, seenHour } = readCookieValue(own);
+      if (isValidSignedToken(token)) return { token, legacy: false, seenHour };
+    }
+    const legacy = parseCookie(header, LEGACY_AUTH_COOKIE);
+    if (legacy !== null && isValidSignedToken(legacy))
+      return { token: legacy, legacy: true };
+    return null;
+  }
+
+  /** Whether the legacy shared cookie holds a session this World signed. */
+  function ownLegacySession(req: Request): boolean {
+    if (!authRequired) return false;
+    const legacy = parseCookie(req.headers.get("cookie"), LEGACY_AUTH_COOKIE);
+    return legacy !== null && isValidSignedToken(legacy);
+  }
+
   function isAuthed(req: Request): boolean {
-    if (!authRequired) return true;
-    const token = parseCookie(req.headers.get("cookie"), AUTH_COOKIE);
-    return token !== null && isValidSignedToken(token);
+    return !authRequired || authedSession(req) !== null;
   }
 
   function sessionToken(req: Request): string | null {
-    return parseCookie(req.headers.get("cookie"), AUTH_COOKIE);
+    const own = parseCookie(req.headers.get("cookie"), cookieName);
+    return (
+      authedSession(req)?.token ??
+      (own === null ? null : readCookieValue(own).token)
+    );
+  }
+
+  /**
+   * Cookie headers for a signed-in page load: the legacy session moves to
+   * this World's name, and this World's cookie is stamped once an hour so
+   * pruning keeps the Worlds in use. They go on the page itself, never a
+   * redirect, so a browser that refuses the cookie cannot loop.
+   */
+  function sessionCookieRefresh(req: Request): [string, string][] {
+    if (req.method !== "GET") return [];
+    const session = authedSession(req);
+    if (!session || currentCookie(req, session)) return [];
+    return sessionCookieHeaders(req, session.token);
+  }
+
+  /** This World's own cookie, set this hour, with no legacy session left. */
+  function currentCookie(
+    req: Request,
+    session: { seenHour?: number },
+  ): boolean {
+    return session.seenHour === thisHour() && !ownLegacySession(req);
   }
 
   /** Failed agent CLI tokens, kept apart so they never lock out a login. */
@@ -276,13 +530,14 @@ export function createAuthHandlers(args: {
       req.headers.get("sec-fetch-site") === "cross-site"
     )
       return new Response("forbidden", { status: 403 });
-    return new Response(null, {
-      status: 204,
-      headers: {
-        "set-cookie": `${AUTH_COOKIE}=; HttpOnly; SameSite=Lax; Path=/; Max-Age=0${args.secureCookies ? "; Secure" : ""}`,
-        "cache-control": "no-store",
-      },
-    });
+    const headers: [string, string][] = [
+      ["set-cookie", clearCookie(cookieName)],
+      ["cache-control", "no-store"],
+    ];
+    // A legacy session this World signed would sign the browser back in.
+    if (ownLegacySession(req))
+      headers.push(["set-cookie", clearCookie(LEGACY_AUTH_COOKIE)]);
+    return new Response(null, { status: 204, headers });
   }
 
   function handleTokenLogin(req: Request, ip = "unknown"): Response | null {
@@ -299,15 +554,17 @@ export function createAuthHandlers(args: {
     const valid = secretsEqual(suppliedToken, args.urlLoginToken);
     if (valid) attempts.failures = 0;
     else failLogin(attempts);
-    const location = valid ? `${url.pathname}${url.search}` : "/login";
+    const location = valid
+      ? (safeReturnPath(`${url.pathname}${url.search}`) ?? "/")
+      : loginLocation(url);
     return new Response(null, {
       status: 303,
-      headers: {
-        location,
-        ...(valid ? authCookieHeaders(req) : {}),
-        "cache-control": "no-store",
-        "referrer-policy": "no-referrer",
-      },
+      headers: [
+        ["location", location],
+        ...(valid ? authCookieHeaders(req) : []),
+        ["cache-control", "no-store"],
+        ["referrer-policy", "no-referrer"],
+      ],
     });
   }
 
@@ -369,11 +626,11 @@ export function createAuthHandlers(args: {
     if (usePin) pinFailures = 0;
     return new Response(JSON.stringify({ ok: true }), {
       status: 200,
-      headers: {
-        "content-type": "application/json",
-        "cache-control": "no-store",
+      headers: [
+        ["content-type", "application/json"],
+        ["cache-control", "no-store"],
         ...authCookieHeaders(req),
-      },
+      ],
     });
   }
 
@@ -385,14 +642,17 @@ export function createAuthHandlers(args: {
     return handleCredentialLogin(req, ip, true);
   }
 
-  function loginPage(): Response {
+  function loginPage(req: Request): Response {
+    const next =
+      safeReturnPath(new URL(req.url).searchParams.get("next")) ?? "/";
     if (!authRequired) {
       return new Response(null, {
         status: 302,
-        headers: { location: "/", "cache-control": "no-store" },
+        headers: { location: next, "cache-control": "no-store" },
       });
     }
-    return new Response(renderLoginPage(Boolean(args.pin), args.tokenCommand), {
+    const page = renderLoginPage(Boolean(args.pin), args.tokenCommand, next);
+    return new Response(page, {
       headers: {
         "content-type": "text/html; charset=utf-8",
         "cache-control": "no-store",
@@ -410,15 +670,20 @@ export function createAuthHandlers(args: {
     handlePinLogin,
     handleLogout,
     loginPage,
+    sessionCookieRefresh,
   };
 }
 
-export function unauthenticatedLoginRedirect(): Response {
+export function unauthenticatedLoginRedirect(req: Request): Response {
   // Use a relative Location so reverse proxies preserve the public origin
-  // instead of leaking the internal upstream host. Intentionally ignores
-  // request URLs and forwarded headers.
+  // instead of leaking the internal upstream host. Only the request's path
+  // and query travel, as `next`, so the login returns to the same page and
+  // its switches; its host and forwarded headers are ignored.
   return new Response(null, {
     status: 302,
-    headers: { location: "/login" },
+    headers: {
+      location: loginLocation(new URL(req.url)),
+      "cache-control": "no-store",
+    },
   });
 }

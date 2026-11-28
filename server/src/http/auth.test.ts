@@ -2,7 +2,11 @@ import { describe, expect, jest, test } from "bun:test";
 import { runInNewContext } from "node:vm";
 import { createHmac } from "node:crypto";
 import { Window } from "happy-dom";
-import { createAuthHandlers, unauthenticatedLoginRedirect } from "./auth";
+import {
+  createAuthHandlers,
+  safeReturnPath,
+  unauthenticatedLoginRedirect,
+} from "./auth";
 import { browserUrlFor, withLoginToken } from "../config/server-config";
 
 const parserWindow = new Window({
@@ -63,7 +67,7 @@ describe("request authentication boundaries", () => {
       urlLoginToken: "ignored-token",
     });
     expect(handlers.isAuthed(new Request("http://localhost/"))).toBe(true);
-    const page = handlers.loginPage();
+    const page = handlers.loginPage(new Request("http://localhost/login"));
     expect(page.status).toBe(302);
     expect(page.headers.get("location")).toBe("/");
     expect(page.headers.get("cache-control")).toBe("no-store");
@@ -87,14 +91,20 @@ describe("request authentication boundaries", () => {
       sessionSecret: "a".repeat(64),
       password: "fixed-test-password",
     });
-    const html = await handlers.loginPage().text();
+    const html = await handlers
+      .loginPage(new Request("http://localhost/login"))
+      .text();
 
     expect(html).toContain("<title>Herdr World login</title>");
     expect(html).toContain('src="/herdr-world-icon-192.png"');
     expect(html).toContain('<label for="pw">Password or token</label>');
     expect(html).toContain('autocomplete="current-password"');
     expect(html).toContain('role="alert"');
-    expect(handlers.loginPage().headers.get("cache-control")).toBe("no-store");
+    expect(
+      handlers
+        .loginPage(new Request("http://localhost/login"))
+        .headers.get("cache-control"),
+    ).toBe("no-store");
     expect(html).not.toContain("herdr-gui");
   });
 
@@ -103,9 +113,11 @@ describe("request authentication boundaries", () => {
       sessionSecret: "a".repeat(64),
       password: "test-login-secret",
     });
-    const html = await handlers.loginPage().text();
+    const html = await handlers
+      .loginPage(new Request("http://localhost/login"))
+      .text();
     const elements: Record<string, any> = {
-      login: {},
+      login: { dataset: {} },
       pw: { value: "test-login-secret", removeAttribute() {} },
       btn: {},
       err: {},
@@ -134,11 +146,13 @@ describe("request authentication boundaries", () => {
         sessionSecret: "a".repeat(64),
         password: "test-login-secret",
       });
-      const html = await handlers.loginPage().text();
+      const html = await handlers
+        .loginPage(new Request("http://localhost/login"))
+        .text();
       let focused = false;
       const attributes: Record<string, string> = {};
       const elements: Record<string, any> = {
-        login: {},
+        login: { dataset: {} },
         pw: {
           value: "test-login-secret",
           type: "password",
@@ -268,7 +282,9 @@ describe("request authentication boundaries", () => {
   );
 
   test("redirects unauthenticated HTML requests with a relative location", () => {
-    const response = unauthenticatedLoginRedirect();
+    const response = unauthenticatedLoginRedirect(
+      new Request("http://localhost/"),
+    );
 
     expect(response.status).toBe(302);
     expect(response.headers.get("location")).toBe("/login");
@@ -642,7 +658,7 @@ describe("browser logout", () => {
       expect(logout.status).toBe(204);
       expect(logout.headers.get("cache-control")).toBe("no-store");
       expect(logout.headers.get("set-cookie")).toBe(
-        `herdr_world_auth=; HttpOnly; SameSite=Lax; Path=/; Max-Age=0${secureCookies ? "; Secure" : ""}`,
+        `${first.split("=")[0]}=; HttpOnly; SameSite=Lax; Path=/; Max-Age=0${secureCookies ? "; Secure" : ""}`,
       );
       expect(
         handlers.isAuthed(
@@ -806,12 +822,14 @@ describe("independent session signing key", () => {
       "127.0.0.1",
     );
     const cookie = cookieHeader(response);
-    const payload = cookie.slice("herdr_world_auth=".length).split(".")[0]!;
+    const payload = cookie.slice(cookie.indexOf("=") + 1).split(".")[0]!;
     const forged = createHmac("sha256", password).update(payload).digest("hex");
     expect(
       handlers.isAuthed(
         new Request("http://localhost/", {
-          headers: { cookie: `herdr_world_auth=${payload}.${forged}` },
+          headers: {
+            cookie: `${cookie.split("=")[0]}=${payload}.${forged}`,
+          },
         }),
       ),
     ).toBe(false);
@@ -856,5 +874,430 @@ describe("independent session signing key", () => {
         }),
       ).toThrow("256-bit session signing secret");
     }
+  });
+});
+
+describe("per-World session cookies and login return paths", () => {
+  const password = "test-login-secret";
+  const world = (secret: string) =>
+    createAuthHandlers({ sessionSecret: secret.repeat(64), password });
+  const login = async (
+    handlers: ReturnType<typeof createAuthHandlers>,
+    origin: string,
+    cookie = "",
+  ) =>
+    handlers.handleLogin(
+      new Request(`${origin}/api/login`, {
+        method: "POST",
+        headers: cookie ? { cookie } : {},
+        body: JSON.stringify({ password }),
+      }),
+      "127.0.0.1",
+    );
+  const page = (origin: string, cookie: string) =>
+    new Request(`${origin}/town`, {
+      headers: { cookie, accept: "text/html" },
+    });
+  const legacyCookie = async (
+    handlers: ReturnType<typeof createAuthHandlers>,
+  ) =>
+    `herdr_world_auth=${cookieHeader(
+      await login(handlers, "http://world.test:9000"),
+    )
+      .split("=")[1]!
+      .replace(/\.h\d+$/, "")}`;
+
+  const nameOf = (cookie: string) => cookie.split("=")[0]!;
+  const tokenOf = (cookie: string) =>
+    cookie
+      .slice(cookie.indexOf("=") + 1)
+      .split(".")
+      .slice(0, 2)
+      .join(".");
+  const clear = (name: string) =>
+    `${name}=; HttpOnly; SameSite=Lax; Path=/; Max-Age=0`;
+  const logout = (
+    handlers: ReturnType<typeof createAuthHandlers>,
+    origin: string,
+    cookie: string,
+  ) =>
+    handlers.handleLogout(
+      new Request(`${origin}/api/logout`, {
+        method: "POST",
+        headers: { cookie, "x-herdr-world-logout": "1" },
+      }),
+    );
+
+  test("two Worlds with different secrets on one host stay logged in side by side", async () => {
+    const first = world("a");
+    const second = world("b");
+    const firstCookie = cookieHeader(
+      await login(first, "http://world.test:8790"),
+    );
+    const secondCookie = cookieHeader(
+      await login(second, "http://world.test:8791", firstCookie),
+    );
+    expect(firstCookie).toMatch(/^herdr_world_auth_[0-9a-f]{12}=/);
+    expect(secondCookie).toMatch(/^herdr_world_auth_[0-9a-f]{12}=/);
+    expect(nameOf(firstCookie)).not.toBe(nameOf(secondCookie));
+    // The name never shows the secret.
+    expect(firstCookie).not.toContain("a".repeat(12));
+    // The browser sends every cookie of the host to every port.
+    const jar = `${firstCookie}; ${secondCookie}`;
+    expect(first.isAuthed(page("http://world.test:8790", jar))).toBe(true);
+    expect(second.isAuthed(page("http://world.test:8791", jar))).toBe(true);
+    expect(first.sessionToken(page("http://world.test:8790", jar))).toBe(
+      tokenOf(firstCookie),
+    );
+    // Neither World accepts the other's session under its own name.
+    expect(
+      second.isAuthed(
+        page(
+          "http://world.test:8791",
+          `${nameOf(secondCookie)}=${tokenOf(firstCookie)}`,
+        ),
+      ),
+    ).toBe(false);
+    // Logging out of one leaves the other signed in.
+    expect(
+      logout(first, "http://world.test:8790", jar).headers.getSetCookie(),
+    ).toEqual([clear(nameOf(firstCookie))]);
+    expect(second.isAuthed(page("http://world.test:8791", secondCookie))).toBe(
+      true,
+    );
+  });
+
+  test("a World keeps its login when it and another World swap ports", async () => {
+    // A at 8790 and B at 8791 restart as A at 8792 and B at 8790, each with
+    // its own secret: the cookie names follow the secrets, not the ports.
+    const a = world("a");
+    const b = world("b");
+    const aCookie = cookieHeader(await login(a, "http://world.test:8790"));
+    const bCookie = cookieHeader(await login(b, "http://world.test:8791"));
+    const jar = `${aCookie}; ${bCookie}`;
+    const restartedA = world("a");
+    const restartedB = world("b");
+    expect(restartedB.isAuthed(page("http://world.test:8790", jar))).toBe(true);
+    expect(
+      restartedB.sessionCookieRefresh(page("http://world.test:8790", jar)),
+    ).toEqual([]);
+    // A login at B's new port writes no cookie, so A's stays as it was.
+    const relogin = await login(restartedB, "http://world.test:8790", jar);
+    expect(relogin.headers.getSetCookie()).toEqual([]);
+    expect(restartedA.isAuthed(page("http://world.test:8792", jar))).toBe(true);
+    expect(restartedA.sessionToken(page("http://world.test:8792", jar))).toBe(
+      tokenOf(aCookie),
+    );
+  });
+
+  test("a legacy session counts once and moves to this World's name", async () => {
+    const handlers = world("a");
+    const legacy = await legacyCookie(handlers);
+    const other = await legacyCookie(world("b"));
+    const token = legacy.split("=")[1]!;
+    const own = cookieHeader(await login(handlers, "http://world.test:8790"));
+    // Another World's legacy session is not this World's.
+    const foreign = page("http://world.test:8790", other);
+    expect(handlers.isAuthed(foreign)).toBe(false);
+    expect(handlers.sessionCookieRefresh(foreign)).toEqual([]);
+
+    const request = page("http://world.test:8790", legacy);
+    expect(handlers.isAuthed(request)).toBe(true);
+    expect(handlers.sessionToken(request)).toBe(token);
+    const moved = handlers.sessionCookieRefresh(request);
+    const [set, ...cleared] = moved.map(([, value]) => value);
+    expect(moved.every(([name]) => name === "set-cookie")).toBe(true);
+    // The same token, so Web Push and open sockets keep their session.
+    expect(set).toStartWith(
+      `${nameOf(own)}=${token}.h${Math.floor(Date.now() / 3_600_000)}; HttpOnly; SameSite=Lax; Path=/; Max-Age=`,
+    );
+    expect(cleared).toEqual([clear("herdr_world_auth")]);
+    // A password login while signed in this way moves the same token too.
+    const relogin = await login(handlers, "http://world.test:8790", legacy);
+    expect(relogin.headers.getSetCookie()).toEqual([set, ...cleared]);
+    // After the move the page loads without further cookie changes.
+    const after = page("http://world.test:8790", set!.split(";")[0]!);
+    expect(handlers.isAuthed(after)).toBe(true);
+    expect(handlers.sessionToken(after)).toBe(token);
+    expect(handlers.sessionCookieRefresh(after)).toEqual([]);
+    // A non-page request never rewrites cookies.
+    expect(
+      handlers.sessionCookieRefresh(
+        new Request("http://world.test:8790/town", {
+          method: "POST",
+          headers: { cookie: legacy },
+        }),
+      ),
+    ).toEqual([]);
+  });
+
+  test("logout clears every cookie a later request would accept", async () => {
+    const handlers = world("a");
+    const legacy = await legacyCookie(handlers);
+    const own = cookieHeader(await login(handlers, "http://world.test:8790"));
+    // Many visits through many ports leave one name, not one per port.
+    const ports = Array.from({ length: 40 }, (_, i) => 8800 + i);
+    const names = new Set<string>();
+    for (const port of ports)
+      for (const set of (
+        await login(handlers, `http://world.test:${port}`)
+      ).headers.getSetCookie())
+        names.add(nameOf(set));
+    expect([...names]).toEqual([nameOf(own)]);
+    // Port-named cookies from an earlier build of #1250 are not sessions.
+    const portNamed = `herdr_world_auth_8790=${tokenOf(own)}`;
+    expect(handlers.isAuthed(page("http://world.test:8790", portNamed))).toBe(
+      false,
+    );
+    const jar = `${portNamed}; ${own}; ${legacy}`;
+    const response = logout(handlers, "http://world.test:8790", jar);
+    expect(response.status).toBe(204);
+    expect(response.headers.getSetCookie()).toEqual([
+      clear(nameOf(own)),
+      clear("herdr_world_auth"),
+    ]);
+    // What the browser still holds after those cookies go signs nobody in.
+    expect(handlers.isAuthed(page("http://world.test:8790", portNamed))).toBe(
+      false,
+    );
+  });
+
+  /** A browser's cookies for one host: every World's Set-Cookie lands here. */
+  const cookieJar = () => {
+    const cookies = new Map<string, string>();
+    return {
+      apply(response: Response | [string, string][]) {
+        const sets =
+          response instanceof Response
+            ? response.headers.getSetCookie()
+            : response.map(([, value]) => value);
+        for (const set of sets) {
+          const pair = set.split(";", 1)[0]!;
+          const name = nameOf(pair);
+          if (/Max-Age=0(;|$)/.test(set)) cookies.delete(name);
+          else cookies.set(name, pair);
+        }
+      },
+      get header() {
+        return [...cookies.values()].join("; ");
+      },
+      get size() {
+        return cookies.size;
+      },
+    };
+  };
+  /** An unsigned World token payload, as another World's cookie holds it. */
+  const otherToken = (iat: number, exp: number) =>
+    `${Buffer.from(JSON.stringify({ iat, exp, nonce: "0" })).toString("base64url")}.sig`;
+
+  test("a World stays logged in while many previews come and go", async () => {
+    // Log in to A, then to 24 short-lived previews with their own secrets,
+    // then to B: A and B are both still logged in.
+    const jar = cookieJar();
+    const a = world("a");
+    jar.apply(await login(a, "http://world.test:8790", jar.header));
+    for (let i = 0; i < 24; i++) {
+      const preview = createAuthHandlers({
+        sessionSecret: (i + 1).toString(16).padStart(64, "c"),
+        password,
+      });
+      jar.apply(
+        await login(preview, `http://world.test:${8800 + i}`, jar.header),
+      );
+    }
+    const b = world("b");
+    jar.apply(await login(b, "http://world.test:8791", jar.header));
+    expect(jar.size).toBe(26);
+    expect(a.isAuthed(page("http://world.test:8790", jar.header))).toBe(true);
+    expect(b.isAuthed(page("http://world.test:8791", jar.header))).toBe(true);
+  });
+
+  test("other Worlds' cookies stay bounded, least recently seen go first", async () => {
+    const handlers = world("a");
+    const now = Math.floor(Date.now() / 1000);
+    const hour = Math.floor(now / 3600);
+    // 60 other Worlds' live cookies, stamped with the hour they were last set.
+    const others = Array.from(
+      { length: 60 },
+      (_, i) =>
+        `herdr_world_auth_${i.toString(16).padStart(12, "0")}=${otherToken(now - 86_400, now + 86_400)}.h${hour - 60 + i}`,
+    );
+    const legacyOther = await legacyCookie(world("b"));
+    const jar = [...others, legacyOther, "unrelated=1"].join("; ");
+    const response = await login(handlers, "http://world.test:8790", jar);
+    const [set, ...cleared] = response.headers.getSetCookie();
+    expect(set).toMatch(/^herdr_world_auth_[0-9a-f]{12}=/);
+    // 61 live other World cookies, 48 kept: the 13 least recently set go.
+    // The legacy one was issued this hour, so it stays.
+    expect(cleared).toEqual(others.slice(0, 13).map((c) => clear(nameOf(c))));
+    // Under the bound nothing live is cleared.
+    const few = await login(
+      handlers,
+      "http://world.test:8790",
+      others.slice(0, 48).join("; "),
+    );
+    expect(few.headers.getSetCookie()).toEqual([
+      expect.stringMatching(/^herdr_world_auth_[0-9a-f]{12}=/),
+    ]);
+  });
+
+  test("cookies that can sign nobody in are cleared when a World sets its own", async () => {
+    const handlers = world("a");
+    const now = Math.floor(Date.now() / 1000);
+    const expired = `herdr_world_auth_00000000000e=${otherToken(now - 40 * 86_400, now - 10)}.h1`;
+    const garbage = "herdr_world_auth_00000000000f=x.y.h1";
+    const live = `herdr_world_auth_00000000000a=${otherToken(now, now + 86_400)}.h1`;
+    const response = await login(
+      handlers,
+      "http://world.test:8790",
+      [expired, garbage, live].join("; "),
+    );
+    const [, ...cleared] = response.headers.getSetCookie();
+    expect(cleared).toEqual([clear(nameOf(expired)), clear(nameOf(garbage))]);
+  });
+
+  test("a page load stamps this World's cookie once an hour", async () => {
+    const handlers = world("a");
+    const own = cookieHeader(await login(handlers, "http://world.test:8790"));
+    expect(
+      handlers.sessionCookieRefresh(page("http://world.test:8790", own)),
+    ).toEqual([]);
+    const earlier = own.replace(/\.h(\d+)$/, (_, h) => `.h${Number(h) - 1}`);
+    expect(earlier).not.toBe(own);
+    const [[header, value]] = handlers.sessionCookieRefresh(
+      page("http://world.test:8790", earlier),
+    ) as [[string, string]];
+    expect(header).toBe("set-cookie");
+    expect(value.split(";")[0]).toBe(own);
+    // An unsigned stamp never makes a forged token valid.
+    expect(
+      handlers.isAuthed(
+        page("http://world.test:8790", `${nameOf(own)}=forged.sig.h1`),
+      ),
+    ).toBe(false);
+  });
+
+  test("login from /town?focusTest=1 lands on /town?focusTest=1", async () => {
+    const handlers = world("a");
+    const redirect = unauthenticatedLoginRedirect(
+      new Request("http://world.test:8790/town?focusTest=1&token=leaked", {
+        headers: { accept: "text/html" },
+      }),
+    );
+    expect(redirect.status).toBe(302);
+    const location = redirect.headers.get("location")!;
+    expect(location).toBe("/login?next=%2Ftown%3FfocusTest%3D1");
+    const html = await handlers
+      .loginPage(new Request(`http://world.test:8790${location}`))
+      .text();
+    const form = new parserWindow.DOMParser()
+      .parseFromString(html, "text/html")
+      .getElementById("login")!;
+    expect(form.getAttribute("data-next")).toBe("/town?focusTest=1");
+    const elements: Record<string, any> = {
+      login: { dataset: { next: form.getAttribute("data-next") } },
+      pw: { value: password, removeAttribute() {} },
+      btn: {},
+      err: {},
+      reveal: {},
+    };
+    const browser = {
+      href: location,
+      hash: "#keep",
+      replace(value: string) {
+        this.href = value;
+      },
+    };
+    runInNewContext(loginScript(html), {
+      document: { getElementById: (id: string) => elements[id] },
+      location: browser,
+      fetch: async () => ({ ok: true }),
+    });
+    await elements.login.onsubmit({ preventDefault() {} });
+    expect(browser.href).toBe("/town?focusTest=1#keep");
+    // Switches without values are carried as typed.
+    expect(
+      unauthenticatedLoginRedirect(
+        new Request(
+          "http://world.test/town?usageFixture&apartments-preview=avatars",
+        ),
+      ).headers.get("location"),
+    ).toBe(
+      `/login?next=${encodeURIComponent("/town?usageFixture&apartments-preview=avatars")}`,
+    );
+    expect(
+      unauthenticatedLoginRedirect(
+        new Request("http://world.test/"),
+      ).headers.get("location"),
+    ).toBe("/login");
+  });
+
+  test.each([
+    "//evil.example/town",
+    "/\\evil.example",
+    "\\\\evil.example",
+    "/town\\..\\x",
+    "https://evil.example/",
+    "javascript:alert(1)",
+    "/\t/evil.example",
+    "/\n/evil.example",
+    "/.//evil.example",
+    "/%2e//evil.example",
+    "/..//x",
+    "/a/../..//x",
+    "/.%2e//x",
+    "\uFF0F\uFF0Fevil.example",
+    "\u2215\u2215evil.example",
+    "town",
+    "",
+    "/login?next=%2Ftown",
+    `/${"a".repeat(2048)}`,
+  ])("refuses open-redirect return path %p", async (next) => {
+    expect(safeReturnPath(next)).toBeNull();
+    const handlers = world("a");
+    const html = await handlers
+      .loginPage(
+        new Request(`http://world.test/login?next=${encodeURIComponent(next)}`),
+      )
+      .text();
+    expect(html).toContain('<form id="login" data-next="/">');
+  });
+
+  test("return paths stay relative and never carry a token", () => {
+    expect(safeReturnPath("/town?token=secret&focusTest=1")).toBe(
+      "/town?focusTest=1",
+    );
+    expect(safeReturnPath("/town?token=secret")).toBe("/town");
+    expect(safeReturnPath("/%2F%2Fevil.example")).toBe("/%2F%2Fevil.example");
+    // Slash lookalikes (U+FF0F, U+2215) are not slashes: after a real
+    // leading slash they stay one encoded path segment on this origin.
+    expect(safeReturnPath("/\uFF0F/evil.example")).toBe(
+      "/%EF%BC%8F/evil.example",
+    );
+    expect(safeReturnPath("/\u2215\u2215evil.example")).toBe(
+      "/%E2%88%95%E2%88%95evil.example",
+    );
+    expect(safeReturnPath('/town?q="><script>')).toBe(
+      "/town?q=%22%3E%3Cscript%3E",
+    );
+    // A URL-token login on a `//host` address lands on `/`, not that host.
+    const handlers = createAuthHandlers({
+      sessionSecret: "a".repeat(64),
+      password,
+      urlLoginToken: "url-login-token",
+    });
+    const response = handlers.handleTokenLogin(
+      new Request("http://world.test//evil.example/?token=url-login-token"),
+      "127.0.0.1",
+    )!;
+    expect(response.status).toBe(303);
+    expect(response.headers.get("location")).toBe("/");
+    const wrong = handlers.handleTokenLogin(
+      new Request("http://world.test/town?focusTest=1&token=wrong"),
+      "127.0.0.2",
+    )!;
+    expect(wrong.headers.get("location")).toBe(
+      "/login?next=%2Ftown%3FfocusTest%3D1",
+    );
   });
 });

@@ -1,13 +1,11 @@
 import { groupHostSnapshots } from "./host-snapshots";
 import type {
-  WorldAgentStatus,
-  WorldAgentStatusCounts,
   WorldSnapshotPriority,
-  WorldWorkspaceCoverage,
-  WorldSnapshotCoverage,
   WorldSnapshot,
   WorldConnectionSnapshot,
   WorldSnapshotResult,
+  WorldPublished,
+  WorldPublication,
 } from "./snapshot-types";
 export type {
   WorldSnapshotPriority,
@@ -23,6 +21,17 @@ import { parseSnapshotParameters } from "./snapshot-parameters";
 import { WorldObservation, parseObservationBase } from "./observation-v1";
 import * as observation from "./snapshot-observers";
 import { nativeId, priorityKey } from "./snapshot-identity";
+import {
+  boundedRecords,
+  boundedReservedRelevantRecords,
+  isAgentPane,
+  paneParentRelevance,
+  paneStatusPriority,
+  rankedRelevantRecords,
+  records,
+  runtimeOf,
+  topologyCoverage,
+} from "./snapshot-records";
 import {
   readRuntimeSnapshot,
   type RuntimeReader,
@@ -68,6 +77,23 @@ type CachedSnapshot = {
   watchRevision: number;
   freshUntil: number;
   dirty: boolean;
+  /** Every room the admitted read returned, before any view bound. */
+  rooms: readonly Record<string, unknown>[];
+  /** The admitted read this entry holds, and its raw result. */
+  readNumber: number;
+  raw: RawHostSnapshot;
+};
+
+/**
+ * An admitted read: it began at the host's current epoch, on the current
+ * generation, after every read already applied. Commands settle only here.
+ */
+export type AdmittedRead = {
+  connectionId: string;
+  generation: number;
+  /** The host epoch the read began in (its invalidation version). */
+  epoch: number;
+  rooms: readonly Record<string, unknown>[];
 };
 
 type RawHostSnapshot = readonly [unknown, unknown, unknown, unknown];
@@ -78,201 +104,14 @@ type HostWork<Runtime> = {
   priorities: readonly WorldSnapshotPriority[];
   invalidationVersion: number;
   activityVersion: number;
+  /** Order of the read's start across the service; set when it runs. */
+  readNumber: number;
   selected: boolean;
   state: "queued" | "running";
   late: boolean;
   promise: Promise<HostOutcome>;
   resolve(outcome: HostOutcome): void;
 };
-
-function records(value: unknown, key: string) {
-  const records = (value as Record<string, unknown> | null)?.[key];
-  if (!Array.isArray(records)) return [];
-  return records.filter(
-    (record): record is Record<string, unknown> =>
-      !!record && typeof record === "object" && !Array.isArray(record),
-  );
-}
-
-function boundedRecords(
-  records: readonly Record<string, unknown>[],
-  limit: number,
-  priority: (record: Record<string, unknown>) => boolean,
-) {
-  if (records.length <= limit) return [...records];
-  const admitted = new Set(
-    [
-      ...records.filter(priority),
-      ...records.filter((record) => !priority(record)),
-    ].slice(0, limit),
-  );
-  return records.filter((record) => admitted.has(record));
-}
-
-function rankedRelevantRecords(
-  records: readonly Record<string, unknown>[],
-  relevance: (record: Record<string, unknown>) => readonly number[],
-) {
-  return records
-    .map((record, index) => ({ record, index, relevance: relevance(record) }))
-    .sort((left, right) => {
-      const dimensions = Math.max(
-        left.relevance.length,
-        right.relevance.length,
-      );
-      for (let index = 0; index < dimensions; index += 1) {
-        const difference =
-          (right.relevance[index] ?? 0) - (left.relevance[index] ?? 0);
-        if (difference !== 0) return difference;
-      }
-      return left.index - right.index;
-    })
-    .map(({ record }) => record);
-}
-
-function boundedReservedRelevantRecords(
-  records: readonly Record<string, unknown>[],
-  limit: number,
-  reserved: ReadonlySet<Record<string, unknown>>,
-  relevance: (record: Record<string, unknown>) => readonly number[],
-  group?: (record: Record<string, unknown>) => string | null,
-  reservedGroups?: ReadonlySet<string>,
-  reservationLimit = 0,
-) {
-  const admitted = new Set<Record<string, unknown>>([...reserved]);
-  const ranked = rankedRelevantRecords(records, relevance);
-  if (group && reservedGroups && reservationLimit > 0) {
-    const groupCounts = new Map<string, number>();
-    for (const record of ranked) {
-      if (admitted.has(record)) continue;
-      const groupId = group(record);
-      if (!groupId || !reservedGroups.has(groupId)) continue;
-      const count = groupCounts.get(groupId) ?? 0;
-      if (count >= reservationLimit || admitted.size >= limit) continue;
-      admitted.add(record);
-      groupCounts.set(groupId, count + 1);
-    }
-  }
-  for (const record of ranked) {
-    if (admitted.size >= limit) break;
-    admitted.add(record);
-  }
-  return records.filter((record) => admitted.has(record));
-}
-
-function runtimeOf(status: WorldRuntimeStatus) {
-  return status.runtime === "herdr-core" ? { runtime: status.runtime } : {};
-}
-
-function emptyStatusCounts(): WorldAgentStatusCounts {
-  return { working: 0, idle: 0, blocked: 0, done: 0, unknown: 0 };
-}
-
-function agentStatus(value: unknown): WorldAgentStatus {
-  if (value === "working" || value === "busy" || value === "running") {
-    return "working";
-  }
-  if (value === "idle" || value === "waiting") return "idle";
-  if (value === "blocked" || value === "error") return "blocked";
-  if (value === "done" || value === "completed") return "done";
-  return "unknown";
-}
-
-function isAgentPane(pane: Record<string, unknown>) {
-  return typeof pane.agent === "string" && pane.agent.trim().length > 0;
-}
-
-function paneStatusPriority(pane: Record<string, unknown>) {
-  const status = agentStatus(pane.agent_status);
-  return status === "blocked"
-    ? 3
-    : status === "working"
-      ? 2
-      : status === "done"
-        ? 1
-        : 0;
-}
-
-type PaneParentRelevance = {
-  focused: boolean;
-  attention: boolean;
-  agentCount: number;
-};
-
-function paneParentRelevance(
-  panes: readonly Record<string, unknown>[],
-  parentKey: "workspace_id" | "tab_id",
-) {
-  const result = new Map<string, PaneParentRelevance>();
-  for (const pane of panes) {
-    const parentId = nativeId(pane[parentKey]);
-    if (!parentId) continue;
-    const current = result.get(parentId) ?? {
-      focused: false,
-      attention: false,
-      agentCount: 0,
-    };
-    current.focused ||= pane.focused === true;
-    current.attention ||= paneStatusPriority(pane) > 0;
-    if (isAgentPane(pane)) current.agentCount += 1;
-    result.set(parentId, current);
-  }
-  return result;
-}
-
-function topologyCoverage(
-  workspaces: readonly Record<string, unknown>[],
-  tabs: readonly Record<string, unknown>[],
-  panes: readonly Record<string, unknown>[],
-  retainedWorkspaces: readonly Record<string, unknown>[],
-): WorldSnapshotCoverage {
-  const status = emptyStatusCounts();
-  let agentPanes = 0;
-  const workspaceCounts = new Map<
-    string,
-    Omit<WorldWorkspaceCoverage, "workspace_id">
-  >();
-  for (const workspace of retainedWorkspaces) {
-    const workspaceId = nativeId(workspace.workspace_id);
-    if (workspaceId && !workspaceCounts.has(workspaceId)) {
-      workspaceCounts.set(workspaceId, {
-        tabs: 0,
-        panes: 0,
-        agent_panes: 0,
-        status: emptyStatusCounts(),
-      });
-    }
-  }
-  for (const tab of tabs) {
-    const workspaceId = nativeId(tab.workspace_id);
-    const counts = workspaceId ? workspaceCounts.get(workspaceId) : undefined;
-    if (counts) counts.tabs += 1;
-  }
-  for (const pane of panes) {
-    const workspaceId = nativeId(pane.workspace_id);
-    const counts = workspaceId ? workspaceCounts.get(workspaceId) : undefined;
-    if (counts) counts.panes += 1;
-    if (!isAgentPane(pane)) continue;
-    agentPanes += 1;
-    const semanticStatus = agentStatus(pane.agent_status);
-    status[semanticStatus] += 1;
-    if (counts) {
-      counts.agent_panes += 1;
-      counts.status[semanticStatus] += 1;
-    }
-  }
-  return {
-    workspaces: workspaces.length,
-    tabs: tabs.length,
-    panes: panes.length,
-    agent_panes: agentPanes,
-    status,
-    by_workspace: [...workspaceCounts].map(([workspace_id, counts]) => ({
-      workspace_id,
-      ...counts,
-    })),
-  };
-}
 
 export class WorldSnapshotService<Runtime extends RuntimeWithOperations> {
   readonly observation: WorldObservation;
@@ -294,6 +133,16 @@ export class WorldSnapshotService<Runtime extends RuntimeWithOperations> {
   private priorityRotation = 0;
   private backgroundRotation = 0;
   private lateInvalidationScheduled = false;
+  private readNumber = 0;
+  /** Per host, the newest read applied to the cache (the epoch fence). */
+  private readonly lastApplied = new Map<string, number>();
+  private admittedReadHook?: (read: AdmittedRead) => boolean;
+  private publication?: WorldPublication;
+  /** The admitted read each built connection shows (none: no snapshot). */
+  private readonly sourceReads = new WeakMap<
+    WorldConnectionSnapshot,
+    number | undefined
+  >();
 
   constructor(
     private readonly registry: Registry<Runtime>,
@@ -312,6 +161,36 @@ export class WorldSnapshotService<Runtime extends RuntimeWithOperations> {
     incarnation?: string,
   ) {
     this.observation = new WorldObservation(incarnation);
+  }
+
+  /** World's own values beside topology (settings, commands, grouping). */
+  publishWith(publication: WorldPublication) {
+    this.publication = publication;
+  }
+
+  /** Called on each admitted read; true when it changed a published value. */
+  onAdmittedRead(hook: (read: AdmittedRead) => boolean) {
+    this.admittedReadHook = hook;
+  }
+
+  /** A published value beside topology changed: advance the revision. */
+  publish(): number {
+    this.revision += 1;
+    return this.revision;
+  }
+
+  /** The host's epoch: reads that began before it are never applied. */
+  epoch(connectionId: string): number {
+    return this.invalidationVersions.get(connectionId) ?? 0;
+  }
+
+  /** Rooms from the newest admitted read of this generation, if any. */
+  rooms(
+    connectionId: string,
+    generation: number,
+  ): readonly Record<string, unknown>[] | null {
+    const cached = this.cache.get(connectionId);
+    return cached && cached.generation === generation ? cached.rooms : null;
   }
 
   /** Activity refreshes the cache without rejecting a read; late results only notify. */
@@ -362,6 +241,9 @@ export class WorldSnapshotService<Runtime extends RuntimeWithOperations> {
     }
     for (const activeId of this.activityVersions.keys()) {
       if (!managedIds.has(activeId)) this.activityVersions.delete(activeId);
+    }
+    for (const appliedId of this.lastApplied.keys()) {
+      if (!managedIds.has(appliedId)) this.lastApplied.delete(appliedId);
     }
     const rotate = (group: typeof statuses, cursor: number) => {
       const offset = group.length ? cursor % group.length : 0;
@@ -427,15 +309,31 @@ export class WorldSnapshotService<Runtime extends RuntimeWithOperations> {
     ]);
     accepting = false;
     if (deadline) clearTimeout(deadline);
-    const connections = statuses.map((status) => {
+    const gathered = statuses.map((status) => {
       const connection = completed.get(status.id);
       if (connection) return connection;
       const hostWork = work.get(status.id);
       if (hostWork) hostWork.late = true;
       return this.fallback(status, "observation deadline exceeded");
     });
+    // One coherent publication: the revision is taken first, World's own
+    // values are read after it, and every host is then brought up to the
+    // newest admitted read, all with no await in between. Each value is
+    // therefore at least as new as the revision it is published under, so a
+    // value a browser already adopted is never published again as older data
+    // under a newer revision.
+    let revision = this.revision;
+    let published: WorldPublished = {};
+    for (let attempt = 0; this.publication; attempt++) {
+      revision = this.revision;
+      published = await this.publication.values();
+      if (this.revision === revision || attempt >= 3) break;
+    }
+    const connections = this.newest(gathered, priorities);
     return {
-      revision: this.revision,
+      ...published,
+      ...this.publication?.derive?.(published, connections),
+      revision,
       observed_at: this.now(),
       connections,
       ...(this.registry.hosts
@@ -472,19 +370,99 @@ export class WorldSnapshotService<Runtime extends RuntimeWithOperations> {
     } catch {
       return null;
     }
-    return {
-      connection_id: status.id,
-      label: status.label,
-      source: status.source,
-      ...runtimeOf(status),
-      is_default: status.is_default,
-      state: status.state,
-      generation: status.generation,
-      snapshot_generation: status.generation,
-      stale: false,
-      actionable: true,
-      snapshot: cached.snapshot,
-    };
+    return this.sourced(
+      {
+        connection_id: status.id,
+        label: status.label,
+        source: status.source,
+        ...runtimeOf(status),
+        is_default: status.is_default,
+        state: status.state,
+        generation: status.generation,
+        snapshot_generation: status.generation,
+        stale: false,
+        actionable: true,
+        snapshot: cached.snapshot,
+      },
+      cached.readNumber,
+    );
+  }
+
+  private sourced(connection: WorldConnectionSnapshot, read?: number) {
+    this.sourceReads.set(connection, read);
+    return connection;
+  }
+
+  /**
+   * Bring each gathered connection up to its host's newest admitted read and
+   * current registry state, so a reply never combines a host's older read
+   * with a revision (or a settled command) that a newer read produced.
+   */
+  private newest(
+    gathered: readonly WorldConnectionSnapshot[],
+    priorities: readonly WorldSnapshotPriority[],
+  ): WorldConnectionSnapshot[] {
+    const statuses = new Map(
+      this.registry.list().map((status) => [status.id, status]),
+    );
+    return gathered.flatMap((connection) => {
+      const status = statuses.get(connection.connection_id);
+      if (!status) return [];
+      const cached = this.cache.get(status.id);
+      const sameRead = this.sourceReads.get(connection) === cached?.readNumber;
+      const sameStatus =
+        status.generation === connection.generation &&
+        status.state === connection.state &&
+        status.label === connection.label;
+      if (sameRead && sameStatus) return [connection];
+      if (!connection.actionable)
+        return [
+          this.fallback(
+            status,
+            typeof connection.snapshot_error === "string"
+              ? connection.snapshot_error
+              : undefined,
+          ),
+        ];
+      let lease: RuntimeLease<Runtime> | null;
+      try {
+        lease = this.registry.readyRuntimeLease(status.id);
+      } catch {
+        lease = null;
+      }
+      if (
+        status.state !== "ready" ||
+        !cached ||
+        cached.generation !== status.generation ||
+        !lease ||
+        lease.generation !== status.generation ||
+        !lease.isCurrent()
+      )
+        return [this.fallback(status, "connection changed during snapshot")];
+      return [
+        this.sourced(
+          {
+            connection_id: status.id,
+            label: status.label,
+            source: status.source,
+            ...runtimeOf(status),
+            is_default: status.is_default,
+            state: status.state,
+            generation: status.generation,
+            snapshot_generation: status.generation,
+            stale: false,
+            actionable: true,
+            snapshot: this.projectSnapshot(
+              status,
+              cached.raw,
+              priorities,
+              this.watchlist(),
+            ),
+          },
+          cached.readNumber,
+        ),
+      ];
+    });
   }
 
   private workFor(
@@ -527,6 +505,7 @@ export class WorldSnapshotService<Runtime extends RuntimeWithOperations> {
       priorities,
       invalidationVersion: this.invalidationVersions.get(status.id) ?? 0,
       activityVersion: this.activityVersions.get(status.id) ?? 0,
+      readNumber: 0,
       selected,
       state: "queued",
       late: false,
@@ -580,6 +559,7 @@ export class WorldSnapshotService<Runtime extends RuntimeWithOperations> {
 
   private async runWork(work: HostWork<Runtime>) {
     const observedAt = this.now();
+    work.readNumber = ++this.readNumber;
     let outcome: HostOutcome;
     try {
       const raw: RawHostSnapshot = await readRuntimeSnapshot(
@@ -592,7 +572,14 @@ export class WorldSnapshotService<Runtime extends RuntimeWithOperations> {
       await new Promise((resolve) => setTimeout(resolve, 0));
       if (!this.current(work)) {
         outcome = { error: "connection changed during snapshot" };
+      } else if (!this.admitted(work)) {
+        // The epoch fence: a read that began before the host's last change,
+        // or before a read already applied, never replaces what is published.
+        // A fresh read follows.
+        this.queueLateInvalidation(work.status.id, work.lease.generation);
+        outcome = { raw };
       } else {
+        this.lastApplied.set(work.status.id, work.readNumber);
         const snapshot = this.projectSnapshot(
           work.status,
           raw,
@@ -606,6 +593,7 @@ export class WorldSnapshotService<Runtime extends RuntimeWithOperations> {
         const changed =
           previous?.generation !== work.lease.generation ||
           previous.rawDigest !== rawDigest;
+        const rooms = records(raw[0], "workspaces");
         this.cache.set(work.status.id, {
           generation: work.lease.generation,
           snapshot,
@@ -614,27 +602,37 @@ export class WorldSnapshotService<Runtime extends RuntimeWithOperations> {
           watchRevision: this.watchlist().revision,
           freshUntil: this.now() + SNAPSHOT_FRESH_MS,
           dirty:
-            this.wasInvalidatedSinceStart(work) ||
             (this.activityVersions.get(work.status.id) ?? 0) !==
-              work.activityVersion,
+            work.activityVersion,
+          rooms,
+          readNumber: work.readNumber,
+          raw,
         });
-        if (!this.wasInvalidatedSinceStart(work)) {
-          observation.complete(
-            this.onCompleteObservation,
-            work.lease,
-            raw[2],
-            observedAt,
-          );
-          this.onFreshObservation?.(
-            work.status.id,
-            work.lease.generation,
-            snapshot.panes,
-            observedAt,
-            snapshot.agents,
-            { workspaces: snapshot.workspaces, tabs: snapshot.tabs },
-          );
-        }
-        if ((work.late && changed) || this.wasInvalidatedSinceStart(work)) {
+        observation.complete(
+          this.onCompleteObservation,
+          work.lease,
+          raw[2],
+          observedAt,
+        );
+        this.onFreshObservation?.(
+          work.status.id,
+          work.lease.generation,
+          snapshot.panes,
+          observedAt,
+          snapshot.agents,
+          { workspaces: snapshot.workspaces, tabs: snapshot.tabs },
+        );
+        // A changed value, or a command settled by this read, is published
+        // under a new revision even when the topology itself is unchanged.
+        const settled =
+          this.admittedReadHook?.({
+            connectionId: work.status.id,
+            generation: work.lease.generation,
+            epoch: work.invalidationVersion,
+            rooms,
+          }) === true;
+        if (changed || settled) this.revision += 1;
+        if (work.late && changed) {
           this.queueLateInvalidation(work.status.id, work.lease.generation);
         }
         outcome = { raw };
@@ -649,6 +647,14 @@ export class WorldSnapshotService<Runtime extends RuntimeWithOperations> {
       this.workByConnection.delete(work.status.id);
     }
     this.drain();
+  }
+
+  /** The per-host epoch fence (openspec world-one-object, task 4.2). */
+  private admitted(work: HostWork<Runtime>) {
+    return (
+      !this.wasInvalidatedSinceStart(work) &&
+      work.readNumber > (this.lastApplied.get(work.status.id) ?? 0)
+    );
   }
 
   private current(work: HostWork<Runtime>) {
@@ -707,27 +713,33 @@ export class WorldSnapshotService<Runtime extends RuntimeWithOperations> {
     if (!this.current(work)) {
       return this.fallback(status, "connection changed during snapshot");
     }
-    if (this.wasInvalidatedSinceStart(work)) {
+    if (
+      this.wasInvalidatedSinceStart(work) ||
+      this.lastApplied.get(status.id) !== work.readNumber
+    ) {
       return this.fallback(status, "observation changed during snapshot");
     }
-    return {
-      connection_id: status.id,
-      label: status.label,
-      source: status.source,
-      ...runtimeOf(status),
-      is_default: status.is_default,
-      state: status.state,
-      generation: work.lease.generation,
-      snapshot_generation: work.lease.generation,
-      stale: false,
-      actionable: true,
-      snapshot: this.projectSnapshot(
-        status,
-        outcome.raw,
-        priorities,
-        this.watchlist(),
-      ),
-    };
+    return this.sourced(
+      {
+        connection_id: status.id,
+        label: status.label,
+        source: status.source,
+        ...runtimeOf(status),
+        is_default: status.is_default,
+        state: status.state,
+        generation: work.lease.generation,
+        snapshot_generation: work.lease.generation,
+        stale: false,
+        actionable: true,
+        snapshot: this.projectSnapshot(
+          status,
+          outcome.raw,
+          priorities,
+          this.watchlist(),
+        ),
+      },
+      work.readNumber,
+    );
   }
 
   private fallback(
@@ -735,21 +747,24 @@ export class WorldSnapshotService<Runtime extends RuntimeWithOperations> {
     snapshotError?: string,
   ): WorldConnectionSnapshot {
     const cached = this.cache.get(status.id);
-    return {
-      connection_id: status.id,
-      label: status.label,
-      source: status.source,
-      ...runtimeOf(status),
-      is_default: status.is_default,
-      state: status.state,
-      generation: status.generation,
-      snapshot_generation: cached?.generation ?? null,
-      stale: Boolean(cached),
-      actionable: false,
-      ...(status.error ? { error: status.error } : {}),
-      ...(snapshotError ? { snapshot_error: snapshotError } : {}),
-      snapshot: cached?.snapshot ?? null,
-    };
+    return this.sourced(
+      {
+        connection_id: status.id,
+        label: status.label,
+        source: status.source,
+        ...runtimeOf(status),
+        is_default: status.is_default,
+        state: status.state,
+        generation: status.generation,
+        snapshot_generation: cached?.generation ?? null,
+        stale: Boolean(cached),
+        actionable: false,
+        ...(status.error ? { error: status.error } : {}),
+        ...(snapshotError ? { snapshot_error: snapshotError } : {}),
+        snapshot: cached?.snapshot ?? null,
+      },
+      cached?.readNumber,
+    );
   }
 
   private projectSnapshot(

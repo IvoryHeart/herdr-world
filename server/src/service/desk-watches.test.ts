@@ -1,3 +1,8 @@
+import { composeFeatures } from "../features/compose";
+import { deskKey } from "../features/desk/register";
+import type { FeatureKernel } from "../features/contract";
+import { testFeatureKernel } from "../testing/features";
+import { herdrRuntimeFixture } from "../adapters/testing/runtime";
 import { expect, test } from "bun:test";
 import type { ServerWebSocket } from "bun";
 import { createLegacyRoutingLogger } from "../connections/protocol";
@@ -17,27 +22,39 @@ test("Desk declarations dispatch without runtime selection and socket cleanup re
   ]);
   const jobs = new Set<() => void>();
   let reads = 0;
-  const watches = new DeskWatches<Socket>({
-    scheduler: {
-      schedule(callback) {
-        jobs.add(callback);
-        return { cancel: () => jobs.delete(callback) };
+  let current = true;
+  const features = composeFeatures(
+    testFeatureKernel({
+      scheduler: {
+        schedule(callback) {
+          jobs.add(callback);
+          return { cancel: () => jobs.delete(callback) };
+        },
       },
-    },
-    lease: () => ({
-      isCurrent: () => true,
-      async read() {
-        reads++;
-        return { result: { text: "synthetic screen" } };
+      connections: () =>
+        ({
+          readyRuntimeLease: () => ({
+            generation: 1,
+            isCurrent: () => current,
+            runtime: herdrRuntimeFixture({
+              call: async (method) => {
+                if (method === "pane.get") return { pane: { pane_id: "pane" } };
+                reads++;
+                return { text: "synthetic screen" };
+              },
+            }),
+          }),
+        }) as unknown as ReturnType<FeatureKernel["connections"]>,
+      send(socket, line) {
+        frames.get(socket)!.push(JSON.parse(line));
+        return true;
       },
     }),
-    send(socket, control) {
-      frames.get(socket)!.push({ control });
-      return true;
-    },
-  });
+  );
+  const watches = features.get(deskKey).watches;
+  expect(features.acquisitions).toEqual([watches]);
   const services = {
-    deskWatches: watches,
+    featureRpc: features.rpc,
     snapshotAdmission: { acknowledge: () => false },
     markRpcError() {},
     safeSend(socket: Socket, payload: string) {
@@ -53,7 +70,7 @@ test("Desk declarations dispatch without runtime selection and socket cleanup re
     logger: silentLogger,
     clock: { now: () => 0, monotonic: () => 0 },
     forEachRuntime() {},
-    sockets: () => [watches],
+    sockets: () => features.acquisitions,
   });
   services.clients = clients.clients;
   const target = {
@@ -97,8 +114,17 @@ test("Desk declarations dispatch without runtime selection and socket cleanup re
     await tick();
     expect(reads).toBe(2);
     expect(jobs.size).toBe(0);
+    watches.declare(one, { screens: [target], receipts: [] });
+    current = false;
+    for (const acquisition of features.acquisitions) acquisition.reconcile();
+    await tick();
+    expect(reads).toBe(2);
   } finally {
-    watches.stop();
+    for (const acquisition of features.acquisitions) acquisition.stop();
+    expect(jobs.size).toBe(0);
+    expect(() => watches.declare(one, { screens: [], receipts: [] })).toThrow(
+      "stopped",
+    );
   }
 });
 

@@ -28,6 +28,23 @@ pins) SHALL run once, on the service.
 - **WHEN** the CLI lists an agent that Town also shows
 - **THEN** both show the same name, colour, group, status and pin from one revision
 
+#### Scenario: Runtimes regroup
+- **WHEN** the "Group runtimes" setting changes, or a host joins, drops or reconnects
+- **THEN** one revision carries the setting with both levels: the hosts (machines) and,
+  within each, Town's buildings, with their members, order and labels, and the view
+  of each shared endpoint that Town shows
+- **AND** Desk, Board, Spaces, the hosts control and its filter, and `herdr-world ls`
+  list and count the published hosts under their labels, and Town draws the published
+  buildings
+- **AND** only the explicit setting change leaves a history entry, recorded before the
+  setting is written
+
+#### Scenario: A host is a machine
+- **WHEN** one machine runs a Herdr TUI and a herdr-core and a second machine runs one
+  runtime
+- **THEN** every view and `herdr-world ls` shows 2 hosts under either setting
+- **AND** Town draws 2 buildings under "One per machine" and 3 under "One per runtime"
+
 ### Requirement: Views display World
 
 A view SHALL NOT keep its own copy of World state, SHALL NOT derive a World fact in its
@@ -83,16 +100,21 @@ observation.
 ### Requirement: Pending, refused and uncertain commands
 
 Between a command and its observation, the browser that sent it SHALL show the
-requested value, marked pending, in every view of that browser. A stored or observed
-outcome SHALL travel in the World revision that carries its value, and the browser
-SHALL keep the pending value until its replica has that revision, so the old value
-never shows in between. World SHALL list
-commands in progress so other clients can mark the entity as changing. A refused or
-failed command SHALL show World's value again at once, with the reason where the user
-acted. A command whose acknowledgement was lost SHALL be uncertain until the first
-observation after reconnection decides it. A change that needs several source steps
-SHALL be a durable job whose state is part of the World object, so a reload or a
-service restart loses nothing.
+requested value, marked pending, in every view of that browser.
+
+#### Scenario: Pending command observation and recovery
+
+- **WHEN** a browser sends a World command
+- **THEN** A stored or observed
+  outcome SHALL travel in the World revision that carries its value, and the browser
+  SHALL keep the pending value until its replica has that revision, so the old value
+  never shows in between. World SHALL list
+  commands in progress so other clients can mark the entity as changing. A refused or
+  failed command SHALL show World's value again at once, with the reason where the user
+  acted. A command whose acknowledgement was lost SHALL be uncertain until the first
+  observation after reconnection decides it. A change that needs several source steps
+  SHALL be a durable job whose state is part of the World object, so a reload or a
+  service restart loses nothing.
 
 #### Scenario: Refusal
 - **WHEN** World or the runtime refuses a command

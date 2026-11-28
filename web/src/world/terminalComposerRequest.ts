@@ -1,3 +1,8 @@
+import {
+  readTerminalComposerDraft,
+  writeTerminalComposerDraft,
+} from "../terminalComposer";
+
 /**
  * World views (Town) can ask the next terminal that shows a pane to open its
  * composer, so messages and uploads use the same composer window everywhere.
@@ -6,6 +11,7 @@
  * that terminal mounts, and expires after a while.
  */
 
+/** @internal Test seam for the shared composer request subscription. */
 export const TERMINAL_COMPOSER_REQUEST_EVENT =
   "herdr-world:terminal-composer-request";
 
@@ -16,26 +22,55 @@ export type TerminalComposerTarget = {
 };
 
 const REQUEST_TTL_MS = 15_000;
-const pending = new Map<string, number>();
+const pending = new Map<string, { at: number; text?: string }>();
 
-/** The request key: the same owner-qualified identity as the composer draft. */
+/** @internal The request key used by draft and subscription conformance tests. */
 export const terminalComposerRequestKey = (target: TerminalComposerTarget) =>
   JSON.stringify([target.connectionId, target.generation, target.paneId]);
 
-export function requestTerminalComposer(target: TerminalComposerTarget) {
+export function requestTerminalComposer(
+  target: TerminalComposerTarget,
+  text?: string,
+) {
   const key = terminalComposerRequestKey(target);
-  pending.set(key, Date.now());
+  pending.set(key, { at: Date.now(), text });
   if (typeof window === "undefined") return;
   window.dispatchEvent(
     new CustomEvent(TERMINAL_COMPOSER_REQUEST_EVENT, { detail: key }),
   );
 }
 
-/** Consume a pending request for this exact terminal, if one is still fresh. */
+/** @internal Consume a pending request; exported for qualified recovery tests. */
 export function takeTerminalComposerRequest(target: TerminalComposerTarget) {
   const key = terminalComposerRequestKey(target);
-  const at = pending.get(key);
-  if (at === undefined) return false;
+  const request = pending.get(key);
+  if (request === undefined) return false;
   pending.delete(key);
-  return Date.now() - at <= REQUEST_TTL_MS;
+  if (Date.now() - request.at > REQUEST_TTL_MS) return false;
+  if (request.text) {
+    const draft = readTerminalComposerDraft(key);
+    writeTerminalComposerDraft(
+      key,
+      draft ? `${draft}\n${request.text}` : request.text,
+    );
+  }
+  return true;
+}
+
+/** Both terminal runtimes consume the same qualified, draft-only request. */
+export function subscribeTerminalComposerRequest(
+  target: TerminalComposerTarget,
+  open: () => void,
+): () => void {
+  const key = terminalComposerRequestKey(target);
+  const take = () => {
+    if (takeTerminalComposerRequest(target)) open();
+  };
+  const listener = (event: Event) => {
+    if ((event as CustomEvent<string>).detail === key) take();
+  };
+  window.addEventListener(TERMINAL_COMPOSER_REQUEST_EVENT, listener);
+  take();
+  return () =>
+    window.removeEventListener(TERMINAL_COMPOSER_REQUEST_EVENT, listener);
 }

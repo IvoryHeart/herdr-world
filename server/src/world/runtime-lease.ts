@@ -1,6 +1,11 @@
 import type { RpcServices } from "../rpc/context";
 
-type RuntimeServices = Pick<RpcServices, "connectionManager" | "coreControl">;
+type RuntimeServices = Pick<RpcServices, "coreControl"> & {
+  connectionManager: Pick<
+    RpcServices["connectionManager"],
+    "has" | "readyRuntimeLease"
+  >;
+};
 
 /** Resolve only the named owner; an unavailable core must never use TUI. */
 export function worldRuntimeLease(
