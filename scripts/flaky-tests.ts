@@ -8,6 +8,7 @@ import {
   writeFileSync,
 } from "node:fs";
 import { dirname, join } from "node:path";
+import { inflateRawSync } from "node:zlib";
 import type { FlakeReport, TestCase } from "./test-retry";
 import {
   flakeSummary,
@@ -76,6 +77,70 @@ export function summarizeRetries(
 }
 
 /** Decode only the small report as data; never extract or execute artifact paths. @internal */
+const ZIP_END = 0x06054b50;
+const ZIP_ENTRY = 0x02014b50;
+const ZIP_LOCAL = 0x04034b50;
+
+/**
+ * The parsed `flaky.json` entries of an artifact zip, read in process; no
+ * path in the archive is ever extracted. @internal
+ */
+export function archiveFlakyJson(archive: Uint8Array): unknown[] {
+  const view = new DataView(
+    archive.buffer,
+    archive.byteOffset,
+    archive.byteLength,
+  );
+  const word = (at: number) => {
+    assert(at >= 0 && at + 4 <= archive.byteLength, "Invalid flaky archive");
+    return view.getUint32(at, true);
+  };
+  const half = (at: number) => {
+    assert(at >= 0 && at + 2 <= archive.byteLength, "Invalid flaky archive");
+    return view.getUint16(at, true);
+  };
+  let end = -1;
+  for (
+    let at = archive.byteLength - 22;
+    at >= Math.max(0, archive.byteLength - 22 - 0xffff);
+    at--
+  )
+    if (view.getUint32(at, true) === ZIP_END) {
+      end = at;
+      break;
+    }
+  assert(end >= 0, "Invalid flaky archive");
+  const reports: unknown[] = [];
+  let at = word(end + 16);
+  for (let entry = half(end + 10); entry > 0; entry--) {
+    assert(word(at) === ZIP_ENTRY, "Invalid flaky archive");
+    const method = half(at + 10);
+    const compressed = word(at + 20);
+    const size = word(at + 24);
+    const nameLength = half(at + 28);
+    const local = word(at + 42);
+    const name = new TextDecoder().decode(
+      archive.subarray(at + 46, at + 46 + nameLength),
+    );
+    at += 46 + nameLength + half(at + 30) + half(at + 32);
+    if (name !== "flaky.json") continue;
+    assert(size <= 5_000_000, "Oversized flake report");
+    assert(word(local) === ZIP_LOCAL, "Invalid flaky archive");
+    const start = local + 30 + half(local + 26) + half(local + 28);
+    assert(start + compressed <= archive.byteLength, "Invalid flaky archive");
+    const data = archive.subarray(start, start + compressed);
+    assert(method === 0 || method === 8, "Unsupported flaky archive entry");
+    const bytes =
+      method === 0
+        ? data
+        : inflateRawSync(data, { maxOutputLength: Math.max(1, size) });
+    assert(bytes.byteLength === size, "Invalid flaky archive");
+    reports.push(JSON.parse(new TextDecoder().decode(bytes)));
+    assert(reports.length === 1, "Duplicate flaky report");
+  }
+  return reports;
+}
+
 export async function downloadReports(api: GitHubAPI, run: number) {
   const reports: Array<{ attempt: number; report: FlakeReport }> = [];
   for (let page = 1; ; page++) {
@@ -100,38 +165,17 @@ export async function downloadReports(api: GitHubAPI, run: number) {
         `actions/artifacts/${artifact.id}/zip`,
       )) as Uint8Array;
       assert(archive.byteLength <= 20_000_000, "Oversized flaky archive");
-      const child = Bun.spawn(
-        [
-          "python3",
-          "-c",
-          `
-import io, json, sys, zipfile
-reports = []
-with zipfile.ZipFile(io.BytesIO(sys.stdin.buffer.read())) as archive:
-    for item in archive.infolist():
-        if item.filename != "flaky.json":
-            continue
-        if item.file_size > 5_000_000:
-            raise ValueError("Oversized flake report")
-        reports.append(json.loads(archive.read(item)))
-        if len(reports) > 1:
-            raise ValueError("Duplicate flaky report")
-json.dump(reports, sys.stdout)
-`,
-        ],
-        { stdin: archive, stdout: "pipe", stderr: "pipe" },
-      );
-      const [code, stdout, stderr] = await Promise.all([
-        child.exited,
-        new Response(child.stdout).text(),
-        new Response(child.stderr).text(),
-      ]);
-      assert(
-        code === 0,
-        `Cannot read flaky evidence for run ${run}: ${stderr}`,
-      );
+      let entries: unknown[];
+      try {
+        entries = archiveFlakyJson(archive);
+      } catch (error) {
+        throw new Error(
+          `Cannot read flaky evidence for run ${run}: ${(error as Error).message}`,
+          { cause: error },
+        );
+      }
       // Old delivery inventory archives have no flaky.json during rollout.
-      for (const value of JSON.parse(stdout))
+      for (const value of entries)
         reports.push({ attempt, report: validateReport(value) });
     }
     if (batch.artifacts.length < 100) return reports;
