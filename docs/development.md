@@ -290,7 +290,7 @@ bun run test <path>           # focused Bun test
 bun run test:quick            # non-Chromium suite
 CHROME_BIN=/path/to/chromium bun run test:browser
 bun run test:world            # all World browser acceptance suites
-bun run test:world --shard=1/6 # reproduce one CI shard, one browser at a time
+bun run test:world --shard=1/18 --parallel=1 # case shard with heavy-scene isolation
 bun run test --web-browser    # Chrome-driven suites outside World, as CI's web job runs them
 bun run build:site            # landing page/tutorial
 bun run check                 # repository checks and tests
@@ -298,6 +298,29 @@ bun run check:delivery        # full local gate, including behavioral verificati
 ```
 
 Use `bun run test <path>` for every ordinary test, including focused cases.
+
+World's 18 browser shards (at most six concurrent jobs) balance individual case durations from
+`scripts/world-browser-timings.json` across three process-isolated workers each.
+The runner honors `--parallel=1` for CI's heavy-scene batch and `--parallel=2`
+for its lightweight batch; three logical timing queues do not override that limit.
+Each selected file has exactly one fallback selector for new or renamed cases;
+missing timings never exclude tests. Exact-name tasks allow zero matches when
+recorded names have been renamed or deleted; the fallback still fails if it
+matches no tests, and assertion failures still fail the shard. To refresh the
+committed weights from a complete CI run (keep its artifacts outside tracked paths):
+
+```bash
+gh run download RUN_ID --pattern 'world-browser-*-attempt-*' --dir .agents/browser-timings
+bun scripts/refresh-world-browser-timings.ts .agents/browser-timings https://github.com/IvoryHeart/herdr-world/actions/runs/RUN_ID
+```
+
+Refresh after browser journey splits and changes from #1419. The table records
+JUnit case seconds; runner setup is additional. Split-case estimates are labelled
+until CI supplies their first observations. Keep all assertions when splitting;
+each case must create its own browser profile and fixture state. World handoff
+cases select shell, windows, admission, resources, resume, authority or shared
+Inspector checks; the shared-creation cases select Chat, creation or retention.
+
 Feature discovery uses committed `server/src/features/index.gen.ts` and
 `web/src/features/index.gen.ts` indexes. After adding or removing a feature's
 `register.ts` or `mount.tsx` under those roots, run `bun run features:generate`.

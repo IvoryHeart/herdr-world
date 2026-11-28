@@ -20,6 +20,8 @@ jobs:
     name: Behavioral models (${{ matrix.shard }}/4)
     strategy:
       fail-fast: false
+      # Retain every model partition within the PR run's fourteen-runner cap.
+      max-parallel: 5
       matrix:
         shard: [1, 2, 3, 4]
     runs-on: ubuntu-24.04

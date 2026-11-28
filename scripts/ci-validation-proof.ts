@@ -1,4 +1,5 @@
 import type { ValidationSelection } from "./validation-scope";
+import { worldBrowserShards } from "./world-browser-suites";
 
 export type ValidationProof = { mode: string; selection: ValidationSelection };
 export const VALIDATION_PROOF_PREFIX = "[delivery-proof] ";
@@ -44,7 +45,10 @@ export function validationProofFromLog(
     if (
       !Array.isArray(scope.worldShards) ||
       !scope.worldShards.every(
-        (index) => Number.isInteger(index) && index >= 1 && index <= 6,
+        (index) =>
+          Number.isInteger(index) &&
+          index >= 1 &&
+          index <= worldBrowserShards.length,
       )
     )
       return undefined;

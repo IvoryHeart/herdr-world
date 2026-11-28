@@ -1,5 +1,5 @@
 import { expect, test } from "bun:test";
-import { balanceShards } from "./balance-shards";
+import { balanceShards } from "./testing/balance-shards";
 import { worldBrowserSuites } from "./world-browser-suites";
 import models from "./verification-timings.json";
 import { verificationModels } from "../quint/models";
@@ -42,10 +42,18 @@ test("Town partitions retain the original cases plus reception, core desk and bu
     [390, 844, "recovery", 0],
     [1440, 900, "recovery", 0],
     [1440, 900, "max", 0],
-    [390, 844, "extended", 0],
-    [960, 1080, "extended", 0],
-    [1440, 900, "extended", 0],
-    [1080, 1920, "extended", 0],
+    [390, 844, "extended-controls", 0],
+    [390, 844, "extended-moves", 0],
+    [390, 844, "extended-reflow", 0],
+    [960, 1080, "extended-controls", 0],
+    [960, 1080, "extended-moves", 0],
+    [960, 1080, "extended-reflow", 0],
+    [1440, 900, "extended-controls", 0],
+    [1440, 900, "extended-moves", 0],
+    [1440, 900, "extended-reflow", 0],
+    [1080, 1920, "extended-controls", 0],
+    [1080, 1920, "extended-moves", 0],
+    [1080, 1920, "extended-reflow", 0],
     [1080, 1920, "extended", 300],
     [390, 844, "incremental", 0],
     [1440, 900, "plates", 0],
