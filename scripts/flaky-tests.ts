@@ -176,7 +176,7 @@ export async function downloadReports(api: GitHubAPI, run: number) {
       }
       // Old delivery inventory archives have no flaky.json during rollout.
       for (const value of entries)
-        reports.push({ attempt, report: validateReport(value) });
+        reports.push({ attempt, report: validateReport(value as FlakeReport) });
     }
     if (batch.artifacts.length < 100) return reports;
   }
