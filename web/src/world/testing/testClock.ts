@@ -76,7 +76,10 @@ export function installTestClock(
   const timers = new Map<number, Timer>();
   /** The running clock rests while nothing is scheduled; work wakes it. */
   let resting: (() => void) | null = null;
+  /** Idle `until` waits, woken when the page schedules work. */
+  const waiters = new Set<() => void>();
   const wake = () => {
+    for (const waiter of [...waiters]) waiter();
     const resume = resting;
     resting = null;
     resume?.();
@@ -265,7 +268,6 @@ export function installTestClock(
       await turn();
     }
   };
-
   return {
     now: () => now,
     frame() {
@@ -285,6 +287,20 @@ export function installTestClock(
       if (!running) await runTimers();
       while (!done()) {
         if (settled >= end) throw new Error(message);
+        if (running && idle) {
+          // At rest only real input (a fetch, a socket, a message) can change
+          // anything: give it a short real tick, ended early when the page
+          // schedules work, before moving test time on.
+          await new Promise<void>((resolve) => {
+            const look = () => {
+              waiters.delete(look);
+              resolve();
+            };
+            waiters.add(look);
+            real.setTimeout(look, 10);
+          });
+          if (done()) return;
+        }
         await progress();
       }
     },
