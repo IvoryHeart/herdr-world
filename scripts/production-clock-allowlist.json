@@ -191,7 +191,6 @@
     "web/src/world/code/ideClient.ts": 1,
     "web/src/world/corePins.ts": 1,
     "web/src/world/coreSeen.ts": 1,
-    "web/src/world/createdTerminalAdmission.ts": 1,
     "web/src/world/DeskView.tsx": 2,
     "web/src/world/devtools/trace.ts": 1,
     "web/src/world/focus.ts": 4,
