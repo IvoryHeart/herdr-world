@@ -9,6 +9,7 @@ Issue #1437 demonstrated an ask answer being typed into bash after its agent exi
 - Ignore children and MCP helpers; remove tty-reader code and input-specific /proc inspection. With no runtime foreground information, preserve pre-PR behavior, including macOS, remote cores and TUI without process info.
 - Preserve qualified terminal/runtime authority and no-replay handling for refused or uncertain sends. Show plain Not sent reasons and saved-answer recovery.
 - Document the limit of a shell started inside a live harness and the missing-information fallback.
+- Follow-up #1447: Town/Board peek replies and review-feedback prefill opt into that same check and offer Copy on refusal. Review drafts survive a refusal; prefill never adds a submit key. The owner dropped pointer delivery, resume, wrapper and launch changes from #1447.
 
 ## Capabilities
 
@@ -16,6 +17,8 @@ Issue #1437 demonstrated an ask answer being typed into bash after its agent exi
 
 - `ask-answer-delivery`: current foreground program admission and saved-answer recovery.
 - `world-surfaces/chat`: shared send-time program checks for World agent input.
+- `world-surfaces/agent-peeks`: guarded peek replies and Copy recovery.
+- `world-surfaces/inspector`: guarded review prefill and retained draft recovery.
 
 ## Impact
 

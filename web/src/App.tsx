@@ -198,7 +198,7 @@ import {
 } from "./tabShortcuts";
 import { orderTabsForDisplay, tabPinsFor } from "./tabPins";
 import { copyTextFromUserGesture } from "./terminalClipboard";
-import { terminalPasteRequest } from "./terminalPaste";
+import { agentInputFailureNotice, sendAgentInput } from "./agentInput";
 import {
   installTerminalInputFocusFlag,
   syncTerminalInputFocus,
@@ -2177,8 +2177,7 @@ export default function App({
       const deliverySession = annotationSessionRef.current;
       setAnnotationDeliveryBusy(true);
       try {
-        const request = terminalPasteRequest(target.pane_id, message);
-        await annotationClient.call(request.method, request.params);
+        await sendAgentInput(annotationClient, target.pane_id, message, false);
         if (!annotationClient?.isCurrent()) return;
         const draftActive =
           deliverySession !== null &&
@@ -2200,9 +2199,9 @@ export default function App({
       } catch (error) {
         if (!annotationClient?.isCurrent()) return;
         store.notify({
-          kind: "error",
-          message: "Failed to pre-fill review feedback",
-          detail: error instanceof Error ? error.message : String(error),
+          ...agentInputFailureNotice(message, error),
+          message: "Review feedback not sent",
+          actionLabel: "Copy feedback",
         });
       } finally {
         if (annotationSessionRef.current === deliverySession)

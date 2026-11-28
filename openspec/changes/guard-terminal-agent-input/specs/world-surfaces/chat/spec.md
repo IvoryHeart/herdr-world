@@ -22,6 +22,12 @@ All World terminal text paths on both runtimes SHALL share the foreground group 
 
 #### Scenario: Owner explicitly enters text in Terminal
 
-- **WHEN** the owner submits/inserts a Terminal composer draft, pastes text or pre-fills review feedback
+- **WHEN** the owner submits/inserts a Terminal composer draft or pastes text directly in Terminal
 - **THEN** existing raw-terminal connection, generation and browser authority remains in force
 - **AND** World-originated agent input through the same method still uses the shared foreground leader check
+
+#### Scenario: World addresses agent input through the pane API
+
+- **WHEN** a peek reply, menu key or review-feedback prefill uses `pane.send_input` with `agent_input: true`
+- **THEN** World consumes that marker and applies the shared foreground check immediately before native input, preserving the exact connection, generation, pane and requested submit behavior
+- **AND** refusal offers Copy without a raw-input fallback or automatic retry

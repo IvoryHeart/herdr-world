@@ -1,4 +1,5 @@
 import { terminalStreamVerb } from "../adapters/runtime-ports";
+import { withAgentInput } from "../adapters/agent-input";
 import type { ServerWebSocket } from "bun";
 import { admitVerb, checkVerbResult, VerbRefusal } from "../verbs/admission";
 import { commandEvidence } from "../verbs/evidence";
@@ -501,11 +502,20 @@ async function handleRpc(
         // Input still goes; only its clipboard routing is unknown.
       }
     }
-    const rawResult = await tui.call(method, params ?? {}, 8000, () => {
-      recheck();
-      if (inputTerminalId)
-        terminalBridge.noteTerminalInput(ws, inputTerminalId);
-    });
+    // Agent-addressed replies and review prefill share the terminal encoding,
+    // but must opt into the same final foreground check as Chat. Never forward
+    // World's marker to the runtime or change explicit Terminal authority.
+    const nativeParams = { ...params };
+    const agentInput =
+      method === "pane.send_input" && nativeParams.agent_input === true;
+    if (method === "pane.send_input") delete nativeParams.agent_input;
+    const send = () =>
+      tui.call(method, nativeParams, 8000, () => {
+        recheck();
+        if (inputTerminalId)
+          terminalBridge.noteTerminalInput(ws, inputTerminalId);
+      });
+    const rawResult = await (agentInput ? withAgentInput(null, send) : send());
     if (verb.recovery !== "read")
       evidence.record({
         stage: "sent",

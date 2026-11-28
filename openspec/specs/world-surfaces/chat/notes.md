@@ -21,6 +21,7 @@
 - `server/src/service/terminal-input.test.ts`
 - `web/src/terminalComposer.ts`
 - `web/src/terminalPaste.ts`
+- `web/src/agentInput.ts` (peek replies and review prefill explicitly opt into the shared foreground guard)
 
 - `web/src/attachmentUploads.ts`
 - `web/src/components/InspectorChat.tsx`

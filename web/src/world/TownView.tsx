@@ -4,6 +4,7 @@ import { TownStepStore } from "./town/townStepStore";
 import { useTownStepReads } from "./town/useTownStepReads";
 import { townScaleSceneRequested } from "./town/townScaleScene";
 import { askingKeysForWorld } from "./worldAskTargets";
+import { agentInputFailureNotice } from "../agentInput";
 import {
   inspectTownTerminal,
   townDeskOpenKey,
@@ -22,7 +23,7 @@ import { TraceOverlay } from "./devtools/TraceOverlay";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { worldLocalStorage } from "../browserStorage";
-import { useStoreSelector } from "../store";
+import { store, useStoreSelector } from "../store";
 import { WORLD_OBSERVABILITY_UPDATED_EVENT } from "../workspaceResource";
 import { useTownSummary } from "./town/TownSummaryPanel";
 import { offerTownSummary } from "./town/townSummaryRequest";
@@ -651,10 +652,10 @@ export default function TownView({
       toast("ok", text ? `Sent to ${label}` : `Pressed Enter for ${label}`);
       return true;
     } catch (cause) {
-      toast(
-        "error",
-        `Not sent to ${label}: ${cause instanceof Error ? cause.message : String(cause)}`,
-      );
+      store.notify({
+        ...agentInputFailureNotice(text, cause),
+        message: `Not sent to ${label}`,
+      });
       return false;
     }
   };

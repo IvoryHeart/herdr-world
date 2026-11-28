@@ -8,6 +8,7 @@
  */
 
 import { viewOnlyMessage } from "../viewOnly";
+import { agentInputFailureNotice } from "../../agentInput";
 import { useEffect, useLayoutEffect, useRef, useState } from "react";
 import { AgentLatestMessage } from "../AgentHoverCard";
 import { agentStateWord } from "../agentMarks";
@@ -127,10 +128,10 @@ export function BoardPeek({
       await sendTownReply(leaf, key, false);
       notify("ok", `Sent to ${name}`);
     } catch (cause) {
-      notify(
-        "error",
-        `Not sent to ${name}: ${cause instanceof Error ? cause.message : String(cause)}`,
-      );
+      store.notify({
+        ...agentInputFailureNotice(key, cause),
+        message: `Not sent to ${name}`,
+      });
     }
   };
   return (
