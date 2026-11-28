@@ -36,6 +36,14 @@ export async function resizeCapture(
     deviceScaleFactor: 1,
     mobile: false,
   });
+  // The page applies the new size on its next rendering step: its resize
+  // event and ResizeObserver callbacks invalidate the scene and commit it
+  // again. Wait until a frame has run at the new size, so a capture waits on
+  // the resized scene instead of a late resize discarding it mid-screenshot.
+  await evaluate(
+    command,
+    `new Promise((resolve) => requestAnimationFrame(() => requestAnimationFrame(() => resolve(innerWidth === ${width} && innerHeight === ${height}))))`,
+  );
 }
 /** Returns bytes only after readiness, content checks and a final currency check. */
 export async function captureScene(
