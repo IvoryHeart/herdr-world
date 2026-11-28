@@ -24,6 +24,8 @@ export type WorldStorage = {
   coreTopology?: import("../storage/core-topology").CoreTopologyPort;
   /** Finished agents' resident records; absent in older test doubles. */
   apartments?: import("../storage/apartments").ApartmentsPort;
+  /** World's agent records; absent in older test doubles. */
+  agents?: import("../storage/agent-store").AgentsPort;
   bindings: import("../storage/world-bindings").WorldBindings;
   ids: import("../storage/world-ids").WorldIds;
   settings: GuiSettingsStore;
@@ -80,6 +82,7 @@ export const openStorage: OpenStorage = async (paths, { clock, scheduler }) => {
     runtimeStatus: world.runtimeStatus,
     coreTopology: world.coreTopology,
     apartments: world.apartments,
+    agents: world.agents,
     ids: world.ids,
     bindings: world.bindings,
     settings,

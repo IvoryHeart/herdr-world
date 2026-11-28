@@ -4,6 +4,7 @@ import { createBoardPort } from "./board-port";
 import { createRuntimeStatusPort } from "./runtime-status";
 import { createCoreTopologyPort } from "./core-topology";
 import { createApartmentsPort } from "./apartments";
+import { createAgentsPort } from "./agent-store";
 import { createProfilePort } from "./profile-port";
 import { ANSWER_DELIVERY_VERB } from "../world/ask-delivery-types";
 import type { WorldIds } from "./world-ids";
@@ -110,6 +111,15 @@ export async function openWorldLedger(
   );
   const apartments = createApartmentsPort(
     client.snapshot.apartments ?? [],
+    <T>(request: StorageRequest) =>
+      closing
+        ? Promise.reject<T>(
+            new StorageWriteRejected("World storage is closing"),
+          )
+        : client.request<T>(request),
+  );
+  const agents = createAgentsPort(
+    client.snapshot.agents ?? [],
     <T>(request: StorageRequest) =>
       closing
         ? Promise.reject<T>(
@@ -309,6 +319,7 @@ export async function openWorldLedger(
     runtimeStatus,
     coreTopology,
     apartments,
+    agents,
     profiles,
     ids,
     bindings: {
@@ -465,6 +476,7 @@ export async function openWorldLedger(
       runtimeStatus.close();
       coreTopology.close();
       apartments.close();
+      agents.close();
       closed = Promise.allSettled([tail, bindingTail, board.settled()]).then(
         () => client.close(),
       );

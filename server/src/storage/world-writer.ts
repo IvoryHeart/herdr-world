@@ -25,6 +25,7 @@ import { importRuntimeStatus } from "./runtime-status-import";
 import { readRuntimeStatus, writeRuntimeStatus } from "./runtime-status";
 import { readCoreTopologies, writeCoreTopology } from "./core-topology";
 import { readApartments, writeApartments } from "./apartments";
+import { readAgents, writeAgents } from "./agent-store";
 import { importLegacyProfiles } from "./profile-import";
 import { randomBytes } from "node:crypto";
 import { createWorldIds } from "./world-ids";
@@ -255,6 +256,7 @@ export function openWorldWriter(
       ...(runtimeStatus ? { runtimeStatus } : {}),
       coreTopology,
       apartments: readApartments(db),
+      agents: readAgents(db),
       attention: (
         db.query("SELECT * FROM outbox ORDER BY rowid").all() as Record<
           string,
@@ -541,6 +543,13 @@ export function openWorldWriter(
         return writeCoreTopology(db, request.expected, request.document);
       case "apartments":
         return writeApartments(db, request.operation, at);
+      case "agents":
+        return writeAgents(
+          db,
+          { ids, bindings, incarnation },
+          request.operation,
+          at,
+        );
       case "board":
         return executeBoardOperation(db, request.operation, bindings, at);
       case "runtime-status":

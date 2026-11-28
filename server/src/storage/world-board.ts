@@ -41,10 +41,7 @@ export const boardTables = [
 type Family = (typeof boardTables)[number];
 type Closing = Partial<Record<"colors" | "desk_pins" | "appearance", string[]>>;
 /** Rows the operations close, as opposed to a user removing them. */
-export function closingRows(
-  before: BoardDocument,
-  ops: readonly BoardOp[],
-): Closing {
+function closingRows(before: BoardDocument, ops: readonly BoardOp[]): Closing {
   const closing: Required<Closing> = {
     colors: [],
     desk_pins: [],

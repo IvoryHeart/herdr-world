@@ -58,7 +58,9 @@ Current limits describe existing behavior, including existing expiry; this step 
 | world.sqlite: sqlite_sequence | SQLite AUTOINCREMENT high-water marks | storage | name | derived | one per AUTOINCREMENT table | server/src/storage/world-schema.ts |
 | world.sqlite: imports | Completed legacy imports | storage | name | source | none — user decides | server/src/storage/world-schema.ts |
 | world.sqlite: world_ids | Issued identities, never reused | identity | id | source | none — user decides | server/src/storage/world-ids.ts |
-| world.sqlite: world_bindings | Evidence-backed World/runtime identity links | identity | id; record_id + slot | source | none — user decides | server/src/storage/world-bindings.ts |
+| world.sqlite: world_bindings | Evidence-backed World/runtime identity links, including each agent's seat | identity | id; record_id + slot | source | none — user decides | server/src/storage/world-bindings.ts |
+| world.sqlite: entities | One row per World agent; ended_at marks the end, the row stays | agents | id (World ID, a-…) | source | none — never trimmed; the user decides | server/src/storage/agent-store.ts |
+| world.sqlite: facts | Agent fields, one row per field and item; each field's one owner is declared with declareData (agentFields) | agents | entity_id + field + item | source | 4096 bytes per value; none — never trimmed | server/src/storage/agent-store.ts |
 | world.sqlite: world_binding_legacy | Legacy Board capture identity mapping | identity | key | source | none — user decides | server/src/storage/legacy-bindings.ts |
 | world.sqlite: world_binding_sync | Legacy Board binding synchronization marker | identity | singleton | source | 1 | server/src/storage/legacy-bindings.ts |
 | world.sqlite: board_meta | Board revision and optional family flags | board | singleton | source | 1 | server/src/storage/world-board.ts |

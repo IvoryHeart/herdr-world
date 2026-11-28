@@ -574,7 +574,6 @@
       "server/src/storage/apartments.ts#memoryApartmentsPort",
       "server/src/storage/apartments.ts#parseApartmentMoveIn",
       "server/src/storage/catalog.ts#dataPathCatalog",
-      "server/src/storage/catalog.ts#declareData",
       "server/src/storage/core-topology.ts#CORE_TOPOLOGY_LIMITS",
       "server/src/storage/core-topology.ts#CoreTopologyConflict",
       "server/src/storage/core-topology.ts#emptyCoreTopology",
