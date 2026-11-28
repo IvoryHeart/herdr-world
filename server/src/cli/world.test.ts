@@ -378,6 +378,77 @@ test("--skill prints the agent guide", async () => {
 });
 
 describe("service owner alert", () => {
+  test("all refusal and recording outcomes retain their evidence", async () => {
+    for (const code of ["refused", "usage", "question_cap", "unavailable"])
+      for (const recorded of [undefined, null, false, true]) {
+        const { context: ctx, out } = context();
+        let alerts = 0;
+        const quiet = code !== "unavailable" || recorded === true;
+        const exit = await runWorldCommand(
+          "ask",
+          ["Continue?", "--json"],
+          ctx,
+          async () => ({
+            ok: false,
+            code,
+            recorded,
+            error: "synthetic failure",
+          }),
+          false,
+          () => {
+            alerts++;
+            return { shown: true, reason: "shown" };
+          },
+        );
+        expect(alerts).toBe(quiet ? 0 : 1);
+        expect(exit).toBe(
+          code === "usage"
+            ? WORLD_EXIT.usage
+            : code === "unavailable"
+              ? WORLD_EXIT.failure
+              : WORLD_EXIT.refused,
+        );
+        expect(JSON.parse(out[0]!)).toMatchObject({
+          code,
+          recorded:
+            recorded === true
+              ? true
+              : code !== "unavailable" || recorded === false
+                ? false
+                : null,
+        });
+      }
+  });
+
+  test("a caller-verification refusal keeps its reason and never alerts", async () => {
+    const { context: ctx, out, err } = context();
+    const error = "caller verification is unavailable on this platform";
+    let alerts = 0;
+    for (const json of [true, false]) {
+      expect(
+        await runWorldCommand(
+          "ask",
+          ["Continue?", "--key", "example", ...(json ? ["--json"] : [])],
+          ctx,
+          async () => ({ ok: false, code: "refused", error }),
+          !json,
+          () => {
+            alerts++;
+            return { shown: true, reason: "shown" };
+          },
+        ),
+      ).toBe(WORLD_EXIT.refused);
+    }
+    expect(alerts).toBe(0);
+    expect(JSON.parse(out[0]!)).toMatchObject({
+      code: "refused",
+      error,
+      recorded: false,
+      notified: null,
+    });
+    expect(err).toEqual([`herdr-world ask: ${error}`]);
+  });
+
   test("repeated question-cap refusals stay quiet and preserve the wait error", async () => {
     const { context: ctx, out } = context();
     let alerts = 0;
@@ -455,10 +526,10 @@ describe("service owner alert", () => {
     const alerts: string[] = [];
     const transport: WorldCliTransport = async () => ({
       ok: false,
-      code: "refused",
+      code: "unavailable",
       recorded: false,
       notified: null,
-      error: "wrong World CLI token",
+      error: "storage is unavailable",
     });
     expect(
       await runWorldCommand(
@@ -474,7 +545,7 @@ describe("service owner alert", () => {
       ),
     ).toBe(WORLD_EXIT.failure);
     expect(alerts).toEqual([
-      "Ship? (not recorded in World: wrong World CLI token)",
+      "Ship? (not recorded in World: storage is unavailable)",
     ]);
     expect(JSON.parse(out[0]!)).toMatchObject({
       recorded: false,
@@ -483,7 +554,7 @@ describe("service owner alert", () => {
     });
   });
   test("an unknown recording outcome can alert once but a confirmed stored ask never falls back", async () => {
-    const { context: ctx } = context();
+    const { context: ctx, out } = context();
     let alerts = 0;
     const fallback = () => {
       alerts++;
@@ -498,6 +569,10 @@ describe("service owner alert", () => {
       fallback,
     );
     expect(alerts).toBe(1);
+    expect(JSON.parse(out[0]!)).toMatchObject({
+      code: "unavailable",
+      recorded: null,
+    });
     await runWorldCommand(
       "ask",
       ["Stored", "--json"],
@@ -656,6 +731,9 @@ describe("endpoint diagnostics", () => {
       expect(garbled.error).toBe(
         `World service at ${answering} (token from ${secret}) answered 500 without JSON`,
       );
+      expect(
+        (await transport(answering)("ask", { question: "Continue?" })).recorded,
+      ).toBeNull();
       // Unreachable by construction: the test keeps this port bound for its
       // whole life and closes every connection before any reply. A freed port
       // could be bound again by another process before the request.
@@ -672,6 +750,9 @@ describe("endpoint diagnostics", () => {
         expect(unreachable.error).toStartWith(
           `World service not reachable at ${gone} (token from ${secret}): `,
         );
+        expect(
+          (await transport(gone)("ask", { question: "Continue?" })).recorded,
+        ).toBeNull();
       } finally {
         await new Promise((resolve) => refusing.close(resolve));
       }

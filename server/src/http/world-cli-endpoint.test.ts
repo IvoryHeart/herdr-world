@@ -2,6 +2,7 @@ import { describe, expect, test } from "bun:test";
 import { worldCliToken } from "../config/session-secret";
 import { createAuthHandlers } from "./auth";
 import { handleWorldCliEndpoint } from "./world-cli-endpoint";
+import { identifyCaller, type CliHost } from "../world/world-cli-actor";
 
 const PASSWORD = "synthetic-generated-token-0123456789abcdef";
 const SESSION_SECRET = "ab".repeat(32);
@@ -44,16 +45,170 @@ function deps(seen: unknown[] = []) {
       };
     },
     platform: "linux",
-    callerChain: (
+    processLookup: (
       _peer: unknown,
       _port: number,
-      _fs?: unknown,
       roots?: readonly number[],
     ) => (roots?.includes(8) ? [{ pid: 9, ppid: 8, pgrp: 9 }] : null),
   };
 }
 
 describe("the agent CLI endpoint", () => {
+  for (const platform of ["linux", "darwin", "win32"])
+    for (const runtime of ["tui", "core"])
+      for (const ancestry of ["matching", "foreign", "unknown"]) {
+        test(`${platform}/${runtime}/${ancestry} preserves pane authority`, async () => {
+          const host: CliHost = {
+            connection_id: "synthetic-tui",
+            generation: 1,
+            local: true,
+            call: async (method) =>
+              method === "pane.process_info"
+                ? { process_info: { shell_pid: 8 } }
+                : {
+                    pane: { pane_id: "w1:p1", terminal_id: "terminal-example" },
+                  },
+          };
+          const core = {
+            terminal: "t1",
+            source: {
+              has: () => true,
+              hosts: () => [
+                {
+                  connection_id: "synthetic-core",
+                  generation: 1,
+                  local: true,
+                  isCurrent: () => true,
+                  coreId: () => "synthetic-core",
+                  occupant: () => ({
+                    coreId: "synthetic-core",
+                    pid: 8,
+                    foregroundPid: null,
+                    fingerprint: "example",
+                  }),
+                  describe: async () => null,
+                },
+              ],
+            },
+          };
+          let lookups = 0;
+          const response = await handleWorldCliEndpoint(
+            request({}, JSON.stringify({ command: "ask" })),
+            local,
+            {
+              ...deps(),
+              platform,
+              processLookup: (seenPeer, port, roots) => {
+                lookups++;
+                expect(seenPeer).toEqual(local);
+                expect(port).toBe(8790);
+                expect(roots).toEqual([8]);
+                return ancestry === "unknown"
+                  ? null
+                  : [
+                      {
+                        pid: 9,
+                        ppid: ancestry === "matching" ? 8 : 600,
+                        pgrp: 9,
+                      },
+                      {
+                        pid: ancestry === "matching" ? 8 : 600,
+                        ppid: 1,
+                        pgrp: 8,
+                      },
+                    ];
+              },
+              handle: async (_body, locate) => {
+                const { actor } = await identifyCaller(
+                  runtime === "tui" ? [host] : [],
+                  runtime === "tui" ? "w1:p1" : undefined,
+                  locate,
+                  runtime === "core" ? core : undefined,
+                );
+                return actor.verified
+                  ? { ok: true, actor, result: null }
+                  : {
+                      ok: false,
+                      actor,
+                      code: "refused",
+                      error: "cause keys require a verified asking pane",
+                      recorded: false,
+                      notified: null,
+                    };
+              },
+            },
+          );
+          const verified = platform !== "win32" && ancestry === "matching";
+          expect(response.status).toBe(verified ? 200 : 403);
+          const reply = await response.json();
+          expect(reply.actor.verified).toBe(verified);
+          expect(lookups).toBe(platform === "win32" ? 0 : 1);
+          if (verified)
+            expect(reply.actor.connection_id).toBe(`synthetic-${runtime}`);
+          if (platform === "win32")
+            expect(reply.error).toContain(
+              "caller verification is unavailable on this platform",
+            );
+        });
+      }
+
+  for (const platform of ["linux", "darwin", "win32"]) {
+    test(`${platform} uses only a supported process lookup`, async () => {
+      const seen: unknown[] = [];
+      let lookups = 0;
+      const injected = deps(seen);
+      const response = await handleWorldCliEndpoint(request(), local, {
+        ...injected,
+        platform,
+        processLookup: (...args) => {
+          lookups++;
+          return injected.processLookup(...args);
+        },
+      });
+      expect(response.status).toBe(200);
+      expect(lookups).toBe(platform === "win32" ? 0 : 1);
+      expect(seen).toEqual([
+        {
+          body: {},
+          chain: platform === "win32" ? null : [{ pid: 9, ppid: 8, pgrp: 9 }],
+        },
+      ]);
+    });
+  }
+
+  test("an unsupported platform explains a refused ask", async () => {
+    const response = await handleWorldCliEndpoint(
+      request(
+        {},
+        JSON.stringify({
+          command: "ask",
+          params: { question: "Continue?", key: "example" },
+        }),
+      ),
+      local,
+      {
+        ...deps(),
+        platform: "win32",
+        handle: async () => ({
+          ok: false,
+          code: "refused",
+          error: "cause keys require a verified asking pane",
+          recorded: false,
+          notified: null,
+        }),
+      },
+    );
+    expect(response.status).toBe(403);
+    expect(await response.json()).toMatchObject({
+      code: "refused",
+      recorded: false,
+      notified: null,
+      error: expect.stringContaining(
+        "caller verification is unavailable on this platform",
+      ),
+    });
+  });
+
   test("takes a local bearer call and hands over the caller's processes", async () => {
     const seen: unknown[] = [];
     const response = await handleWorldCliEndpoint(

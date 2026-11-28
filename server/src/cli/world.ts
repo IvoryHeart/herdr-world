@@ -74,8 +74,8 @@ type Reply = {
   error?: string;
   actor?: { label: string; verified: boolean };
   result?: unknown;
-  /** `ask` only: whether World recorded the question. */
-  recorded?: boolean;
+  /** `ask` only: true/false are confirmed; null means the reply was lost. */
+  recorded?: boolean | null;
   retrying?: boolean;
   /**
    * `ask` only: what Herdr's alert to the owner reported; null when none was
@@ -143,7 +143,11 @@ function alertOwner(
   alert: OwnerAlert,
 ): Reply {
   if (reply.ok || reply.recorded === true) return reply;
-  if (reply.code === "usage" || reply.code === "question_cap")
+  if (
+    reply.code === "usage" ||
+    reply.code === "question_cap" ||
+    reply.code === "refused"
+  )
     return { ...reply, recorded: false, notified: null };
   const who =
     reply.actor?.label ??
@@ -161,7 +165,7 @@ function alertOwner(
   return {
     ...reply,
     code: "unavailable",
-    recorded: false,
+    recorded: reply.recorded === false ? false : null,
     notified,
     error: `World did not confirm recording the question: ${reply.error ?? "failed"}; ${notified.shown ? "the owner was alerted through Herdr" : `Herdr alert also failed: ${notified.reason}`}`,
   };
@@ -223,6 +227,7 @@ export function httpTransport(
         ok: false,
         code: "unavailable",
         error: (error as Error).message,
+        ...(command === "ask" ? { recorded: false } : {}),
       };
     }
     const { url, token, secretPath } = endpoint;
@@ -257,6 +262,7 @@ export function httpTransport(
         ok: false,
         code: "unavailable",
         error: `World service not reachable at ${where}: ${(error as Error).message}`,
+        ...(command === "ask" ? { recorded: null } : {}),
       };
     }
     try {
@@ -270,6 +276,7 @@ export function httpTransport(
         ok: false,
         code: "unavailable",
         error: `World service at ${where} answered ${response.status} without JSON`,
+        ...(command === "ask" ? { recorded: null } : {}),
       };
     }
   };

@@ -1,5 +1,6 @@
 import { isLoopbackAddress } from "../workspace/file-manager";
 import { callerProcesses, type CallerLocator } from "../world/caller-identity";
+import { darwinCallerProcesses } from "../world/caller-identity-darwin";
 import type { CliErrorCode, WorldCliResponse } from "../world/world-cli";
 import { readJsonBody } from "./json-body";
 
@@ -36,7 +37,11 @@ export async function handleWorldCliEndpoint(
       body: unknown,
       locate: CallerLocator | null,
     ): Promise<WorldCliResponse>;
-    callerChain?: typeof callerProcesses;
+    processLookup?(
+      peer: { address: string; port: number },
+      serverPort: number,
+      roots: readonly number[],
+    ): ReturnType<CallerLocator>;
     platform?: string;
   },
 ): Promise<Response> {
@@ -89,18 +94,32 @@ export async function handleWorldCliEndpoint(
       },
       { status: 400 },
     );
-  // Searched only when the call names a pane, under that pane's processes.
+  const platform = deps.platform ?? process.platform;
+  const supported = platform === "linux" || platform === "darwin";
+  // macOS takes one bounded snapshot per request, even across several hosts.
+  let macChain: ReturnType<CallerLocator> | undefined;
+  // Searched only when the call names a pane, checked against that pane's roots.
   const locate: CallerLocator | null =
-    (deps.platform ?? process.platform) === "linux" && peer
-      ? (roots) =>
-          (deps.callerChain ?? callerProcesses)(
-            peer,
-            deps.serverPort,
-            undefined,
-            roots,
-          )
+    supported && peer
+      ? (roots) => {
+          if (deps.processLookup)
+            return deps.processLookup(peer, deps.serverPort, roots);
+          if (platform === "linux")
+            return callerProcesses(peer, deps.serverPort, undefined, roots);
+          if (macChain === undefined)
+            macChain = darwinCallerProcesses(peer, deps.serverPort);
+          return macChain;
+        }
       : null;
   const response = await deps.handle(body, locate);
+  if (
+    !supported &&
+    !response.ok &&
+    response.code === "refused" &&
+    typeof command === "string" &&
+    (command === "ask" || command.startsWith("ask "))
+  )
+    response.error += "; caller verification is unavailable on this platform";
   return Response.json(response, {
     status: response.ok ? 200 : STATUS[response.code],
     headers: { "cache-control": "no-store" },

@@ -11,6 +11,12 @@
   remains `dismissed`, and a later withdrawal supersedes an answer or dismissal.
 - Use `ask ls`, not `ask list`. Command-word-only questions fail quietly with a
   usage hint, including when supplied after flags or sent directly to World.
+- Refused asks keep the service's reason, exit 3 and send no fallback alert.
+  Unsupported platforms say "caller verification is unavailable on this platform".
+  Ask JSON uses `recorded: true` for saved questions, `false` for confirmed
+  rejection, and `null` when a lost or unreadable reply leaves recording unknown.
+  Service/transport failures retain one Herdr fallback alert and exit 1; a
+  recorded ask never falls back. There are no new browser controls.
 
 **Code:**
 
@@ -39,6 +45,8 @@
 - `server/src/cli/world.ts`, `server/src/cli/world.test.ts`
 - `server/src/cli/world-skill.ts`, `server/src/cli/integration.ts`, `server/src/cli/integration.test.ts`
 - `server/src/world/world-cli.ts`, `server/src/world/world-cli-protocol.ts`
+- `server/src/http/world-cli-endpoint.ts`, `server/src/http/world-cli-endpoint.test.ts` (platform refusal reasons and injected caller lookup)
+- `server/src/world/caller-identity-darwin.ts`, `server/src/world/caller-identity-darwin.test.ts` (macOS caller inspection)
 - `server/src/world/world-cli.test.ts`, `server/src/world/world-question-ownership.test.ts`
 - `server/src/verbs/cli.ts`, `server/src/verbs/policy-baseline.json`
 - `server/src/verbs/policy.test.ts`

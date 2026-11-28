@@ -12,6 +12,9 @@
 - `server/src/world/binding-resolution.test.ts`
 - `shared/worldIdentity.ts`
 - `server/src/world/world-cli-actor.ts` (shared CLI caller location and verification)
+- `server/src/http/world-cli-endpoint.ts`, `server/src/http/world-cli-endpoint.test.ts` (platform selection, injected process lookup and both runtime authority checks)
+- `server/src/world/caller-identity.ts`, `server/src/world/caller-identity.test.ts` (Linux socket ownership and shared ancestry)
+- `server/src/world/caller-identity-darwin.ts`, `server/src/world/caller-identity-darwin.test.ts` (bounded numeric macOS socket/process inspection)
 - `server/src/world/world-ledger.ts` (actor snapshots on asks, results and history)
 - `server/src/world/world-cli-location.test.ts` (isolated TUI/core move attribution)
 - `server/src/world/ask-delivery-types.ts` (stable question ownership versus exact recipient authority)
@@ -25,6 +28,12 @@
 **Pitfalls:**
 
 - Names are display labels; durable identity is qualified by runtime.
+- Local CLI caller verification supports Linux and macOS for both runtimes.
+  macOS uses the bundled lsof and ps without privileges, with a 1-second deadline
+  and 256 KiB cap per command, at most 4096 processes and 64 ancestors. Unavailable
+  tools, unreadable or ambiguous ownership, and exhausted limits stay unverified.
+  Other platforms name unavailable verification in refused asks. A pane claim
+  and a shared process group still grant no authority.
 - `herdr-world whoami` shows the caller's current runtime location. Herdr resolves
   an unchanged launch-time pane ID after a move; no process environment edit is
   needed. New asks, results and history use that location, while saved attribution
