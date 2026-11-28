@@ -410,7 +410,8 @@ exception and unrelated ordinary docs skip it. Full CI covers every repository
 check, accepted model and diagnostic/resource control across its workers. Pre-push runs
 `bun run check:changed` for static checks and affected non-browser units;
 browser suites and behavioral acceptance run in CI. `bun run check:delivery`
-runs all local lanes, including the full `verification:gate` (never `--case`). Linux CI additionally enforces the aggregate resource envelope described
+runs all local lanes, including the full `verification:gate` (never `--case`)
+after the test lanes, or its receipt from a pass on identical inputs. Linux CI additionally enforces the aggregate resource envelope described
 in [behavioral evidence](verification/README.md#candidate-commands-and-promotion).
 Independent acceptance is recorded in [promotion decisions](verification/promotion-review.md);
 The [verification guide](verification/README.md) retains final gate/resource

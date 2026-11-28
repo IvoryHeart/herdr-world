@@ -128,11 +128,11 @@ proof establishes an identical tree. A newer red/cancelled verdict is never
 skipped; absent proof or API errors keep a red metadata result without starting
 another suite in that aggregate. An independent **Main model evidence** job runs
 the model lane fresh and saves successful per-model evidence in main's cache scope.
-The 26 immutable model/part identities are packed longest-first by recorded
+The 27 immutable model/part identities are packed longest-first by recorded
 resource-step times from main run 46077711273 into four balanced groups
 (`scripts/ci-model-plan.ts`). Each group admits at most four concurrent parts inside one existing
 400% CPU / 4 GiB cgroup. Every part keeps its scope, controls, cache validation and
-resource receipt; the complete aggregate still requires all 26 parts. A group
+resource receipt; the complete aggregate still requires all 27 parts. A group
 cache restores the latest bundle set, and each part independently validates its
 current content/tool key before dependency/checker installation. Invalid or
 missing parts run fresh. Only main saves successful bundles. Group 1 always
@@ -283,7 +283,9 @@ isolation rules. Only failed unit files or browser cases retry once; models neve
 latency signal for measured input delays.
 
 The maintained plan (`scripts/ci-model-plan.ts`) gives each model its own job;
-IDE lifecycle has four jobs and core runtime has three. Every original check,
+IDE lifecycle has four jobs and core runtime has four. The failing-candidate
+diagnostic control runs once per run, in the group owning browser-refresh,
+whenever that part misses the cache. Every original check,
 replay, witness, production control and sensitivity case remains required.
 Each model CI job uses four TLC workers inside an enforced 4 GiB/no-swap/four-CPU
 envelope, with the existing OOM/cancellation and diagnostic controls. The

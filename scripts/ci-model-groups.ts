@@ -3,7 +3,7 @@ import { createHash, randomUUID } from "node:crypto";
 import { existsSync, appendFileSync } from "node:fs";
 import { mkdir, readdir, readFile, writeFile } from "node:fs/promises";
 import { resolve } from "node:path";
-import { modelCache, modelCacheKey } from "./ci-model-cache";
+import { modelCache, modelCacheKeys } from "./ci-model-cache";
 import {
   DIAGNOSTIC_CONTROL_JOB,
   MODEL_GROUP_WORKERS,
@@ -92,9 +92,7 @@ if (import.meta.main) {
   const indices = verificationGroup(group);
   const root = resolve(import.meta.dir, "..");
   if (action === "key") {
-    const keys = await Promise.all(
-      indices.map((index) => modelCacheKey(root, index)),
-    );
+    const keys = await modelCacheKeys(root, indices);
     const hash = createHash("sha256")
       .update(JSON.stringify(keys.map((key) => key.hash)))
       .digest("hex");

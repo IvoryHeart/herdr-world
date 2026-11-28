@@ -161,7 +161,8 @@ function plan(selection: Affected) {
           {
             name: "verification",
             queue: "verification",
-            commands: [["bun", "run", "verification:gate"]],
+            // The complete gate, or its receipt on identical inputs.
+            commands: [["bun", "scripts/verification-reuse.ts"]],
           },
         ]
       : [];
@@ -280,11 +281,11 @@ if (results.every((result) => result.code === 0)) {
       ? [...done, ...(await Promise.all(quiet.map(runLane)))]
       : done;
   })();
-  const [checked, tested] = await Promise.all([
-    Promise.all(verification.map(runLane)),
-    tests,
-  ]);
-  results.push(...checked, ...tested);
+  // Model checking runs after the browser lanes: beside them, a fresh gate
+  // contended for the same cores and exceeded its run deadline.
+  const tested = await tests;
+  const checked = await Promise.all(verification.map(runLane));
+  results.push(...tested, ...checked);
 }
 
 const failed = results.filter((result) => result.code !== 0);

@@ -9,12 +9,23 @@ import { verificationModels } from "../quint/models";
  * its dependencies, but do not traverse other models' unselected branches.
  * Mutants read production files by name, so literal source paths are inputs too.
  */
-export function modelInputs(root: string, files: string[], model: string) {
+export function modelInputs(
+  root: string,
+  files: string[],
+  model: string,
+  scan: ModelInputScan = scanModelInputs(root, files),
+) {
   assert(
     verificationModels.includes(model as (typeof verificationModels)[number]),
     "Unknown model key",
   );
-  const graph = buildGraph(root, files);
+  // Each model filters the dispatchers' edges on its own copy.
+  const graph = {
+    ...scan.graph,
+    deps: new Map(
+      [...scan.graph.deps].map(([path, deps]) => [path, new Set(deps)]),
+    ),
+  };
   const aliases: Record<string, string> = {
     "herdr-core-verification": "herdr-core-runtime",
     "connection-registry-verification": "connection-registry",
@@ -64,10 +75,38 @@ export function modelInputs(root: string, files: string[], model: string) {
     "quint/composed-cases.ts",
     "scripts/verification-replay.ts",
   ]);
+  for (const path of scan.sources) {
+    const deps = graph.deps.get(path) ?? new Set<string>();
+    // Actual Quint module imports always remain, including cross-model modules.
+    graph.deps.set(
+      path,
+      new Set(
+        [...deps].filter(
+          (dep) =>
+            !dispatchers.has(path) || !owner(dep) || owner(dep) === model,
+        ),
+      ),
+    );
+  }
+  // Missing imports fail closed rather than minting incomplete reusable evidence.
+  return contentInputs(graph, roots);
+}
+
+export type ModelInputScan = {
+  graph: ReturnType<typeof buildGraph>;
+  sources: string[];
+};
+
+/** The model-independent import scan, shared by every model's key. */
+export function scanModelInputs(root: string, files: string[]): ModelInputScan {
+  const graph = buildGraph(root, files);
+  const sources: string[] = [];
   for (const path of files) {
     if (!/\.(?:qnt|[cm]?[jt]sx?)$/.test(path)) continue;
     const source = readFileSync(resolve(root, path), "utf8");
+    sources.push(path);
     const deps = graph.deps.get(path) ?? new Set<string>();
+    graph.deps.set(path, deps);
     // Quint imports are not JavaScript imports and need their own resolver.
     const imports =
       /(?:from\s*|import\s*(?:\(\s*)?|require\s*\(\s*)["'](\.{1,2}\/[^"']+)["']/g;
@@ -101,17 +140,6 @@ export function modelInputs(root: string, files: string[], model: string) {
       ))
         if (graph.files.has(match[1]!)) deps.add(match[1]!);
     }
-    // Actual Quint module imports always remain, including cross-model modules.
-    graph.deps.set(
-      path,
-      new Set(
-        [...deps].filter(
-          (dep) =>
-            !dispatchers.has(path) || !owner(dep) || owner(dep) === model,
-        ),
-      ),
-    );
   }
-  // Missing imports fail closed rather than minting incomplete reusable evidence.
-  return contentInputs(graph, roots);
+  return { graph, sources };
 }

@@ -168,11 +168,16 @@ The explicit agent-tooling exception and unrelated ordinary docs skip it. See
 [the CI guide](../docs/ci-pipelines.md#shared-suite-plan-and-sharding). Local
 pre-push uses the same complete-PR classification for non-browser units only;
 browser suites and behavioral verification run in CI. The explicit local
-`check:delivery` always runs the complete `verification:gate`.
+`check:delivery` runs the complete `verification:gate` after its test lanes, or
+reuses a receipt from a gate that passed on identical inputs (every model
+part's cache key and the gate command); `HERDR_VERIFICATION_FRESH=1` always
+runs it.
 
 CI gives every accepted model its own job (`scripts/ci-model-plan.ts`).
 IDE lifecycle has four jobs (replay and three exhaustive groups); core runtime
-has three (replay and two fault-control groups). Space admission overlaps
+has four (replay and three fault-control groups). The failing-candidate
+diagnostic control runs once per run, in the group that owns browser-refresh,
+when that part misses the cache. Space admission overlaps
 independent exhaustive verification and simulation. Every model still runs
 its maintained bounds, replay and sensitivity checks. Partial `ci-shard` artifacts
 are not canonical evidence. The final aggregate requires all groups and every
