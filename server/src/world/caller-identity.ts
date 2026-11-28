@@ -5,8 +5,8 @@ import { readdirSync, readFileSync, readlinkSync } from "node:fs";
  * HERDR_PANE_ID, which any process can set, so the service checks it: the
  * calling process (found from its loopback TCP connection) or one of its
  * ancestors must be the pane's shell or a foreground process in Herdr. This
- * works for panes of a local Herdr on Linux; elsewhere the claim stays
- * unverified and is labelled so.
+ * works for local Herdr panes on Linux and macOS; elsewhere the claim stays
+ * unverified and is labelled so. macOS lookup lives in caller-identity-darwin.ts.
  */
 
 export type CallerProcess = { pid: number; ppid: number; pgrp: number };

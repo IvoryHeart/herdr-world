@@ -108,7 +108,7 @@ Targets are on your own host; add --connection ID for another one.
          changes Herdr's tab order, so it needs --herdr; World cannot undo it
   ask "QUESTION" [--key CAUSE] [--options a,b,c] [--owner-only] [--wait [--timeout S]]
   ask get ID [--wait] | ask answer ID "ANSWER" | ask withdraw ID|--key CAUSE
-         New asks from a verified local Linux caller with a supported bound
+         New asks from a verified local Linux or macOS caller with a supported bound
          Chat session can receive the saved answer there without --wait.
          Right before typing, World checks only the runtime-reported foreground
          group leader's executable basename, ignoring arguments and children.
@@ -139,7 +139,8 @@ Targets are on your own host; add --connection ID for another one.
          closed, like an answered one, until you withdraw it.
          The service commits a question and its owner-alert intent to
          world.sqlite, then sends through the captured Herdr connection.
-         JSON "recorded" says whether World kept it; "notified" carries
+         JSON "recorded" is true when kept, false when rejected, and null
+         when a lost reply leaves recording unknown. "notified" carries
          Herdr's reply (null when a repeated cause sent no new alert).
          Exit 6 (not_delivered) keeps the ID: no alert is confirmed yet.
          "retrying": true means World scheduled a temporary-failure retry
@@ -147,7 +148,9 @@ Targets are on your own host; add --connection ID for another one.
          At the open-question cap (20 per verified terminal, shared for
          unverified callers; 500 overall), question_cap exits 3 without an
          owner alert. Wait until a question closes; do not retry in a loop.
-         For other recording failures, the CLI still alerts via
+         Refused asks preserve their reason, exit 3 and send no fallback alert.
+         Unsupported platforms say caller verification is unavailable on this platform.
+         For service or transport failures, the CLI still alerts via
          your Herdr, names the failure, and exits 1. A lost service reply
          can therefore produce a harmless duplicate owner alert.
          ask get ID --json exposes delivery evidence, including uncertain
