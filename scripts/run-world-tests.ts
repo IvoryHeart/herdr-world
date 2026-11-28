@@ -3,6 +3,10 @@ import { mkdtemp, rm, mkdir } from "node:fs/promises";
 import { availableParallelism, tmpdir } from "node:os";
 import { join } from "node:path";
 import { buildWorldBrowserBundle } from "../web/src/world/testing/browserBundles";
+import {
+  SHARED_CHROME_ENV,
+  startSharedChrome,
+} from "../web/src/testing/chromeBrowser";
 import { acquireCheckSlot, heldEnv } from "./check-lock";
 import {
   assertWorldBrowserInventory,
@@ -64,6 +68,14 @@ await rm(phasesFile, { force: true });
 // World runs take the browser slot. A nested runner already holds its
 // parent's slot and skips acquisition.
 const release = await acquireCheckSlot("browser", { lane: `world ${label}` });
+// One Chrome for the whole shard; every case opens its own context in it.
+const sharedChrome = Bun.env[SHARED_CHROME_ENV]
+  ? undefined
+  : await startSharedChrome().catch((error: Error) => {
+      // Each test file then starts its own Chrome.
+      console.warn(`[world-tests] shared Chrome: ${error.message}`);
+      return undefined;
+    });
 try {
   const began = performance.now();
   await buildWorldBrowserBundle("HostsFilter", directory);
@@ -122,6 +134,7 @@ try {
           HERDR_WORLD_TEST_ASSETS: directory,
           HERDR_WORLD_TEST_PHASES: phasesFile,
           HERDR_TEST_EXCLUDE_WORLD_BROWSER: "0",
+          ...sharedChrome?.env,
           ...heldEnv("browser"),
         },
       },
@@ -169,6 +182,7 @@ try {
     `[world-test-runner] ${label}: completed in ${((performance.now() - began) / 1000).toFixed(1)} seconds`,
   );
 } finally {
+  await sharedChrome?.stop();
   release();
   await rm(directory, { recursive: true, force: true });
 }

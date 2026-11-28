@@ -218,7 +218,7 @@ test.skipIf(!chrome).concurrent.each([
         )
           heldChunks.set(path, Promise.withResolvers<void>());
       }
-      page = await openChromePage(["--disable-gpu", "--window-size=500,800"]);
+      page = await openChromePage({ viewport: { width: 500, height: 800 } });
       cdp = page.cdp;
 
       const { evaluate } = page;

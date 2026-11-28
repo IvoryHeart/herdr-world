@@ -206,10 +206,32 @@ export function includesBrowserSuites(
   );
 }
 
+/**
+ * Whether the selection runs a suite that opens its pages in the run's shared
+ * Chrome (web/src/testing/sharedChrome.ts). Unlike the slot check, a path
+ * outside the repository's suites selects none.
+ */
+export function includesSharedChromeSuites(
+  args: readonly string[],
+  root = process.cwd(),
+): boolean {
+  const shared = [...webBrowserSuites, ...worldBrowserSuites].filter((file) => {
+    try {
+      return /testing\/(?:sharedChrome|TownCanvas)"/.test(
+        readFileSync(join(root, file), "utf8"),
+      );
+    } catch {
+      return false;
+    }
+  });
+  return shared.length > 0 && includesSuites(args, shared, root, false);
+}
+
 function includesSuites(
   args: readonly string[],
   suites: readonly string[],
   root: string,
+  unknownPath = true,
 ): boolean {
   const valueFlags = new Set([
     "-t",
@@ -236,17 +258,18 @@ function includesSuites(
   if (paths.length === 0) return true;
   return paths.some((arg) => {
     const absolute = resolve(root, arg);
-    if (!existsSync(absolute)) return true;
+    if (!existsSync(absolute)) return unknownPath;
     try {
       const path = relative(realpathSync(root), realpathSync(absolute))
         .split(sep)
         .join("/");
-      if (!path || path === ".." || path.startsWith("../")) return true;
+      if (!path) return true;
+      if (path === ".." || path.startsWith("../")) return unknownPath;
       return suites.some(
         (suite) => suite === path || suite.startsWith(`${path}/`),
       );
     } catch {
-      return true;
+      return unknownPath;
     }
   });
 }

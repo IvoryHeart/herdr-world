@@ -33,6 +33,7 @@ import type { TownSceneFrame, TownSceneState } from "./scene/townSceneDiff";
 import { diagnostics, type TownFrameTrace } from "./townDiagnostics";
 export type { TownFrameTrace } from "./townDiagnostics";
 import { DEVTOOLS, type ViewTrace } from "../devtools/flag";
+import { townPixelsEnabled } from "../devtools/renderer";
 
 import {
   TownActors,
@@ -743,8 +744,10 @@ export async function createTownRenderer(
       !(animated && frames?.motionAllowed && ambient.next === clock);
     forced = false;
     if (!onlyFilling || now - lastRender >= TOWN_FILL_RENDER_MS) {
-      lighting.render(townSkyIsClear(sky));
-      app.renderer.render(app.stage);
+      if (townPixelsEnabled()) {
+        lighting.render(townSkyIsClear(sky));
+        app.renderer.render(app.stage);
+      }
       lastRender = now;
     }
     onDrawn?.(materializing);

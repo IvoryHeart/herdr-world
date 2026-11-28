@@ -14,6 +14,7 @@ import {
   worldLatencyTrendSuites,
   worldRuntimeSuites,
   includesBrowserSuites,
+  includesSharedChromeSuites,
   discoverWorldBrowserSuites,
 } from "./world-browser-suites";
 
@@ -31,6 +32,23 @@ test("World selections and unknown selectors take the browser slot", () => {
   expect(
     includesBrowserSuites([worldLatencyTrendSuites[0]!, "-t", "name"]),
   ).toBe(true);
+});
+
+test("only selections of suites that use it start the run's shared Chrome", () => {
+  expect(includesSharedChromeSuites([])).toBe(true);
+  expect(includesSharedChromeSuites(["web/src/world/town"])).toBe(true);
+  expect(
+    includesSharedChromeSuites(["web/src/world/town/TownCanvas.test.ts"]),
+  ).toBe(true);
+  expect(includesSharedChromeSuites(["web/src/uiScale.test.ts"])).toBe(true);
+  expect(
+    includesSharedChromeSuites(["scripts/world-browser-suites.test.ts"]),
+  ).toBe(false);
+  // A file outside the repository's suites selects none of them.
+  expect(includesSharedChromeSuites(["/nonexistent/probe.test.ts"])).toBe(
+    false,
+  );
+  expect(includesSharedChromeSuites([], tmpdir())).toBe(false);
 });
 
 test("case shards cover the complete World browser file inventory", async () => {

@@ -339,3 +339,23 @@ export function realTimeClock(): TestClock {
     },
   };
 }
+
+declare global {
+  interface Window {
+    /** The page's test clock, once a fixture installs one. */
+    __HERDR_TEST_CLOCK__?: TestClock;
+  }
+}
+
+/**
+ * The page's installed test clock, for check helpers a fixture shares
+ * (`townCenter.browser.ts` and the like) that wait for test time.
+ */
+export function pageClock(): TestClock {
+  const installed = globalThis.window?.__HERDR_TEST_CLOCK__;
+  if (!installed)
+    throw new Error(
+      "This check runs on test time: its fixture imports testing/installRunningTestClock first",
+    );
+  return installed;
+}

@@ -6,6 +6,11 @@ declare global {
     __HERDR_WORLD_RENDERER_DEBUG__?: boolean | "counters";
     /** World model work by kind, while the counters are on. */
     __HERDR_WORLD_WORK__?: Record<string, number>;
+    /**
+     * Set false by browser checks of behaviour, not pixels: Town keeps its
+     * whole scene, frames and counters but submits nothing to WebGL.
+     */
+    __HERDR_TOWN_PIXELS__?: boolean;
   }
 }
 
@@ -43,4 +48,20 @@ export function countWorldWork(kind: string, units = 1) {
   if (!worldRendererCountersEnabled()) return;
   const work = (window.__HERDR_WORLD_WORK__ ??= {});
   work[kind] = (work[kind] ?? 0) + units;
+}
+
+/**
+ * Whether Town submits its frames to WebGL. Browser checks of behaviour
+ * (navigation, rooms, controls, focus, terminals) turn it off: the scene,
+ * its frames and its counters stay the same, but test Chrome's software GPU
+ * (SwiftShader) no longer paints every frame, which was most of a Town case's
+ * time. Golden images, the frame budget and visual checks keep the pixels.
+ * Release builds always draw.
+ */
+export function townPixelsEnabled() {
+  return (
+    !DEVTOOLS ||
+    typeof window === "undefined" ||
+    window.__HERDR_TOWN_PIXELS__ !== false
+  );
 }

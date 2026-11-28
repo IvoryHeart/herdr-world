@@ -390,35 +390,7 @@
       "pauses": 4,
       "reason": "Not converted yet; its area sweep (#1419) replaces these with waits on the real signal."
     },
-    "web/src/world/town/townBusTrip.browser.ts": {
-      "pauses": 1,
-      "reason": "Not converted yet; its area sweep (#1419) replaces these with waits on the real signal."
-    },
-    "web/src/world/town/TownCanvas.browser.tsx": {
-      "pauses": 38,
-      "reason": "Not converted yet; its area sweep (#1419) replaces these with waits on the real signal."
-    },
-    "web/src/world/town/townCenter.browser.ts": {
-      "pauses": 1,
-      "reason": "Not converted yet; its area sweep (#1419) replaces these with waits on the real signal."
-    },
-    "web/src/world/town/townEdgeArrows.browser.ts": {
-      "pauses": 1,
-      "reason": "Not converted yet; its area sweep (#1419) replaces these with waits on the real signal."
-    },
     "web/src/world/town/townMoves.test.ts": {
-      "pauses": 1,
-      "reason": "Not converted yet; its area sweep (#1419) replaces these with waits on the real signal."
-    },
-    "web/src/world/town/townPlaces.browser.ts": {
-      "pauses": 2,
-      "reason": "Not converted yet; its area sweep (#1419) replaces these with waits on the real signal."
-    },
-    "web/src/world/town/townRoomPlates.browser.ts": {
-      "pauses": 3,
-      "reason": "Not converted yet; its area sweep (#1419) replaces these with waits on the real signal."
-    },
-    "web/src/world/town/townRoomPlates.test.ts": {
       "pauses": 1,
       "reason": "Not converted yet; its area sweep (#1419) replaces these with waits on the real signal."
     },

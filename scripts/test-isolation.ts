@@ -24,6 +24,8 @@ const runnerVariables = new Set([
   "HERDR_WORLD_TEST_GPU",
   // Per-case phase seconds for the World job summary (casePhases.ts).
   "HERDR_WORLD_TEST_PHASES",
+  // The run's one shared test Chrome (web/src/testing/chromeBrowser.ts).
+  "HERDR_TEST_CHROME_WS",
   // The CI diagnostics adapter needs these through nested test runners.
   "HERDR_DIAGNOSTIC_CHROME",
   "HERDR_BROWSER_DIAGNOSTICS_DIR",

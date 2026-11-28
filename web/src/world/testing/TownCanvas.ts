@@ -1,17 +1,18 @@
 import { afterAll, beforeAll, expect, test } from "bun:test";
 import { type TownCanvasCase, townCanvasCases } from "../town/TownCanvas.cases";
-import { existsSync } from "node:fs";
-import { mkdtemp, readFile, rm } from "node:fs/promises";
+import { mkdtemp, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import {
   BROWSER_STARTUP_TIMEOUT_MS,
   waitForBrowserFixture,
-  waitForChromePort,
 } from "../../browserChrome";
+import {
+  type ChromePage,
+  chromeBinary as chrome,
+  openChromePage,
+} from "../../testing/sharedChrome";
 import { casePhases } from "./casePhases";
-import { chromeRenderingFlags } from "./chromeRendering";
-import { connectCapture } from "./connectCapture";
 import {
   buildWorldBrowserBundle,
   readWorldBrowserBundle,
@@ -36,13 +37,6 @@ afterAll(async () => {
     await rm(bundleDirectory, { recursive: true, force: true });
 });
 
-const chrome =
-  Bun.env.CHROME_BIN ||
-  (process.platform === "darwin" &&
-  existsSync("/Applications/Google Chrome.app/Contents/MacOS/Google Chrome")
-    ? "/Applications/Google Chrome.app/Contents/MacOS/Google Chrome"
-    : Bun.which("google-chrome") || Bun.which("chromium"));
-
 const unavailableObservability = {
   health: "unavailable",
   providerId: null,
@@ -65,7 +59,6 @@ export function registerTownCanvasCases(group: keyof typeof townCanvasCases) {
       const phases = casePhases(
         `TownCanvas ${width}x${height} ${scale} ${flightFrameDelay}ms`,
       );
-      const dir = await mkdtemp(join(tmpdir(), "office-town-test-"));
       const assets = new Map<string, Blob>();
       const result = Promise.withResolvers<unknown>();
       const pageRequested = Promise.withResolvers<void>();
@@ -91,58 +84,23 @@ export function registerTownCanvasCases(group: keyof typeof townCanvasCases) {
           return new Response("Not found", { status: 404 });
         },
       });
-      let browser: ReturnType<typeof Bun.spawn> | undefined;
-      let devtools: Awaited<ReturnType<typeof connectCapture>> | undefined;
+      let page: ChromePage | undefined;
       try {
         for (const [path, output] of bundle.assets) assets.set(path, output);
-        const browserLog = join(dir, "browser.log");
-        // Every case pins its CSS viewport over CDP: `--window-size` alone
-        // gives headless Chrome a wider viewport than a 390px phone (#643),
-        // and the fixture fails when the size it measures differs.
         const fixtureUrl = `${server.url.href}?mode=test&scale=${scale}&flightFrameDelay=${flightFrameDelay}&edgeFrameDelay=${width === 390 && height === 844 && (scale === "extended" || scale.startsWith("extended-")) ? 300 : 0}&viewport=${width}x${height}`;
-        browser = Bun.spawn(
-          [
-            chrome!,
-            "--headless=new",
-            `--window-size=${width},${height}`,
-            "--enable-webgl",
-            ...(await chromeRenderingFlags(chrome!)),
-            "--disable-background-networking",
-            "--no-first-run",
-            "--no-default-browser-check",
-            `--user-data-dir=${join(dir, "profile")}`,
-            "--remote-debugging-port=0",
-            "about:blank",
-          ],
-          { stdout: "ignore", stderr: Bun.file(browserLog) },
-        );
-        const port = await waitForChromePort(
-          browser,
-          join(dir, "profile"),
-          browserLog,
-        );
+        // Every case pins its CSS viewport by emulation at DPR 1 (#643: the
+        // fixture fails when the size it measures differs). Behaviour checks
+        // skip the GPU draw; the scene graph, hit testing and DOM still run.
+        page = await openChromePage({ viewport: { width, height } });
         phases.mark("chrome");
         void pageRequested.promise.then(() => phases.mark("load"));
-        devtools = await openAtExactViewport(port, fixtureUrl, width, height);
+        await page.command("Page.navigate", { url: fixtureUrl });
         const failures = await waitForBrowserFixture(
           pageRequested.promise,
           result.promise,
-          browser.exited.then(async (code) => {
-            throw new Error(
-              `Browser exited (${code}): ${await readFile(browserLog, "utf8")}`,
-            );
-          }),
+          page.exited,
           "Office town browser check",
-          // A hang guard, not a speed budget. Extended and max towns at large
-          // windows paint far more pixels in software, and each topology
-          // change glides over drawn frames; CI runners differ by about 1.5x
-          // (the 1080x1920 slow-frame case took 54 s to 80 s on main, and the
-          // 1440x900 typical case 40 s on CI against 20 s locally). The
-          // full bus trip (townBusTrip.browser.ts) has its own case:
-          // combined with typical's interactions, and waiting for drawn
-          // frames at every sampled second, it took 109 s locally on two
-          // cores and exceeded this guard on CI. It now samples without
-          // drawn frames (#1183).
+          // A hang guard, not a speed budget.
           scale.startsWith("extended") ||
             scale === "protected" ||
             scale === "max" ||
@@ -150,7 +108,7 @@ export function registerTownCanvasCases(group: keyof typeof townCanvasCases) {
             ? LARGE_TOWN_FIXTURE_MS
             : 60_000,
         ).catch(async (error: Error) => {
-          const state = await devtools!
+          const state = await page!
             .command("Runtime.evaluate", {
               expression:
                 "JSON.stringify({progress: window.__townCheckProgress?.slice(-12), renderer: (({frames, flying, transitioning, level, buildingsDrawn}) => ({frames, flying, transitioning, level, buildingsDrawn}))(window.__HERDR_TOWN_RENDERER__ ?? {})})",
@@ -164,41 +122,11 @@ export function registerTownCanvasCases(group: keyof typeof townCanvasCases) {
         phases.mark("scene");
         expect(failures).toEqual([]);
       } finally {
-        devtools?.close();
-        if (browser) {
-          browser.kill();
-          await browser.exited;
-        }
+        await page?.close();
         server.stop(true);
-        await rm(dir, { recursive: true, force: true });
         phases.done();
       }
     },
     LARGE_TOWN_FIXTURE_MS + 15_000 + BROWSER_STARTUP_TIMEOUT_MS,
   );
-}
-
-/**
- * Pins the page's CSS viewport, then loads the fixture. The override lasts
- * while the returned DevTools socket stays open.
- */
-async function openAtExactViewport(
-  port: string,
-  url: string,
-  width: number,
-  height: number,
-) {
-  const socket = await connectCapture(port);
-  const { command } = socket;
-  await command("Emulation.setDeviceMetricsOverride", {
-    width,
-    height,
-    deviceScaleFactor: 1,
-    mobile: false,
-  });
-  // A page opened over DevTools is not the focused window, so focus events
-  // (the room card opens on focus) need focus emulation.
-  await command("Emulation.setFocusEmulationEnabled", { enabled: true });
-  await command("Page.navigate", { url });
-  return socket;
 }
