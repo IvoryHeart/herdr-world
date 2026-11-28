@@ -1,3 +1,7 @@
+import {
+  launchTestBrowser,
+  type TestBrowser,
+} from "../../../scripts/testing/browser-session";
 import { afterAll, beforeAll, expect, test } from "bun:test";
 import { mkdtemp, readFile, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
@@ -33,18 +37,29 @@ import {
   waitForBrowserFixture,
 } from "../browserChrome";
 import { InputDriver } from "./browserAcceptanceFixture";
+import { casePhases } from "./testing/casePhases";
 import { chromeRenderingFlags } from "./testing/chromeRendering";
 
 const chrome =
   Bun.env.CHROME_BIN || Bun.which("google-chrome") || Bun.which("chromium");
-test.skipIf(!chrome).each([1440, 390])(
-  "rendering, focus and terminal lifecycle: shared creation across views at %ipx",
-  async (width) => {
+test
+  .skipIf(!chrome)
+  .each(
+    [1440, 390].flatMap((width) =>
+      ["chat", "creation", "retention"].map(
+        (scenario) => [width, scenario] as const,
+      ),
+    ),
+  )(
+  "rendering, focus and terminal lifecycle: shared creation across views at %ipx (%s)",
+  async (width, scenario) => {
+    const phases = casePhases(`SharedViewCreation ${width}px ${scenario}`);
     const dir = await mkdtemp(join(tmpdir(), "world-shared-creation-"));
     const assets = new Map<string, Blob>();
     const result = Promise.withResolvers<string[]>();
     let socket: WebSocket | undefined;
     const pageRequested = Promise.withResolvers<void>();
+    let driver: InputDriver | undefined;
     const server = Bun.serve({
       hostname: "127.0.0.1",
       port: 0,
@@ -66,7 +81,7 @@ test.skipIf(!chrome).each([1440, 390])(
             socket!.onopen = () => resolve();
             socket!.onerror = () => reject(new Error("CDP connection failed"));
           });
-          const driver = new InputDriver(socket);
+          driver = new InputDriver(socket);
           await driver.call("Emulation.setEmulatedMedia", {
             features: [{ name: "prefers-reduced-motion", value: "reduce" }],
           });
@@ -80,6 +95,12 @@ test.skipIf(!chrome).each([1440, 390])(
             enabled: width === 390,
           });
           return new Response(String(width));
+        }
+        if (path === "/input" && request.method === "POST") {
+          if (!driver) return new Response("Input not ready", { status: 503 });
+          const { method, params } = await request.json();
+          await driver.call(method, params);
+          return new Response("ok");
         }
         if (path === "/result") {
           result.resolve(await request.json());
@@ -99,10 +120,12 @@ test.skipIf(!chrome).each([1440, 390])(
         );
       },
     });
-    let browser: ReturnType<typeof Bun.spawn> | undefined;
+    let browser: TestBrowser | undefined;
     try {
       for (const [path, output] of bundle.assets) assets.set(path, output);
-      browser = Bun.spawn(
+      phases.mark("setup");
+      void pageRequested.promise.then(() => phases.mark("load"));
+      browser = await launchTestBrowser(
         [
           chrome!,
           "--headless=new",
@@ -115,10 +138,11 @@ test.skipIf(!chrome).each([1440, 390])(
           "--no-first-run",
           "--no-default-browser-check",
           `--user-data-dir=${join(dir, "profile")}`,
-          server.url.href,
+          `${server.url.href}?scenario=${scenario}`,
         ],
         { stdout: "ignore", stderr: Bun.file(join(dir, "browser.log")) },
       );
+      await browser.start();
       const observed = await waitForBrowserFixture(
         pageRequested.promise,
         result.promise,
@@ -128,6 +152,7 @@ test.skipIf(!chrome).each([1440, 390])(
         "Shared creation browser",
         120_000,
       );
+      phases.mark("scene");
       if (observed.length) console.info("Shared creation failures", observed);
       expect(observed).toEqual([]);
     } finally {
@@ -136,6 +161,7 @@ test.skipIf(!chrome).each([1440, 390])(
       if (browser) await browser.exited;
       server.stop(true);
       await rm(dir, { recursive: true, force: true });
+      phases.done();
     }
   },
   150_000 + BROWSER_STARTUP_TIMEOUT_MS,

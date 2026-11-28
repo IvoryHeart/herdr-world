@@ -38,7 +38,8 @@ export async function desktopPane(core: ScratchCore) {
       `${JSON.stringify({ jsonrpc: "2.0", id: 0, method: "hello", params: { framed: true, generation: 1 } })}\n`,
     ),
   );
-  while (!plain.includes("\n")) await Bun.sleep(5);
+  while (!plain.includes("\n"))
+    await new Promise<void>((resolve) => setImmediate(resolve));
   framed = true;
   const size = (cols: number, rows: number) => {
     const bytes = new Uint8Array(4);

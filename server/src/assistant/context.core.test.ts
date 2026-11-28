@@ -75,7 +75,7 @@ async function setup(
   });
   w.fake.report(agent, { state: "working", app: "claude-code" });
   await w.connect();
-  await w.settle();
+  await w.synchronize();
   const settings = () =>
     Promise.resolve(options.settings?.("box") ?? defaultGuiSettings());
   const leaseOf = () => {
@@ -271,7 +271,7 @@ describe("Ranger over herdr-core workspaces", () => {
       cwd: "/tmp/example",
     });
     w.fake.report(agent, { state: "idle", app: "claude-code" });
-    await w.settle();
+    await w.synchronize();
     await expect(
       context.read("terminal", scope, { ...coreRef, pane_id: agent }),
     ).rejects.toThrow("Mentioned agent session changed");

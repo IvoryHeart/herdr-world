@@ -1,3 +1,4 @@
+import { clock } from "../../clock";
 import { useEffect, useState } from "react";
 import { PULL_REQUEST_DETAIL_MAX_AGE_MS } from "../../../../shared/pullRequestFreshness";
 import type {
@@ -235,7 +236,7 @@ export function townWarehouseFixtureMerged(
     ...snapshot,
     items: snapshot.items.map((item) =>
       item === first
-        ? { ...item, lane: "merged", finishedAt: Date.now() }
+        ? { ...item, lane: "merged", finishedAt: clock.now() }
         : item,
     ),
   };
@@ -268,17 +269,17 @@ export function useTownWarehouseSources(): WorldSourcesSnapshot {
   const live = useWorldSources();
   const [fixture] = useState(townWarehouseFixtureMode);
   const [synthetic, setSynthetic] = useState(() =>
-    fixture ? townWarehouseFixtureAt(fixture, Date.now()) : null,
+    fixture ? townWarehouseFixtureAt(fixture, clock.now()) : null,
   );
   useEffect(() => {
     if (!fixture || fixture === "off" || fixtureStart === null) return;
-    const left = fixtureStart + TOWN_WAREHOUSE_FIXTURE_MERGE_MS - Date.now();
+    const left = fixtureStart + TOWN_WAREHOUSE_FIXTURE_MERGE_MS - clock.now();
     if (left <= 0) return;
-    const timer = window.setTimeout(
-      () => setSynthetic(townWarehouseFixtureAt(fixture, Date.now())),
+    const timer = clock.setTimeout(
+      () => setSynthetic(townWarehouseFixtureAt(fixture, clock.now())),
       left + 20,
     );
-    return () => window.clearTimeout(timer);
+    return () => clock.clearTimeout(timer);
   }, [fixture]);
   return synthetic ?? live;
 }

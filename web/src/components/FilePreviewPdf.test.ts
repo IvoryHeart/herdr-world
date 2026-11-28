@@ -119,9 +119,7 @@ if (process.env.FILE_PREVIEW_PDF_DOM !== "1") {
       for (let attempt = 0; attempt < 50; attempt++) {
         const pages = host.querySelector<HTMLElement>("[data-pdf-pages]");
         if (pages) return pages;
-        await act(
-          async () => new Promise((resolve) => setTimeout(resolve, 10)),
-        );
+        await act(async () => new Promise((resolve) => setImmediate(resolve)));
       }
       return null;
     };

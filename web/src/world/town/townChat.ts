@@ -1,3 +1,4 @@
+import { clock } from "../../clock";
 /**
  * Live screen reads and replies for the Town peek and chat dock. Every call is
  * qualified by the leaf's own connection and runtime generation; a pane whose
@@ -91,12 +92,12 @@ export function useTownScreen(
         } catch {
           // An unreadable pane keeps its last screen until it can be read.
         }
-      if (!cancelled) timer = window.setTimeout(read, intervalMs);
+      if (!cancelled) timer = clock.setTimeout(read, intervalMs);
     };
     void read();
     return () => {
       cancelled = true;
-      if (timer !== undefined) window.clearTimeout(timer);
+      if (timer !== undefined) clock.clearTimeout(timer);
     };
     // identity captures the leaf's owner and pane.
     // eslint-disable-next-line react-hooks/exhaustive-deps

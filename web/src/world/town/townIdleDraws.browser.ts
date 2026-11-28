@@ -89,7 +89,7 @@ export async function checkTownIdleDraws(
     // Wait for actual camera/roof/actor/materialization completion, not a
     // fixed animation tail. Do not wait for next === null: unwanted ambient
     // requests must reach the zero-draw assertions below.
-    const settle = () =>
+    const presentFrame = () =>
       clock.until(
         () => trace !== null && trace.causes.length === 0,
         "Town state transitions never settled",
@@ -98,7 +98,7 @@ export async function checkTownIdleDraws(
       () => town().ready && town().frames > 0,
       "Town never drew a frame",
     );
-    await settle();
+    await presentFrame();
     check(
       renderer.level === "town",
       "Static case must cover animated interiors with roofs",
@@ -150,7 +150,7 @@ export async function checkTownIdleDraws(
       town().frames - before >= 6,
       "Camera flight lost its smooth frame cadence",
     );
-    await settle();
+    await presentFrame();
     const animated = town().frames;
     // Eight frames distinguish a continuing pulse from a lone state paint.
     // Drawing seconds of the same pulse adds GPU cost, not coverage.
@@ -170,14 +170,14 @@ export async function checkTownIdleDraws(
       camera.limits!.min,
     );
     renderer.invalidate("test-cover-again");
-    await settle();
+    await presentFrame();
     await idle("Town covered again");
     // Calm motion stills the atmosphere: nothing at all is drawn.
     trace = null;
     renderer.apply(
       new TownSceneDiff().next(model, layout, { ...state, calm: true }),
     );
-    await settle();
+    await presentFrame();
     const calm = await idle("Town calm");
     check(calm["atmosphere-draws"] === 0, "Calm Town kept drifting");
   } finally {

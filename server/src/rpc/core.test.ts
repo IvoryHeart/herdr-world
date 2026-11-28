@@ -300,7 +300,7 @@ describe("world.core.* answers only the core connection it names", () => {
       for (let n = 1; n < ordinal; n++) w.fake.create();
       const lead = w.fake.create({ name: "lead" });
       w.fake.create({ parent: lead, die_with_parent: true, name: "helper" });
-      await w.settle();
+      await w.synchronize();
       const result = await call(w, "world.core.kill_plan", {
         connection_id: "box",
         connection_generation: w.lease().generation,
@@ -326,7 +326,7 @@ test("world.core.move re-keys the moved desk's Board colour and pin, then lets i
       resolveExecutable: async (kind) => `/opt/example/bin/${kind}`,
     },
   );
-  await w.settle();
+  await w.synchronize();
   const lease = w.lease();
   const [{ workspaces = [] }, { panes = [] }] = await Promise.all([
     lease.runtime.operations.listWorkspaces(),

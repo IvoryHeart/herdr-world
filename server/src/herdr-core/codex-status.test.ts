@@ -23,7 +23,7 @@ test("a shell-launched Codex shows core's real status, including a missing repor
     if (outcome.status !== "started") throw new Error("not started");
     const address = outcome.terminal_id;
     const status = async () => {
-      await w.settle();
+      await w.synchronize();
       return (await w.rows()).panes.find((pane) => pane.pane_id === address);
     };
     expect(await status()).toMatchObject({

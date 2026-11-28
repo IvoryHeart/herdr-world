@@ -1,0 +1,5 @@
+{
+  "version": 1,
+  "description": "Fixed sleeps a test file may still hold (#1419). Counts only go down: fix a file, then run bun scripts/check-test-waits.ts --update.",
+  "files": {}
+}

@@ -1,3 +1,4 @@
+import { clock as fixtureTime } from "../testing/installTestClock";
 import { flushSync } from "react-dom";
 import { TownLibrary } from "../town/TownLibrary";
 import type { TownLayout } from "../town/townLayout";
@@ -58,7 +59,7 @@ async function waitFor<T>(
     const value = read();
     if (value) return value as NonNullable<T>;
     if (performance.now() > until) throw new Error(message);
-    await new Promise((resolve) => setTimeout(resolve, 25));
+    await fixtureTime.advance(25);
   }
 }
 

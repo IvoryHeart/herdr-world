@@ -186,8 +186,14 @@ describe("World's session input to a real herdr-core", () => {
       });
       expect(outcome).toMatchObject({ status: "sent", started: true });
       await until(() => s.read().includes("hello once"));
-      await Bun.sleep(500);
-      expect(s.read()).toBe("hello once\n");
+      // The agent reads lines in order: a second send answered first would
+      // show a repeat of the first before it.
+      await deliverCore(s.w.lease(), t, s.token(t), {
+        kind: "message",
+        text: "then this",
+      });
+      await until(() => s.read().includes("then this"));
+      expect(s.read()).toBe("hello once\nthen this\n");
     },
     30_000,
   );
@@ -207,12 +213,16 @@ describe("World's session input to a real herdr-core", () => {
         10_000,
       );
       expect(s.w.record(t)?.argv).toEqual(["/bin/sh"]);
+      const type = await s.person(t);
       const outcome = await deliverCore(s.w.lease(), t, token, {
         kind: "message",
         text: "echo REACHED-SHELL",
       });
       expect(outcome).toMatchObject({ status: "refused", reason: "changed" });
-      await Bun.sleep(500);
+      // The refusal sent nothing; a shell command typed now runs after anything
+      // that had been typed before it.
+      type("echo SENTINEL-DONE\r");
+      await until(async () => /^SENTINEL-DONE/m.test(await s.screen("probe")));
       expect(await s.screen("probe")).not.toContain("REACHED-SHELL");
     },
     30_000,
@@ -226,7 +236,7 @@ describe("World's session input to a real herdr-core", () => {
       const token = s.token(t);
       const type = await s.person(t);
       type("a draft"); // core holds sends until it is sent or cleared
-      await Bun.sleep(300);
+      await until(async () => (await s.screen("probe")).includes("a draft"));
       const pending = deliverCore(s.w.lease(), t, token, {
         kind: "message",
         text: "echo HELD-REACHED-SHELL",
@@ -239,7 +249,10 @@ describe("World's session input to a real herdr-core", () => {
         "World cancelled the input while herdr-core held it",
       );
       await until(() => s.w.record(t)?.argv?.[0] === "/bin/sh", 10_000);
-      await Bun.sleep(1_000);
+      // A command typed into the replacement runs after anything that had
+      // reached it before.
+      (await s.person(t))("echo SENTINEL-DONE\r");
+      await until(async () => /^SENTINEL-DONE/m.test(await s.screen("probe")));
       expect(await s.screen("probe")).not.toContain("HELD-REACHED-SHELL");
       expect(s.read()).not.toContain("HELD-REACHED-SHELL");
     },
@@ -253,7 +266,7 @@ describe("World's session input to a real herdr-core", () => {
       const t = await s.start("probe");
       const type = await s.person(t);
       type("a draft");
-      await Bun.sleep(300);
+      await until(async () => (await s.screen("probe")).includes("a draft"));
       // The same send with nobody watching the occupant, as any client.
       const lease = s.w.lease();
       const pending = lease.runtime.send(

@@ -1,3 +1,4 @@
+import { clock as appClock } from "../clock";
 import "./AgentChat.css";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Copy, ListTree, RefreshCw, SquareTerminal } from "lucide-react";
@@ -432,7 +433,7 @@ export function AgentChat({
   useEffect(() => {
     if (seenStatus.current === liveStatus) return;
     seenStatus.current = liveStatus;
-    setStatusSince(Date.now());
+    setStatusSince(appClock.now());
   }, [liveStatus]);
   // An open call is running only while Herdr says the agent works: a call
   // waiting for approval, or one cut off by an interrupt or crash, is not.
@@ -444,14 +445,14 @@ export function AgentChat({
   const usageStop = useCurrentUsageStop(conversation?.usage_stop ?? trialStop);
   const fuel =
     usageStop && liveStatus !== "working"
-      ? usageStopText(usageStop, Date.now())
+      ? usageStopText(usageStop, appClock.now())
       : null;
   const ticking = liveStatus === "working";
-  const [clock, setClock] = useState(() => Date.now());
+  const [clock, setClock] = useState(() => appClock.now());
   useEffect(() => {
     if (!ticking) return;
-    const timer = window.setInterval(() => setClock(Date.now()), 1000);
-    return () => window.clearInterval(timer);
+    const timer = appClock.setInterval(() => setClock(appClock.now()), 1000);
+    return () => appClock.clearInterval(timer);
   }, [ticking]);
   // Stop presses Esc in the agent's pane, only when the user asks: the Stop
   // button, or Esc twice while Chat has focus.
@@ -500,8 +501,8 @@ export function AgentChat({
         !event.target.closest(".agent-chat")
       )
         return;
-      const now = Date.now();
-      window.clearTimeout(expire);
+      const now = appClock.now();
+      appClock.clearTimeout(expire);
       if (now - firstEscape.current < DOUBLE_ESCAPE_MS) {
         firstEscape.current = 0;
         void stop();
@@ -510,7 +511,7 @@ export function AgentChat({
         const note = `Press Esc again to stop ${agentName || "the agent"}.`;
         setStopNote(note);
         // The note holds only while a second Esc would stop.
-        expire = window.setTimeout(
+        expire = appClock.setTimeout(
           () => setStopNote((current) => (current === note ? "" : current)),
           DOUBLE_ESCAPE_MS,
         );
@@ -518,7 +519,7 @@ export function AgentChat({
     };
     window.addEventListener("keydown", keydown);
     return () => {
-      window.clearTimeout(expire);
+      appClock.clearTimeout(expire);
       window.removeEventListener("keydown", keydown);
     };
   }, [agentName, canStop, stop]);

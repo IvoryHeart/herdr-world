@@ -1,3 +1,5 @@
+import { spawnTestChrome, launchTestBrowser } from "./testing/browser-session";
+import { sharedBrowserBuild } from "../web/src/world/testing/sharedBrowserBuild";
 import { mkdir, mkdtemp, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { basename, join, resolve } from "node:path";
@@ -213,7 +215,7 @@ export async function runTownGolden(options: {
     },
   });
   try {
-    const build = await Bun.build({
+    const build = await sharedBrowserBuild(import.meta.path, {
       ...townGoldenBuildConfig,
       entrypoints: [join(fixture, "TownGolden.browser.tsx")],
       outdir: join(scratch, "bundle"),
@@ -224,7 +226,10 @@ export async function runTownGolden(options: {
       assets.set("/" + basename(output.path), output);
     if (options.update) await mkdir(goldenDirectory, { recursive: true });
     for (let run = 1; run <= runs; run++) {
-      const browser = Bun.spawn(
+      const launch = process.env.HERDR_TEST_BROWSER
+        ? launchTestBrowser
+        : spawnTestChrome;
+      const browser = await launch(
         [
           options.chrome,
           "--headless=new",
@@ -246,7 +251,18 @@ export async function runTownGolden(options: {
       );
       let cdp: Cdp | undefined;
       try {
-        cdp = await Cdp.connect(await endpoint(browser.stderr));
+        if ("start" in browser) await browser.start();
+        const address =
+          "devtoolsPort" in browser
+            ? (
+                (await (
+                  await fetch(
+                    `http://127.0.0.1:${browser.devtoolsPort}/json/list`,
+                  )
+                ).json()) as { type: string; webSocketDebuggerUrl: string }[]
+              ).find((target) => target.type === "page")!.webSocketDebuggerUrl
+            : await endpoint(browser.stderr);
+        cdp = await Cdp.connect(address);
         const version = await cdp.command("Browser.getVersion");
         browserVersion = version.product;
         if (!browserVersion.endsWith("/" + pin.version))
@@ -256,6 +272,9 @@ export async function runTownGolden(options: {
         for (const viewport of townGoldenCaptures) {
           const { targetId } = await cdp.command("Target.createTarget", {
             url: "about:blank",
+            ...("contextId" in browser
+              ? { browserContextId: browser.contextId }
+              : {}),
           });
           try {
             const { sessionId } = await cdp.command("Target.attachToTarget", {

@@ -1,21 +1,11 @@
 /**
- * Fixed sleeps in test files (#1419): a test reacts to the thing it checks
- * (an event, a promise, a message, a DOM change, a counted read) instead of
- * pausing. This check fails on a new pause in a test file; the allowlist in
- * `scripts/test-waits-allowlist.json` only shrinks.
- *
- * A pause is `Bun.sleep(ms)`, `Bun.sleepSync(ms)`, a `setTimeout` that only
- * resolves a promise, `setTimeout(ms)` from `node:timers/promises`, or a call
- * of a helper that pauses (`settle()`, `sleep(80)`), in the same file or
- * imported from another test file. Not pauses: a 0 ms yield, a deadline
- * timer that rejects, and a poll tick of at most `POLL_TICK_MS` directly in a
- * loop that polls, where every iteration checks the thing it waits for (the
- * last resort when nothing signals). A tick in a loop bounded only by a count,
- * a collection or elapsed time, one whose exit only a counter gates, or a
- * callback that runs later (a test body declared in a loop) is a pause.
- *
- * `bun scripts/check-test-waits.ts --update` lowers the allowlist to the
- * current counts; it never raises one.
+ * Tests react to events, promises, messages, DOM changes or counted reads.
+ * The fixed-wait and short-poll allowlists only shrink (#1419).
+ * Pauses include Bun.sleep, resolving timers, imported timer promises and
+ * pausing helpers. Zero-delay yields and rejecting deadlines are not pauses.
+ * A <=10 ms tick qualifies as a short poll only if every iteration checks
+ * observed state. Counter/elapsed-time loops and deferred callbacks pause.
+ * `--update` lowers current allowance counts; it never raises them.
  *
  * The check guards against accidental fixed waits in honest test code; it
  * does not try to defeat deliberately contrived loops. Known limits:
@@ -25,12 +15,70 @@
 import { existsSync, readFileSync, writeFileSync } from "node:fs";
 import { dirname, join, normalize, resolve } from "node:path";
 import { parse } from "@babel/parser";
+import { checkClockPorts } from "./check-clock-ports";
+import { webBrowserSuites, worldBrowserSuites } from "./world-browser-suites";
+import { inlineBrowserScripts } from "./testing/inline-browser-scripts";
+
+import {
+  parseAllowlist,
+  compare,
+  lowered,
+  formatAllowlist,
+  type Allowlist,
+} from "./test-waits-allowlist";
+/** @internal Shared guard seams. */
+export {
+  parseAllowlist,
+  compare,
+  lowered,
+  formatAllowlist,
+} from "./test-waits-allowlist";
 
 const ALLOWLIST = "scripts/test-waits-allowlist.json";
 const POLL_TICK_MS = 10;
+const SHORT_POLLS = "scripts/test-short-polls-allowlist.json";
 /** @internal */
 export const TEST_FILE =
-  /(?:\.(?:test|browser)\.[cm]?[jt]sx?|\.(?:fixture|cases|browserMock)\.[cm]?[jt]sx?|\/testing\/[^/]+\.[cm]?[jt]sx?)$/;
+  /(?:\.(?:test|spec|browser)\.[cm]?[jt]sx?|\.(?:fixture|cases|browserMock)\.[cm]?[jt]sx?|\/(?:testing|__tests__)\/.*\.[cm]?[jt]sx?)$/;
+
+/** @internal Browser binaries are spawned at one maintained boundary. */
+export function browserLaunchProblems(files: Map<string, string>): string[] {
+  const problems: string[] = [];
+  for (const [path, source] of files) {
+    // This unit file executes shell fakes to verify quoting and startup refusal.
+    if (
+      [
+        "scripts/testing/browser-session.ts",
+        "scripts/test-chrome.test.ts",
+      ].includes(path) ||
+      !source.includes("--headless")
+    )
+      continue;
+    const ast = parse(source, {
+      sourceType: "unambiguous",
+      plugins: path.endsWith("x") ? ["typescript", "jsx"] : ["typescript"],
+    });
+    const inspect = (node: Node) => {
+      if (isCall(node, "Bun", /^spawn(?:Sync)?$/)) {
+        const args = (node.arguments as Node[])[0];
+        if (
+          args?.type === "ArrayExpression" &&
+          (args.elements as Node[]).some(
+            (arg) =>
+              arg?.type === "StringLiteral" &&
+              String(arg.value).startsWith("--headless"),
+          )
+        )
+          problems.push(
+            `${path}:${node.loc?.start.line}: launch Chrome through the shared browser-session helper`,
+          );
+      }
+      for (const child of children(node)) inspect(child);
+    };
+    inspect(ast.program as unknown as Node);
+  }
+  return problems;
+}
 const RESOLVER = /^(?:resolve\w*|res|r|done|wake\w*|next|ok)$/;
 const LOOPS = new Set([
   "ForStatement",
@@ -342,7 +390,17 @@ function onlyResolves(callback: Node | undefined, executorParam?: string) {
       return false;
     body = statements[0]!.expression as Node;
   }
-  return body.type === "CallExpression" && resolver(body.callee);
+  if (body.type !== "CallExpression") return false;
+  if (resolver(body.callee)) return true;
+  const callee = body.callee as Node;
+  // A presentation callback after a dwell still pauses for that dwell.
+  if (
+    isIdentifier(callee, "requestAnimationFrame") ||
+    (callee.type === "MemberExpression" &&
+      isIdentifier(callee.property, "requestAnimationFrame"))
+  )
+    return onlyResolves((body.arguments as Node[])[0], executorParam);
+  return false;
 }
 
 /** The name a function node is bound to, when it is a named helper. */
@@ -532,6 +590,11 @@ function parseSource(path: string, text: string): Parsed {
       if (isCall(node, "Bun", /^sleep(?:Sync)?$/))
         delay = delayOf(args[0], params);
       else if (
+        callee.type === "MemberExpression" &&
+        isIdentifier(callee.property, "waitForTimeout")
+      )
+        delay = delayOf(args[0], params);
+      else if (
         (isIdentifier(callee, "setTimeout") ||
           (callee.type === "MemberExpression" &&
             isIdentifier(callee.property, "setTimeout"))) &&
@@ -567,10 +630,13 @@ const isParam = (delay: Delay): delay is { param: number } =>
  * Whether a pause counts where it is written: not a yield, not a short tick
  * in a poll, and not a helper's parameter outside a loop (its calls count).
  */
-const counts = (site: { delay: Delay; loop: boolean }) =>
+const counts = (
+  site: { delay: Delay; loop: boolean },
+  pollTick = POLL_TICK_MS,
+) =>
   !(site.delay === "none" || site.delay === 0) &&
   !(isParam(site.delay) && !site.loop) &&
-  !(site.loop && typeof site.delay === "number" && site.delay <= POLL_TICK_MS);
+  !(site.loop && typeof site.delay === "number" && site.delay <= pollTick);
 
 /** One delay for a helper with several pauses. */
 function merge(a: Delay | undefined, b: Delay): Delay {
@@ -590,7 +656,10 @@ function merge(a: Delay | undefined, b: Delay): Delay {
 function resolvePauses(
   parsed: Parsed,
   importedPausing: ReadonlyMap<string, Delay> = new Map(),
+  pollTick = POLL_TICK_MS,
 ): FileScan {
+  const count = (site: { delay: Delay; loop: boolean }) =>
+    counts(site, pollTick);
   const { sites, calls } = parsed;
   // A call's delay: the helper's own, or the argument its pause reads.
   const callDelay = (call: Call, helperDelay: Delay): Delay => {
@@ -610,7 +679,7 @@ function resolvePauses(
     return true;
   };
   for (const site of sites)
-    if (site.helper && !site.loop && (counts(site) || isParam(site.delay)))
+    if (site.helper && !site.loop && (count(site) || isParam(site.delay)))
       add(site.helper, site.delay);
   for (let changed = true, rounds = 0; changed && rounds < 50; rounds++) {
     changed = false;
@@ -619,7 +688,7 @@ function resolvePauses(
       if (delay === undefined || !call.helper || call.loop) continue;
       const effective = callDelay(call, delay);
       if (
-        (counts({ delay: effective, loop: false }) || isParam(effective)) &&
+        (count({ delay: effective, loop: false }) || isParam(effective)) &&
         add(call.helper, effective)
       )
         changed = true;
@@ -635,7 +704,7 @@ function resolvePauses(
     ...sites
       .filter(
         (site) =>
-          counts(site) ||
+          count(site) ||
           (isParam(site.delay) && !!site.helper && !called.has(site.helper)),
       )
       .map((site) => site.line),
@@ -645,7 +714,7 @@ function resolvePauses(
         // `settle()` pauses; `sleep(0)` yields; `sleep(5)` in a poll ticks.
         return (
           delay !== undefined &&
-          counts({ delay: callDelay(call, delay), loop: call.loop })
+          count({ delay: callDelay(call, delay), loop: call.loop })
         );
       })
       .map((call) => call.line),
@@ -663,7 +732,11 @@ function resolvePauses(
 
 /** @internal Convenience for one file without cross-file helpers. */
 export function scanSource(path: string, text: string): FileScan {
-  return resolvePauses(parseSource(path, text));
+  return resolvePauses(
+    parseSource(path, text),
+    undefined,
+    /\.browser\./.test(path) ? 0 : POLL_TICK_MS,
+  );
 }
 
 const EXTENSIONS = [
@@ -677,7 +750,10 @@ const EXTENSIONS = [
 ];
 
 /** @internal Pause lines per test file, following pausing helpers across test files. */
-export function scanFiles(files: Map<string, string>): Map<string, number[]> {
+export function scanFiles(
+  files: Map<string, string>,
+  strict = new Set<string>(),
+): Map<string, number[]> {
   const resolveImport = (from: string, source: string) => {
     for (const extension of EXTENSIONS) {
       const candidate = normalize(join(dirname(from), source + extension));
@@ -685,6 +761,20 @@ export function scanFiles(files: Map<string, string>): Map<string, number[]> {
     }
     return null;
   };
+  for (const path of files.keys())
+    if (/\.browser\./.test(path)) strict.add(path);
+  const queue = [...strict];
+  for (const path of queue) {
+    for (const match of (files.get(path) ?? "").matchAll(
+      /from\s+["'](\.[^"']+)["']/g,
+    )) {
+      const dependency = resolveImport(path, match[1]!);
+      if (dependency && !strict.has(dependency)) {
+        strict.add(dependency);
+        queue.push(dependency);
+      }
+    }
+  }
   // Parsing is the cost: parse only files that can pause, by a timer of
   // their own or through a helper imported from one that can.
   const canPause = new Set(
@@ -734,7 +824,11 @@ export function scanFiles(files: Map<string, string>): Map<string, number[]> {
           return delay === undefined ? [] : [[target.local, delay] as const];
         }),
       );
-      const scan = resolvePauses(file, importedPausing);
+      const scan = resolvePauses(
+        file,
+        importedPausing,
+        strict.has(path) ? 0 : POLL_TICK_MS,
+      );
       result.set(path, scan.pauses);
       for (const [name, delay] of scan.exported)
         next.set(`${path}#${name}`, delay);
@@ -743,6 +837,23 @@ export function scanFiles(files: Map<string, string>): Map<string, number[]> {
     exported = next;
   }
   return result;
+}
+
+/** @internal Legacy short polling ticks are counted separately, never exempted. */
+export function shortPolls(
+  files: Map<string, string>,
+  regular: Map<string, number[]>,
+): Map<string, number[]> {
+  return new Map(
+    [...scanFiles(files, new Set(files.keys()))].map(([path, lines]) => {
+      const remaining = [...lines];
+      for (const line of regular.get(path) ?? []) {
+        const index = remaining.indexOf(line);
+        if (index !== -1) remaining.splice(index, 1);
+      }
+      return [path, remaining];
+    }),
+  );
 }
 
 /** @internal Files outside test code that import the test-timing switch. */
@@ -758,90 +869,6 @@ export function timingSwitchesOutsideTests(
       );
   }
   return problems;
-}
-
-type Entry = { pauses: number; reason: string };
-type Allowlist = Record<string, Entry>;
-
-/** @internal */
-export function parseAllowlist(text: string): Allowlist {
-  const value = JSON.parse(text) as { version?: number; files?: Allowlist };
-  if (value.version !== 1 || !value.files || typeof value.files !== "object")
-    throw new Error(`${ALLOWLIST}: expected version 1 and files`);
-  for (const [path, entry] of Object.entries(value.files))
-    if (
-      !Number.isSafeInteger(entry?.pauses) ||
-      entry.pauses < 1 ||
-      typeof entry.reason !== "string" ||
-      !entry.reason.trim() ||
-      entry.reason.includes("\n")
-    )
-      throw new Error(
-        `${ALLOWLIST}: ${path} needs a positive pause count and a one-line reason`,
-      );
-  return value.files;
-}
-
-/** @internal Problems with the current counts against the allowlist and its base. */
-export function compare(
-  current: Map<string, number[]>,
-  allowed: Allowlist,
-  base?: Allowlist,
-): string[] {
-  const problems: string[] = [];
-  for (const [path, lines] of current) {
-    const limit = allowed[path]?.pauses ?? 0;
-    if (lines.length > limit)
-      problems.push(
-        `${path}: ${lines.length} fixed sleep(s) (lines ${lines.join(", ")}), allowlist ${limit}. Wait for the event, promise, message or DOM change instead, or count the cycles that prove nothing happened.`,
-      );
-    else if (lines.length < limit)
-      problems.push(
-        `${path}: ${lines.length} fixed sleep(s), allowlist ${limit}: lower it (bun scripts/check-test-waits.ts --update).`,
-      );
-  }
-  for (const path of Object.keys(allowed))
-    if (!current.has(path))
-      problems.push(
-        `${path}: no longer a test file; remove its allowlist entry.`,
-      );
-  if (base)
-    for (const [path, entry] of Object.entries(allowed))
-      if (entry.pauses > (base[path]?.pauses ?? 0))
-        problems.push(
-          `${path}: the allowlist may only shrink (base ${base[path]?.pauses ?? 0}, now ${entry.pauses}).`,
-        );
-  return problems;
-}
-
-/** @internal The allowlist lowered to the current counts; never raised. */
-export function lowered(
-  current: Map<string, number[]>,
-  allowed: Allowlist,
-): Allowlist {
-  const out: Allowlist = {};
-  for (const [path, entry] of Object.entries(allowed).sort(([a], [b]) =>
-    a.localeCompare(b),
-  )) {
-    const count = current.get(path)?.length ?? 0;
-    if (count > 0)
-      out[path] = { ...entry, pauses: Math.min(entry.pauses, count) };
-  }
-  return out;
-}
-
-/** @internal */
-export function formatAllowlist(files: Allowlist) {
-  return `${JSON.stringify(
-    {
-      version: 1,
-      description:
-        "Fixed sleeps a test file may still hold (#1419). Counts only go down: fix a file, then run bun scripts/check-test-waits.ts --update.",
-      files,
-    },
-    null,
-    2,
-  )}\n`;
 }
 
 /** Tracked and new source files, by path. */
@@ -864,7 +891,10 @@ function sourceFiles(root: string) {
 }
 
 /** The allowlist at the PR base, so raising it cannot bless a new sleep. */
-function allowlistAtBase(root: string): Allowlist | undefined {
+function allowlistAtBase(
+  root: string,
+  path = ALLOWLIST,
+): Allowlist | undefined {
   const git = (args: string[]) =>
     Bun.spawnSync(["git", ...args], { cwd: root });
   const merge = git(["merge-base", "HEAD", "origin/main"]);
@@ -874,7 +904,7 @@ function allowlistAtBase(root: string): Allowlist | undefined {
   if (!ref) return;
   if (git(["rev-parse", "--verify", `${ref}^{commit}`]).exitCode !== 0)
     throw new Error(`Cannot resolve the test-waits allowlist base ${ref}`);
-  const entry = `${ref}:${ALLOWLIST}`;
+  const entry = `${ref}:${path}`;
   // A base predating this check is its adoption.
   if (git(["cat-file", "-e", entry]).exitCode !== 0) return;
   return parseAllowlist(git(["show", entry]).stdout.toString());
@@ -883,19 +913,69 @@ function allowlistAtBase(root: string): Allowlist | undefined {
 if (import.meta.main) {
   const root = resolve(import.meta.dir, "..");
   const sources = sourceFiles(root);
+  const browser = new Set([...webBrowserSuites, ...worldBrowserSuites]);
   const current = scanFiles(
     new Map([...sources].filter(([path]) => TEST_FILE.test(path))),
+    browser,
+  );
+  const polls = shortPolls(
+    new Map([...sources].filter(([path]) => TEST_FILE.test(path))),
+    current,
+  );
+  const pollAllowance = parseAllowlist(
+    readFileSync(join(root, SHORT_POLLS), "utf8"),
   );
   const allowed = parseAllowlist(readFileSync(join(root, ALLOWLIST), "utf8"));
+  const production = new Map(
+    [...sources].filter(([path]) => !TEST_FILE.test(path)),
+  );
+  const merge = Bun.spawnSync(["git", "merge-base", "HEAD", "origin/main"], {
+    cwd: root,
+  });
+  const baseRef =
+    process.env.HERDR_WORLD_RATCHET_TARGET ||
+    (merge.exitCode === 0 ? merge.stdout.toString().trim() : undefined);
+  const clockProblems = checkClockPorts(
+    root,
+    production,
+    process.argv.includes("--update"),
+    baseRef,
+  );
   if (process.argv.includes("--update")) {
     writeFileSync(
       join(root, ALLOWLIST),
       formatAllowlist(lowered(current, allowed)),
     );
+    writeFileSync(
+      join(root, SHORT_POLLS),
+      formatAllowlist(lowered(polls, pollAllowance)),
+    );
     console.info(`${ALLOWLIST}: lowered to the current counts`);
   } else {
     const problems = [
+      ...clockProblems,
+      ...[...browser].flatMap((path) =>
+        inlineBrowserScripts(path, sources.get(path) ?? "").flatMap(
+          (script) => {
+            const count = scanSource("inline.browser.ts", script).pauses.length;
+            return count
+              ? [
+                  `${path}: executable inline browser script has ${count} fixed wait(s); use a real event or driven clock`,
+                ]
+              : [];
+          },
+        ),
+      ),
+      ...browserLaunchProblems(sources),
+      ...[...current].flatMap(([path, lines]) =>
+        browser.has(path) && lines.length
+          ? [
+              `${path}: browser waits must be zero, including short polling sleeps (${lines.length} remaining)`,
+            ]
+          : [],
+      ),
       ...compare(current, allowed, allowlistAtBase(root)),
+      ...compare(polls, pollAllowance, allowlistAtBase(root, SHORT_POLLS)),
       ...timingSwitchesOutsideTests(sources),
     ];
     const total = [...current.values()].reduce(
@@ -907,7 +987,7 @@ if (import.meta.main) {
       process.exit(1);
     }
     console.info(
-      `test waits: ${total} allowlisted fixed sleep(s) in ${Object.keys(allowed).length} file(s); no new ones`,
+      `test waits: ${total} allowlisted fixed sleep(s), ${[...polls.values()].reduce((n, lines) => n + lines.length, 0)} allowlisted short polling sleep(s) in ${Object.keys(allowed).length} file(s); no new ones`,
     );
   }
 }

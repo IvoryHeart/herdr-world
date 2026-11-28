@@ -1,3 +1,7 @@
+import {
+  launchTestBrowser,
+  type TestBrowser,
+} from "../../../../scripts/testing/browser-session";
 import { expect, test } from "bun:test";
 import { mkdtemp, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
@@ -15,6 +19,7 @@ import {
   hostFilterGroup,
   type HostFilterGroup,
 } from "./browserCases";
+import { casePhases } from "./casePhases";
 import { worldBrowserBundle } from "./worldBrowserBundle";
 
 /** A hang guard for one case's page, not a speed budget. */
@@ -43,6 +48,9 @@ export function registerHostsFilterTests(group: HostFilterGroup) {
             ? "geometry, rendering, focus and terminal lifecycle: Hosts scope %j"
             : "the shell preserves qualified operational targets: %j",
       async ({ width, height = 1000, operation, view }) => {
+        const phases = casePhases(
+          `HostsFilter ${operation} ${view} ${width}x${height}`,
+        );
         const dir = await mkdtemp(join(tmpdir(), "world-hosts-filter-"));
         const { assets } = await worldBrowserBundle("HostsFilter");
         const result = Promise.withResolvers<unknown>();
@@ -65,9 +73,11 @@ export function registerHostsFilterTests(group: HostFilterGroup) {
             );
           },
         });
-        let browser: ReturnType<typeof Bun.spawn> | undefined;
+        let browser: TestBrowser | undefined;
         try {
-          browser = Bun.spawn(
+          phases.mark("setup");
+          void pageRequested.promise.then(() => phases.mark("load"));
+          browser = await launchTestBrowser(
             [
               chrome!,
               "--headless=new",
@@ -80,7 +90,9 @@ export function registerHostsFilterTests(group: HostFilterGroup) {
               `${server.url.href}?operation=${operation}&view=${view}`,
             ],
             { stdout: "ignore", stderr: Bun.file(join(dir, "browser.log")) },
+            { exclusive: operation.startsWith("town-idle") },
           );
+          await browser.start();
           const observed = await waitForBrowserFixture(
             pageRequested.promise,
             result.promise,
@@ -90,6 +102,7 @@ export function registerHostsFilterTests(group: HostFilterGroup) {
             "Hosts filter browser acceptance",
             FIXTURE_MS,
           );
+          phases.mark("scene");
           if (Array.isArray(observed) && observed.length)
             console.info(
               "Hosts filter failures",
@@ -101,6 +114,7 @@ export function registerHostsFilterTests(group: HostFilterGroup) {
           if (browser) await browser.exited;
           server.stop(true);
           await rm(dir, { recursive: true, force: true });
+          phases.done();
         }
       },
       FIXTURE_MS + 15_000 + BROWSER_STARTUP_TIMEOUT_MS,

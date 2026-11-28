@@ -85,7 +85,7 @@ function board(
   return { world, actions, action, calls };
 }
 
-const settle = () => new Promise((resolve) => setTimeout(resolve, 0));
+const flushTasks = () => new Promise((resolve) => setTimeout(resolve, 0));
 
 /** Run `body` with a window that records launcher requests. */
 function launches(body: () => void, event = WORLD_AGENT_LAUNCH_EVENT) {
@@ -160,14 +160,14 @@ test("only a workspace that can launch now is the launch target", () => {
 test("Town master opens the role holder's chat, with no name fallback", async () => {
   const named = board();
   named.action("master").run();
-  await settle();
+  await flushTasks();
   expect(named.calls).toEqual([["chat", "a"]]);
 
   const holder = board({
     holder: { connection_id: "local", terminal_id: "t-b" },
   });
   holder.action("master").run();
-  await settle();
+  await flushTasks();
   expect(holder.calls).toEqual([["chat", "b"]]);
 });
 
@@ -176,7 +176,7 @@ test("a missing or unopenable Town master says so; none set offers a choice", as
     holder: { connection_id: "local", terminal_id: "t-absent" },
   });
   missing.action("master").run();
-  await settle();
+  await flushTasks();
   expect(missing.calls).toEqual([
     ["toast", "error", "The Town master isn't in Town now"],
   ]);
@@ -184,7 +184,7 @@ test("a missing or unopenable Town master says so; none set offers a choice", as
     leaves: [leaf("a", "api", "firstmate", { stale: true })],
   });
   stale.action("master").run();
-  await settle();
+  await flushTasks();
   expect(stale.calls).toEqual([
     ["toast", "error", "firstmate can't be opened now"],
   ]);

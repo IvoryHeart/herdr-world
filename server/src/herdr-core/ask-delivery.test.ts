@@ -29,7 +29,7 @@ async function fixture() {
       cwd: "/example",
     },
   });
-  await world.settle();
+  await world.synchronize();
   const actor = identifyCoreAsker(world.core.manager, terminal, () => [
     { pid: 12346, ppid: 12345, pgrp: 12345 },
     { pid: 12345, ppid: 1, pgrp: 12345 },
@@ -131,7 +131,7 @@ test("a replaced core asker is refused and the saved answer remains readable", a
   const f = await fixture();
   await f.answer();
   f.world.fake.replaceWithShell(f.terminal);
-  await f.world.settle();
+  await f.world.synchronize();
   await f.dispatcher.wake();
   expect((await f.entry()).state).toBe("refused");
   expect(f.world.fake.deliveredInput).toEqual([]);

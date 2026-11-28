@@ -270,19 +270,20 @@ async function waitUntil<T>(read: () => T | null): Promise<T> {
   while (Date.now() < deadline) {
     const value = read();
     if (value !== null) return value;
-    await Bun.sleep(20);
+    await new Promise<void>((resolve) => setImmediate(resolve));
   }
   throw new Error("condition not reached");
 }
 
 async function waitForHealth(port: number): Promise<void> {
-  for (let attempt = 0; attempt < 200; attempt += 1) {
+  const healthDeadline = Date.now() + 2000;
+  while (Date.now() < healthDeadline) {
     try {
       if ((await fetch(`http://127.0.0.1:${port}/health`)).ok) return;
     } catch {
       // The child may still be binding.
     }
-    await Bun.sleep(25);
+    await new Promise<void>((resolve) => setImmediate(resolve));
   }
   throw new Error("SSH profile process fixture did not become healthy");
 }
@@ -423,7 +424,8 @@ test("production bridge supervises two independent SSH profile tunnels", async (
     };
 
     let catalog: any;
-    for (let attempt = 0; attempt < 300; attempt += 1) {
+    const connectDeadline = Date.now() + 6000;
+    while (Date.now() < connectDeadline) {
       catalog = await rpc("connections.list");
       const alpha = catalog.connections.find(
         (item: any) => item.id === "ssh-alpha",
@@ -440,7 +442,7 @@ test("production bridge supervises two independent SSH profile tunnels", async (
         legacy?.state === "ready"
       )
         break;
-      await Bun.sleep(20);
+      await new Promise<void>((resolve) => setImmediate(resolve));
     }
     const alpha = catalog.connections.find(
       (item: any) => item.id === "ssh-alpha",
@@ -481,7 +483,8 @@ test("production bridge supervises two independent SSH profile tunnels", async (
     process.kill(firstAlphaState.pid, "SIGKILL");
     let sawReconnecting = false;
     let betaRoutedDuringReconnect = false;
-    for (let attempt = 0; attempt < 400; attempt += 1) {
+    const reconnectDeadline = Date.now() + 8000;
+    while (Date.now() < reconnectDeadline) {
       catalog = await rpc("connections.list");
       const nextAlpha = catalog.connections.find(
         (item: any) => item.id === "ssh-alpha",
@@ -512,7 +515,7 @@ test("production bridge supervises two independent SSH profile tunnels", async (
         nextAlpha.generation !== alphaGeneration
       )
         break;
-      await Bun.sleep(20);
+      await new Promise<void>((resolve) => setImmediate(resolve));
     }
     expect(sawReconnecting).toBeTrue();
     expect(betaRoutedDuringReconnect).toBeTrue();
@@ -554,12 +557,13 @@ test("production bridge supervises two independent SSH profile tunnels", async (
     );
     process.kill(legacyState.pid, "SIGKILL");
     let legacyStatus: any;
-    for (let attempt = 0; attempt < 200; attempt += 1) {
+    const healthDeadline = Date.now() + 2000;
+    while (Date.now() < healthDeadline) {
       legacyStatus = (await rpc("connections.list")).connections.find(
         (item: any) => item.id === "startup-default",
       );
       if (legacyStatus?.state === "error") break;
-      await Bun.sleep(20);
+      await new Promise<void>((resolve) => setImmediate(resolve));
     }
     expect(legacyStatus).toMatchObject({ state: "error" });
     expect(legacyStatus.generation).not.toBe(legacyGeneration);

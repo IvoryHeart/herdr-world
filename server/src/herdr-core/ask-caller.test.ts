@@ -164,7 +164,7 @@ describe("a caller inside a herdr-core terminal (§4.10)", () => {
       argv: ["claude"],
       cwd: "/tmp/example",
     });
-    await w.settle();
+    await w.synchronize();
     expect(
       (
         await identifyCaller(
@@ -494,7 +494,7 @@ describe("a core asker's recipient (M5)", () => {
         }) + "\n",
       ),
     );
-    await w.settle();
+    await w.synchronize();
     expect(await recipients.resolve(recipient)).toMatchObject({
       state: "attached",
     });
@@ -510,7 +510,7 @@ describe("a core asker's recipient (M5)", () => {
       const { address, actor, recipients } = await asker(w, 46_001);
       const recipient = (await recipients.capture(actor))!;
       w.fake.replaceWithShell(address, { reusePid });
-      await w.settle();
+      await w.synchronize();
       expect(await recipients.resolve(recipient)).toEqual({
         state: "unconfirmed",
         reason: expect.stringContaining("it's a shell now"),
@@ -546,7 +546,7 @@ describe("a core asker's recipient (M5)", () => {
       }),
     ).toMatchObject({ state: "unconfirmed" });
     w.fake.finish(address);
-    await w.settle();
+    await w.synchronize();
     expect(await recipients.resolve(recipient)).toEqual({
       state: "ended",
       reason: "The original terminal ended; use ask get",

@@ -56,11 +56,11 @@ afterEach(async () => {
     rmSync(root, { recursive: true, force: true });
 });
 
-async function until(predicate: () => boolean, ms = 10_000) {
+async function until(predicate: () => boolean | Promise<boolean>, ms = 10_000) {
   const deadline = Date.now() + ms;
-  while (!predicate()) {
+  while (!(await predicate())) {
     if (Date.now() > deadline) throw new Error("condition not reached");
-    await Bun.sleep(10);
+    await new Promise<void>((resolve) => setImmediate(resolve));
   }
 }
 
@@ -248,14 +248,12 @@ int main(void) {
           ?.snapshot;
       };
       let view = await rows();
-      const deadline = Date.now() + 10_000;
-      while (
-        Date.now() < deadline &&
-        view?.panes.find((p) => p.agent === "gemini")?.agent_status !== "done"
-      ) {
-        await Bun.sleep(50);
+      await until(async () => {
         view = await rows();
-      }
+        return (
+          view?.panes.find((p) => p.agent === "gemini")?.agent_status === "done"
+        );
+      });
       const byName = new Map(
         view!.agents.map((agent) => [agent.name, agent.pane_id]),
       );
@@ -288,11 +286,10 @@ int main(void) {
       });
       // Another Herdr client looks at it: idle everywhere.
       await core.hc("label", String(byName.get("scout")), "herdr.seen=1");
-      const seenBy = Date.now() + 5_000;
-      while (Date.now() < seenBy && pane("scout")?.agent_status !== "idle") {
-        await Bun.sleep(50);
+      await until(async () => {
         view = await rows();
-      }
+        return pane("scout")?.agent_status === "idle";
+      }, 5_000);
       expect(pane("scout")?.agent_status).toBe("idle");
       expect(view!.panes).toHaveLength(3);
       expect(view!.panes.filter((p) => !p.agent)).toHaveLength(1);
@@ -427,7 +424,10 @@ int main(void) {
       const sockets = readdirSync(join(core.root, "run", "herdr-core")).sort();
       const w = worldFor(core.stateDir);
       await w.service.create(w.profile);
-      await Bun.sleep(500);
+      // The attempt on the dead socket failed; nothing started a core.
+      await until(() =>
+        ["reconnecting", "error"].includes(w.core.manager.status("core").state),
+      );
       expect(["reconnecting", "error"]).toContain(
         w.core.manager.status("core").state,
       );
@@ -509,7 +509,8 @@ int main(void) {
         end: () => {},
       });
       for (let i = 0; i < 5; i++) await client.readScreen("t1");
-      await Bun.sleep(300);
+      // Core has handled everything sent before this reply.
+      await client.status();
       const after = await sizeOf();
       expect([after.cols, after.rows]).toEqual([before.cols, before.rows]);
       expect(after.turn).toBe(before.turn);
@@ -765,7 +766,8 @@ int main(void) {
       // Leaving changes nothing: t1 stays headless after its watches end.
       watches.close(page, "a");
       watch.detach();
-      await Bun.sleep(200);
+      // Core has handled the CLOSE sent on this connection before this reply.
+      await client.status();
       expect(await grid("t1")).toEqual([200, 120]);
       // Nothing World sent typed, resized or focused: RPC on channel 0,
       // CREDIT for what it read, and CLOSE when it left.
@@ -823,14 +825,8 @@ int main(void) {
         const t = JSON.parse(await core.hc("get", "t1", "--json"));
         return `${t.cols}x${t.rows}`;
       };
-      const settles = async (want: string) => {
-        const deadline = Date.now() + 10_000;
-        while ((await grid()) !== want) {
-          if (Date.now() > deadline)
-            throw new Error(`grid ${await grid()}, not ${want}`);
-          await Bun.sleep(20);
-        }
-      };
+      const settles = (want: string) =>
+        until(async () => (await grid()) === want);
       const manager = new ConnectionManager<CoreConnectionRuntime>("");
       manager.register({
         identity: { id: "core", label: "core", source: "local-profile" },
@@ -865,6 +861,26 @@ int main(void) {
         address: "t1",
         stream: "a",
       });
+      /**
+       * Everything World sent core on this connection has been handled: a
+       * watch of a probe terminal opens, on the same ordered connection.
+       */
+      const barrier = async () => {
+        await core.hc("run", "--bg", "--name", "probe", "--", "sh");
+        await until(
+          () =>
+            manager.readyRuntimeLease("core")?.runtime.core.terminal("t2")
+              ?.state === "live",
+        );
+        const probe = {};
+        await watches.open(probe, {
+          connection_id: "core",
+          generation: manager.status("core").generation,
+          address: "t2",
+          stream: "probe",
+        });
+        watches.close(probe, "probe");
+      };
       const announced = () =>
         pushes.flatMap((p) =>
           "grid" in p && !("bytes" in p)
@@ -883,7 +899,8 @@ int main(void) {
       const before = announced().length;
       watches.hold(page, { stream: "a", cols: 100, rows: 32 });
       await settles("100x32");
-      await Bun.sleep(300);
+      // The new grid reaches the page; a headless step would precede it.
+      await until(() => announced().length > before);
       expect(announced().slice(before)).toEqual(["100x32"]);
 
       // An app pane takes the size; a new fitted size in World never
@@ -893,7 +910,7 @@ int main(void) {
       await settles("120x40");
       watches.hold(page, { stream: "a", cols: 80, rows: 24 });
       await until(() => watches.typing(page, "a") === "yes");
-      await Bun.sleep(300);
+      await barrier();
       expect(await grid()).toBe("120x40");
 
       // A key typed in World leads by core's rule, arrives once, and the

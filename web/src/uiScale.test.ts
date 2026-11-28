@@ -1,3 +1,9 @@
+import { sharedBrowserBuild } from "./world/testing/sharedBrowserBuild";
+import { waitForPage } from "./world/testing/browserEvents";
+import {
+  launchTestBrowser,
+  type TestBrowser,
+} from "../../scripts/testing/browser-session";
 import { expect, test } from "bun:test";
 import { existsSync } from "node:fs";
 import { mkdtemp, readFile, rm } from "node:fs/promises";
@@ -164,11 +170,11 @@ test.skipIf(!chrome).concurrent.each([
         return new Response("Not found", { status: 404 });
       },
     });
-    let child: ReturnType<typeof Bun.spawn> | undefined;
+    let child: TestBrowser | undefined;
     let socket: WebSocket | undefined;
     const timers = new Set<ReturnType<typeof setTimeout>>();
     try {
-      const build = await Bun.build({
+      const build = await sharedBrowserBuild(import.meta.path, {
         entrypoints: [
           join(
             import.meta.dir,
@@ -214,7 +220,7 @@ test.skipIf(!chrome).concurrent.each([
           heldChunks.set(path, Promise.withResolvers<void>());
       }
       const errorOutput = join(dir, "browser.log");
-      child = Bun.spawn(
+      child = await launchTestBrowser(
         [
           chrome!,
           "--headless",
@@ -230,6 +236,7 @@ test.skipIf(!chrome).concurrent.each([
         ],
         { stdout: "ignore", stderr: Bun.file(errorOutput) },
       );
+      await child.start();
       const port = await waitForChromePort(
         child,
         join(dir, "profile"),
@@ -278,7 +285,8 @@ test.skipIf(!chrome).concurrent.each([
             pending.set(requestId, { resolve, reject });
             socket!.send(JSON.stringify({ id: requestId, method, params }));
           }),
-          `CDP ${method}`,
+          `CDP ${method}${params.expression ? `: ${String(params.expression).slice(0, 180)}` : ""}`,
+          params.awaitPromise ? 25_000 : undefined,
         ).finally(() => pending.delete(requestId));
       };
       const evaluate = async (expression: string) => {
@@ -291,20 +299,7 @@ test.skipIf(!chrome).concurrent.each([
           throw new Error(JSON.stringify(result.exceptionDetails));
         return result.result.value;
       };
-      const waitFor = async (expression: string) => {
-        for (let i = 0; i < 800; i++) {
-          if (await evaluate(expression)) return;
-          await Bun.sleep(25);
-        }
-        const fixtureResult = await Promise.race([
-          promise,
-          Bun.sleep(50).then(() => "fixture still running"),
-        ]);
-        const page = await evaluate("document.body.innerText.slice(0, 600)");
-        throw new Error(
-          `Browser condition timed out: ${expression}; fixture: ${JSON.stringify(fixtureResult)}; page: ${JSON.stringify(page)}`,
-        );
-      };
+      const waitFor = (expression: string) => waitForPage(cdp, expression);
       const key = async (value: string, code: number, shift = false) => {
         for (const type of ["keyDown", "keyUp"])
           await cdp("Input.dispatchKeyEvent", {
@@ -397,7 +392,7 @@ test.skipIf(!chrome).concurrent.each([
                 touchPoints: [{ x, y: y + step * 16 }],
               });
               await evaluate(
-                "new Promise(resolve => requestAnimationFrame(() => requestAnimationFrame(resolve)))",
+                "new Promise(resolve => window.__herdrTestFrame(() => window.__herdrTestFrame(resolve)))",
               );
             }
             await cdp("Input.dispatchTouchEvent", {

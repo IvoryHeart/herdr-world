@@ -116,7 +116,7 @@ async function agentIn(w: World, folder: string) {
       cwd: folder,
     },
   });
-  await w.settle();
+  await w.synchronize();
   return address;
 }
 
@@ -275,7 +275,7 @@ describe("core worktrees (P4)", () => {
       },
       { topology: w.topology, resolveExecutable: async () => "/bin/sh" },
     );
-    await w.settle();
+    await w.synchronize();
     const inRoom = (await w.rows()).panes.filter(
       (p) => p.workspace_id === created.workspace_id,
     );
@@ -296,7 +296,7 @@ describe("core worktrees (P4)", () => {
       parent: inRoom[0]!.pane_id,
       die_with_parent: true,
     });
-    await w.settle();
+    await w.synchronize();
     const stale = await removeCoreWorktree(w.lease(), deps, {
       workspaceId: created.workspace_id,
       force: false,
@@ -361,7 +361,7 @@ describe("core worktrees (P4)", () => {
       { topology: w.topology, resolveExecutable: async () => "/bin/sh" },
     );
     if (shell.status !== "started") throw new Error("No shell");
-    await w.settle();
+    await w.synchronize();
     const plan = await planCoreKill(w.lease(), [shell.terminal_id]);
     let late = "";
     w.fake.onCall = (method) => {
@@ -417,7 +417,7 @@ describe("core worktrees (P4)", () => {
                   resolveExecutable: async () => "/bin/sh",
                 },
               );
-              await w.settle();
+              await w.synchronize();
             }
             return result;
           },

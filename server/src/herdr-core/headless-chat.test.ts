@@ -144,7 +144,7 @@ test("a replacement during a delayed process lookup cannot publish the old conve
         cwd: root,
       },
     });
-    await w.settle();
+    await w.synchronize();
     const entered = Promise.withResolvers<void>();
     const found = Promise.withResolvers<{ kind: "path"; value: string }>();
     host = createCoreHostRuntime({
@@ -168,7 +168,7 @@ test("a replacement during a delayed process lookup cannot publish the old conve
     });
     await entered.promise;
     w.fake.replaceWithShell(terminal, { reusePid: true });
-    await w.settle();
+    await w.synchronize();
     found.resolve({ kind: "path", value: path });
     expect(await pending).not.toMatchObject({ status: "ok" });
     expect(

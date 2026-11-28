@@ -316,7 +316,7 @@ describe("connection HTTP routing", () => {
     const stream = new ReadableStream<Uint8Array>({
       async start(controller) {
         controller.enqueue(new TextEncoder().encode("stream"));
-        await Bun.sleep(1);
+        await new Promise((resolve) => setImmediate(resolve));
         controller.enqueue(new TextEncoder().encode("ed"));
         controller.close();
       },

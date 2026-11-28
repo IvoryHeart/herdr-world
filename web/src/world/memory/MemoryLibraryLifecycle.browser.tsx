@@ -1,3 +1,4 @@
+import { clock as fixtureTime } from "../testing/installTestClock";
 import { createRoot, type Root } from "react-dom/client";
 import "../../styles/tokens.css";
 import "../../styles/base.css";
@@ -170,7 +171,7 @@ function call(
   const entry: Call = { action, target, params };
   calls.push(entry);
   return new Promise((resolve, reject) => {
-    const settle = () => {
+    const advance = () => {
       try {
         resolve(answer(entry) as never);
       } catch (error) {
@@ -178,8 +179,8 @@ function call(
       }
     };
     if (hold.has(action))
-      held.push({ ...entry, release: settle, fail: reject });
-    else setTimeout(settle, 5);
+      held.push({ ...entry, release: advance, fail: reject });
+    else setTimeout(advance, 5);
   });
 }
 
@@ -206,7 +207,7 @@ const byText = (selector: string, text: string | RegExp) =>
       : text.test(el.textContent ?? ""),
   );
 const content = () => $(".memory-content")?.textContent ?? "";
-const tick = () => new Promise((resolve) => setTimeout(resolve, 60));
+const tick = () => fixtureTime.advance(60);
 
 async function waitFor<T>(
   read: () => T,
@@ -217,7 +218,7 @@ async function waitFor<T>(
     const value = read();
     if (value) return value as NonNullable<T>;
     if (performance.now() > until) throw new Error(message);
-    await new Promise((resolve) => setTimeout(resolve, 20));
+    await fixtureTime.advance(20);
   }
 }
 

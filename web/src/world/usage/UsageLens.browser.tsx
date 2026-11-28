@@ -1,3 +1,4 @@
+import { clock as fixtureTime } from "../testing/installTestClock";
 import { act } from "react";
 import { createRoot } from "react-dom/client";
 import { bridge } from "../../api";
@@ -22,9 +23,9 @@ bridge.call = (async () => {
 }) as typeof bridge.call;
 history.replaceState(null, "", "/?usageFixture=busy");
 
-const settle = () =>
+const advance = () =>
   act(async () => {
-    await new Promise((resolve) => setTimeout(resolve, 0));
+    await fixtureTime.advance(0);
   });
 
 /** Every drawn element sits inside the lens; tables may scroll in their wrap. */
@@ -60,7 +61,7 @@ async function run() {
     await act(async () =>
       root.render(<UsageLens initialTab="budget" onClose={() => {}} />),
     );
-    await settle();
+    await advance();
     if (location.search)
       failures.push(`the switch stayed in the address: ${location.search}`);
     const lens = host.querySelector<HTMLElement>(".usage-lens")!;
@@ -88,7 +89,7 @@ async function run() {
     checkInside(lens, `Runs at once as a table at ${width}px`);
 
     await act(async () => tab("Tokens").click());
-    await settle();
+    await advance();
     if (!lens.querySelector(".usage-flag"))
       failures.push(`${width}px: no run stands out as waste`);
     checkInside(lens, `Tokens at ${width}px`);

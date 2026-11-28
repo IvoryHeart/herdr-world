@@ -1,3 +1,4 @@
+import { clock } from "../../clock";
 import {
   memo,
   useEffect,
@@ -43,7 +44,7 @@ export function useTownArrivals(
   const [planner] = useState(() => new TownArrivals());
   const [version, setVersion] = useState(0);
   useLayoutEffect(() => {
-    const now = performance.now();
+    const now = clock.monotonic();
     const changed = planner.update(
       starts,
       townAgentsByTerminal(model),
@@ -59,10 +60,13 @@ export function useTownArrivals(
     // Wake when one reaches its door or its welcome is over.
     const next = planner.nextChange(now);
     if (next === null) return;
-    const timer = setTimeout(() => setVersion((n) => n + 1), next - now + 20);
-    return () => clearTimeout(timer);
+    const timer = clock.setTimeout(
+      () => setVersion((n) => n + 1),
+      next - now + 20,
+    );
+    return () => clock.clearTimeout(timer);
   }, [planner, starts, model, layout, route, version]);
-  const now = performance.now();
+  const now = clock.monotonic();
   const arriving = useKeySet(planner.outside(now));
   const welcoming = useKeySet(planner.welcoming(now));
   return { arrivals: planner.arrivals, arriving, welcoming };
@@ -119,7 +123,7 @@ export const TownArrivalLayer = memo(function TownArrivalLayer({
     if (!arrivals.length) return;
     let frame = 0;
     const tick = () => {
-      const now = performance.now();
+      const now = clock.monotonic();
       for (const arrival of arrivals) {
         const node = walkers.current.get(arrival.id);
         const canvas = node?.querySelector("canvas");
@@ -159,10 +163,10 @@ export const TownArrivalLayer = memo(function TownArrivalLayer({
         if (at && welcomed.current.has(arrival.id))
           welcome.style.translate = `${at.x}px ${at.y}px`;
       }
-      frame = requestAnimationFrame(tick);
+      frame = clock.requestAnimationFrame(tick);
     };
     tick();
-    return () => cancelAnimationFrame(frame);
+    return () => clock.cancelAnimationFrame(frame);
   }, [arrivals, paths, lookOf, renderer]);
 
   if (!arrivals.length) return null;

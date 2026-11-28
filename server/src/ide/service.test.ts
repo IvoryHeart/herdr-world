@@ -60,7 +60,7 @@ async function until(done: () => boolean, what: string) {
   const deadline = Date.now() + 10_000;
   while (!done()) {
     if (Date.now() > deadline) throw new Error(`timed out: ${what}`);
-    await Bun.sleep(10);
+    await new Promise<void>((resolve) => setImmediate(resolve));
   }
 }
 
@@ -155,7 +155,7 @@ function harness(
       run,
       forward,
       probe: async (upstream) => (existsSync(upstream.socketPath) ? 200 : null),
-      sleep: (ms) => Bun.sleep(Math.min(ms, 10)),
+      sleep: () => new Promise((resolve) => setImmediate(resolve)),
       stopGraceMs: 300,
     },
     connection: (id) => connections.find((entry) => entry.id === id) ?? null,
@@ -233,7 +233,7 @@ test("a connection change while detection is pending starts no server", async ()
     generation: 1,
     folder: h.at.project,
   });
-  for (let i = 0; i < 50 && !detected; i++) await Bun.sleep(1);
+  await until(() => detected !== undefined, "detection started");
   h.set([
     {
       id: "local-a",

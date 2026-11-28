@@ -1,3 +1,4 @@
+import { clock } from "../../clock";
 /**
  * Town's time of day. It follows this device's clock, or holds the day, dusk
  * or night the user picked in the sky menu under the zoom controls; the
@@ -69,12 +70,11 @@ export function resetTownDaylightForTest() {
 }
 
 /**
- * The hour the town shows, 0–24. The clock is read through Date.now so a
- * page's installed test clock governs it too.
+ * The hour the town shows, 0–24, from the injected wall clock.
  */
 export function townDaylightHour(
   current: TownDaylightMode = townDaylightMode(),
-  now = new Date(Date.now()),
+  now = new Date(clock.now()),
 ) {
   return current === "clock"
     ? now.getHours() + now.getMinutes() / 60

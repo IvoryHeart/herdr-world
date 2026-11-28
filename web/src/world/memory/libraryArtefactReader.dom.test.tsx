@@ -139,7 +139,7 @@ if (process.env.HERDR_WORLD_LIBRARY_DOM_TEST !== "1") {
     const container = browser.document.createElement("div");
     browser.document.body.append(container);
     const root = createRoot(container as unknown as Element);
-    const settle = async () => {
+    const flushTasks = async () => {
       for (let index = 0; index < 5; index++)
         await act(async () => {
           await new Promise((resolve) => setTimeout(resolve, 0));
@@ -160,7 +160,7 @@ if (process.env.HERDR_WORLD_LIBRARY_DOM_TEST !== "1") {
         />,
       );
     });
-    await settle();
+    await flushTasks();
     const click = async (selector: string) => {
       const target = page.querySelector(selector) as unknown as {
         click(): void;
@@ -169,14 +169,14 @@ if (process.env.HERDR_WORLD_LIBRARY_DOM_TEST !== "1") {
       await act(async () => target.click());
     };
     await click('[data-artefact-id="artefact-report"]');
-    await settle();
+    await flushTasks();
     expect(text()).toContain("Synthetic weekly notes");
     expect(text()).toContain("Open in Files");
 
     // The file is deleted at its source; the person reads the host again.
     exists = false;
     await click('button[aria-label="Read again"]');
-    await settle();
+    await flushTasks();
     expect(lists).toBeGreaterThanOrEqual(2);
     expect(text()).toContain("This file was deleted.");
     expect(text()).not.toContain("Synthetic weekly notes");
@@ -273,7 +273,7 @@ if (process.env.HERDR_WORLD_LIBRARY_DOM_TEST !== "1") {
     const container = browser.document.createElement("div");
     browser.document.body.append(container);
     const root = createRoot(container as unknown as Element);
-    const settle = async () => {
+    const flushTasks = async () => {
       for (let index = 0; index < 5; index++)
         await act(async () => {
           await new Promise((resolve) => setTimeout(resolve, 0));
@@ -290,7 +290,7 @@ if (process.env.HERDR_WORLD_LIBRARY_DOM_TEST !== "1") {
         />,
       );
     });
-    await settle();
+    await flushTasks();
     expect(catalogReads).toBe(0);
     expect(page.querySelector('[role="tablist"]')).toBeNull();
     expect(text()).toContain("only what agents made is here");
@@ -318,7 +318,7 @@ if (process.env.HERDR_WORLD_LIBRARY_DOM_TEST !== "1") {
         }
       ).requestSubmit();
     });
-    await settle();
+    await flushTasks();
     expect(text()).toContain("1 found for “launch”");
     expect(
       page.querySelector('[data-artefact-id="artefact-plan"]'),
@@ -335,12 +335,12 @@ if (process.env.HERDR_WORLD_LIBRARY_DOM_TEST !== "1") {
         }
       ).click();
     });
-    await settle();
+    await flushTasks();
     expect(text()).toContain("Synthetic weekly report");
 
     // An agent that keeps memory starts there: memory is read again.
     publishMemoryHosts([{ ...host, memory: true }]);
-    await settle();
+    await flushTasks();
     expect(catalogReads).toBe(1);
     expect(page.querySelector('[role="tablist"]')).not.toBeNull();
 
@@ -375,6 +375,8 @@ if (process.env.HERDR_WORLD_LIBRARY_DOM_TEST !== "1") {
       leaves: [],
     } as unknown as WorldObject;
     const read: string[] = [];
+    // Each read is held until the test lets it answer.
+    const gates: (() => void)[] = [];
     let running = 0;
     let most = 0;
     setArtefactShelfClientForTests({
@@ -382,7 +384,7 @@ if (process.env.HERDR_WORLD_LIBRARY_DOM_TEST !== "1") {
         read.push(target.connection_id);
         running += 1;
         most = Math.max(most, running);
-        await new Promise((resolve) => setTimeout(resolve, 5));
+        await new Promise<void>((resolve) => gates.push(resolve));
         running -= 1;
         return {
           connection_id: target.connection_id,
@@ -403,13 +405,19 @@ if (process.env.HERDR_WORLD_LIBRARY_DOM_TEST !== "1") {
     }
     const root = createRoot(document.createElement("div"));
     await act(async () => root.render(<Publisher />));
-    for (let index = 0; index < 10 && read.length < 5; index++)
-      await act(async () => {
-        await new Promise((resolve) => setTimeout(resolve, 10));
-      });
-    await act(async () => {
-      await new Promise((resolve) => setTimeout(resolve, 10));
-    });
+    const until = async (done: () => boolean) => {
+      while (!done())
+        await act(async () => {
+          await new Promise((resolve) => setTimeout(resolve, 0));
+        });
+    };
+    // A few at a time: the first reads wait for an answer, the rest queue.
+    await until(() => read.length >= 4);
+    expect(read).toHaveLength(4);
+    gates.shift()!();
+    await until(() => read.length === 5);
+    while (gates.length) gates.shift()!();
+    await until(() => libraryHosts().length === 1);
     expect(read.sort()).toEqual(["c1", "c2", "c3", "c4", "c5"]);
     expect(most).toBeLessThanOrEqual(4);
     expect(libraryHosts().map((one) => one.connection_id)).toEqual(["c5"]);

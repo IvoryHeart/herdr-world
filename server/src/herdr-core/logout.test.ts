@@ -6,6 +6,7 @@ import {
 } from "./observations";
 import { createCoreConnectionRuntime } from "./runtime";
 import { memoryStreamPair } from "./stream";
+import { until } from "./testing/core-world";
 import { FakeCore } from "./testing/fake-core";
 
 // Core 0.1.21 reports, in `hello` and `server.status`, whether the host ends
@@ -92,13 +93,14 @@ async function runtimeOn(fake: FakeCore) {
   };
 }
 
-async function until(predicate: () => boolean, ms = 2_000) {
-  const deadline = Date.now() + ms;
-  while (!predicate()) {
-    if (Date.now() > deadline) throw new Error("condition not reached");
-    await Bun.sleep(2);
-  }
-}
+const polls = (fake: FakeCore) =>
+  fake.calls.filter((c) => c.method === "server.status").length;
+
+/** Core has answered `n` more liveness polls, each a chance to publish. */
+const pollsAfter = (fake: FakeCore, n: number) => {
+  const target = polls(fake) + n;
+  return until(() => polls(fake) >= target);
+};
 
 describe("a core connection's logout warning", () => {
   test("follows core's background check: unknown, then stops at logout, then fixed", async () => {
@@ -123,7 +125,7 @@ describe("a core connection's logout warning", () => {
     });
     // Unchanged facts publish nothing more.
     const count = w.published.length;
-    await Bun.sleep(30);
+    await pollsAfter(fake, 3);
     expect(w.published.length).toBe(count);
     // An administrator enables lingering: the warning clears by itself.
     fake.logout = {
@@ -149,7 +151,7 @@ describe("a core connection's logout warning", () => {
     const older = new FakeCore({ heartbeatMs: 60_000 });
     older.revive();
     const second = await runtimeOn(older);
-    await Bun.sleep(20);
+    await pollsAfter(older, 2);
     expect(second.latest().stops_at_logout).toBeNull();
     await second.runtime.stop();
   });
@@ -168,7 +170,10 @@ describe("a core connection's logout warning", () => {
       stops_at_logout: { linger_user: "example" },
     });
     fake.logout = null;
-    await Bun.sleep(30);
+    // A second connection's polls show the cycles the stopped one would have had.
+    const probe = await runtimeOn(fake);
+    await pollsAfter(fake, 3);
+    await probe.runtime.stop();
     expect(w.latest()).toMatchObject({
       state: "stale",
       stops_at_logout: { linger_user: "example" },

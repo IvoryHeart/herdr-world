@@ -1,3 +1,4 @@
+import { clock as fixtureTime } from "./world/testing/installTestClock";
 import { useState } from "react";
 import { createRoot } from "react-dom/client";
 import { bridge, type ConnectionClient } from "./api";
@@ -12,7 +13,7 @@ const failures: string[] = [];
 const check = (condition: unknown, message: string) => {
   if (!condition) failures.push(message);
 };
-const settle = (ms = 100) => new Promise((resolve) => setTimeout(resolve, ms));
+const advance = (ms = 100) => fixtureTime.advance(ms);
 const fingerprint = "a".repeat(64);
 const subject = {
   connectionId: "alpha",
@@ -125,7 +126,7 @@ const client: ConnectionClient = {
       };
     if (method === "file.read") {
       reads.push(params);
-      await settle(300);
+      await advance(300);
       return {
         workspace_id: "workspace",
         root: candidate.canonicalRoot,
@@ -218,9 +219,9 @@ createRoot(host).render(<Fixture />);
 
 async function run() {
   // Wait for React, lazy resource modules and CodeMirror in the browser fixture.
-  await settle();
-  await settle();
-  await settle();
+  await advance();
+  await advance();
+  await advance();
   const origin = location.href;
   check(
     innerWidth === Number(new URLSearchParams(location.search).get("width")),
@@ -232,7 +233,12 @@ async function run() {
   );
   check(link, "The real Chat transcript must render its local Markdown link");
   link?.click();
-  await settle(750);
+  await fixtureTime.until(
+    () =>
+      target.querySelector(".cm-activeLine")?.textContent ===
+      "const line12 = 12;",
+    "Source line 12 was not rendered",
+  );
   check(
     target.querySelector(".inspector-files-resource:not(.is-hidden)"),
     "Clicking Chat source must activate Files in the same Inspector",
@@ -265,13 +271,18 @@ async function run() {
     "The source preview must reveal line 12",
   );
   changeView("history");
-  await settle();
+  await advance();
   const inline = [...chat()!.querySelectorAll<HTMLAnchorElement>("a")].find(
     (anchor) => anchor.textContent === "/project/demo/src/main.ts:7",
   );
   check(inline, "Inline source references must also be clickable");
   inline?.click();
-  await settle(750);
+  await fixtureTime.until(
+    () =>
+      target.querySelector(".cm-activeLine")?.textContent ===
+      "const line7 = 7;",
+    "The new source line was not rendered",
+  );
   check(
     target.querySelector(".cm-activeLine")?.textContent === "const line7 = 7;",
     "Reopening the same file must reveal the newly requested line",
@@ -281,13 +292,13 @@ async function run() {
     "Source navigation must reuse the existing Inspector",
   );
   changeView("history");
-  await settle();
+  await advance();
   const before = reads.length;
   const outside = [...chat()!.querySelectorAll<HTMLAnchorElement>("a")].find(
     (anchor) => anchor.textContent === "Outside",
   );
   outside?.click();
-  await settle();
+  await advance();
   check(
     chat()
       ?.querySelector("[role=alert]")
@@ -299,7 +310,7 @@ async function run() {
     "An outside-worktree link must neither read nor navigate",
   );
   chat()?.querySelector<HTMLButtonElement>("[role=alert] button")?.click();
-  await settle();
+  await advance();
   check(
     document.querySelector(".agent-worktree-picker"),
     "The notice must open the shared worktree chooser",

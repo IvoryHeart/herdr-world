@@ -34,7 +34,7 @@ async function fixture(
     status: { app: "claude", state: "idle" },
     foreground: { pid: 6000, ...foreground },
   });
-  await world.settle();
+  await world.synchronize();
   let detachDuringInput = false;
   const prompts: string[] = [];
   const f = await productionAnswerFixture(join(world.root, "answers"), {
@@ -255,7 +255,7 @@ for (const runtime of ["core", "tui"] as const)
       const f = await fixture(runtime);
       await f.answer();
       f.detach(name);
-      await f.world.settle();
+      await f.world.synchronize();
       await f.dispatcher.wake();
       expect(
         f.f.storage.ledger.ask("q-foreground")?.delivery?.answer?.state,

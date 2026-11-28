@@ -1,3 +1,4 @@
+import { clock as fixtureTime } from "../world/testing/installTestClock";
 import { createRoot } from "react-dom/client";
 import { bridge } from "../api";
 import { __storeTesting, store } from "../store";
@@ -16,8 +17,8 @@ const failures: string[] = [];
 function check(condition: boolean, message: string) {
   if (!condition) failures.push(message);
 }
-async function settle() {
-  await new Promise((resolve) => setTimeout(resolve, 80));
+async function advance() {
+  await fixtureTime.advance(80);
 }
 
 async function run() {
@@ -179,7 +180,7 @@ async function run() {
     )?.dataset.sequence;
     details.focus();
     details.click();
-    await settle();
+    await advance();
     check(
       details.getAttribute("aria-pressed") === "true" &&
         !!container.querySelector(
@@ -193,7 +194,7 @@ async function run() {
       `${context}: session metadata must remain available`,
     );
     details.click();
-    await settle();
+    await advance();
     check(
       details.getAttribute("aria-pressed") === "false" &&
         !!container.querySelector(
@@ -215,7 +216,7 @@ async function run() {
       i < 100 && !container.querySelector('[aria-label="Open transcript"]');
       i++
     )
-      await settle();
+      await advance();
     const viewToggle = container.querySelector<HTMLButtonElement>(
       '[aria-label="Chat view"]',
     )!;
@@ -235,18 +236,18 @@ async function run() {
     container
       .querySelector<HTMLButtonElement>(".agent-history-composer-send")!
       .click();
-    await settle();
+    await advance();
     check(
       sends.length === 1 && readTerminalComposerDraft(draftKey) === "",
       "History must submit the captured pane draft exactly once",
     );
     writeTerminalComposerDraft(draftKey, "Keep after retirement");
-    await settle();
+    await advance();
     current = false;
     container
       .querySelector<HTMLButtonElement>(".agent-history-composer-send")!
       .click();
-    await settle();
+    await advance();
     check(
       sends.length === 1 &&
         readTerminalComposerDraft(draftKey) === "Keep after retirement",
@@ -256,10 +257,10 @@ async function run() {
     // Exercise Chat at the same narrow desktop width before retaining the
     // Timeline card, filter, selection and keyboard regressions below.
     container.style.width = "640px";
-    await settle();
+    await advance();
     check(container.scrollWidth <= 640, "Chat must fit the narrow Inspector");
     viewToggle.click();
-    await settle();
+    await advance();
     check(
       viewToggle.getAttribute("aria-pressed") === "false" &&
         !!container.querySelector(".agent-history-card"),
@@ -269,7 +270,7 @@ async function run() {
       document.documentElement.dataset.theme = theme;
       for (const width of [1000, 640]) {
         container.style.width = `${width}px`;
-        await settle();
+        await advance();
         await checkHeader(`${theme} wide ${width}px`);
         check(
           container.scrollWidth <= width,
@@ -287,7 +288,7 @@ async function run() {
         container
           .querySelector<HTMLElement>(".agent-history-card-meta")
           ?.click();
-        await settle();
+        await advance();
         check(
           container.querySelector(".agent-history-card time")?.textContent ===
             "09-20 17:38" &&
@@ -332,7 +333,7 @@ async function run() {
         "value",
       )!.set!.call(input, text);
       input.dispatchEvent(new Event("input", { bubbles: true }));
-      await settle();
+      await advance();
     };
     await search("  中文  ");
     await checkHeader("Filtered history");
@@ -360,7 +361,7 @@ async function run() {
     container
       .querySelector<HTMLButtonElement>(".agent-history-filter.is-user")!
       .click();
-    await settle();
+    await advance();
     check(
       container.querySelectorAll(".agent-history-card").length === 0,
       "Search must respect role toggles",
@@ -375,7 +376,7 @@ async function run() {
     container
       .querySelector<HTMLButtonElement>(".agent-history-state button")!
       .click();
-    await settle();
+    await advance();
     check(
       container.querySelector<HTMLInputElement>('input[type="search"]')
         ?.value === "" &&
@@ -386,7 +387,7 @@ async function run() {
     container
       .querySelector<HTMLButtonElement>(".agent-history-filter.is-tool")!
       .click();
-    await settle();
+    await advance();
     await search("DESKTOP LAYOUT");
     check(
       container.querySelectorAll(".agent-history-card").length === 1 &&
@@ -395,7 +396,7 @@ async function run() {
     );
     await search("");
     container.querySelector<HTMLElement>(".agent-history-card")!.click();
-    await settle();
+    await advance();
     check(
       !!container.querySelector(
         ".agent-history-wide-detail .agent-message-modal-content",
@@ -425,11 +426,11 @@ async function run() {
           '[aria-label="Close message detail"]',
         )!
         .click();
-      await settle();
+      await advance();
       container
         .querySelector<HTMLButtonElement>(".agent-history-copy")!
         .click();
-      await settle();
+      await advance();
       check(
         !container.querySelector(
           ".agent-history-wide-detail .agent-message-modal-content",
@@ -438,7 +439,7 @@ async function run() {
       );
       copied.length = 0;
       container.querySelector<HTMLElement>(".agent-history-card-meta")!.click();
-      await settle();
+      await advance();
       for (const selector of [
         ".agent-history-copy",
         '[aria-label="Copy message"]',
@@ -518,7 +519,7 @@ async function run() {
       document.documentElement.dataset.theme = theme;
       for (const width of [380, 320]) {
         container.style.width = `${width}px`;
-        await settle();
+        await advance();
         await checkHeader(`${theme} compact ${width}px`);
         check(
           container.scrollWidth <= width,
@@ -541,7 +542,7 @@ async function run() {
     }
     container.style.width = "380px";
     container.querySelector<HTMLElement>(".agent-history-card-meta")!.click();
-    await settle();
+    await advance();
     check(
       !!document.querySelector(".agent-message-modal"),
       "Compact card header must open the modal detail",
@@ -549,7 +550,7 @@ async function run() {
     document
       .querySelector<HTMLButtonElement>('[aria-label="Close message"]')!
       .click();
-    await settle();
+    await advance();
     await search("中文");
     check(
       container.querySelectorAll(".agent-history-card").length === 1,
@@ -559,18 +560,18 @@ async function run() {
     delete document.documentElement.dataset.layout;
     render(true);
     container.style.width = "1000px";
-    await settle();
+    await advance();
     await checkHeader("Restored wide layout");
     container
       .querySelector<HTMLButtonElement>(".agent-history-filter.is-tool")!
       .click();
-    await settle();
+    await advance();
     container
       .querySelector<HTMLElement>('[role="slider"]')!
       .dispatchEvent(
         new KeyboardEvent("keydown", { key: "End", bubbles: true }),
       );
-    await settle();
+    await advance();
     check(
       container
         .querySelector(".agent-history-wide-detail")
@@ -586,9 +587,9 @@ async function run() {
     container
       .querySelector<HTMLButtonElement>('[aria-label="Session details"]')!
       .click();
-    await settle();
+    await advance();
     render(true, "replacement-pane");
-    await settle();
+    await advance();
     check(
       container.querySelector<HTMLInputElement>('input[type="search"]')
         ?.value === "",
@@ -620,15 +621,15 @@ async function run() {
           ?.click();
       refresh();
       refresh();
-      await settle();
+      await advance();
       releaseOld();
-      await settle();
+      await advance();
       container
         .querySelector<HTMLButtonElement>(
           'button[aria-label="Session details"]',
         )
         ?.click();
-      await settle();
+      await advance();
       const overview =
         container.querySelector('[aria-label="Session overview"]')
           ?.textContent ?? "";

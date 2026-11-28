@@ -65,7 +65,7 @@ function setup(
 }
 
 /** Let a flight finish, as the renderer's frames would. */
-function settle(camera: TownCamera) {
+function finishCameraMotion(camera: TownCamera) {
   for (let frame = 0; frame < 600 && camera.moving; frame += 1)
     camera.update(1 / 60);
   camera.update(1 / 60);
@@ -308,7 +308,7 @@ test("keys pan by 60 screen pixels and zoom about the centre", () => {
   view.attach(camera, layout, viewport);
   reasons.length = 0;
   view.stepZoom(1, layout, viewport);
-  settle(camera);
+  finishCameraMotion(camera);
   const { x, y, z } = camera;
   expect(view.key("ArrowRight")).toBe(true);
   camera.update(1 / 60);
@@ -325,10 +325,10 @@ test("on a phone, zoom out steps to the whole town and zoom in comes home", () =
   const limits = camera.limits!;
   expect(limits.all).toBeLessThan(limits.home * 0.93);
   view.stepZoom(-1, layout, viewport);
-  settle(camera);
+  finishCameraMotion(camera);
   expect(camera.z).toBeCloseTo(limits.all);
   view.stepZoom(1, layout, viewport);
-  settle(camera);
+  finishCameraMotion(camera);
   expect(camera.z).toBeCloseTo(limits.home);
 });
 
@@ -339,7 +339,7 @@ test("zoom in steps from home to a building, a room and a desk, then zooms", () 
   const zooms = [camera.z];
   for (let step = 0; step < 4; step += 1) {
     view.stepZoom(1, layout, viewport);
-    settle(camera);
+    finishCameraMotion(camera);
     zooms.push(camera.z);
   }
   // Each step goes at least 1.2 times closer; the desk step is past desk zoom.
@@ -359,7 +359,7 @@ test("zoom in steps from home to a building, a room and a desk, then zooms", () 
   reasons.length = 0;
   for (let step = 0; step < 3; step += 1) {
     view.stepZoom(-1, layout, viewport);
-    settle(camera);
+    finishCameraMotion(camera);
   }
   expect(camera.z).toBeCloseTo(limits.home);
   expect(reasons).toEqual(["zoom-step", "zoom-step", "home", "zoom-step"]);
@@ -367,10 +367,10 @@ test("zoom in steps from home to a building, a room and a desk, then zooms", () 
   // the whole town, and zoom out stays there.
   expect(limits.all).toBeLessThan(limits.home * 0.93);
   view.stepZoom(-1, layout, viewport);
-  settle(camera);
+  finishCameraMotion(camera);
   expect(camera.z).toBeCloseTo(limits.all);
   view.stepZoom(-1, layout, viewport);
-  settle(camera);
+  finishCameraMotion(camera);
   expect(camera.z).toBeCloseTo(limits.all);
 });
 
@@ -389,17 +389,17 @@ test("zoom in leaves home when the whole town is barely wider than home", () => 
   expect(limits.all * 1.2 * 0.93).toBeGreaterThan(limits.home);
   expect(camera.z).toBeCloseTo(limits.home);
   view.stepZoom(1, layout, viewport);
-  settle(camera);
+  finishCameraMotion(camera);
   expect(camera.z).toBeGreaterThanOrEqual(limits.home * 1.2 - 1e-9);
   // Zoom out still comes home, then shows the whole town.
   view.stepZoom(-1, layout, viewport);
-  settle(camera);
+  finishCameraMotion(camera);
   expect(camera.z).toBeCloseTo(limits.home);
   view.stepZoom(-1, layout, viewport);
-  settle(camera);
+  finishCameraMotion(camera);
   expect(camera.z).toBeCloseTo(limits.all);
   view.stepZoom(1, layout, viewport);
-  settle(camera);
+  finishCameraMotion(camera);
   expect(camera.z).toBeCloseTo(limits.home);
 });
 
@@ -420,7 +420,7 @@ test("focusing a target moves the camera only when it is near an edge or the tow
   const edge = camera.toWorld(10, 10);
   view.focusTarget(target(edge.x, edge.y));
   expect(camera.flying).toBe(true);
-  settle(camera);
+  finishCameraMotion(camera);
   // At town level, even a centred target brings the camera to card zoom.
   view.drew(camera, "town", layout);
   view.focusTarget(target(camera.x - 5, camera.y - 5));
@@ -437,9 +437,9 @@ test("a room request runs once per seq, when the camera and room are ready", () 
   reasons.length = 0;
   view.roomFocus({ roomKey, seq: 1 }, layout);
   expect(reasons).toEqual(["room"]);
-  settle(camera);
+  finishCameraMotion(camera);
   view.fitAll(layout);
-  settle(camera);
+  finishCameraMotion(camera);
   // The same request never replays, even when its room leaves and returns.
   const without = layoutFor(
     office({ alpha: working(6), gamma: working(2), delta: working(4) }),
@@ -531,7 +531,7 @@ test("rooms that move under a still camera keep the room in view where it was", 
   // The camera glides with the room rather than jumping.
   expect([camera.x, camera.y]).toEqual([from.x, from.y]);
   expect(camera.moving).toBe(true);
-  settle(camera);
+  finishCameraMotion(camera);
   const after = camera.toScreen((moved.x + 1) * T, (moved.y + 1) * T);
   expect(after.x).toBeCloseTo(before.x, 0);
   expect(after.y).toBeCloseTo(before.y, 0);
@@ -587,10 +587,10 @@ test("Show the whole town flies to fit every building", () => {
   const { view, layout, viewport, camera, reasons } = setup();
   view.attach(camera, layout, viewport);
   view.stepZoom(1, layout, viewport);
-  settle(camera);
+  finishCameraMotion(camera);
   reasons.length = 0;
   view.fitAll(layout);
-  settle(camera);
+  finishCameraMotion(camera);
   expect(camera.z).toBeCloseTo(camera.limits!.all);
   expect(reasons).toEqual(["fit"]);
 });
@@ -599,7 +599,7 @@ test("on a phone, Show the whole town zooms out past home", () => {
   const { view, layout, viewport, camera } = setup(PHONE);
   view.attach(camera, layout, viewport);
   view.fitAll(layout);
-  settle(camera);
+  finishCameraMotion(camera);
   expect(camera.z).toBeCloseTo(camera.limits!.all);
   expect(camera.z).toBeLessThan(camera.limits!.home * 0.93);
 });
@@ -677,7 +677,7 @@ test("a town viewed whole is framed again when it grows, then fits a narrower vi
   view.follow(grown, viewport);
   // It flies to the new home framing with the buildings, and is home there.
   expect(camera.flying).toBe(true);
-  settle(camera);
+  finishCameraMotion(camera);
   expect(view.atHome()).toBe(true);
   // A change while it flies frames the newest town.
   const shrunk = layoutFor(
@@ -687,7 +687,7 @@ test("a town viewed whole is framed again when it grows, then fits a narrower vi
   view.follow(shrunk, viewport);
   camera.update(0.05);
   view.follow(grown, viewport);
-  settle(camera);
+  finishCameraMotion(camera);
   expect(view.atHome()).toBe(true);
   // Opening a panel narrows the view; the home view fits the town again, so
   // every building stays on screen.
@@ -732,7 +732,7 @@ test("going to an agent glides at the zoom it has, zooming into its room from af
   expect(view.goTo(point, room, false)).toBeGreaterThan(0);
   expect(camera.flying).toBe(true);
   expect(reasons).toEqual(["go-to"]);
-  settle(camera);
+  finishCameraMotion(camera);
   const focus = camera.focusPoint();
   const centre = camera.toWorld(focus.x, focus.y);
   expect(camera.z).toBeCloseTo(z);
@@ -740,10 +740,10 @@ test("going to an agent glides at the zoom it has, zooming into its room from af
   expect(centre.y).toBeCloseTo(point.y, 0);
   // Out at the whole town: it zooms in to the room.
   view.fitAll(layout);
-  settle(camera);
+  finishCameraMotion(camera);
   view.level = "town";
   view.goTo(point, room, false);
-  settle(camera);
+  finishCameraMotion(camera);
   expect(camera.z).toBeGreaterThanOrEqual(camera.limits!.card);
 });
 

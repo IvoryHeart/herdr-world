@@ -1127,6 +1127,10 @@ describe("conversation binding and remote admission", () => {
       },
     };
     let changes = 0;
+    let sessionsChanged!: () => void;
+    const sessionsChangedOnce = new Promise<void>((resolve) => {
+      sessionsChanged = resolve;
+    });
     const prompts: unknown[] = [];
     const chat = createHerdrConversationSource({
       herdrCall: herdr(
@@ -1141,6 +1145,7 @@ describe("conversation binding and remote admission", () => {
       cache: createSessionProjectionCache(files),
       onCodexSessionsChanged: () => {
         changes += 1;
+        sessionsChanged();
       },
     });
     try {
@@ -1152,7 +1157,7 @@ describe("conversation binding and remote admission", () => {
         written,
         join(dir, `rollout-2026-10-19T09-00-01-${thread.slice(0, 29)}b2.jsonl`),
       );
-      await new Promise((resolve) => setTimeout(resolve, 200));
+      await sessionsChangedOnce;
       expect(changes).toBeGreaterThan(0);
       const after = await chat.identity({ pane_id: "w1:p1" });
       expect(searches).toBeGreaterThan(searchesBefore);

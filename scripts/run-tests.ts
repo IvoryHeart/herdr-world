@@ -1,3 +1,4 @@
+import { spawnTestBatch } from "./testing/file-deadline";
 import { retryTests } from "./test-retry";
 import { fileURLToPath } from "node:url";
 import { availableParallelism } from "node:os";
@@ -109,7 +110,7 @@ try {
     commands.push([process.execPath, "scripts/run-world-tests.ts"]);
   for (const command of commands) {
     const run = async (command: string[]) => {
-      const child = Bun.spawn(command, {
+      const child = spawnTestBatch(command, {
         stdin: "inherit",
         stdout: "inherit",
         stderr: "inherit",

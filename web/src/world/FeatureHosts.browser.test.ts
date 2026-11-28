@@ -1,3 +1,7 @@
+import {
+  launchTestBrowser,
+  type TestBrowser,
+} from "../../../scripts/testing/browser-session";
 import { expect, test } from "bun:test";
 import { existsSync } from "node:fs";
 import { mkdtemp, rm } from "node:fs/promises";
@@ -42,9 +46,9 @@ test.skipIf(!chrome)(
           : new Response("Not found", { status: 404 });
       },
     });
-    let child: ReturnType<typeof Bun.spawn> | undefined;
+    let child: TestBrowser | undefined;
     try {
-      child = Bun.spawn(
+      child = await launchTestBrowser(
         [
           chrome!,
           "--headless=new",
@@ -57,6 +61,7 @@ test.skipIf(!chrome)(
         ],
         { stdout: "ignore", stderr: "ignore" },
       );
+      await child.start();
       expect(
         await withBrowserDeadline(result.promise, "feature hosts", 45_000),
       ).toEqual([]);

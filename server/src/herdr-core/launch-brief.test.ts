@@ -11,7 +11,7 @@ async function starting() {
   worlds.push(w);
   await w.connect();
   const t = w.fake.create({ argv: ["pi"], foreground: null });
-  await w.settle();
+  await w.synchronize();
   return { w, t, record: w.lease().runtime.core.terminal(t)! };
 }
 
@@ -37,7 +37,7 @@ for (const state of [null, "blocked", "working", "error"])
     const { w, t, record } = await starting();
     w.fake.status(t, state);
     w.fake.foreground(t, { pid: 77, name: "pi", argv: ["pi"] });
-    await w.settle();
+    await w.synchronize();
     expect(
       await deliverLaunchBrief(w.lease(), record, "Trust this folder"),
     ).toMatchObject({
@@ -51,7 +51,7 @@ test("core rechecks idle after a queued brief, before any paste or Enter", async
   const { w, t, record } = await starting();
   w.fake.status(t, "idle");
   w.fake.foreground(t, { pid: 77, name: "pi", argv: ["pi"] });
-  await w.settle();
+  await w.synchronize();
   w.fake.holdSends = true;
   const pending = deliverLaunchBrief(w.lease(), record, "Trust this folder");
   await until(() => w.fake.heldSendCount === 1);

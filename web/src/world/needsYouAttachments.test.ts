@@ -70,7 +70,7 @@ async function registerDomTest() {
   const container = document.createElement("div");
   document.body.append(container);
   const root = createRoot(container);
-  const settle = () =>
+  const flushTasks = () =>
     act(async () => {
       await new Promise((resolve) => setTimeout(resolve, 0));
     });
@@ -155,7 +155,7 @@ async function registerDomTest() {
     await act(async () =>
       uploads.get("notes.txt")!.reject(new Error("File too large")),
     );
-    await settle();
+    await flushTasks();
     expect(chips()).toEqual([
       "screen.png: done",
       "notes.txt: failed",
@@ -165,20 +165,20 @@ async function registerDomTest() {
     await act(async () =>
       uploads.get("extra.png")!.resolve("/tmp/c/extra.png"),
     );
-    await settle();
+    await flushTasks();
     expect(send().disabled).toBe(true);
     await act(async () => labelled("Retry notes.txt").click());
     expect(chips()[1]).toBe("notes.txt: uploading");
     await act(async () =>
       uploads.get("notes.txt")!.resolve("/tmp/b/notes.txt"),
     );
-    await settle();
+    await flushTasks();
     // A file removed before sending is not sent.
     await act(async () => labelled("Remove extra.png").click());
     expect(chips()).toEqual(["screen.png: done", "notes.txt: done"]);
     expect(send().disabled).toBe(false);
     await act(async () => send().click());
-    await settle();
+    await flushTasks();
     expect(answers).toEqual([
       "The header overlaps\n\nAttached files:\n/tmp/a/screen.png\n/tmp/b/notes.txt",
     ]);
@@ -192,10 +192,10 @@ async function registerDomTest() {
     expect(send().disabled).toBe(true);
     await pick("only.png");
     await act(async () => uploads.get("only.png")!.resolve("/tmp/d/only.png"));
-    await settle();
+    await flushTasks();
     expect(send().disabled).toBe(false);
     await act(async () => send().click());
-    await settle();
+    await flushTasks();
     expect(answers).toEqual(["Attached files:\n/tmp/d/only.png"]);
   });
 }

@@ -21,7 +21,7 @@ async function waitUntil(predicate: () => boolean) {
   const deadline = Date.now() + 1000;
   while (!predicate()) {
     if (Date.now() >= deadline) throw new Error("condition not reached");
-    await Bun.sleep(1);
+    await new Promise<void>((resolve) => setImmediate(resolve));
   }
 }
 

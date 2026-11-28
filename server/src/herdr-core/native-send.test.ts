@@ -23,7 +23,7 @@ async function setup(children: string[][] = []) {
       cwd: "/tmp/example",
     },
   });
-  await w.settle();
+  await w.synchronize();
   return {
     w,
     address,
@@ -70,7 +70,7 @@ test("a replacement, changed foreground or retired lease sends nothing", async (
             cwd: "/tmp/example",
           });
         else await w.service.disconnect("box");
-        if (change !== "lease") await w.settle();
+        if (change !== "lease") await w.synchronize();
         return true;
       }),
     ).rejects.toThrow();
@@ -90,7 +90,7 @@ test.each(["bash", "vim", "node", "python", "ssh", "sudo", "psql"])(
       argv: [name],
       cwd: "/tmp/example",
     });
-    await w.settle();
+    await w.synchronize();
     const fence = CoreOperationFence.admit(lease, address);
     await expect(
       lease.runtime.send(
@@ -128,7 +128,7 @@ test("core without foreground information preserves native input", async () => {
   worlds.push(w);
   await w.connect();
   const address = w.fake.create({ argv: ["codex"], foreground: null });
-  await w.settle();
+  await w.synchronize();
   const lease = w.lease();
   const fence = CoreOperationFence.admit(lease, address);
   await lease.runtime.send(fence, "An answer", async () => true);
@@ -150,7 +150,7 @@ test("a held native answer is cancelled when its agent exits to bash", async () 
     );
   await submitted.promise;
   w.fake.foreground(address, { pid: 53000, name: "bash", argv: ["bash"] });
-  await w.settle();
+  await w.synchronize();
   expect(await sending).not.toBeNull();
   expect(w.fake.deliveredInput).toEqual([]);
   expect(w.fake.calls.filter((c) => c.method === "terminal.send")).toHaveLength(
@@ -215,7 +215,7 @@ test("a core without native send refuses before marking possible input", async (
     argv: ["/usr/bin/codex"],
     foreground: { pid: 51001, name: "codex" },
   });
-  await w.settle();
+  await w.synchronize();
   let marked = false;
   await expect(
     w

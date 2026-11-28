@@ -3,6 +3,7 @@ import { join } from "node:path";
 import type { CoreByteStream } from "../stream";
 import { encodeFrame, FrameDecoder, FrameKind, STREAM_WINDOW } from "../wire";
 import { fakeCoreAddress } from "./fake-address";
+import { notifyCoreFixtureChange } from "./events";
 
 /**
  * An in-process herdr-core that speaks the same wire protocol as the real
@@ -906,6 +907,7 @@ export class FakeCore {
       );
       connection.plain = "";
       this.calls.push({ method: request.method, params: request.params });
+      queueMicrotask(notifyCoreFixtureChange);
       const framed = request.params?.framed === true;
       const reply =
         request.method === "hello"
@@ -993,6 +995,8 @@ export class FakeCore {
     request: { id: number; method: string; params: Record<string, unknown> },
   ) {
     this.calls.push({ method: request.method, params: request.params });
+    // Publish after this request's synchronous state changes (including held sends).
+    queueMicrotask(notifyCoreFixtureChange);
     this.onCall?.(request.method, request.params ?? {});
     const reply = (result: unknown) =>
       this.write(
@@ -1332,6 +1336,7 @@ export class FakeCore {
   }
 
   private drop(connection: FakeConnection) {
+    queueMicrotask(notifyCoreFixtureChange);
     if (connection.heartbeat) clearInterval(connection.heartbeat);
     // Core cancels every send a closed connection left waiting.
     for (let i = this.heldSends.length - 1; i >= 0; i--)

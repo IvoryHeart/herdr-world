@@ -122,7 +122,7 @@ test("Town moves core agents between desks and rooms through placement labels", 
     });
   }
   expect(requests).toEqual([]);
-  await core.settle();
+  await core.synchronize();
   const after = await core.rows();
   expect(after.panes.find((p) => p.pane_id === "t1")).toMatchObject({
     workspace_id: rows.panes.find((p) => p.pane_id === "t3")!.workspace_id,
@@ -145,7 +145,7 @@ test("Town moves core agents between desks and rooms through placement labels", 
       false,
     ),
   ).toMatchObject({ status: "moved" });
-  await core.settle();
+  await core.synchronize();
   const moved = await core.rows();
   const one = moved.panes.find((p) => p.pane_id === "t1")!;
   const three = moved.panes.find((p) => p.pane_id === "t3")!;
@@ -211,7 +211,7 @@ test("World-started agents and shells move between World rooms, app spaces and e
   };
   const agent = await launch("claude");
   const shell = await launch(null);
-  await w.settle();
+  await w.synchronize();
   expect(
     await moveCore(lease, w.topology, {
       kind: "pane",
@@ -470,7 +470,7 @@ test("moving a World-started parent does not carry its inherited child to the ne
     argv: ["claude"],
     parent: started.terminal_id,
   });
-  await w.settle();
+  await w.synchronize();
   expect(
     await moveCore(w.lease(), w.topology, {
       kind: "pane",

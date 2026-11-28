@@ -8,7 +8,12 @@ export type TimingJob = {
   started_at: string | null;
   completed_at: string | null;
 };
-type TimingRun = { created_at: string; html_url: string };
+type TimingRun = {
+  created_at: string;
+  html_url: string;
+  head_sha?: string;
+  event?: string;
+};
 type Workflow = {
   jobs: Record<
     string,
@@ -131,12 +136,14 @@ export function renderRunTiming(
     "",
     "Runner waits sum job created_at → started_at (parallel waits overlap); dependency waits before a job is created are excluded. Skipped jobs are excluded. Missing timestamps stay unknown.",
     "",
-    "| Job | Result | Execution | Runner wait |",
-    "| --- | --- | ---: | ---: |",
+    `Executed jobs: **${active.length}** (matrix expansions included).`,
+    "",
+    "| Job | Result | Execution | Runner wait | Start offset | End offset |",
+    "| --- | --- | ---: | ---: | ---: | ---: |",
   );
   for (const row of measured)
     lines.push(
-      `| ${label(row.job.name)} | ${row.job.conclusion ?? "in progress"} | ${seconds(row.execution)} | ${seconds(row.wait)} |`,
+      `| ${label(row.job.name)} | ${row.job.conclusion ?? "in progress"} | ${seconds(row.execution)} | ${seconds(row.wait)} | ${seconds(duration(run.created_at, row.job.started_at))} | ${seconds(duration(run.created_at, end(row.job)))} |`,
     );
   return lines.join("\n") + "\n";
 }
@@ -168,26 +175,81 @@ export async function collectRunTiming(
   throw new Error("Timing job limit exceeded");
 }
 
+/** One read-only snapshot across all workflows for a pushed PR head. @internal */
+export async function collectHeadTiming(
+  repository: string,
+  sha: string,
+  api: (path: string) => Promise<any>,
+) {
+  if (!/^[\w.-]+\/[\w.-]+$/.test(repository) || !/^[a-f0-9]{40}$/.test(sha))
+    throw new Error("Invalid head identity");
+  const runs: {
+    id: number;
+    run_attempt: number;
+    name: string;
+    html_url: string;
+    status: string;
+  }[] = [];
+  for (let page = 1; ; page++) {
+    if (page > 5) throw new Error("Head workflow limit exceeded");
+    const result = await api(
+      `/repos/${repository}/actions/runs?head_sha=${sha}&event=pull_request&per_page=100&page=${page}`,
+    );
+    runs.push(...result.workflow_runs);
+    if (result.workflow_runs.length < 100) break;
+  }
+  const rows: string[] = [];
+  let total = 0;
+  for (const run of runs) {
+    const observed = await collectRunTiming(
+      repository,
+      String(run.id),
+      String(run.run_attempt),
+      api,
+    );
+    const count = observed.jobs.filter(
+      (job) => job.conclusion !== "skipped",
+    ).length;
+    total += count;
+    rows.push(
+      `| ${label(run.name)} | [${run.id}](${run.html_url}) | ${run.run_attempt} | ${count} | ${label(run.status)} |`,
+    );
+  }
+  return [
+    "### All PR workflows for this pushed head",
+    "",
+    "Single snapshot, including side workflows and repeated PR events on this SHA. Queued workflows may not have emitted every job yet; this is an observed lower bound, not a final acceptance receipt.",
+    "",
+    "| Workflow | Run | Attempt | Observed jobs | Status |",
+    "| --- | --- | ---: | ---: | --- |",
+    ...rows,
+    "",
+    `Total observed runner jobs across all ${runs.length} workflows: **${total}**.`,
+    "",
+  ].join("\n");
+}
+
 if (import.meta.main) {
   let report: string;
   try {
+    const api = async (path: string) => {
+      const response = await fetch(`https://api.github.com${path}`, {
+        headers: {
+          Accept: "application/vnd.github+json",
+          Authorization: `Bearer ${process.env.GH_TOKEN}`,
+          "X-GitHub-Api-Version": "2022-11-28",
+        },
+        signal: AbortSignal.timeout(10_000),
+      });
+      if (!response.ok)
+        throw new Error(`GitHub timing API: ${response.status}`);
+      return response.json();
+    };
     const { run, jobs } = await collectRunTiming(
       process.env.GITHUB_REPOSITORY!,
       process.env.GITHUB_RUN_ID!,
       process.env.GITHUB_RUN_ATTEMPT!,
-      async (path) => {
-        const response = await fetch(`https://api.github.com${path}`, {
-          headers: {
-            Accept: "application/vnd.github+json",
-            Authorization: `Bearer ${process.env.GH_TOKEN}`,
-            "X-GitHub-Api-Version": "2022-11-28",
-          },
-          signal: AbortSignal.timeout(10_000),
-        });
-        if (!response.ok)
-          throw new Error(`GitHub timing API: ${response.status}`);
-        return response.json();
-      },
+      api,
     );
     const workflow = Bun.YAML.parse(
       readFileSync(
@@ -196,6 +258,18 @@ if (import.meta.main) {
       ),
     ) as Workflow;
     report = renderRunTiming(run, jobs, workflow, new Date().toISOString());
+    if (run.event === "pull_request" && run.head_sha) {
+      try {
+        report += await collectHeadTiming(
+          process.env.GITHUB_REPOSITORY!,
+          run.head_sha,
+          api,
+        );
+      } catch {
+        report +=
+          "\nCross-workflow head snapshot unavailable; inspect the Actions workflow list before counting total jobs.\n";
+      }
+    }
   } catch {
     // Reporting cannot change a test verdict. Never print API bodies or tokens.
     report =

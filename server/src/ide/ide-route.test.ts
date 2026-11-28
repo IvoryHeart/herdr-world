@@ -90,7 +90,7 @@ async function until<T>(read: () => Promise<T>, done: (value: T) => boolean) {
     if (done(value)) return value;
     if (Date.now() > deadline)
       throw new Error(`timed out: ${JSON.stringify(value)}`);
-    await Bun.sleep(50);
+    await new Promise<void>((resolve) => setImmediate(resolve));
   }
 }
 

@@ -20,6 +20,7 @@ import {
   type TuiManagedProfile,
 } from "../connections/profile-service";
 import { ConnectionProfileStore } from "../connections/profiles";
+import { systemScheduler } from "../service/clock";
 import { silentLogger } from "../utils/logger";
 import { createCoreConnections } from "./connections";
 import { CoreFenceError, CoreOperationFence } from "./fence";
@@ -29,6 +30,7 @@ import { readCoreScreen } from "./runtime";
 import { coreAgentStatus } from "./topology";
 import { handleCoreSharedRpc } from "../rpc/core-shared";
 import { localCoreTransport } from "./transport";
+import { until } from "./testing/core-world";
 import { FakeCore } from "./testing/fake-core";
 
 const roots: string[] = [];
@@ -39,14 +41,6 @@ afterEach(async () => {
     rmSync(root, { recursive: true, force: true });
 });
 
-async function until(predicate: () => boolean, ms = 2_000) {
-  const deadline = Date.now() + ms;
-  while (!predicate()) {
-    if (Date.now() > deadline) throw new Error("condition not reached");
-    await Bun.sleep(2);
-  }
-}
-
 const startup: StartupLocalProfile = {
   id: "startup-default",
   label: "Default",
@@ -56,7 +50,18 @@ const startup: StartupLocalProfile = {
   auto_connect: false,
 };
 
-function world({ herdrTuiInstalled }: { herdrTuiInstalled?: boolean } = {}) {
+function world({
+  herdrTuiInstalled,
+  manualRetries = false,
+}: {
+  herdrTuiInstalled?: boolean;
+  manualRetries?: boolean;
+} = {}) {
+  /** Reconnect timers wait here; a test fires them when it wants an attempt. */
+  const retries: Array<{ run: () => void; cancelled: boolean }> = [];
+  const fireRetries = () => {
+    for (const timer of retries.splice(0)) if (!timer.cancelled) timer.run();
+  };
   const root = mkdtempSync(join(tmpdir(), "hcw-t-"));
   roots.push(root);
   const tuiManager = new ConnectionManager<ConnectionRuntime>(
@@ -94,12 +99,28 @@ function world({ herdrTuiInstalled }: { herdrTuiInstalled?: boolean } = {}) {
         explicitStartupOverride: false,
       }),
       createRuntime: tuiRuntime,
-      retry: { baseDelayMs: 5, maxDelayMs: 20, random: () => 0 },
+      retry: {
+        baseDelayMs: 5,
+        maxDelayMs: 20,
+        random: () => 0,
+        schedule: (callback, delayMs) => {
+          // Retry delays are at most 20 ms; the 30 s stability timer runs on time.
+          if (!manualRetries || delayMs > 20)
+            return systemScheduler.schedule(callback, delayMs);
+          const timer = { run: callback, cancelled: false };
+          retries.push(timer);
+          return {
+            cancel: () => {
+              timer.cancelled = true;
+            },
+          };
+        },
+      },
       ...(herdrTuiInstalled === undefined
         ? {}
         : { noHerdrTui: () => !herdrTuiInstalled }),
     });
-  return { root, service, core, tuiManager, store };
+  return { root, service, core, tuiManager, store, retries, fireRetries };
 }
 
 async function servedCore(root: string, name = "core") {
@@ -397,7 +418,7 @@ describe("herdr-core connections", () => {
   });
 
   test("the preview fixture: start, kill, start again, remove", async () => {
-    const w = world();
+    const w = world({ manualRetries: true });
     const fixture = createCoreFixture(() => w.service);
     expect(await fixture.start()).toMatchObject({ running: true });
     await until(() => w.core.manager.status("core-fixture").state === "ready");
@@ -417,12 +438,20 @@ describe("herdr-core connections", () => {
     ]);
     expect(fixture.kill()).toMatchObject({ running: false });
     await until(() => observed(w, "core-fixture")?.state === "stale");
-    // Killed: World retries, but nothing starts a core.
-    await Bun.sleep(60);
+    // Killed: World retries, but nothing starts a core. Each attempt fails
+    // and schedules the next.
+    for (let attempt = 0; attempt < 3; attempt++) {
+      await until(() => w.retries.length > 0);
+      w.fireRetries();
+    }
+    await until(() => w.retries.length > 0);
     expect(fixture.status().running).toBe(false);
     expect(w.core.manager.status("core-fixture").state).toBe("reconnecting");
     await fixture.start();
-    await until(() => observed(w, "core-fixture")?.state === "live");
+    await until(() => {
+      w.fireRetries();
+      return observed(w, "core-fixture")?.state === "live";
+    });
     expect(
       observed(w, "core-fixture")!.terminals.map((t) => [t.address, t.name]),
     ).toEqual(first.terminals.map((t) => [t.address, t.name]));

@@ -91,7 +91,7 @@ function harness(
   return { install, calls, created, connected, finishSetup };
 }
 
-async function settle(
+async function flushTasks(
   install: ReturnType<typeof harness>["install"],
   host: unknown,
 ) {
@@ -238,7 +238,7 @@ describe("herdr-core install from World", () => {
       "already being installed there",
     );
     h.finishSetup();
-    const status = await settle(h.install, { type: "local" });
+    const status = await flushTasks(h.install, { type: "local" });
     expect(status.phase).toBe("done");
     expect(status.connection_id).toBe("core-local");
     expect(status.lines).toContain(
@@ -273,7 +273,7 @@ describe("herdr-core install from World", () => {
     expect(h.calls[1]!.input).toEndWith("\nherdr_core_probe </dev/null\n");
     h.install.install({ type: "local" }, "0.1.22");
     h.finishSetup();
-    expect((await settle(h.install, { type: "local" })).phase).toBe("done");
+    expect((await flushTasks(h.install, { type: "local" })).phase).toBe("done");
     expect(h.calls[2]!.input).toEndWith(
       "\nherdr_core_setup '0.1.22' 'default'\n",
     );
@@ -294,7 +294,7 @@ describe("herdr-core install from World", () => {
     const host = { type: "ssh", destination: "dev.example.com" };
     h.install.install(host, null);
     h.finishSetup();
-    const status = await settle(h.install, host);
+    const status = await flushTasks(h.install, host);
     expect(status.connection_id).toBe("core-dev");
     expect(h.connected).toEqual(["core-dev"]);
     expect(h.created).toHaveLength(0);
@@ -308,7 +308,7 @@ describe("herdr-core install from World", () => {
     });
     h.install.install({ type: "local" }, null);
     h.finishSetup();
-    const status = await settle(h.install, { type: "local" });
+    const status = await flushTasks(h.install, { type: "local" });
     expect(status.phase).toBe("failed");
     expect(status.error).toBe(
       "the download is damaged (checksum mismatch); try again",
@@ -322,13 +322,13 @@ describe("herdr-core install from World", () => {
       null,
     );
     h.install.install({ type: "local" }, "0.1.22", "ok");
-    const ok = await settle(h.install, { type: "local" });
+    const ok = await flushTasks(h.install, { type: "local" });
     expect(ok).toMatchObject({ phase: "done", connection_id: "core-fixture" });
     // Every simulated line and failure says so (#931).
     expect(ok.lines.length).toBeGreaterThan(0);
     for (const line of ok.lines) expect(line).toStartWith("Simulated: ");
     h.install.install({ type: "local" }, "0.1.22", "error");
-    const failed = await settle(h.install, { type: "local" });
+    const failed = await flushTasks(h.install, { type: "local" });
     expect(failed.error).toStartWith("Simulated: ");
     expect(failed.error).toContain("checksum mismatch");
     for (const line of failed.lines) expect(line).toStartWith("Simulated: ");
@@ -355,7 +355,7 @@ describe("herdr-core install from World", () => {
     );
     expect(started).toMatchObject({ session: "work", connection: "core-work" });
     h.finishSetup();
-    const status = await settle(h.install, { type: "local" });
+    const status = await flushTasks(h.install, { type: "local" });
     expect(status).toMatchObject({ phase: "done", connection_id: "core-work" });
     expect(h.calls[0]!.input).toEndWith(
       "\nherdr_core_setup '' 'work' </dev/null\n",
@@ -383,7 +383,7 @@ describe("herdr-core install from World", () => {
     });
     h.install.install({ type: "local" }, null);
     h.finishSetup();
-    const status = await settle(h.install, { type: "local" });
+    const status = await flushTasks(h.install, { type: "local" });
     expect(status.connection_id).toBe("core-local");
     expect(h.connected).toHaveLength(0);
     expect(h.created).toHaveLength(1);
@@ -428,7 +428,7 @@ describe("herdr-core install from World", () => {
     });
     h.install.install({ type: "local" }, null);
     h.finishSetup();
-    const created = await settle(h.install, { type: "local" });
+    const created = await flushTasks(h.install, { type: "local" });
     expect(created.phase).toBe("failed");
     expect(created.error).toBe(
       "herdr-core is installed and started, but World could not connect to it: herdr-core is not running",
@@ -439,7 +439,7 @@ describe("herdr-core install from World", () => {
     });
     existing.install.install({ type: "local" }, null);
     existing.finishSetup();
-    const reconnected = await settle(existing.install, { type: "local" });
+    const reconnected = await flushTasks(existing.install, { type: "local" });
     expect(reconnected.phase).toBe("failed");
     expect(reconnected.error).toContain("the connection is error");
   });

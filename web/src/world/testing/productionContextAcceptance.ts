@@ -1,3 +1,7 @@
+import {
+  launchTestBrowser,
+  type TestBrowser,
+} from "../../../../scripts/testing/browser-session";
 import { sendWorldSnapshotReply } from "../../../../server/src/bridge/world-snapshot-reply";
 import { WorldSnapshotAdmission } from "../../../../server/src/bridge/world-snapshot-admission";
 import { serveStatic } from "../../../../server/src/http/static-files";
@@ -11,6 +15,7 @@ import {
   flushCoalescedMessages,
 } from "../../../../server/src/bridge/websocket-send";
 import { createDenseSnapshotFixture } from "../browserAcceptanceFixture";
+import { SnapshotClock } from "./snapshotClock";
 
 import {
   productionContextCases,
@@ -23,6 +28,7 @@ import {
   waitForChromePort,
 } from "../../browserChrome";
 import { worldBrowserBundle } from "./worldBrowserBundle";
+import { casePhases } from "./casePhases";
 import { chromeRenderingFlags } from "./chromeRendering";
 import { recordLatency } from "./latencyTrend";
 import { productionWorkCeilings, workViolations } from "./workCeilings";
@@ -40,14 +46,20 @@ export function registerProductionContextTests(group: ProductionContextGroup) {
     )(
     "production transport and mounted acceptance: %j",
     async ({ view, entry, width }) => {
+      const phases = casePhases(
+        `ProductionContexts ${view}${entry ? ` ${entry}` : ""} ${width}px`,
+      );
       const dir = await mkdtemp(join(tmpdir(), "world-production-contexts-"));
       const bundle = await worldBrowserBundle("ProductionContexts");
+      const snapshotClock = new SnapshotClock();
       const fixture =
         view === "uncertain"
           ? null
           : createDenseSnapshotFixture({
               workingInitially: entry === "animated",
               maximumScale: entry === "maximum-scale",
+              clock: snapshotClock,
+              scheduler: snapshotClock,
             });
       const initialSnapshot = fixture ? await fixture.service.snapshot() : null;
       const payload = initialSnapshot ? JSON.stringify(initialSnapshot) : "";
@@ -399,8 +411,13 @@ export function registerProductionContextTests(group: ProductionContextGroup) {
               if (diagnostic) serviceTasks.push(task);
               const refresh = ++revision === 2;
               if (refresh) fixture!.startStalledAttentionRefresh();
-              const began = Date.now();
-              const snapshotResult = await fixture!.snapshot(request.params);
+              const began = fixture!.now();
+              const pendingSnapshot = fixture!.snapshot(request.params);
+              if (refresh) {
+                await fixture!.attentionReady();
+                snapshotClock.advance(20_000);
+              }
+              const snapshotResult = await pendingSnapshot;
               task.endAt = Date.now();
               if (refresh) {
                 basedRefreshVerified =
@@ -413,7 +430,7 @@ export function registerProductionContextTests(group: ProductionContextGroup) {
                       (host.unchanged === true && !("snapshot" in host)),
                   );
                 stalledResponseVerified =
-                  Date.now() - began >= 19900 &&
+                  fixture!.now() - began >= 19900 &&
                   fixture!.stalledIds.every((id) =>
                     snapshotResult.connections.some(
                       (connection) =>
@@ -528,9 +545,11 @@ export function registerProductionContextTests(group: ProductionContextGroup) {
           },
         },
       });
-      let browser: ReturnType<typeof Bun.spawn> | undefined;
+      let browser: TestBrowser | undefined;
       try {
-        browser = Bun.spawn(
+        phases.mark("setup");
+        void pageRequested.promise.then(() => phases.mark("load"));
+        browser = await launchTestBrowser(
           [
             chrome!,
             "--headless=new",
@@ -551,7 +570,12 @@ export function registerProductionContextTests(group: ProductionContextGroup) {
               (Bun.env.WORLD_TRACE_PREFIX ? "&trace=1" : ""),
           ],
           { stdout: "ignore", stderr: Bun.file(dir + "/browser.log") },
+          // Native input keeps its existing 5s RPC bound. Concurrent
+          // SwiftShader work can starve those replies beyond that bound;
+          // preserve isolation instead of extending the deadline.
+          { exclusive: traceTimeline || view !== "uncertain" },
         );
+        await browser.start();
         // Keep both observation/render phases and the deliberate 20-second stall
         // in the original fixture budget. Input latency has separate budgets.
         const observed = await waitForBrowserFixture(
@@ -563,6 +587,7 @@ export function registerProductionContextTests(group: ProductionContextGroup) {
           "Production context acceptance deadline",
           90_000,
         );
+        phases.mark("scene");
         if (view === "uncertain")
           expect(
             calls.some(
@@ -724,6 +749,7 @@ export function registerProductionContextTests(group: ProductionContextGroup) {
         if (browser) await browser.exited;
         server.stop(true);
         await rm(dir, { recursive: true, force: true });
+        phases.done();
       }
     },
     // Also allow fixture/build setup and cleanup outside the browser watchdog.

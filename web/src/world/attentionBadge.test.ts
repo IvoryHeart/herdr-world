@@ -66,7 +66,7 @@ function page(navigator: Record<string, unknown> = {}) {
   return { document, badge, drawn, icons };
 }
 
-const settle = () => new Promise((resolve) => setTimeout(resolve, 0));
+const flushTasks = () => new Promise((resolve) => setTimeout(resolve, 0));
 
 describe("the page's title, icon and app badge", () => {
   test("show the count while anything waits and restore everything at 0", async () => {
@@ -78,7 +78,7 @@ describe("the page's title, icon and app badge", () => {
     const plain = icons();
 
     badge.show(34);
-    await settle();
+    await flushTasks();
     expect(document.title).toBe("(34) Herdr World");
     expect(icons()).toEqual([
       "apple-touch-icon /herdr-world-icon-180.png",
@@ -86,18 +86,18 @@ describe("the page's title, icon and app badge", () => {
     ]);
 
     badge.show(33);
-    await settle();
+    await flushTasks();
     expect(document.title).toBe("(33) Herdr World");
     // Still 9+: the icon is not drawn again.
     expect(drawn).toEqual(["9+"]);
 
     badge.show(3);
-    await settle();
+    await flushTasks();
     expect(icons()).toContain("icon data:image/png;base64,3");
     expect(document.head.querySelectorAll('link[rel="icon"]')).toHaveLength(1);
 
     badge.show(0);
-    await settle();
+    await flushTasks();
     expect(document.title).toBe("Herdr World");
     expect(icons().sort()).toEqual(plain.sort());
     expect(calls).toEqual(["set 34", "set 33", "set 3", "clear"]);
@@ -111,11 +111,11 @@ describe("the page's title, icon and app badge", () => {
       clearAppBadge: async () => void (appBadge = 0),
     };
     page(navigator).badge.show(0);
-    await settle();
+    await flushTasks();
     expect(appBadge).toBe(0);
     appBadge = 5;
     page(navigator).badge.show(2);
-    await settle();
+    await flushTasks();
     expect(appBadge).toBe(2);
   });
 
@@ -124,7 +124,7 @@ describe("the page's title, icon and app badge", () => {
     const plain = icons();
     badge.show(5);
     badge.show(0);
-    await settle();
+    await flushTasks();
     expect(icons()).toEqual(plain);
   });
 
@@ -140,7 +140,7 @@ describe("the page's title, icon and app badge", () => {
     });
     rejecting.badge.show(2);
     rejecting.badge.show(0);
-    await settle();
+    await flushTasks();
     expect(rejecting.document.title).toBe("Herdr World");
   });
 
@@ -156,7 +156,7 @@ describe("the page's title, icon and app badge", () => {
       drawIcon: () => Promise.reject(new Error("offline")),
     });
     badge.show(4);
-    await settle();
+    await flushTasks();
     expect(document.title).toBe("(4) Herdr World");
     expect(document.head.querySelector("link")?.getAttribute("href")).toBe(
       "/favicon.ico",

@@ -19,7 +19,11 @@ const runnerVariables = new Set([
   "HERDR_WORLD_CHECK_LOCK",
   "HERDR_WORLD_TEST_ASSETS",
   "HERDR_WORLD_TEST_LABEL",
+  "HERDR_WORLD_TEST_PHASES",
   "HERDR_CHROME_WARM",
+  "HERDR_TEST_BROWSER",
+  "HERDR_TEST_BROWSER_TOKEN",
+  "HERDR_TEST_BROWSER_RENDERING",
   // The CI diagnostics adapter needs these through nested test runners.
   "HERDR_DIAGNOSTIC_CHROME",
   "HERDR_BROWSER_DIAGNOSTICS_DIR",
@@ -42,7 +46,8 @@ export function isolatedTestEnv(
     if (
       /^(?:SSH_|GIT_|CURL_HOME$|WGETRC$|GH_CONFIG_DIR$|GLAB_CONFIG_DIR$|BASH_ENV$|ENV$|ZDOTDIR$|BUN_OPTIONS$|NODE_OPTIONS$|.*_PROXY$|.*_TOKEN$|.*_API_KEY$)/i.test(
         key,
-      )
+      ) &&
+      key !== "HERDR_TEST_BROWSER_TOKEN"
     )
       continue;
     if (

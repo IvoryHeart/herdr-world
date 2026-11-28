@@ -35,7 +35,7 @@ const frame = () => new Promise<number>((r) => requestAnimationFrame(r));
 const stats = () => window.__HERDR_TOWN_RENDERER__!;
 
 /** Waits until the camera and actors stop moving, or `limit` ms pass. */
-async function settle(limit = 8000) {
+async function waitForSceneIdle(limit = 8000) {
   const began = performance.now();
   let calm = 0;
   while (performance.now() - began < limit) {
@@ -87,7 +87,7 @@ const site = {
     return {
       desks: stats().desks,
       actors: stats().actors,
-      ...(await settle(12_000)),
+      ...(await waitForSceneIdle(12_000)),
     };
   })(),
   /** Whole town (ALL), then each Zoom in step: building, room, desk. */
@@ -110,9 +110,9 @@ const site = {
           ? "Zoom in"
           : "Zoom out",
     );
-    return settle();
+    return waitForSceneIdle();
   },
-  settle,
+  waitForSceneIdle,
 };
 
 Object.assign(window, { siteShots: site });

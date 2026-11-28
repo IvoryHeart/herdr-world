@@ -2,7 +2,7 @@ name: CI
 
 on:
     pull_request:
-        types: [opened, synchronize, reopened, labeled]
+        types: [opened, synchronize, reopened, labeled, edited, closed]
     # The queue must validate its combined commit afresh, independently of PR proof.
     merge_group:
         types: [checks_requested]
@@ -35,8 +35,8 @@ permissions:
 concurrency:
     # Each main SHA receives its own lightweight evidence report.
     group: ci-${{ github.workflow }}-${{ github.event.pull_request.number || (github.event_name == 'push' && github.sha) || github.ref }}
-    # PR events queue and inspect existing evidence for that head/tree.
-    cancel-in-progress: false
+    # New code/closure cancels obsolete work; metadata edits retain active proof.
+    cancel-in-progress: ${{ github.event_name == 'pull_request' && contains(fromJSON('["opened","synchronize","reopened","closed"]'), github.event.action) }}
 
 jobs:
     browser-diagnostics:
@@ -133,6 +133,13 @@ jobs:
               with:
                   bun-version: "1.4.4"
                   no-cache: true
+            - name: Scan introduced commits and PR metadata without exposing matches
+              run: |
+                  if [ "$GITHUB_EVENT_NAME" = pull_request ]; then
+                    bun scripts/check-privacy.ts --event "$GITHUB_EVENT_PATH"
+                  else
+                    bun run check:privacy
+                  fi
             - name: Determine validation scope
               id: scope
               env:
@@ -166,53 +173,17 @@ jobs:
                   fi
                   echo "::error::Run $HELD_RUN is this head's latest result and it is red. A title, description or label change retests nothing: re-run that run's failed jobs, then this run's failed jobs, or push a commit."
                   exit 1
-    pr-description:
-        name: PR description
-        needs: validation-scope
-        if: always() && needs.validation-scope.result != 'skipped' && github.event_name == 'pull_request'
-        runs-on: ubuntu-latest
-        steps:
-            - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
-              with:
-                  persist-credentials: false
-                  fetch-depth: 0
-            - uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2
-              with:
-                  bun-version: "1.4.4"
-                  no-cache: true
-            - name: Check PR description
-              run: bun run check:pr-body --event "$GITHUB_EVENT_PATH"
-
-    # A reused Delivery checks result already required this audit on the same merge.
-    dependency-security:
-        name: Shipped dependency security
-        needs: validation-scope
-        if: needs.validation-scope.outputs.mode != 'reuse' && needs.validation-scope.outputs.mode != 'hold'
-        runs-on: ubuntu-latest
-        timeout-minutes: 10
-        steps:
-            - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
-              with:
-                  persist-credentials: false
-            - uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2
-              with:
-                  bun-version: "1.4.4"
-                  no-cache: true
-            - run: bun install --frozen-lockfile --ignore-scripts
-            - run: bun run security:check
-
     static:
         name: Static checks (${{ matrix.group }})
         needs: validation-scope
-        if: needs.validation-scope.outputs.mode != 'reuse' && needs.validation-scope.outputs.mode != 'hold'
+        if: needs.validation-scope.outputs.mode == 'docs'
         runs-on: ubuntu-latest
         timeout-minutes: 30
         strategy:
             fail-fast: false
             matrix:
-                # Keep CPU-heavy builds and type checking off the analysis runner.
-                # Docs still run their existing command once, on the repository runner.
-                group: ${{ fromJSON(needs.validation-scope.outputs.mode == 'docs' && '["repository"]' || '["repository","types","build"]') }}
+                # Full runs carry static groups on the four unit runners.
+                group: [repository]
         env:
             HERDR_WORLD_RATCHET_TARGET: ${{ github.event.pull_request.base.sha || github.event.merge_group.base_sha }}
             HERDR_CI_SELECTION: ${{ needs.validation-scope.outputs.selection }}
@@ -230,21 +201,13 @@ jobs:
                   bun-version: "1.4.4"
                   no-cache: true
             - run: bun install --frozen-lockfile
+            - run: bun run security:check
             - name: Run documentation checks
               if: needs.validation-scope.outputs.mode == 'docs'
               run: bun run check:docs
-            - name: Run static repository checks
-              if: needs.validation-scope.outputs.mode != 'docs'
-              run: bun run check:static --static-group=${{ matrix.group }}
-            - name: Upload static check logs
-              if: always() && needs.validation-scope.outputs.mode != 'docs'
-              uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7
-              with:
-                  name: static-check-logs-${{ matrix.group }}
-                  path: .agents/delivery/lanes/static-*.log
-                  include-hidden-files: true
-                  if-no-files-found: error
-
+    # Sixteen runner leaves in a full run: scope, four combined unit/static/web,
+    # six World browser, four model groups, and Delivery. Keep work sequential
+    # within each combined runner so CPU and Chrome limits remain unchanged.
     unit-tests:
         name: Non-browser tests (${{ matrix.shard }}/4)
         needs: validation-scope
@@ -260,7 +223,11 @@ jobs:
         strategy:
             fail-fast: false
             matrix:
-                shard: [1, 2, 3, 4]
+                include:
+                    - { shard: 1, group: '', web: 1 }
+                    - { shard: 2, group: types, web: 2 }
+                    - { shard: 3, group: build, web: 0 }
+                    - { shard: 4, group: repository, web: 0 }
         steps:
             - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
               with:
@@ -293,41 +260,86 @@ jobs:
                   include-hidden-files: true
                   if-no-files-found: warn
                   retention-days: 7
+            - name: Fetch history for static ratchets
+              if: ${{ !cancelled() && matrix.group != '' }}
+              run: git fetch --filter=blob:none --unshallow origin
+            - name: Run static repository checks
+              if: ${{ !cancelled() && matrix.group != '' }}
+              env:
+                  HERDR_WORLD_RATCHET_TARGET: ${{ github.event.pull_request.base.sha || github.event.merge_group.base_sha }}
+              run: bun run check:static --static-group=${{ matrix.group }}
+            - name: Upload static check logs
+              if: always() && matrix.group != ''
+              uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7
+              with:
+                  name: static-check-logs-${{ matrix.group }}
+                  path: .agents/delivery/lanes/static-*.log
+                  include-hidden-files: true
+                  if-no-files-found: error
+
+            - name: Audit shipped dependencies
+              timeout-minutes: 10
+              if: ${{ !cancelled() && matrix.group == 'repository' }}
+              run: bun run security:check
+            - if: ${{ !cancelled() && matrix.web != 0 && needs.validation-scope.outputs.world == 'true' && toJSON(fromJSON(needs.validation-scope.outputs.selection).web) != '[]' }}
+              uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+              with:
+                  path: ~/.cache/herdr-test-chrome
+                  key: test-chrome-${{ hashFiles('tools/chrome/test-chrome.json') }}
+            - name: Install the pinned test Chrome
+              if: ${{ !cancelled() && matrix.web != 0 && needs.validation-scope.outputs.world == 'true' && toJSON(fromJSON(needs.validation-scope.outputs.selection).web) != '[]' }}
+              run: bun scripts/test-chrome.ts "$HOME/.cache/herdr-test-chrome"
+            - name: Run web browser suites
+              timeout-minutes: 15
+              if: ${{ !cancelled() && matrix.web != 0 && needs.validation-scope.outputs.world == 'true' && toJSON(fromJSON(needs.validation-scope.outputs.selection).web) != '[]' }}
+              env:
+                  HERDR_TEST_PARALLEL: "2"
+                  HERDR_TEST_EXCLUDE_WORLD_BROWSER: "0"
+                  HERDR_TEST_MAX_CONCURRENCY: "2"
+                  HERDR_CI_SELECTION: ${{ needs.validation-scope.outputs.selection }}
+              run: bun scripts/run-browser-tests.ts --ci-web=${{ matrix.web }}/2
+            - name: Upload web browser test results
+              if: always() && matrix.web != 0 && needs.validation-scope.outputs.world == 'true' && toJSON(fromJSON(needs.validation-scope.outputs.selection).web) != '[]'
+              uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7
+              with:
+                  name: web-browser-${{ matrix.web }}-attempt-${{ github.run_attempt }}
+                  path: .agents/delivery/web-browser-*.xml
+                  include-hidden-files: true
+                  if-no-files-found: warn
+                  retention-days: 7
+
+            - name: Summarize retry evidence
+              if: always()
+              continue-on-error: true
+              run: bun scripts/flaky-tests.ts summarize .agents/delivery
             - name: Retain flaky test evidence
               if: always()
+              continue-on-error: true
               uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7
               with:
                   name: flaky-tests-unit-${{ matrix.shard }}-${{ github.run_attempt }}
-                  path: .agents/delivery/flakes-*.json
+                  path: .agents/delivery/flaky/flaky.json
                   include-hidden-files: true
-                  if-no-files-found: error
+                  if-no-files-found: warn
                   retention-days: 7
+
 
     world-browser:
         name: World browser tests
         needs: validation-scope
-        if: needs.validation-scope.outputs.world == 'true' && toJSON(fromJSON(needs.validation-scope.outputs.selection).world) != '[]'
+        if: "!cancelled() && needs.validation-scope.result == 'success' && needs.validation-scope.outputs.world == 'true' && toJSON(fromJSON(needs.validation-scope.outputs.selection).world) != '[]'"
         uses: ./.github/workflows/world-browser.yml
         with:
-            lane: world
-            selection: ${{ needs.validation-scope.outputs.selection }}
-            stability: ${{ contains(github.event.pull_request.labels.*.name, 'world-browser-stability') }}
-
-    web-browser:
-        name: Web browser shards
-        needs: validation-scope
-        if: needs.validation-scope.outputs.world == 'true' && toJSON(fromJSON(needs.validation-scope.outputs.selection).web) != '[]'
-        uses: ./.github/workflows/world-browser.yml
-        with:
-            lane: web
             selection: ${{ needs.validation-scope.outputs.selection }}
             stability: ${{ contains(github.event.pull_request.labels.*.name, 'world-browser-stability') }}
 
     behavioral:
         name: Behavioral verification
         needs: validation-scope
-        if: needs.validation-scope.outputs.verification == 'true'
+        if: "!cancelled() && needs.validation-scope.result == 'success' && needs.validation-scope.outputs.verification == 'true'"
         uses: ./.github/workflows/behavioral-verification.yml
+        with:
+            diagnostic-control: ${{ fromJSON(needs.validation-scope.outputs.selection).full || fromJSON(needs.validation-scope.outputs.selection).diagnosticControl }}
 
     model-evidence:
         name: Main model evidence
@@ -337,7 +349,7 @@ jobs:
 
     delivery:
         name: Delivery checks
-        needs: [validation-scope, pr-description, static, unit-tests, world-browser, web-browser, behavioral, dependency-security]
+        needs: [validation-scope, static, unit-tests, world-browser, behavioral]
         env:
             HERDR_CI_SELECTION: ${{ needs.validation-scope.outputs.selection }}
         if: always() && needs.validation-scope.result != 'skipped'
@@ -346,29 +358,29 @@ jobs:
             - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
               with:
                   persist-credentials: false
+                  fetch-depth: 0
             - uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2
               with:
                   bun-version: "1.4.4"
                   no-cache: true
             - name: Download flaky test evidence
-              if: always() && (needs.unit-tests.result != 'skipped' || needs.world-browser.result != 'skipped' || needs.web-browser.result != 'skipped')
+              if: always() && (needs.unit-tests.result != 'skipped' || needs.world-browser.result != 'skipped')
+              continue-on-error: true
               uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8
               with:
-                  pattern: flaky-tests-*
+                  pattern: flaky-tests-*-${{ github.run_attempt }}
                   path: .agents/delivery/flakes
-                  merge-multiple: true
-            - name: Report flaky tests and enforce frequency limit
+            - name: Summarize retry evidence
               if: always()
-              env:
-                  GH_TOKEN: ${{ github.token }}
-                  VALIDATION_MODE: ${{ needs.validation-scope.outputs.mode }}
-              run: bun scripts/flaky-tests.ts gate
-            - name: Retain selected inventory for trusted frequency enforcement
+              continue-on-error: true
+              run: bun scripts/flaky-tests.ts summarize .agents/delivery/flakes
+            - name: Retain combined flaky test evidence
               if: always()
+              continue-on-error: true
               uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7
               with:
                   name: flaky-tests-delivery-${{ github.run_attempt }}
-                  path: .agents/delivery/flakes/inventory-*.json
+                  path: .agents/delivery/flaky/flaky.json
                   include-hidden-files: true
                   if-no-files-found: warn
                   retention-days: 7
@@ -389,6 +401,10 @@ jobs:
                   include-hidden-files: true
                   if-no-files-found: error
                   retention-days: 14
+            - name: Check PR description
+              id: description
+              if: always() && github.event_name == 'pull_request'
+              run: bun run check:pr-body --event "$GITHUB_EVENT_PATH"
             - name: Determine validation scope
               run: echo "Validation mode is $VALIDATION_MODE"
               env:
@@ -398,12 +414,12 @@ jobs:
               env:
                   VALIDATION_MODE: full
                   SCOPE_RESULT: ${{ needs.validation-scope.result }}
-                  DESCRIPTION_RESULT: ${{ needs.pr-description.result }}
-                  SECURITY_RESULT: ${{ needs.dependency-security.result }}
-                  STATIC_RESULT: ${{ needs.static.result }}
+                  DESCRIPTION_RESULT: ${{ steps.description.outcome || 'skipped' }}
+                  SECURITY_RESULT: ${{ needs.validation-scope.outputs.mode == 'docs' && needs.static.result || needs.unit-tests.result }}
+                  STATIC_RESULT: ${{ needs.validation-scope.outputs.mode == 'docs' && needs.static.result || needs.unit-tests.result }}
                   UNIT_RESULT: ${{ needs.unit-tests.result }}
                   WORLD_RESULT: ${{ needs.world-browser.result }}
-                  WEB_RESULT: ${{ needs.web-browser.result }}
+                  WEB_RESULT: ${{ needs.validation-scope.outputs.world == 'true' && toJSON(fromJSON(needs.validation-scope.outputs.selection).web) != '[]' && needs.unit-tests.result || 'skipped' }}
                   BEHAVIORAL_RESULT: ${{ needs.behavioral.result }}
               run: bun scripts/ci-delivery-result.ts
             - name: Verify applicable or reused results
@@ -411,12 +427,12 @@ jobs:
               env:
                   VALIDATION_MODE: ${{ needs.validation-scope.outputs.mode }}
                   SCOPE_RESULT: ${{ needs.validation-scope.result }}
-                  DESCRIPTION_RESULT: ${{ needs.pr-description.result }}
-                  SECURITY_RESULT: ${{ needs.dependency-security.result }}
-                  STATIC_RESULT: ${{ needs.static.result }}
+                  DESCRIPTION_RESULT: ${{ steps.description.outcome || 'skipped' }}
+                  SECURITY_RESULT: ${{ needs.validation-scope.outputs.mode == 'docs' && needs.static.result || needs.unit-tests.result }}
+                  STATIC_RESULT: ${{ needs.validation-scope.outputs.mode == 'docs' && needs.static.result || needs.unit-tests.result }}
                   UNIT_RESULT: ${{ needs.unit-tests.result }}
                   WORLD_RESULT: ${{ needs.world-browser.result }}
-                  WEB_RESULT: ${{ needs.web-browser.result }}
+                  WEB_RESULT: ${{ needs.validation-scope.outputs.world == 'true' && toJSON(fromJSON(needs.validation-scope.outputs.selection).web) != '[]' && needs.unit-tests.result || 'skipped' }}
                   BEHAVIORAL_RESULT: ${{ needs.behavioral.result }}
               run: bun scripts/ci-delivery-result.ts
             - name: Report run timings

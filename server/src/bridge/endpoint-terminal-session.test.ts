@@ -625,6 +625,7 @@ test("a codec refresh while the popup observer reads its size still observes", a
   // refresh in that window must not leave a closed observer that its retry
   // can never replace.
   let hellos = 0;
+  const helloSeen = Promise.withResolvers<void>();
   const socketPath = await startSessionServer({
     initialSurface: {
       frame: {
@@ -638,6 +639,7 @@ test("a codec refresh while the popup observer reads its size still observes", a
     },
     onHello: () => {
       hellos += 1;
+      helloSeen.resolve();
     },
   });
   const size = Promise.withResolvers<{ cols: number; rows: number }>();
@@ -666,7 +668,7 @@ test("a codec refresh while the popup observer reads its size still observes", a
     bridge.refreshSurfaceCodecs();
     size.resolve({ cols: 120, rows: 40 });
     // Longer than the observer's 2 s retry.
-    for (let i = 0; i < 60 && hellos === 0; i++) await Bun.sleep(50);
+    await helloSeen.promise;
     expect(hellos).toBeGreaterThan(0);
   } finally {
     bridge.dispose();
@@ -717,8 +719,9 @@ test.each(["cursor only", "other split pane"])(
         { ...visible, x: 3 },
       ]) {
         const count = frames.length;
+        const patched = once(session, "terminal");
         sendPatch(cursor, changedPanes);
-        await Bun.sleep(50);
+        await patched;
         expect(frames).toHaveLength(count + 1);
         const result = frames.at(-1)!;
         expect(result.frame.cursor).toEqual(
@@ -1004,11 +1007,11 @@ describe("EndpointTerminalSession", () => {
       jest.useFakeTimers();
       try {
         await session.connect(cols, 69);
-        const settle = await requested.promise;
+        const releaseReply = await requested.promise;
         jest.advanceTimersByTime(60);
         expect(frames).toEqual([]);
         const rendered = once(session, "terminal");
-        settle();
+        releaseReply();
         await rendered;
         expect(frames).toEqual([
           expect.objectContaining({ width: cols, height: 69 }),
@@ -1291,12 +1294,21 @@ describe("EndpointTerminalSession", () => {
     const stale = makeSurface(134, 69, 64); // pre-resize split geometry
     const settled = makeSurface(136, 70, 133); // after applying 136x70
     const resizes: Array<[number, number]> = [];
+    let sendClipboard!: (data: string) => void;
+    const inputSeen = Promise.withResolvers<void>();
     const socketPath = await startSessionServer({
       initialSurface: stale,
+      onClipboardConnection: (send) => {
+        sendClipboard = send;
+      },
+      onPaneInput: () => inputSeen.resolve(),
       onResize: (cols, rows, send) => {
         resizes.push([cols, rows]);
         send(stale.frame, stale.panes); // in-flight stale frames
         if (cols === 136 && rows === 70) send(settled.frame, settled.panes);
+        // Streams are ordered: the viewer has handled the frames above when
+        // this reaches it.
+        sendClipboard(Buffer.from("frames sent").toString("base64"));
       },
     });
     const session = new EndpointTerminalSession(
@@ -1306,8 +1318,13 @@ describe("EndpointTerminalSession", () => {
     );
     try {
       await session.connect(134, 69);
+      const framesHandled = once(session, "clipboard");
       session.resize(134, 69);
-      await Bun.sleep(100);
+      await framesHandled;
+      // A resize the stale frames caused was sent before this input, so the
+      // endpoint has seen it by the time the input arrives.
+      session.input(Buffer.from("x"));
+      await inputSeen.promise;
       // The attach resize carries the wanted pane size once; stale frames
       // arriving while it is in flight must not trigger another resize.
       expect(resizes.length).toBeLessThanOrEqual(2);
@@ -1396,7 +1413,11 @@ describe("EndpointTerminalSession", () => {
     await session.connect(80, 24);
     session.input(Buffer.from("hi"));
     session.scroll("up", 3);
-    await new Promise((resolve) => setTimeout(resolve, 100));
+    await settleUntil(
+      () =>
+        inputs.includes("text:hi") &&
+        requests.some((r) => r.method === "pane.scroll"),
+    );
 
     expect(inputs).toContain("text:hi");
     expect(requests).toContainEqual({
@@ -1464,7 +1485,7 @@ test("endpoint mouse stays pane-local and mode changes route application input v
     right.input(Buffer.from("\x1b[<0;9;1M\x1b[<0;1;4M")); // outside 8x3 crop
     right.scroll("down", 3, 1, 2);
     left.scroll("up", 3, 1, 2);
-    await Bun.sleep(40);
+    await sync(left, right);
     expect(inputs).toEqual([
       { paneId: "w1:p2", kind: 0, column: 1, row: 2 },
       { paneId: "w1:p2", kind: 2, column: 2, row: 1 },
@@ -1480,11 +1501,11 @@ test("endpoint mouse stays pane-local and mode changes route application input v
     right.input(Buffer.from("\x1b[<0;"));
     const disabled = panes.map((pane) => ({ ...pane, mouseReporting: false }));
     for (const send of senders) send(disabled);
-    await Bun.sleep(40);
+    await sync(right);
     right.input(Buffer.from("2;3M"));
     right.scroll("up", 4, 1, 2);
     right.scroll("up", Number.NaN);
-    await Bun.sleep(40);
+    await sync(right);
     expect(inputs).toHaveLength(5);
     expect(modes).toContain(true);
     expect(modes.at(-1)).toBe(false);
@@ -1493,10 +1514,10 @@ test("endpoint mouse stays pane-local and mode changes route application input v
       params: { pane_id: "w1:p2", offset_from_bottom: 4 },
     });
     for (const send of senders) send(panes);
-    await Bun.sleep(40);
+    await sync(right);
     right.input(Buffer.from("\x1b[<0;1;1M"));
     left.input(Buffer.from("\x1b[<0;1;1M"));
-    await Bun.sleep(40);
+    await sync(left, right);
     expect(inputs.at(-1)).toEqual({
       paneId: "w1:p2",
       kind: 0,
@@ -1551,21 +1572,21 @@ test("accepted presses retain clamped drag and release ownership outside the pan
   try {
     await session.connect(20, 5);
     session.input(Buffer.from("\x1b[<0;8;3M\x1b[<32;9;3M\x1b[<0;9;3m"));
-    await Bun.sleep(40);
+    await sync(session);
     expect(inputs).toEqual(
       [0, 2, 1].map((kind) => ({ paneId: "w1:p2", kind, column: 7, row: 2 })),
     );
     session.input(Buffer.from("\x1b[<0;9;3M\x1b[<32;8;3M\x1b[<0;8;3m"));
-    await Bun.sleep(40);
+    await sync(session);
     expect(inputs).toHaveLength(3); // an outside press cannot acquire ownership
     session.input(Buffer.from("\x1b[<0;8;3M"));
-    await Bun.sleep(40);
+    await sync(session);
     sendSurface(panes.map((pane) => ({ ...pane, mouseReporting: false })));
-    await Bun.sleep(40);
+    await sync(session);
     sendSurface(panes);
-    await Bun.sleep(40);
+    await sync(session);
     session.input(Buffer.from("\x1b[<32;9;3M\x1b[<0;9;3m"));
-    await Bun.sleep(40);
+    await sync(session);
     expect(inputs).toHaveLength(4); // mode changes cancel gesture ownership
   } finally {
     session.close();
@@ -1634,7 +1655,7 @@ test("terminal bridge carries endpoint mouse state and targets each attached ter
         data: Buffer.from("\x1b[<0;2;2M").toString("base64"),
       });
     }
-    await Bun.sleep(40);
+    await settleUntil(() => inputs.length === 2);
     // Each pane has its own socket; delivery order across sockets is undefined.
     expect(inputs.toSorted()).toEqual(["w1:p1", "w1:p2"]);
     expect(errors).toHaveLength(1);
@@ -1656,7 +1677,6 @@ test("terminal bridge carries endpoint mouse state and targets each attached ter
         await settleUntil(() => inputs.length > beforeInputs);
       else await settleUntil(() => scrollRequests.length > beforeScrolls);
     }
-    await Bun.sleep(40);
     expect(scrollRequests).toEqual([
       { pane_id: "w1:p2", offset_from_bottom: 7 },
       { pane_id: "w1:p2", offset_from_bottom: 0 },
@@ -1804,6 +1824,7 @@ test("split tab reattach reuses warm streams sized to the full surface", async (
   });
   try {
     for (let visit = 0; visit < 2; visit++) {
+      const framesBefore = frames.length;
       for (const id of ["left", "right"]) {
         await bridge.handleTerminalRpc(ws, "attach", "terminal.attach", {
           terminal_id: id,
@@ -1814,7 +1835,7 @@ test("split tab reattach reuses warm streams sized to the full surface", async (
           relay_active: false,
         });
       }
-      await Bun.sleep(40);
+      await settleUntil(() => frames.length >= framesBefore + 2);
       expect(errors).toEqual([]);
       expect(frames.length).toBeGreaterThan(0);
       expect(
@@ -1885,12 +1906,20 @@ test("endpoint frames are clipped per viewer and per terminal after resize", asy
         relay_active: false,
       });
     }
-    await Bun.sleep(600);
-    for (const [viewer, terminalId, width, height] of [
+    const clipped = [
       [small, "left", 6, 2],
       [small, "right", 8, 3],
       [large, "left", 10, 4],
-    ] as const) {
+    ] as const;
+    await settleUntil(() =>
+      clipped.every(([viewer, terminalId, width, height]) => {
+        const last = frames.findLast(
+          (f) => f.viewer === viewer && f.terminal.terminal_id === terminalId,
+        )?.terminal;
+        return last?.width === width && last.height === height;
+      }),
+    );
+    for (const [viewer, terminalId, width, height] of clipped) {
       expect(
         frames.findLast(
           (f) => f.viewer === viewer && f.terminal.terminal_id === terminalId,
@@ -1903,7 +1932,11 @@ test("endpoint frames are clipped per viewer and per terminal after resize", asy
       rows: 2,
       relay_active: false,
     });
-    await Bun.sleep(600);
+    await settleUntil(
+      () =>
+        frames.at(-1)?.terminal.terminal_id === "right" &&
+        frames.at(-1)?.terminal.width === 7,
+    );
     expect(frames.at(-1)?.terminal).toMatchObject({
       terminal_id: "right",
       width: 7,
@@ -2270,7 +2303,7 @@ test("endpoint clipboard follows foreground-recipient ownership, not producing P
     });
   const deliver = async (peer: number, data = "Y29weQ==") => {
     peers[peer](data);
-    await Bun.sleep(20);
+    await sync(sessions[peer]);
   };
   try {
     await attach(alpha, ownerA, "left");
@@ -2343,8 +2376,9 @@ test("endpoint clipboard follows foreground-recipient ownership, not producing P
     expect(received).toEqual([]);
     await input(alpha, ownerA, "left");
     // A closed transport cannot pass a queued clipboard event to a replacement.
+    const transportClosed = once(sessions[0], "close");
     sessions[0].close();
-    await Bun.sleep(20);
+    await transportClosed;
     await attach(alpha, ownerA, "left");
     sessions[0].emit("clipboard", { data: "Y29weQ==" });
     await deliver(3);
@@ -2432,8 +2466,30 @@ function deferred<T>() {
   });
   return { promise, resolve };
 }
+/**
+ * A request/response on the session's socket. Messages on one connection are
+ * handled in order, so when it resolves the endpoint has handled everything
+ * this session sent before it, and this session everything the endpoint sent.
+ */
+async function sync(...sessions: EndpointTerminalSession[]) {
+  await Promise.all(
+    sessions.map((session) =>
+      (
+        session as unknown as {
+          client: { callEndpoint(m: string, p: object): Promise<unknown> };
+        }
+      ).client.callEndpoint("pane.focus", { pane_id: "sync" }),
+    ),
+  );
+}
+/** Event-loop turns for in-process work that waits on nothing external. */
+async function turns(count = 20) {
+  for (let i = 0; i < count; i++) await new Promise((r) => setImmediate(r));
+}
 async function settleUntil(predicate: () => boolean) {
-  for (let i = 0; i < 200 && !predicate(); i++) await Bun.sleep(5);
+  const deadline = Date.now() + 1000;
+  while (Date.now() < deadline && !predicate())
+    await new Promise<void>((resolve) => setImmediate(resolve));
   expect(predicate()).toBe(true);
 }
 
@@ -2770,7 +2826,7 @@ describe("attached endpoint creation and input readiness", () => {
         { workspace_id: "w1", browser_source: creationSource },
         () => true,
       );
-      await Bun.sleep(10);
+      await turns();
       expect(replies.some((r) => r.id === "input")).toBe(false);
       expect(inputs).toEqual([]);
       lookup.resolve("w1:p1");
@@ -2815,7 +2871,7 @@ describe("attached endpoint creation and input readiness", () => {
           { terminal_id: "term1", data: "WA==" },
           () => current,
         );
-        await Bun.sleep(5);
+        await turns();
         if (invalidation === "lease") current = false;
         else if (invalidation === "dispose") bridge.dispose();
         else {
@@ -3053,7 +3109,8 @@ test("two browser source endpoints create concurrently without changing each oth
           pane: sources.get(connection)!,
           workspace: params.workspace_id,
         });
-        await Bun.sleep(10);
+        // Both creates are in flight together before either completes.
+        await settleUntil(() => creates.length === 2);
         return { workspace_id: params.workspace_id };
       }
     },
@@ -3262,7 +3319,7 @@ test("input waits for the first source-pane surface, not only the endpoint welco
       terminal_id: "term1",
       data: "WA==",
     });
-    await Bun.sleep(10);
+    await turns();
     expect(replies.some((reply) => reply.id === "early")).toBe(false);
     expect(inputs).toEqual([]);
     sendSurface(DEFAULT_PANES);
@@ -3304,7 +3361,7 @@ test("creation admission deadline prevents execution after queue residence", asy
         () => null,
         (error: Error) => error,
       );
-    await Bun.sleep(5);
+    await turns();
     clock.mockReturnValue(Date.now() + 30_001);
     held.resolve();
     await first;
@@ -3360,7 +3417,7 @@ for (const stage of ["readiness", "validation"] as const) {
           (error: Error) => error,
         );
       if (stage === "validation") await settleUntil(() => waiting);
-      else await Bun.sleep(5);
+      else await turns();
       clock.mockReturnValue(Date.now() + 30_001);
       held.resolve();
       await attaching;
@@ -3759,7 +3816,8 @@ describe("wheel bursts with delayed endpoint frames", () => {
       await settleUntil(() => frames > before);
       session.scroll("up", 3);
       first.resolve();
-      await Bun.sleep(60);
+      await settleUntil(() => requests.at(-1) === 9);
+      await sync(session); // a further request would be sent before this one
       expect(requests[requests.length - 1]).toBe(9);
       expect(
         requests.every((offset, i) => i === 0 || offset >= requests[i - 1]),
@@ -3867,7 +3925,8 @@ for (const scenario of ["reverse", "grow", "close", "input"] as const) {
       first.resolve();
       if (scenario !== "close" && scenario !== "input")
         await settleUntil(() => requests.length === 2);
-      else await Bun.sleep(30);
+      else if (scenario === "input") await sync(session);
+      else await turns(50);
       expect(requests).toEqual(
         scenario === "grow" ? [3, 10] : scenario === "reverse" ? [3, 0] : [3],
       );
@@ -3983,7 +4042,7 @@ describe("attached endpoint cursor focus", () => {
           { terminal_id: "term1" },
           () => current,
         );
-        await Bun.sleep(10);
+        await turns();
         expect(requests).toEqual([]);
         expect(replies.find((r) => r.id === "focus")).toBeUndefined();
         if (invalidation === "lease") current = false;
@@ -4050,7 +4109,7 @@ describe("attached endpoint cursor focus", () => {
         await settleUntil(() => requests.length === 1);
         const second = focus("second", "term2");
         const third = supersede ? focus("third", "term1") : Promise.resolve();
-        await Bun.sleep(20);
+        await turns();
         expect(requests).toEqual(["w1:p1"]);
         hold.resolve();
         await Promise.all([first, second, third]);
@@ -4510,7 +4569,7 @@ for (const invalidate of [false, true]) {
         },
         () => current,
       );
-      await Bun.sleep(10);
+      await turns();
       expect(inputs).toEqual([]);
       expect(replies.find((r) => r.id === "page")).toBeUndefined();
       if (invalidate) current = false;

@@ -170,9 +170,9 @@ pre-push uses the same complete-PR classification for non-browser units only;
 browser suites and behavioral verification run in CI. The explicit local
 `check:delivery` always runs the complete `verification:gate`.
 
-CI gives every accepted model its own job (`scripts/ci-model-plan.ts`).
-IDE lifecycle has four jobs (replay and three exhaustive groups); core runtime
-has three (replay and two fault-control groups). Space admission overlaps
+CI preserves every accepted model's immutable part identity (`scripts/ci-model-plan.ts`)
+within four runner jobs. IDE lifecycle has four parts (replay and three exhaustive
+groups); core runtime has three (replay and two fault-control groups). Space admission overlaps
 independent exhaustive verification and simulation. Every model still runs
 its maintained bounds, replay and sensitivity checks. Partial `ci-shard` artifacts
 are not canonical evidence. The final aggregate requires all groups and every
@@ -180,13 +180,26 @@ model exactly once, current source/revision and matching tool identities, plus
 successful enforced accounting for each group. On a rerun it selects each newest
 group attempt; missing, incomplete, duplicate, foreign or mismatched evidence
 fails. Only that aggregate publishes canonical success; late cancellation
-invalidates publication. The diagnostic, OOM and cancellation controls remain
+invalidates publication. The diagnostic control runs once on runner 1 for full
+validation or changed verification tooling; OOM and cancellation controls remain
 mandatory on every group runner. Local canonical commands remain unfiltered.
 
 Each Linux model CI group executes in an isolated cgroup with hard 4 GiB memory,
 zero swap and four CPUs of quota (`tools/quint/model-resources.json`), with four
 TLC workers (`tools/quint/tlc-ci.json`). The owner approved this model-only CPU
-change on 2026-11-26. The explicit local `verification:resources` command retains
+change on 2026-11-26. Four model parts cannot all assume that full memory budget
+at once: `scripts/ci-model-plan.ts` packs by peak memory × time, then balances
+predicted pool completion across runners. Reservations retain 25% headroom,
+64 MiB rounding and 256 MiB group overhead. A completed part frees only its own
+reservation; the next part starts while the running sum fits. Failure or
+cancellation stops admission and drains started parts. Runner 1 retains the
+measured diagnostic allowance; recorded serial totals alone do not predict this
+schedule.
+The estimate excludes runner setup and must be confirmed with actual timings.
+Exhaustive cache-subset packing checks and real-pool admission/failure tests guard that
+boundary. Hosted resource receipts are still required: recorded peaks are
+estimates, and a passing unconstrained local canonical gate does not establish CI
+group memory fit. The explicit local `verification:resources` command retains
 its original two-CPU envelope (`resources.json`) and one TLC worker; ordinary local canonical execution is unchanged.
 The CI aggregate preserves every per-runner accounting record rather than
 claiming a single global peak across separate machines. The payload subtree's `memory.peak`, enforced
@@ -366,3 +379,12 @@ whole bounded graph; three seeds replay through the production browser
 violate safety and diverge and four production faults must be rejected by a
 valid trace. Core's missing compare-and-set (upstream Q7) is the declared
 residual. Coverage stays pending independent review and real-device step B.
+
+### Combined CI model admission
+
+The four CI groups retain 27 immutable parts, including three disjoint core
+control partitions. `scripts/ci-model-plan.test.ts` exhausts cache-subset
+admission with the original padded memory reservations. `scripts/verification-pool.test.ts`
+checks weighted admission, failure and cancellation; `scripts/ci-model-groups.test.ts`
+connects it to the production group runner. Part splitting changes no model bound,
+fault or source owner. Any such adapter change still requires the complete gate.

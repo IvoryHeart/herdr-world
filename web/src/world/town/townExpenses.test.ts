@@ -378,12 +378,12 @@ test("a read kept through failed refreshes goes stale, and never past UTC midnig
     },
     () => now,
   );
-  const settle = async () => {
+  const flushTasks = async () => {
     await Promise.resolve();
     await Promise.resolve();
   };
   store.request();
-  await settle();
+  await flushTasks();
   expect(townCityExpenses(townUsageCurrent(store.get(), now)).status).toBe(
     "ready",
   );
@@ -392,7 +392,7 @@ test("a read kept through failed refreshes goes stale, and never past UTC midnig
   fail = true;
   now += 60_000;
   store.request();
-  await settle();
+  await flushTasks();
   expect(store.get().status).toBe("ready");
   expect(townCityExpenses(townUsageCurrent(store.get(), now)).status).toBe(
     "ready",
@@ -450,7 +450,7 @@ test("a read kept through failed refreshes goes stale, and never past UTC midnig
   // A fresh read brings the figures back.
   fail = false;
   store.request();
-  await settle();
+  await flushTasks();
   expect(townCityExpenses(townUsageCurrent(store.get(), now)).status).not.toBe(
     "stale",
   );

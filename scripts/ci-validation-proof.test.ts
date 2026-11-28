@@ -6,6 +6,7 @@ import {
   VALIDATION_PROOF_PREFIX,
 } from "./ci-validation-proof";
 import { selectValidation } from "./validation-scope";
+import { worldBrowserShards } from "./world-browser-suites";
 
 const selection = selectValidation(
   {
@@ -30,7 +31,9 @@ test("proof requires one valid machine record and preserves exact sharding order
     record(null),
     record({ ...proof, mode: "unknown" }),
     record({ ...proof, selection: { ...selection, verification: "false" } }),
-    record({ ...proof, selection: { ...selection, worldShards: [7] } }),
+    ...[0, -1, 1.5, "1", worldBrowserShards.length + 1].map((index) =>
+      record({ ...proof, selection: { ...selection, worldShards: [index] } }),
+    ),
   ])
     expect(validationProofFromLog(log)).toBeUndefined();
   expect(sameValidationSelection(selection, { ...selection })).toBe(true);
@@ -73,4 +76,13 @@ test("real delivery publishes scoped proof only after all applicable results pas
   const fail = execute("failure");
   expect(fail.status).not.toBe(0);
   expect(validationProofFromLog(fail.stdout)).toBeUndefined();
+});
+
+test("scoped browser proofs accept every current shard and retain their order", () => {
+  const shards = worldBrowserShards.map((_, index) => index + 1).reverse();
+  const proof = {
+    mode: "scoped",
+    selection: { ...selection, worldShards: shards },
+  };
+  expect(validationProofFromLog(record(proof))).toEqual(proof);
 });

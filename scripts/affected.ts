@@ -45,6 +45,12 @@ const FULL = [
   /^scripts\/(?:affected|check-delivery|run-tests|run-world-tests)\.ts$/,
 ];
 
+/** @internal Unconditional full checks need only the tracked inventory. */
+export function fullChangeReason(paths: readonly string[]): string | undefined {
+  const path = paths.find((path) => FULL.some((rule) => rule.test(path)));
+  return path === undefined ? undefined : `${path} affects every check`;
+}
+
 /** Inputs of behavioral verification besides the adapters' imports. */
 const VERIFICATION = [
   /^scripts\/(?:balance-shards\.ts|verification-timings\.json)$/,
@@ -235,10 +241,10 @@ export function affected(
   owns: (path: string) => boolean = () => false,
   models: (path: string) => boolean = owns,
 ): Affected {
+  const full = fullChangeReason(changed);
+  if (full) return { full: true, reason: full };
   let verification = false;
   for (const path of changed) {
-    if (FULL.some((rule) => rule.test(path)))
-      return { full: true, reason: `${path} affects every check` };
     if (
       (!isCoveragePath(path) && VERIFICATION.some((rule) => rule.test(path))) ||
       models(path)

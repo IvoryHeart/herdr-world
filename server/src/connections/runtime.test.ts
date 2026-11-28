@@ -479,11 +479,13 @@ test("layout subscription ACK and reconnect request browser reconciliation", asy
     runtime.startBackground();
     // The event list waits for Herdr's protocol, so subscribing is async.
     const started = Date.now() + 3000;
-    while (subscriptions.length < 1 && Date.now() < started) await Bun.sleep(1);
+    while (subscriptions.length < 1 && Date.now() < started)
+      await new Promise<void>((resolve) => setImmediate(resolve));
     expect(subscriptions).toHaveLength(1);
     expect(events).toEqual([]); // No snapshot invalidation before the ACK.
     subscriptions[0]!.ack();
-    await Bun.sleep(10);
+    for (let i = 0; i < 3000 && events.length < 1; i++)
+      await new Promise<void>((resolve) => setImmediate(resolve));
     expect(events).toEqual([{ event: "session.resync_required", data: {} }]);
     // Subscription name is dotted; tagged event envelopes use snake_case.
     const layout = {
@@ -495,11 +497,12 @@ test("layout subscription ACK and reconnect request browser reconciliation", asy
     subscriptions[0]!.close();
     const deadline = Date.now() + 3000;
     while (subscriptions.length < 2 && Date.now() < deadline)
-      await Bun.sleep(10);
+      await new Promise<void>((resolve) => setImmediate(resolve));
     expect(subscriptions).toHaveLength(2);
     expect(events).toHaveLength(2);
     subscriptions[1]!.ack();
-    await Bun.sleep(10);
+    for (let i = 0; i < 3000 && events.length < 3; i++)
+      await new Promise<void>((resolve) => setImmediate(resolve));
     expect(events.at(-1)).toEqual({
       event: "session.resync_required",
       data: {},
@@ -542,7 +545,8 @@ test("Herdr without tab.move is not asked for tab.moved, which it would refuse",
   try {
     runtime.startBackground();
     const deadline = Date.now() + 3000;
-    while (subscribed.length < 1 && Date.now() < deadline) await Bun.sleep(1);
+    while (subscribed.length < 1 && Date.now() < deadline)
+      await new Promise<void>((resolve) => setImmediate(resolve));
     expect(subscribed[0]).toContain("tab.renamed");
     expect(subscribed[0]).not.toContain("tab.moved");
   } finally {
@@ -587,7 +591,8 @@ test("a failed tab.move probe retries instead of dropping tab.moved", async () =
   try {
     runtime.startBackground();
     const deadline = Date.now() + 5000;
-    while (subscribed.length < 1 && Date.now() < deadline) await Bun.sleep(5);
+    while (subscribed.length < 1 && Date.now() < deadline)
+      await new Promise<void>((resolve) => setImmediate(resolve));
     expect(pings).toBeGreaterThanOrEqual(2);
     expect(subscribed).toHaveLength(1);
     expect(subscribed[0]).toContain("tab.moved");
@@ -807,7 +812,9 @@ test("herdr notification source falls back to agent status on legacy Herdr", asy
       : method === "tab.list"
         ? { tabs: [{ tab_id: "w1:t1", workspace_id: "w1", label: "Peter" }] }
         : { panes: [] };
+  let subscribed = 0;
   runtime.herdr.subscribe = () => {
+    subscribed++;
     const closed = Promise.withResolvers<void>();
     return {
       ready: Promise.resolve(),
@@ -817,8 +824,8 @@ test("herdr notification source falls back to agent status on legacy Herdr", asy
   };
   try {
     runtime.startBackground();
-    for (let i = 0; i < 20 && pings === 0; i++) await Bun.sleep(1);
-    await Bun.sleep(1);
+    for (let i = 0; i < 3000 && (pings === 0 || subscribed === 0); i++)
+      await new Promise<void>((resolve) => setImmediate(resolve));
     for (const agent_status of ["working", "blocked"]) {
       runtime.herdr.emit("event", {
         event: "pane.agent_status_changed",

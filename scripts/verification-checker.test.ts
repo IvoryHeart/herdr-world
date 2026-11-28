@@ -55,7 +55,7 @@ setTimeout(() => createServer(socket => socket.end()).listen(port, '127.0.0.1'),
                 break;
               } catch (error) {
                 if (Date.now() >= deadline) throw error;
-                await new Promise((resolve) => setTimeout(resolve, 10));
+                await new Promise((resolve) => setImmediate(resolve));
               }
             }
             const { ownsCheckerPort } = await import(

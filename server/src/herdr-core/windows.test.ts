@@ -51,7 +51,7 @@ async function until(predicate: () => boolean, ms = 5_000) {
   const deadline = Date.now() + ms;
   while (!predicate()) {
     if (Date.now() > deadline) throw new Error("condition not reached");
-    await Bun.sleep(5);
+    await new Promise<void>((resolve) => setImmediate(resolve));
   }
 }
 

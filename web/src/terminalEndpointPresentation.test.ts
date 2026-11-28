@@ -5,6 +5,10 @@ import {
   terminalMouseUsesSelection,
 } from "./terminalEndpointPresentation";
 
+// xterm parses writes in order: a write after them calls back once they are parsed.
+const parsedThrough = (terminal: Terminal) =>
+  new Promise<void>((resolve) => terminal.write("", resolve));
+
 describe("endpoint selection presentation", () => {
   test.each([false, true])(
     "drops oversized frames after resize, including selection-held frames (%s)",
@@ -240,11 +244,11 @@ describe("endpoint selection presentation", () => {
             copied = terminal.buffer.active.getLine(0)!.translateToString(true);
           }),
         ).toBe(false);
-        await Bun.sleep(30);
+        await parsedThrough(terminal);
         expect(copied).toBe("B");
         expect(selected).toBe(true);
         presentation.update("\x1b[HC", false);
-        await Bun.sleep(30);
+        await parsedThrough(terminal);
         expect(terminal.buffer.active.getLine(0)!.translateToString(true)).toBe(
           "B",
         );
@@ -342,18 +346,18 @@ describe("endpoint selection presentation", () => {
         }),
       ).toBe(false);
       expect(selected).toBe(false);
-      await Bun.sleep(30);
+      await parsedThrough(terminal);
       expect(copied).toBe("B");
       expect(terminal.modes.mouseTrackingMode).toBe("drag");
       presentation.update("\x1b[HC", false);
-      await Bun.sleep(30);
+      await parsedThrough(terminal);
       expect(terminal.buffer.active.getLine(0)!.translateToString(true)).toBe(
         "B",
       );
       selected = false;
       presentation.selectionDrag = false;
       presentation.flush();
-      await Bun.sleep(30);
+      await parsedThrough(terminal);
       expect(terminal.buffer.active.getLine(0)!.translateToString(true)).toBe(
         "C",
       );

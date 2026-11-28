@@ -45,7 +45,7 @@ describe("core host runtime (P4)", () => {
   test("a terminal read is the screen only: lines 0, no caller, whatever was asked", async () => {
     const w = await world();
     const address = w.fake.create({ name: "agent" });
-    await w.settle();
+    await w.synchronize();
     const read = await host(w).operations.readTerminal({
       pane_id: address,
       lines: 500,
@@ -72,7 +72,7 @@ describe("core host runtime (P4)", () => {
       const w = await world();
       for (let n = 1; n < ordinal; n++) w.fake.create();
       const address = w.fake.create({ name: "agent" });
-      await w.settle();
+      await w.synchronize();
       const runtime = host(w);
       const release = w.fake.holdReads();
       const pending = runtime.operations
@@ -132,7 +132,7 @@ describe("core host runtime (P4)", () => {
         cwd: repo,
         foreground: { pid: 4242, name: "claude", argv: [], cwd: repo },
       });
-      await w.settle();
+      await w.synchronize();
       const runtime = host(w);
       const subject = {
         connectionId: "box",
@@ -176,7 +176,7 @@ describe("core host runtime (P4)", () => {
         argv: [],
         cwd: repo,
       });
-      await w.settle();
+      await w.synchronize();
       await expect(
         runtime.files.listWorkspaceFiles({
           workspace_id: "hc:unplaced",

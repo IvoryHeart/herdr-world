@@ -146,7 +146,7 @@ async function registerDomTests() {
     open = new Set(names);
     render();
   }
-  const settle = async () => {
+  const flushTasks = async () => {
     // Each traversal can schedule a React commit and one guard reconcile.
     for (let turn = 0; turn < 8; turn++) {
       await act(async () => {
@@ -162,11 +162,11 @@ async function registerDomTests() {
   };
   async function set(names: Name[]) {
     await act(async () => show(names));
-    await settle();
+    await flushTasks();
   }
   async function userBack() {
     browser.history.back();
-    await settle();
+    await flushTasks();
   }
   const guarded = () =>
     typeof browser.history.state === "object" &&
@@ -185,7 +185,7 @@ async function registerDomTests() {
   updateLayoutPreferences({ mode: "mobile" });
 
   test("refresh on an empty guard returns to its base without a duplicate Back stop", async () => {
-    await settle();
+    await flushTasks();
     expect([at(), guarded()]).toEqual(["/b", false]);
     await userBack();
     expect(at()).toBe("/a");
@@ -202,7 +202,7 @@ async function registerDomTests() {
       await Promise.resolve();
       pushRoute({}, new URL("http://localhost/c"));
     });
-    await settle();
+    await flushTasks();
     expect([String(at()), guarded()]).toEqual(["http://localhost/c", false]);
     await userBack();
     expect(at()).toBe("/b");
@@ -211,13 +211,26 @@ async function registerDomTests() {
   test("a guard removal that never lands stops holding routes back", async () => {
     await start();
     await set(["more"]);
-    await act(async () => show([]));
-    await act(async () => Promise.resolve());
+    // Capture the give-up timer instead of waiting out its second.
+    const realSetTimeout = globalThis.setTimeout;
+    const giveUp: (() => void)[] = [];
+    globalThis.setTimeout = ((handler: () => void, ms?: number) => {
+      if (ms !== 1_000) return realSetTimeout(handler, ms);
+      giveUp.push(handler);
+      return 0;
+    }) as unknown as typeof setTimeout;
+    try {
+      await act(async () => show([]));
+      await act(async () => Promise.resolve());
+    } finally {
+      globalThis.setTimeout = realSetTimeout;
+    }
     expect(isBackPending()).toBe(true);
     // The traversal is lost: no popstate ever arrives.
     traversals.splice(0);
     pushRoute({}, new URL("http://localhost/d"));
-    await act(async () => new Promise((resolve) => setTimeout(resolve, 1100)));
+    expect(giveUp).toHaveLength(1);
+    await act(async () => giveUp[0]());
     expect(isBackPending()).toBe(false);
     expect(String(at())).toBe("http://localhost/d");
   });
@@ -292,10 +305,10 @@ async function registerDomTests() {
     await start();
     await set(["sheet", "composer"]);
     await act(async () => updateLayoutPreferences({ mode: "desktop" }));
-    await settle();
+    await flushTasks();
     expect(guarded()).toBe(false);
     await act(async () => updateLayoutPreferences({ mode: "mobile" }));
-    await settle();
+    await flushTasks();
     await userBack();
     expect(closed).toEqual(["sheet"]);
     expect(open.has("composer")).toBe(true);
@@ -308,7 +321,7 @@ async function registerDomTests() {
     await act(async () => show([]));
     expect(traversals).toHaveLength(1);
     await act(async () => show(["files"]));
-    await settle();
+    await flushTasks();
     expect([open.has("files"), guarded(), at()]).toEqual([true, true, "/b"]);
     await userBack();
     expect(closed).toEqual(["files"]);
@@ -322,7 +335,7 @@ async function registerDomTests() {
     await set([]);
     const length = history.length;
     history.forward();
-    await settle();
+    await flushTasks();
     expect([at(), guarded(), history.length]).toEqual(["/b", true, length]);
     await userBack();
     expect(at()).toBe("/a");
@@ -334,7 +347,7 @@ async function registerDomTests() {
     await set([]);
     const length = history.length;
     history.forward();
-    await settle();
+    await flushTasks();
     expect([at(), history.length]).toEqual(["/b", length]);
     expect(history.state).toMatchObject({ herdrBack: 2 });
     await userBack();
@@ -349,7 +362,7 @@ async function registerDomTests() {
     await userBack();
     expect([at(), guarded()]).toEqual(["/b", false]);
     history.forward();
-    await settle();
+    await flushTasks();
     expect(at()).toBe("/c");
     await userBack();
     expect([at(), guarded()]).toEqual(["/b", false]);
@@ -370,7 +383,7 @@ async function registerDomTests() {
       url: "/c",
     });
     history.forward();
-    await settle();
+    await flushTasks();
     expect(at()).toBe("/c");
     await userBack();
     expect([at(), guarded()]).toEqual(["/b", false]);
@@ -383,10 +396,10 @@ async function registerDomTests() {
     await set(["composer"]);
     browser.dispatchEvent(new browser.Event("pagehide"));
     await act(async () => root.unmount());
-    await settle();
+    await flushTasks();
     expect(guarded()).toBe(true);
     browser.dispatchEvent(new browser.Event("pageshow"));
-    await settle();
+    await flushTasks();
     expect(guarded()).toBe(false);
     root = createRoot(container);
   });
@@ -395,7 +408,7 @@ async function registerDomTests() {
     await start();
     await set(["composer"]);
     await act(async () => root.unmount());
-    await settle();
+    await flushTasks();
     expect([guarded(), at()]).toEqual([true, "/b"]);
     root = createRoot(container);
     await act(async () => updateLayoutPreferences({ mode: "desktop" }));

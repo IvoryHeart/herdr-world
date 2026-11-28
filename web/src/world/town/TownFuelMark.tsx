@@ -1,3 +1,4 @@
+import { clock } from "../../clock";
 import { useCallback } from "react";
 import {
   usageStopResetTime,
@@ -42,7 +43,7 @@ export function TownFuelMark({
     },
     [pennants, renderer],
   );
-  const now = Date.now();
+  const now = clock.now();
   return (
     <span
       ref={ref}

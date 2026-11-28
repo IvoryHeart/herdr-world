@@ -118,7 +118,7 @@ describe("the read model shows verified summaries and stamps", () => {
         expiresMs: expires,
       }),
     });
-    await w.settle();
+    await w.synchronize();
     const summary = async () =>
       (await w.rows()).panes.find((p) => p.pane_id === address)?.task_summary;
     expect(await summary()).toBe("Reviewing PR 12");
@@ -147,7 +147,7 @@ describe("the read model shows verified summaries and stamps", () => {
         argv: ["/bin/sh"],
         labels: { [CORE_SPAWNED_BY_LABEL]: "mac/t1" },
       });
-      await w.settle();
+      await w.synchronize();
       const panes = (await w.rows()).panes;
       const tokens = (address: string) =>
         panes.find((p) => p.pane_id === address)?.tokens;
@@ -185,7 +185,7 @@ describe("the CLI verifies the core terminal it runs in (§4.10)", () => {
       const w = await world();
       for (let n = 1; n < ordinal; n++) w.fake.create();
       const address = w.fake.create({ pid: 80 });
-      await w.settle();
+      await w.synchronize();
       const open = async (socket: string) =>
         CoreClient.open(
           await connectUnixStream(socket, new AbortController().signal),
@@ -267,7 +267,7 @@ describe("the CLI verifies the core terminal it runs in (§4.10)", () => {
 describe("the standalone CLI writes to the verified core terminal", () => {
   async function inside(w: World) {
     const address = w.fake.create(claude());
-    await w.settle();
+    await w.synchronize();
     const verifyCore = async (): Promise<CoreCallerClaim> => {
       const client = await CoreClient.open(
         await connectUnixStream(w.socket, new AbortController().signal),
@@ -302,7 +302,7 @@ describe("the standalone CLI writes to the verified core terminal", () => {
     });
     const label = w.fake.calls.find((c) => c.method === "terminal.label");
     expect(label?.params).toMatchObject({ terminal: address });
-    await w.settle();
+    await w.synchronize();
     expect(
       (await w.rows()).panes.find((p) => p.pane_id === address)?.task_summary,
     ).toBe("Writing the docs");
@@ -338,7 +338,7 @@ describe("the standalone CLI writes to the verified core terminal", () => {
       for (let n = 1; n < ordinal; n++) w.fake.create();
       const { address, verifyCore, env } = await inside(w);
       const child = w.fake.create({ argv: ["/opt/example/bin/codex"] });
-      await w.settle();
+      await w.synchronize();
       const out: string[] = [];
       const code = await runSpawnStampCommand(
         ["stamp", child, address],

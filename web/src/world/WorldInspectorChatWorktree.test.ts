@@ -254,7 +254,7 @@ if (process.env.INSPECTOR_CHAT_WORKTREE_DOM_TEST !== "1") {
         back: { label: "Back to Town" },
       },
     } as unknown as Parameters<typeof View>[0];
-    const settle = async () => {
+    const flushTasks = async () => {
       for (let turn = 0; turn < 20; turn += 1)
         await act(async () => {
           await new Promise((resolve) => setTimeout(resolve, 0));
@@ -264,7 +264,7 @@ if (process.env.INSPECTOR_CHAT_WORKTREE_DOM_TEST !== "1") {
       document.querySelector<HTMLTextAreaElement>('[aria-label="Message"]');
     try {
       await act(async () => root.render(h(View, props)));
-      await settle();
+      await flushTasks();
       expect(message()).not.toBeNull();
       // The hidden Files listing hit the changed binding and the re-read
       // came back stale: the same sequence as the report.
@@ -303,7 +303,7 @@ if (process.env.INSPECTOR_CHAT_WORKTREE_DOM_TEST !== "1") {
           }),
         ),
       );
-      await settle();
+      await flushTasks();
       expect(document.body.textContent).toContain("Worktree changed");
       expect(document.body.textContent).not.toContain("Disconnected");
     } finally {

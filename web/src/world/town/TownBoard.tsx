@@ -1,3 +1,4 @@
+import { clock } from "../../clock";
 import { usageStopText } from "../../../../shared/usageStop";
 import { Activity, Hourglass } from "lucide-react";
 import { useEffect, useRef, useState, type ReactNode } from "react";
@@ -97,7 +98,7 @@ export function TownBoard({
   const boardRef = useRef<HTMLDivElement>(null);
   const leaveTimer = useRef<number | undefined>(undefined);
   const close = () => {
-    window.clearTimeout(leaveTimer.current);
+    clock.clearTimeout(leaveTimer.current);
     setPinned(false);
     setHovered(false);
   };
@@ -123,7 +124,7 @@ export function TownBoard({
       document.removeEventListener("keydown", escape);
     };
   }, [open]);
-  useEffect(() => () => window.clearTimeout(leaveTimer.current), []);
+  useEffect(() => () => clock.clearTimeout(leaveTimer.current), []);
   // A focus session that ends here opens the board on its recap (#1131).
   useEffect(() => {
     const show = () => setPinned(true);
@@ -145,13 +146,13 @@ export function TownBoard({
   }, [quietShown]);
   const hoverIn = (event: React.PointerEvent) => {
     if (event.pointerType !== "mouse") return;
-    window.clearTimeout(leaveTimer.current);
+    clock.clearTimeout(leaveTimer.current);
     setHovered(true);
   };
   const hoverOut = (event: React.PointerEvent) => {
     if (event.pointerType !== "mouse") return;
-    window.clearTimeout(leaveTimer.current);
-    leaveTimer.current = window.setTimeout(() => setHovered(false), 240);
+    clock.clearTimeout(leaveTimer.current);
+    leaveTimer.current = clock.setTimeout(() => setHovered(false), 240);
   };
   const closeOnEscape = (event: React.KeyboardEvent) => {
     if (open && event.key === "Escape") {
@@ -162,7 +163,7 @@ export function TownBoard({
   const population = `${counts.agents} ${counts.agents === 1 ? "agent" : "agents"} in ${counts.buildings} ${counts.buildings === 1 ? "building" : "buildings"}`;
   // Subscription fuel: each harness's limit windows, from harness usage.
   const usage = useTownLimits();
-  const now = Date.now();
+  const now = clock.now();
   const limits = townLimits(usage);
   const gauges = townFuelGauges(limits, now);
   const notes = townFuelNotes(limits, gauges, harnesses);
@@ -400,7 +401,7 @@ export function TownPlaceSummaryCard({
       {place.fuel.map(({ label, stop }, index) => (
         <p key={index} className="town-place-fuel">
           {place.fuel.length > 1 ? `${label}: ` : ""}
-          {usageStopText(stop, Date.now())}
+          {usageStopText(stop, clock.now())}
         </p>
       ))}
       {economy.status === "ready" ? (

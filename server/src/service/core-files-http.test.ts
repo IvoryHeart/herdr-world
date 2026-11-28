@@ -22,7 +22,7 @@ test("core HTTP downloads, uploads and deletes stay on the original generation",
     cwd: folder,
     foreground: { pid: 42000, name: "sh", cwd: folder },
   });
-  await w.settle();
+  await w.synchronize();
   const lease = w.lease();
   const core = {
     manager: w.core.manager,

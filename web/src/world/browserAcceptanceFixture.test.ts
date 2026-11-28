@@ -1,5 +1,41 @@
 import { expect, test } from "bun:test";
 import { createDenseSnapshotFixture } from "./browserAcceptanceFixture";
+import { SnapshotClock } from "./testing/snapshotClock";
+
+test("a stalled refresh keeps its full deadline on a driven clock", async () => {
+  const clock = new SnapshotClock();
+  const fixture = createDenseSnapshotFixture({
+    maximumScale: true,
+    clock,
+    scheduler: clock,
+  });
+  try {
+    await fixture.snapshot();
+    fixture.startStalledAttentionRefresh();
+    let complete = false;
+    const response = fixture.snapshot().then((value) => {
+      complete = true;
+      return value;
+    });
+    await fixture.attentionReady();
+    clock.advance(19_999);
+    await Promise.resolve();
+    expect(complete).toBe(false);
+    clock.advance(1);
+    const result = await response;
+    expect(
+      result.connections.find((host) => host.connection_id === "alpha")
+        ?.actionable,
+    ).toBe(true);
+    expect(
+      result.connections
+        .filter((host) => fixture.stalledIds.includes(host.connection_id))
+        .every((host) => host.stale && !host.actionable),
+    ).toBe(true);
+  } finally {
+    fixture.release();
+  }
+});
 
 test("owner maximum-scale acceptance observes three hosts, eight workspaces and fifteen tabs per workspace", async () => {
   const fixture = createDenseSnapshotFixture({ maximumScale: true });
@@ -42,7 +78,7 @@ test("production fixture refresh sends only changed topology against its negotia
       })),
     };
     fixture.startStalledAttentionRefresh();
-    // Release host reads here; the browser acceptance owns the real 20 s stall.
+    // This case completes the reads; the driven-deadline case owns the stall.
     fixture.release();
     const refreshed = await fixture.snapshot({ base });
     expect(refreshed.connections.map((host) => host.connection_id)).toEqual(

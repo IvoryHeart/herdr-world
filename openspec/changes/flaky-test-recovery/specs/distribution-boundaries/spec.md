@@ -1,46 +1,67 @@
 ## ADDED Requirements
 
 ### Requirement: Accountable flaky test recovery
-CI SHALL retry each failed unit test file or browser case at most once in its existing job, without rerunning passing files or unrelated browser cases. A recovered test SHALL pass its job and appear in the Delivery checks summary with its file and case. A second failure SHALL fail the job. Model, static, privacy and PR-description checks SHALL never retry.
+CI SHALL retry each failed unit test file or browser case at most once in its existing job, without rerunning passing files or unrelated browser cases. A recovered test SHALL pass its job. A second failure SHALL fail the job. Model, static, privacy and PR-description checks SHALL never retry.
 
 #### Scenario: One transient failure
 - **WHEN** a unit file or browser case fails initially and succeeds on its sole retry
-- **THEN** its job succeeds and Delivery checks lists each recovered file and case as flaky
+- **THEN** its job succeeds and lists the retried file and case in its own summary
 - **AND** only failed files or cases consume retry test execution
 
 #### Scenario: Failure persists or recovery evidence is missing
 - **WHEN** the retry fails or does not prove the failed test executed successfully
-- **THEN** the job fails
+- **THEN** the job fails and any attempted retry remains reportable
 
 #### Scenario: Non-test check fails
 - **WHEN** a model, static, privacy or description check fails
 - **THEN** no flaky-test retry runs
 
-### Requirement: Flaky test accountability
-CI SHALL maintain one open issue labelled flaky per recovered file/case from same-repository CI runs, updating each distinct run occurrence with its run link. More than three distinct flaky runs in seven days SHALL fail CI until the issue is closed after a fix or the owner explicitly quarantines it.
+### Requirement: Informational daily flaky test reporting
+Existing CI test jobs SHALL write their retried tests into job summaries and small flaky.json artifacts, including retries that fail again. The existing Delivery job SHALL consolidate shard evidence into one flaky.json artifact per run attempt. Reporting SHALL never gate a job, PR or merge, read issue history for a merge verdict, or publish commit statuses. The ruleset SHALL require only the Delivery checks check run.
 
-#### Scenario: A cause recurs
-- **WHEN** a recovered test already has an open flaky issue
-- **THEN** its new run is recorded in that issue without opening another
-- **AND** rerunning the same run SHALL count once
+#### Scenario: Reporting is unavailable or a test recurs
+- **WHEN** retry history recurs any number of times, or summary, artifact or daily issue reporting fails or is late
+- **THEN** reporting SHALL NOT change the test verdict or delay merge eligibility after Delivery checks succeeds
 
-#### Scenario: Fourth run in seven days
-- **WHEN** an unquarantined open cause reaches a fourth distinct run within seven days
-- **THEN** Delivery checks fails, including later runs that select the affected file until fixed or explicitly quarantined
+#### Scenario: No per-run accounting workflows
+- **WHEN** any CI run starts or completes, including cancellation or skipping
+- **THEN** no flaky-test workflow SHALL start from workflow_run events
+- **AND** no pending or final accounting commit status SHALL be published
 
-#### Scenario: Explicit owner resolution
-- **WHEN** the owner closes a fixed cause or labels its open issue flaky-quarantined
-- **THEN** that issue no longer blocks the frequency limit
-- **AND** a later recovered failure after closure creates a new open issue
-- **AND** quarantine SHALL exempt only the frequency limit and SHALL never permit a test that fails twice to pass
+### Requirement: One daily trusted retry report
+One daily scheduled workflow, also available through workflow_dispatch, SHALL read flaky.json artifacts from completed CI runs created in the last 24 hours on this repository's branches and update a single Flaky tests tracking issue. Each test SHALL list its retry count and a link to its latest run. Cancelled, skipped, fork and unidentified source runs SHALL be excluded before artifact download.
 
-#### Scenario: Trusted source admission
-- **WHEN** the trusted tracker handles a source CI run
-- **THEN** it SHALL independently verify the source head repository through the Actions API before reading issue history or writing issues or statuses
-- **AND** missing source repository identity SHALL be rejected
+#### Scenario: Trusted report publication
+- **WHEN** the daily or manual report runs
+- **THEN** it SHALL execute default-branch code, treating artifacts only as validated data
+- **AND** only this serialized workflow SHALL have issue-write permission; candidate CI reporting SHALL require no issue or status writes
+- **AND** concurrent requests SHALL coalesce to one active and at most one pending report
 
-#### Scenario: Fork or unidentified source run
-- **WHEN** a source CI run belongs to a fork or its head repository identity is missing
-- **THEN** the trusted tracker SHALL skip fork runs before downloading artifacts
-- **AND** the workflow skips tracking before artifact download
-- **AND** direct tracker invocation rejects that source without reading issue history or writing issues or statuses, for both requested and completed events
+#### Scenario: Repeated evidence and manual reruns
+- **WHEN** a test occurs in multiple shard reports for one run attempt, or the daily report is run again
+- **THEN** each run attempt SHALL count once for that test in the 24-hour snapshot
+- **AND** repeated reports SHALL update the same issue, preserving owner text outside its managed report
+- **AND** different attempts of a run SHALL count separately
+
+#### Scenario: Short pages or unavailable evidence
+- **WHEN** CI run discovery returns short intermediate pages or one source artifact cannot be read
+- **THEN** discovery SHALL continue until an empty page and other runs SHALL still be reported
+- **AND** unavailable evidence SHALL be visible in the daily issue and daily job failure, with manual rerun recovery independent of CI or merge verdicts
+
+### Requirement: Bounded deterministic test execution
+
+CI SHALL preserve every maintained test and model within at most sixteen default
+CI runner jobs. Browser cases SHALL share a browser process with isolated case
+contexts. Behaviour fixtures MAY omit raster work behind the renderer interface,
+but pixel, animation and native performance checks SHALL retain their real renderer.
+
+#### Scenario: A fixture clock stops advancing
+- **WHEN** file evaluation, a hook or a case hangs with a stopped injected clock
+- **THEN** a parent-owned real-time file deadline SHALL fail and name that file
+- **AND** the failure SHALL NOT depend on the stopped clock
+
+#### Scenario: Memory-bounded model execution
+- **WHEN** a group admits another immutable model part, including after cache reuse
+- **THEN** all concurrent padded peak reservations and the supervisor reserve SHALL fit the existing hard memory envelope
+- **AND** failure or cancellation SHALL stop admission and drain all started work
+- **AND** splitting core controls SHALL retain every maintained fault exactly once

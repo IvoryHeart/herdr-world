@@ -1,3 +1,4 @@
+import { clock } from "../../clock";
 import { useEffect } from "react";
 import {
   usageLimitExpired,
@@ -365,8 +366,8 @@ export function useTownLimits(
 ): TownUsageState {
   useEffect(() => {
     store.request();
-    const timer = window.setInterval(() => store.request(), LIMITS_REFRESH_MS);
-    return () => window.clearInterval(timer);
+    const timer = clock.setInterval(() => store.request(), LIMITS_REFRESH_MS);
+    return () => clock.clearInterval(timer);
   }, [store]);
   return useTownUsage(store);
 }

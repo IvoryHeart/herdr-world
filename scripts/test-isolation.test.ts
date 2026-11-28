@@ -22,6 +22,22 @@ function scratch() {
   return root;
 }
 
+test("only runner-owned browser credentials cross test isolation", () => {
+  const env = isolatedTestEnv(scratch(), {
+    ...process.env,
+    HERDR_TEST_BROWSER: "http://127.0.0.1:1234/",
+    HERDR_TEST_BROWSER_TOKEN: "synthetic-browser-token",
+    GH_TOKEN: "synthetic-account-token",
+    OTHER_API_KEY: "synthetic-account-key",
+    HERDR_SESSION: "owner-session",
+  });
+  expect(env.HERDR_TEST_BROWSER).toBe("http://127.0.0.1:1234/");
+  expect(env.HERDR_TEST_BROWSER_TOKEN).toBe("synthetic-browser-token");
+  expect(env.GH_TOKEN).toBeUndefined();
+  expect(env.OTHER_API_KEY).toBeUndefined();
+  expect(env.HERDR_SESSION).toBeUndefined();
+});
+
 async function run(
   source: string,
   env: NodeJS.ProcessEnv = process.env,

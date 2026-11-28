@@ -1,3 +1,4 @@
+import { clock } from "../../clock";
 import {
   memo,
   useEffect,
@@ -117,7 +118,7 @@ function useArrivals(view: ShipyardView) {
     const fresh = ids.filter((id) => !prev.ids.has(id));
     if (!fresh.length) return;
     setArriving((set) => new Set([...set, ...fresh]));
-    const timer = window.setTimeout(() => {
+    const timer = clock.setTimeout(() => {
       timers.current.delete(timer);
       setArriving((set) => {
         const next = new Set(set);
@@ -130,7 +131,7 @@ function useArrivals(view: ShipyardView) {
   useEffect(() => {
     const pending = timers.current;
     return () => {
-      for (const timer of pending) window.clearTimeout(timer);
+      for (const timer of pending) clock.clearTimeout(timer);
     };
   }, []);
   return arriving;
@@ -204,7 +205,7 @@ export const TownShipyard = memo(function TownShipyard({
   renderer: { readonly current: TownRendererHandle | null };
 }) {
   const state = useShipyard();
-  const now = Date.now();
+  const now = clock.now();
   const chosen = shipyardView(state, now);
   const lanes = townShipyardLanes(state, now);
   const openWork = useOpenTownWork();

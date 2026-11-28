@@ -139,7 +139,7 @@ if (process.env.ROAMGATE_COMPOSER_DOM_TEST !== "1") {
         toJSON() {},
       });
     };
-    const settle = async () => {
+    const flushTasks = async () => {
       await act(async () => {
         finish?.();
         await Promise.resolve();
@@ -184,7 +184,7 @@ if (process.env.ROAMGATE_COMPOSER_DOM_TEST !== "1") {
         });
         expect(calls[calls.length - 1]).toEqual(["hello", enter]);
         const count = calls.length;
-        await settle();
+        await flushTasks();
         await seed();
         await act(() => click(action.querySelector("path") ?? action));
         expect(calls.length).toBe(count); // compatibility click after unlock
@@ -388,7 +388,7 @@ if (process.env.ROAMGATE_COMPOSER_DOM_TEST !== "1") {
         click(button(true));
       });
       expect(calls[calls.length - 1]).toEqual(["hello", true]);
-      await settle();
+      await flushTasks();
     } finally {
       await act(() => root.unmount());
       container.remove();

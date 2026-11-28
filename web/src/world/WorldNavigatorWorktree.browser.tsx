@@ -1,3 +1,5 @@
+import { clock as fixtureTime } from "./testing/installTestClock";
+import { presentTestFrame } from "./testing/testClock";
 // Worktree entry points in the World navigator, on repository workspaces:
 // desktop (right-click) and phone (long-press), and a stale host whose tree
 // shows them but stays inert. A live herdr-core host's agents are chosen by
@@ -139,10 +141,7 @@ createRoot(mount).render(
   />,
 );
 
-const settle = (ms = 0) =>
-  new Promise((resolve) =>
-    setTimeout(() => requestAnimationFrame(() => resolve(undefined)), ms),
-  );
+const presentNavigator = (ms = 32) => presentTestFrame(fixtureTime, ms);
 const tree = (connectionId: string) =>
   document.querySelector<HTMLElement>(
     `[data-world-navigator-host="${connectionId}"] .world-navigator-tree`,
@@ -177,7 +176,7 @@ async function menuFor(item: HTMLElement | undefined): Promise<string[]> {
         pointerType: "touch",
       }),
     );
-    await settle(700);
+    await presentNavigator(700);
     item.dispatchEvent(
       new PointerEvent("pointerup", {
         ...at,
@@ -190,7 +189,7 @@ async function menuFor(item: HTMLElement | undefined): Promise<string[]> {
       new MouseEvent("contextmenu", { ...at, bubbles: true, cancelable: true }),
     );
   }
-  await settle();
+  await presentNavigator();
   const buttons = [
     ...document.querySelectorAll<HTMLButtonElement>(".context-menu-item"),
   ];
@@ -202,12 +201,12 @@ async function menuFor(item: HTMLElement | undefined): Promise<string[]> {
   document.dispatchEvent(
     new KeyboardEvent("keydown", { key: "Escape", bubbles: true }),
   );
-  await settle();
+  await presentNavigator();
   return labels;
 }
 
 async function run() {
-  await settle(50);
+  await presentNavigator(50);
   check(
     document.documentElement.dataset.layout === (phone ? "mobile" : "desktop"),
     `layout is ${document.documentElement.dataset.layout}, not ${phone ? "mobile" : "desktop"}`,
@@ -258,7 +257,7 @@ async function run() {
   const coreAgent = coreTree?.querySelector<HTMLElement>('[data-pane-id="t1"]');
   check(coreAgent, "the herdr-core agent is not listed");
   coreAgent?.click();
-  await settle();
+  await presentNavigator();
   check(
     selected.includes("agent t1"),
     `clicking the herdr-core agent selected ${JSON.stringify(selected)}`,

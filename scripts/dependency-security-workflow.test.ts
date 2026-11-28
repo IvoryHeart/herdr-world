@@ -5,21 +5,31 @@ const yaml = async (path: string): Promise<any> =>
 
 test("live audit blocks the protected delivery result, release publication and Pages deployment", async () => {
   const ci = await yaml(".github/workflows/ci.yml");
+  const audit = ci.jobs["unit-tests"].steps.find(
+    (step: any) => step.run === "bun run security:check",
+  );
+  expect(audit.if).toBe("${{ !cancelled() && matrix.group == 'repository' }}");
+  expect(audit["continue-on-error"]).toBeUndefined();
+  expect(ci.jobs["unit-tests"].if).toBe(
+    "needs.validation-scope.outputs.mode != 'reuse' && needs.validation-scope.outputs.mode != 'hold' && needs.validation-scope.outputs.mode != 'docs'",
+  );
+  expect(ci.jobs.static.if).toBe(
+    "needs.validation-scope.outputs.mode == 'docs'",
+  );
   expect(
-    ci.jobs["dependency-security"].steps.some(
-      (step: any) => step.run === "bun run security:check",
+    ci.jobs.static.steps.some(
+      (step: any) =>
+        step.run === "bun run security:check" && !step["continue-on-error"],
     ),
   ).toBe(true);
-  // Only a reused Delivery result, which already required the audit, skips it.
-  expect(ci.jobs["dependency-security"].if).toBe(
-    "needs.validation-scope.outputs.mode != 'reuse' && needs.validation-scope.outputs.mode != 'hold'",
-  );
-  expect(ci.jobs.delivery.needs).toContain("dependency-security");
+  expect(ci.jobs.delivery.needs).toContain("unit-tests");
+  expect(ci.jobs.delivery.needs).toContain("static");
   const required = ci.jobs.delivery.steps.find(
     (step: any) => step.name === "Run full repository check",
   );
   expect(required.env).toMatchObject({
-    SECURITY_RESULT: "${{ needs.dependency-security.result }}",
+    SECURITY_RESULT:
+      "${{ needs.validation-scope.outputs.mode == 'docs' && needs.static.result || needs.unit-tests.result }}",
   });
   expect(required.run).toBe("bun scripts/ci-delivery-result.ts");
   for (const [path, job] of [

@@ -100,8 +100,9 @@ test("a real tap file becomes a Claude gauge on the board at its next refresh", 
     () => now,
   );
   const settled = async () => {
-    for (let i = 0; i < 50 && store.get().status !== "ready"; i++)
-      await Bun.sleep(10);
+    const deadline = Date.now() + 500;
+    while (Date.now() < deadline && store.get().status !== "ready")
+      await new Promise<void>((resolve) => setImmediate(resolve));
     const state = store.get();
     return state.status === "ready" ? state.snapshot : null;
   };
@@ -144,7 +145,9 @@ test("a real tap file becomes a Claude gauge on the board at its next refresh", 
   now += LIMITS_REFRESH_MS - 5_000;
   const shown = store.get();
   store.request();
-  for (let i = 0; i < 50 && store.get() === shown; i++) await Bun.sleep(10);
+  const refreshDeadline = Date.now() + 500;
+  while (Date.now() < refreshDeadline && store.get() === shown)
+    await new Promise<void>((resolve) => setImmediate(resolve));
   const claude = townLimits(store.get()).find((l) => l.harness === "claude");
   expect(claude).toMatchObject({
     state: "available",

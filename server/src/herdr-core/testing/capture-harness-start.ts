@@ -115,21 +115,54 @@ export async function captureHarnessStart(
       });
       started.push(record.address as string);
     }
-    // Startup, then one short turn each, then the end of that turn.
-    await Bun.sleep(10_000);
+    type Seen = { type?: string; terminal?: string; data?: { state?: string } };
+    const seen = () => events.map((e) => e.line.params as Seen);
+    /** Polls at a short tick until `done`, for at most `limitMs`. */
+    const until = async (
+      done: () => boolean,
+      what: string,
+      limitMs: number,
+    ) => {
+      for (let tick = 0; ; tick++) {
+        if (done()) return;
+        if (tick * 10 >= limitMs)
+          throw new Error(`timed out waiting for ${what}`);
+        await new Promise<void>((resolve) => setImmediate(resolve));
+      }
+    };
+    // Startup: each program has reported its status.
+    await until(
+      () =>
+        started.every((address) =>
+          seen().some((e) => e.type === "status" && e.terminal === address),
+        ),
+      "every harness to report",
+      60_000,
+    );
+    // One short turn each, then the end of that turn.
     for (const address of started) await core.hc("send", address, PROMPT);
-    for (let waited = 0; waited < 60_000; waited += 500) {
-      const turns = events.filter(
-        (e) =>
-          (e.line.params as { type?: string; data?: { state?: string } })
-            .type === "turn" &&
-          (e.line.params as { data?: { state?: string } }).data?.state ===
-            "done",
-      );
-      if (turns.length >= started.length) break;
-      await Bun.sleep(500);
-    }
-    await Bun.sleep(1_000);
+    await until(
+      () =>
+        seen().filter((e) => e.type === "turn" && e.data?.state === "done")
+          .length >= started.length,
+      "every turn to end",
+      60_000,
+    );
+    // The status that follows each turn's end.
+    await until(
+      () =>
+        started.every((address) => {
+          const all = seen();
+          const turn = all.findLastIndex(
+            (e) => e.type === "turn" && e.terminal === address,
+          );
+          return all.some(
+            (e, i) => i > turn && e.type === "status" && e.terminal === address,
+          );
+        }),
+      "the status after each turn",
+      60_000,
+    );
     const coreVersion = client.hello.version;
     client.close();
     const scrub = (text: string) =>

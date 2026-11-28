@@ -115,7 +115,7 @@ if (process.env.TOWN_SHIPYARD_DOM !== "1") {
       );
     });
   }
-  const settle = () => act(async () => shipyardStore.read());
+  const flushTasks = () => act(async () => shipyardStore.read());
 
   const town = (narrow: boolean) =>
     layoutTown(
@@ -146,7 +146,7 @@ if (process.env.TOWN_SHIPYARD_DOM !== "1") {
         ),
       ),
     );
-    await settle();
+    await flushTasks();
     const lanes = () => [
       ...host.querySelectorAll<HTMLElement>(
         ".town-harbour-lane:not([data-more])",
@@ -249,11 +249,11 @@ if (process.env.TOWN_SHIPYARD_DOM !== "1") {
     await act(async () => harbour.sign()!.click());
     expect(harbour.opened).toEqual(["releases"]);
     await act(async () => harbour.board(repos[1]).click());
-    await settle();
+    await flushTasks();
     expect(harbour.opened).toEqual(["releases", "releases"]);
     expect(shipyardStore.state().repo).toBe(repos[1]!);
     await act(async () => harbour.hull()!.click());
-    await settle();
+    await flushTasks();
     expect(harbour.opened).toEqual(["releases", "releases", "releases"]);
     expect(shipyardStore.state().repo).toBe(FIXTURE_REPO);
 
@@ -304,7 +304,7 @@ if (process.env.TOWN_SHIPYARD_DOM !== "1") {
         repos.slice(shown),
       );
       await act(async () => rows[0]!.click());
-      await settle();
+      await flushTasks();
       expect(harbour.opened).toEqual(["releases"]);
       expect(shipyardStore.state().repo).toBe(repos[shown]!);
     }
@@ -345,7 +345,7 @@ if (process.env.TOWN_SHIPYARD_DOM !== "1") {
               },
             },
           };
-    await settle();
+    await flushTasks();
     const ships = harbour.ships();
     expect(ships[0]!.textContent).toBe("v1.5.0");
     expect(ships[0]!.dataset.arriving).toBe("true");
@@ -378,7 +378,7 @@ if (process.env.TOWN_SHIPYARD_DOM !== "1") {
     const other = shipyardFixtureCatalog("ready", Date.now()).repositories[1]!;
     expect(harbour.lane(other).dataset.stale).toBeUndefined();
     broken.add(other);
-    await settle();
+    await flushTasks();
     expect(harbour.lane(other).dataset.stale).toBe("true");
     expect(harbour.lamp(other).dataset.tone).toBe("unknown");
     // Its last ships stay, as old.
@@ -430,7 +430,7 @@ if (process.env.TOWN_SHIPYARD_DOM !== "1") {
               },
             },
           };
-    await settle();
+    await flushTasks();
     expect(harbour.lanes().length).toBe(repos.length + 1);
     expect(harbour.ships(FIXTURE_UNRELEASED).map((s) => s.textContent)).toEqual(
       ["v0.1.0"],
@@ -550,7 +550,7 @@ if (process.env.TOWN_SHIPYARD_DOM !== "1") {
         }),
       ),
     );
-    await settle();
+    await flushTasks();
     const lens = document.querySelector<HTMLElement>(
       '[data-place-window="work"] .work-lens',
     )!;
@@ -603,7 +603,7 @@ if (process.env.TOWN_SHIPYARD_DOM !== "1") {
         .querySelector<HTMLButtonElement>('[aria-label="Read GitHub again"]')!
         .click(),
     );
-    await settle();
+    await flushTasks();
     expect(calls.filter((call) => call.method === "POST")).toEqual([
       {
         path: "/api/world/shipyard/refresh?repo=example-org%2Fwidgets",
@@ -630,7 +630,7 @@ if (process.env.TOWN_SHIPYARD_DOM !== "1") {
       "0 running, 3 stopped reporting",
     );
     down = false;
-    await settle();
+    await flushTasks();
     expect(stage("Main branch").textContent).toContain("main passing");
 
     // Another repository is read and kept on this browser.
@@ -641,7 +641,7 @@ if (process.env.TOWN_SHIPYARD_DOM !== "1") {
       select.value = "example-org/gadgets";
       select.dispatchEvent(new Event("change", { bubbles: true }));
     });
-    await settle();
+    await flushTasks();
     // The chosen repository is read first, after the catalog.
     const catalogRead = calls
       .map((call) => call.path)

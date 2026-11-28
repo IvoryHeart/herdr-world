@@ -57,7 +57,7 @@ type Message =
   | { kind: "answer"; deliver: () => void }
   | { kind: "publication"; value: unknown; revision: number };
 
-const settle = async () => {
+const flushTasks = async () => {
   for (let i = 0; i < 12; i += 1) await Promise.resolve();
 };
 
@@ -262,7 +262,7 @@ async function runSchedule(
   }
 
   for (;;) {
-    await settle();
+    await flushTasks();
     const actions = enabled();
     if (!actions.length) break;
     await actions[choose(actions.length)]!();

@@ -300,7 +300,7 @@ async function settledUpgrade(
   for (;;) {
     const body = await handlers.handleHerdrUpgradeStatus().json();
     if (body.status !== "running") return body;
-    await Bun.sleep(1);
+    await new Promise<void>((resolve) => setImmediate(resolve));
   }
 }
 

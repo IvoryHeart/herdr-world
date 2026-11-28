@@ -15,6 +15,8 @@
 - `server/src/usage/claude-launch-settings.ts`
 - `server/src/usage/claude-launch-settings.test.ts`
 - `web/src/creationRequests.ts`
+- `web/src/world/useWorldCreatedTerminal.ts`, `web/src/world/createdTerminalAdmission.ts` (bounded qualified completion, publication/navigation versions, cancellation)
+- `web/src/world/runtimeStore.ts`, `web/src/store/sessions.ts` (World publication and per-connection navigation sources)
 - `web/src/world/agentProfiles.ts`
 - `web/src/world/ProfileEditor.tsx`
 - `server/src/rpc/launcher.ts`
@@ -24,6 +26,7 @@
 **Tests:**
 
 - `web/src/world/SharedViewCreation.test.ts`
+- `web/src/world/useWorldCreatedTerminal.test.ts`, `web/src/world/createdTerminalAdmission.test.ts`
 - `web/src/worldCreation.test.ts`
 - `shared/agentProfile.test.ts`
 - `server/src/rpc/launcher-tap.test.ts`
@@ -34,6 +37,7 @@
 - A method advertisement is not this browser's prepared source attachment.
 - Global creation confirms one host; All hosts never means broadcast.
 - A lost reply may mean creation happened; do not automatically relaunch.
+- Admission observes publication and browser navigation revisions; equal wall timestamps never merge distinct observations.
 - Readiness/login commands are host-specific; World shows login text rather than typing it.
 - Profile definitions are World-owned, but current assignments are Herdr-owned; see appearance.
 - No profile-management CLI is specified here; CLI integration commands manage skills.

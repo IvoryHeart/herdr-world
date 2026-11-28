@@ -1,3 +1,4 @@
+import { clock } from "../../clock";
 /**
  * Reads the steps Town's thought bubbles show, for the agents Town wants
  * (TownStepStore.want): working agents in rooms on screen at the room or desk
@@ -54,7 +55,7 @@ export class TownStepReads {
   /** Each agent's newest read; an older reply for it is dropped. */
   private readonly issued = new Map<string, number>();
   private serial = 0;
-  private timer: ReturnType<typeof setTimeout> | undefined;
+  private timer: ReturnType<typeof clock.setTimeout> | undefined;
   private disposed = false;
 
   constructor(
@@ -117,7 +118,7 @@ export class TownStepReads {
 
   private schedule() {
     if (this.disposed || !this.pending.size) return;
-    this.timer ??= setTimeout(() => {
+    this.timer ??= clock.setTimeout(() => {
       this.timer = undefined;
       this.flush();
     }, this.options.batchMs ?? BATCH_MS);
@@ -206,7 +207,7 @@ export class TownStepReads {
 
   dispose() {
     this.disposed = true;
-    if (this.timer !== undefined) clearTimeout(this.timer);
+    if (this.timer !== undefined) clock.clearTimeout(this.timer);
     for (const stop of this.watches.values()) stop();
     this.watches.clear();
     this.steps.clear();
@@ -239,7 +240,7 @@ export function useTownStepReads(
       (world.current.index ??= new Map(
         world.current.leaves.map((leaf) => [leaf.id, leaf]),
       )).get(key);
-    const loadedAt = Date.now();
+    const loadedAt = clock.now();
     const current = new TownStepReads(store, leafOf, {
       ...(scene
         ? {

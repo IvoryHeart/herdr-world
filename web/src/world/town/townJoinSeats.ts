@@ -1,3 +1,4 @@
+import { clock } from "../../clock";
 /**
  * Where a desk joining a team sits (townTeamActions.ts). Joining moves no
  * other desk: the dropped desk takes a free cell touching the desk it was
@@ -124,7 +125,7 @@ export class TownJoinSeats {
   private version = 0;
   private readonly now: () => number;
 
-  constructor(now: () => number = () => Date.now()) {
+  constructor(now: () => number = () => clock.now()) {
     this.now = now;
   }
 

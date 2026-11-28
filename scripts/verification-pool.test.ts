@@ -156,3 +156,62 @@ test("external cancellation cannot complete a partial verification pool", async 
     runVerificationPool([0], 0, control.signal, async () => 0),
   ).rejects.toThrow("Invalid verification worker count");
 });
+
+test("memory admission starts items in order only while their weights fit, and a lone item always starts", async () => {
+  const gates = new Map<number, PromiseWithResolvers<void>>();
+  const started: number[] = [];
+  let used = 0;
+  let peak = 0;
+  const weights = [3, 2, 2, 5, 1];
+  const pending = runVerificationPool(
+    [0, 1, 2, 3, 4],
+    4,
+    new AbortController().signal,
+    async (item) => {
+      started.push(item);
+      used += weights[item]!;
+      peak = Math.max(peak, used);
+      const gate = Promise.withResolvers<void>();
+      gates.set(item, gate);
+      await gate.promise;
+      used -= weights[item]!;
+      return item;
+    },
+    undefined,
+    { weight: (item) => weights[item]!, budget: 5 },
+  );
+  const turn = async () => {
+    for (let i = 0; i < 10; i++) await Promise.resolve();
+  };
+  await turn();
+  // 3 + 2 fit; the next 2 would exceed 5 and waits, holding later items back.
+  expect(started).toEqual([0, 1]);
+  gates.get(0)!.resolve();
+  await turn();
+  expect(started).toEqual([0, 1, 2]);
+  gates.get(1)!.resolve();
+  gates.get(2)!.resolve();
+  await turn();
+  // Over budget alone (5 of 5), it still starts once nothing else runs.
+  expect(started).toEqual([0, 1, 2, 3]);
+  gates.get(3)!.resolve();
+  await turn();
+  gates.get(4)!.resolve();
+  expect(await pending).toEqual([0, 1, 2, 3, 4]);
+  expect(peak).toBeLessThanOrEqual(5);
+});
+
+test("a worker waiting for memory stops when the pool fails", async () => {
+  const pending = runVerificationPool(
+    [0, 1],
+    2,
+    new AbortController().signal,
+    async (item) => {
+      if (item === 0) throw new Error("Synthetic part failure");
+      return item;
+    },
+    undefined,
+    { weight: () => 4, budget: 5 },
+  );
+  await expect(pending).rejects.toThrow("Synthetic part failure");
+});

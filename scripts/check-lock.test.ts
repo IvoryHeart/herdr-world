@@ -56,6 +56,20 @@ release();
     );
 }
 
+/** Waits, with a short poll tick, until a holder has recorded that it took its slot. */
+async function untilStarted(root: string, label: string, ms = 10_000) {
+  const deadline = Date.now() + ms;
+  const started = () =>
+    existsSync(join(root, "record")) &&
+    readFileSync(join(root, "record"), "utf8").includes(
+      `"label":"${label}","at"`,
+    );
+  while (!started()) {
+    if (Date.now() > deadline) throw new Error(`${label} never started`);
+    await new Promise<void>((resolve) => setImmediate(resolve));
+  }
+}
+
 function intervals(root: string) {
   const events = readFileSync(join(root, "record"), "utf8")
     .trim()
@@ -77,7 +91,7 @@ test("two runs of a one-slot class take turns, and the second says whom it waits
   const root = scratch();
   const hold = holderScript(root);
   const first = hold("browser", "first", 600);
-  await Bun.sleep(250);
+  await untilStarted(root, "first");
   const second = hold("browser", "second", 50);
   const [, , output] = await Promise.all([
     first.exited,
@@ -95,7 +109,8 @@ test("the light class runs two at a time and queues a third", async () => {
   const root = scratch();
   const hold = holderScript(root);
   const runs = [hold("light", "one", 500), hold("light", "two", 500)];
-  await Bun.sleep(200);
+  await untilStarted(root, "one");
+  await untilStarted(root, "two");
   runs.push(hold("light", "three", 50));
   await Promise.all(runs.map((run) => run.exited));
   const [one, two, three] = intervals(root);
@@ -107,8 +122,7 @@ test("a holder that dies leaves no stale lock", async () => {
   const root = scratch();
   const hold = holderScript(root);
   const victim = hold("browser", "victim", 60_000);
-  for (let tries = 0; tries < 200 && !existsSync(join(root, "record")); tries++)
-    await Bun.sleep(25);
+  await untilStarted(root, "victim");
   victim.kill("SIGKILL");
   await victim.exited;
   // The holder note still names the dead process; the kernel freed the lock.
@@ -165,9 +179,9 @@ test("a timed lane waits for every running heavy lane, and nothing starts beside
   const hold = holderScript(root);
   // A unit lane is running when the timed lane asks for the whole machine.
   const unit = hold("light", "unit", 500);
-  await Bun.sleep(200);
+  await untilStarted(root, "unit");
   const timed = hold("all", "timed", 500);
-  await Bun.sleep(500);
+  await untilStarted(root, "timed");
   // A verification run arriving while the timed lane runs must wait.
   const verification = hold("verification", "verification", 50);
   await Promise.all([unit.exited, timed.exited, verification.exited]);
@@ -185,10 +199,13 @@ test("two whole-machine lanes take turns without deadlock", async () => {
     hold("light", "c", 200),
   ];
   const done = Promise.all(runs.map((run) => run.exited));
+  let deadline: ReturnType<typeof setTimeout> | undefined;
   const outcome = await Promise.race([
     done.then(() => "done"),
-    Bun.sleep(5000).then(() => "stuck"),
-  ]);
+    new Promise<string>((resolve) => {
+      deadline = setTimeout(() => resolve("stuck"), 5000);
+    }),
+  ]).finally(() => clearTimeout(deadline));
   expect(outcome).toBe("done");
   const spans = intervals(root);
   for (let i = 1; i < spans.length; i++)
@@ -241,7 +258,7 @@ test("later light arrivals cannot overtake a pending whole-machine request", asy
       });
       order.push(`later ${index}`);
       release();
-      await Bun.sleep(5);
+      await new Promise((resolve) => setImmediate(resolve));
     }
   })();
   first();

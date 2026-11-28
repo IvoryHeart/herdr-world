@@ -1,3 +1,4 @@
+import { clock } from "../../clock";
 /**
  * The town center's radial menu and its name plaque. Tapping the building
  * (or the plaque, or Enter on it) opens a ring of actions around the doors:
@@ -289,7 +290,7 @@ export function TownCenterMenu({
   const ring = useRef<HTMLDivElement>(null);
   /** The shown ring's own medallions and hub. */
   const items = useRef<HTMLDivElement>(null);
-  const opened = useRef(performance.now());
+  const opened = useRef(clock.monotonic());
   /** The rings opened after the first, innermost last. */
   const [levels, setLevels] = useState<readonly TownCenterLevel[]>([]);
   const depth = useRef(0);
@@ -380,7 +381,7 @@ export function TownCenterMenu({
         onPointerDown={(event) => {
           event.preventDefault();
           // The second press of a double tap that opened the ring stays.
-          if (performance.now() - opened.current > 300) onClose();
+          if (clock.monotonic() - opened.current > 300) onClose();
         }}
       />
       <div

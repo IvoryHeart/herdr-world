@@ -1,6 +1,7 @@
 import type { RuntimeOperations } from "../adapters/runtime-ports";
 import type { HerdrClient } from "../bridge/herdr-client";
 import { herdrEventName } from "../utils/herdr-events";
+import { type Scheduler, systemScheduler } from "../service/clock";
 
 /**
  * Herdr emits `pane.agent_status_changed` only through parameterized per-pane
@@ -76,7 +77,10 @@ export function createAgentStatusSubscriptionLoop(args: {
   retryDelayMs?: number;
   rebuildDebounceMs?: number;
   membershipPollMs?: number;
+  /** Retry, debounce and poll timers; tests inject their own. */
+  scheduler?: Scheduler;
 }): AgentStatusSubscriptionLoop {
+  const scheduler = args.scheduler ?? systemScheduler;
   const retryDelayMs = args.retryDelayMs ?? 2000;
   const rebuildDebounceMs = args.rebuildDebounceMs ?? 300;
   const membershipPollMs = args.membershipPollMs ?? 30000;
@@ -86,7 +90,7 @@ export function createAgentStatusSubscriptionLoop(args: {
   let loopTask: Promise<void> | null = null;
   let stopTask: Promise<void> | null = null;
   let active: Subscription | null = null;
-  let rebuildTimer: ReturnType<typeof setTimeout> | null = null;
+  let rebuildTimer: { cancel(): void } | null = null;
   let rebuildRequested = false;
   let rebuildWaiters: Array<() => void> = [];
 
@@ -135,9 +139,9 @@ export function createAgentStatusSubscriptionLoop(args: {
     wakeOnRebuild: boolean,
   ): Promise<void> {
     return new Promise((resolve) => {
-      const timer = setTimeout(finish, ms);
+      const timer = scheduler.schedule(finish, ms);
       function finish() {
-        clearTimeout(timer);
+        timer.cancel();
         if (wakeOnRebuild) {
           rebuildWaiters = rebuildWaiters.filter((waiter) => waiter !== finish);
         }
@@ -185,7 +189,7 @@ export function createAgentStatusSubscriptionLoop(args: {
     if (!running) return;
     rebuildRequested = true;
     if (rebuildTimer) return;
-    rebuildTimer = setTimeout(() => {
+    rebuildTimer = scheduler.schedule(() => {
       rebuildTimer = null;
       wakeRebuild();
     }, rebuildDebounceMs);
@@ -339,7 +343,7 @@ export function createAgentStatusSubscriptionLoop(args: {
       expected?.cancel();
       rebuildRequested = false;
       if (rebuildTimer) {
-        clearTimeout(rebuildTimer);
+        rebuildTimer.cancel();
         rebuildTimer = null;
       }
       const subscription = active;

@@ -135,10 +135,14 @@ if (process.env.WORLD_CREATED_TERMINAL_TEST !== "1") {
   }
   const render = () => act(() => root.render(createElement(Harness)));
   const advance = (ms = 16) => act(() => clock.advance(ms));
-  function publish(host = connection(true)) {
+  function publish(
+    host = connection(true),
+    observedAt = observed.observedAt + 1,
+  ) {
     observed = {
       ...observed,
-      observedAt: observed.observedAt + 1,
+      revision: observed.revision + 1,
+      observedAt,
       connections: [host],
     };
     for (const listener of observers) listener();
@@ -221,6 +225,40 @@ if (process.env.WORLD_CREATED_TERMINAL_TEST !== "1") {
     for (const mock of mocks.splice(0).reverse()) mock.mockRestore();
     __storeTesting.replaceState(previous);
   });
+
+  test.each(["publication", "navigation"] as const)(
+    "handoff: a new %s with an unchanged timestamp retries transient focus",
+    async (source) => {
+      await create();
+      expect(opened).toHaveLength(1);
+      const first = opening;
+      opening = Promise.withResolvers<void>();
+      first.reject(new Error("Synthetic transient focus rejection"));
+      await advance();
+      expect(opened).toHaveLength(1);
+      const timestamp = observed.observedAt;
+      if (source === "publication") publish(connection(true), timestamp);
+      else {
+        const snapshot = store.get();
+        __storeTesting.replaceState({
+          ...snapshot,
+          browserNavigation: {
+            ...snapshot.browserNavigation,
+            revision: snapshot.browserNavigation.revision + 1,
+          },
+        });
+      }
+      await advance();
+      expect(observed.observedAt).toBe(timestamp);
+      expect(opened).toHaveLength(2);
+      opening.resolve();
+      await advance();
+      expect(presented).toBe(
+        JSON.stringify(["alpha", "terminal", "created-terminal"]),
+      );
+      expect(store.get().notice).toBeNull();
+    },
+  );
 
   test("handoff: one in-flight open; transient failure retries only a new observation", async () => {
     await create();

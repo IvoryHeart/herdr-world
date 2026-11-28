@@ -1,3 +1,4 @@
+import { spawnTestChrome } from "../testing/browser-session";
 import { mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
@@ -37,7 +38,7 @@ export async function browserCase(
   if (!chrome) throw new Error("Chrome is required for the scale matrix");
   const scratch = mkdtempSync(join(tmpdir(), "hws-chrome-"));
   try {
-    const child = Bun.spawn(
+    const child = spawnTestChrome(
       [
         chrome,
         "--headless=new",
