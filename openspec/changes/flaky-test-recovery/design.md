@@ -29,7 +29,7 @@ core control partition and memory/time packing from #1478 onto the padded
 reservations and hard resource envelope. Refill a worker only while its reservation
 fits; cancellation stops admission and drains every started part.
 
-Use measured whole-part durations from run 46147624726 rather than checker-only
+Use measured whole-part durations from run 46155401222 rather than checker-only
 estimates, accounting for the diagnostic control in initial placement as well as
 refinement. Keep every padded memory reservation. Combined runners publish their
 actual lane outcomes independently; Delivery also requires the runner verdicts,
@@ -37,6 +37,23 @@ so one web timeout cannot impersonate unit/static/security failures or hide a
 setup/artifact failure. The 41-context uiScale file runs in disjoint browser-only
 case groups, with a complement for future names and separate JUnit/retry receipts,
 under the unchanged file deadline. The unit executor remains unchanged.
+
+Download all attempts' combined-runner receipts into separate artifact directories.
+Select the newest whole receipt per shard; reject duplicate shard/attempt pairs,
+missing shards and invalid outcomes. This supports partial reruns without filling
+a newer missing or failed lane from older evidence. Delivery retains full commit
+history with blob filtering; historical source blobs are not needed for its
+source-name comparisons and current-tree fingerprints.
+
+Admit all three existing World case workers in CI. Native tracing remains
+exclusive across the shared Chrome, while behaviour cases may use the other
+slots. Locally the CPU count sets the worker/context bound. Keep all assertions,
+per-case and per-file deadlines, model memory reservations and CI job counts.
+Retain raw fixture/context phase records with JUnit. Admission wait is not scene
+execution and must not be double-counted when refreshing scheduling estimates.
+Standalone capture tools join an existing managed Chrome or own one queued
+session, with isolated contexts and explicit disposal. Golden repetitions share
+one owner. Smoke, warm-up and hardware probes use the same native launch module.
 
 A parent-owned file watchdog observes atomic worker markers in the existing run
 temporary folder. Native file events and parent timers stay outside fake clocks

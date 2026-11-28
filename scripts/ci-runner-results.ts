@@ -5,10 +5,28 @@ import { join } from "node:path";
 const lanes = ["unit", "static", "security", "web"] as const;
 type Lane = (typeof lanes)[number];
 /** @internal Lane-receipt regression input. */
-export type RunnerResults = { shard: number } & Record<Lane, string>;
+export type RunnerResults = { shard: number; attempt: number } & Record<
+  Lane,
+  string
+>;
 
 /** @internal A combined runner's failure must never impersonate other lane verdicts. */
 export function aggregateRunnerResults(rows: RunnerResults[], web: boolean) {
+  const newest = new Map<number, RunnerResults>();
+  const seen = new Set<string>();
+  for (const row of rows) {
+    assert([1, 2, 3, 4].includes(row.shard), "Invalid runner shard");
+    assert(
+      Number.isSafeInteger(row.attempt) && row.attempt > 0,
+      "Invalid runner attempt",
+    );
+    const identity = `${row.shard}:${row.attempt}`;
+    assert(!seen.has(identity), "Duplicate runner attempt");
+    seen.add(identity);
+    const prior = newest.get(row.shard);
+    if (!prior || prior.attempt < row.attempt) newest.set(row.shard, row);
+  }
+  rows = [...newest.values()];
   assert.deepEqual(
     rows.map((row) => row.shard).sort(),
     [1, 2, 3, 4],
@@ -51,6 +69,7 @@ if (import.meta.main) {
     assert([1, 2, 3, 4].includes(shard), "Invalid runner shard");
     const result: RunnerResults = {
       shard,
+      attempt: Number(process.env.GITHUB_RUN_ATTEMPT),
       unit: process.env.UNIT_RESULT!,
       static: process.env.STATIC_RESULT!,
       security: process.env.SECURITY_RESULT!,

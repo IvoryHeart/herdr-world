@@ -2,6 +2,7 @@
 import { expect, test } from "bun:test";
 import {
   launchTestBrowser,
+  toolBrowserSession,
   type TestBrowser,
 } from "../../../../scripts/testing/browser-session";
 import { connectCapture } from "./connectCapture";
@@ -46,12 +47,19 @@ test("one Chrome owns isolated case storage, targets and independent lifetimes",
   });
   const handles: TestBrowser[] = [];
   const pages: Awaited<ReturnType<typeof connectCapture>>[] = [];
+  let tool: Awaited<ReturnType<typeof toolBrowserSession>> | undefined;
   try {
     for (let i = 0; i < 2; i++) {
-      const handle = await launchTestBrowser([
-        process.env.CHROME_BIN!,
-        fixture.url.href,
-      ]);
+      const handle =
+        i === 0
+          ? (tool = await toolBrowserSession(process.env.CHROME_BIN!, {
+              url: fixture.url.href,
+              exclusive: false,
+            })).browser
+          : await launchTestBrowser([
+              process.env.CHROME_BIN!,
+              fixture.url.href,
+            ]);
       await handle.start();
       handles.push(handle);
       pages.push(await connectCapture(handle.devtoolsPort));
@@ -114,8 +122,10 @@ test("one Chrome owns isolated case storage, targets and independent lifetimes",
     ).toBe(true);
     handles[0]!.kill();
     expect(await handles[0]!.exited).toBe(0);
+    await tool!.close();
     expect(await evaluate(1, "6 * 7")).toBe(42);
   } finally {
+    await tool?.close();
     for (const page of pages) page.close();
     for (const handle of handles) {
       handle.kill();

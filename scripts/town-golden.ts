@@ -1,4 +1,5 @@
-import { spawnTestChrome, launchTestBrowser } from "./testing/browser-session";
+import { acquireCheckSlot } from "./check-lock";
+import { toolBrowserSession, browserSession } from "./testing/browser-session";
 import { sharedBrowserBuild } from "../web/src/world/testing/sharedBrowserBuild";
 import { mkdir, mkdtemp, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
@@ -9,7 +10,6 @@ import {
   assetUrlImports,
   rawSvgImports,
 } from "../web/src/world/testing/assetUrlImports";
-import { SWIFTSHADER_FLAGS } from "../web/src/world/testing/chromeRendering";
 import {
   TOWN_GOLDEN_WEATHER,
   TOWN_GOLDEN_WEATHER_VIEWPORTS,
@@ -115,37 +115,6 @@ export class Cdp {
   }
 }
 
-export async function endpoint(stream: ReadableStream<Uint8Array>) {
-  const reader = stream.getReader();
-  const ready = Promise.withResolvers<string>();
-  const timer = setTimeout(
-    () => ready.reject(new Error("Chrome startup timed out")),
-    35_000,
-  );
-  void (async () => {
-    let log = "";
-    try {
-      for (;;) {
-        const { done, value } = await reader.read();
-        if (done) {
-          ready.reject(new Error("Chrome exited before CDP was ready"));
-          break;
-        }
-        log = (log + new TextDecoder().decode(value)).slice(-4000);
-        const address = /DevTools listening on (ws:\/\/[^\s]+)/.exec(log)?.[1];
-        if (address) ready.resolve(address);
-      }
-    } catch (error) {
-      ready.reject(error);
-    }
-  })();
-  try {
-    return await ready.promise;
-  } finally {
-    clearTimeout(timer);
-  }
-}
-
 export async function runTownGolden(options: {
   chrome: string;
   directory: string;
@@ -214,7 +183,12 @@ export async function runTownGolden(options: {
         : new Response("Not found", { status: 404 });
     },
   });
+  const release = await acquireCheckSlot("browser", {
+    lane: "Town golden tool",
+  });
+  let owner: Awaited<ReturnType<typeof browserSession>> | undefined;
   try {
+    owner = await browserSession(options.chrome, { golden: true, gpu: false });
     const build = await sharedBrowserBuild(import.meta.path, {
       ...townGoldenBuildConfig,
       entrypoints: [join(fixture, "TownGolden.browser.tsx")],
@@ -226,43 +200,15 @@ export async function runTownGolden(options: {
       assets.set("/" + basename(output.path), output);
     if (options.update) await mkdir(goldenDirectory, { recursive: true });
     for (let run = 1; run <= runs; run++) {
-      const launch = process.env.HERDR_TEST_BROWSER
-        ? launchTestBrowser
-        : spawnTestChrome;
-      const browser = await launch(
-        [
-          options.chrome,
-          "--headless=new",
-          "--remote-debugging-port=0",
-          "--remote-debugging-address=127.0.0.1",
-          "--enable-webgl",
-          ...SWIFTSHADER_FLAGS,
-          "--force-device-scale-factor=1",
-          "--force-color-profile=srgb",
-          "--disable-lcd-text",
-          "--font-render-hinting=none",
-          "--disable-background-networking",
-          "--no-first-run",
-          "--no-default-browser-check",
-          `--user-data-dir=${join(scratch, "profile-" + run)}`,
-          "about:blank",
-        ],
-        { stdout: "ignore", stderr: "pipe" },
+      const session = await toolBrowserSession(
+        options.chrome,
+        { golden: true, gpu: false },
+        owner.env,
       );
+      const browser = session.browser;
       let cdp: Cdp | undefined;
       try {
-        if ("start" in browser) await browser.start();
-        const address =
-          "devtoolsPort" in browser
-            ? (
-                (await (
-                  await fetch(
-                    `http://127.0.0.1:${browser.devtoolsPort}/json/list`,
-                  )
-                ).json()) as { type: string; webSocketDebuggerUrl: string }[]
-              ).find((target) => target.type === "page")!.webSocketDebuggerUrl
-            : await endpoint(browser.stderr);
-        cdp = await Cdp.connect(address);
+        cdp = await Cdp.connect(browser.browserEndpoint);
         const version = await cdp.command("Browser.getVersion");
         browserVersion = version.product;
         if (!browserVersion.endsWith("/" + pin.version))
@@ -272,9 +218,7 @@ export async function runTownGolden(options: {
         for (const viewport of townGoldenCaptures) {
           const { targetId } = await cdp.command("Target.createTarget", {
             url: "about:blank",
-            ...("contextId" in browser
-              ? { browserContextId: browser.contextId }
-              : {}),
+            browserContextId: browser.contextId,
           });
           try {
             const { sessionId } = await cdp.command("Target.attachToTarget", {
@@ -382,8 +326,7 @@ export async function runTownGolden(options: {
         );
       } finally {
         cdp?.close();
-        browser.kill();
-        await browser.exited;
+        await session.close();
         await rm(join(scratch, "profile-" + run), {
           recursive: true,
           force: true,
@@ -393,6 +336,11 @@ export async function runTownGolden(options: {
   } catch (error) {
     failures.push(error instanceof Error ? error.message : String(error));
   } finally {
+    try {
+      await owner?.close();
+    } finally {
+      release();
+    }
     server.stop(true);
     await rm(scratch, { recursive: true, force: true });
     await report();

@@ -23,13 +23,13 @@ export const verificationJobs = verificationModels.flatMap((model) => {
   return parts.map((part) => ({ model, part, id: `${model}-${part}` }));
 });
 
-// Whole-part seconds from run 46147624726 (2026-11-28), including replay,
+// Whole-part seconds from run 46155401222 (2026-11-28), including replay,
 // controls and evidence publication. Checker-only estimates underpacked group 1.
 // Stable part IDs remain cache owners, independent of runner grouping.
 /** @internal */
 export const modelPartSeconds = [
-  82, 136, 113, 131, 100, 41, 208, 50, 81, 162, 68, 76, 47, 70, 54, 42, 60, 51,
-  23, 24, 22, 20, 32, 26, 21, 74, 138,
+  52, 123, 148, 138, 132, 44, 150, 70, 85, 152, 69, 107, 32, 64, 37, 33, 41, 23,
+  17, 22, 24, 23, 37, 27, 23, 51, 99,
 ];
 
 /**

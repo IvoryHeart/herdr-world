@@ -44,6 +44,7 @@ export async function withBrowserDeadline<T>(
   }
 }
 
+/** @internal Shared test-browser lifecycle boundary. */
 export async function stopChrome(
   child: Pick<ReturnType<typeof Bun.spawn>, "kill" | "exited"> | undefined,
 ): Promise<void> {

@@ -70,6 +70,8 @@ jobs:
                   path: |
                       .agents/delivery/world-shard-*.xml
                       .agents/delivery/world-shard-*.timings.json
+                      .agents/delivery/world-shard-*.phases.jsonl
+                      .agents/delivery/browser-phases.jsonl
                       .agents/delivery/world-production-*-inputs.json
                   include-hidden-files: true
                   if-no-files-found: warn

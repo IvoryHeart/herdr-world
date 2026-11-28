@@ -397,6 +397,16 @@ test("combined runner evidence is retained after every lane and required by Deli
   )!;
   expect(aggregate.if).toBe("always() && needs.unit-tests.result != 'skipped'");
   expect(aggregate["continue-on-error"]).toBeUndefined();
+  const download = workflow.jobs.delivery.steps.find(
+    (step) => step.name === "Download independent runner results",
+  )!;
+  expect((download.with as Record<string, unknown>).pattern).toBe(
+    "unit-evidence-*",
+  );
+  expect(workflow.jobs.delivery.steps[0]!.with).toMatchObject({
+    "fetch-depth": 0,
+    filter: "blob:none",
+  });
 });
 
 test("flaky reporting uses only a daily schedule or manual default-branch run", async () => {

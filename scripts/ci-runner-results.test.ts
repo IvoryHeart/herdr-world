@@ -7,6 +7,7 @@ import {
 function passing(web = true): RunnerResults[] {
   return [1, 2, 3, 4].map((shard) => ({
     shard,
+    attempt: 1,
     unit: "success",
     static: shard > 1 ? "success" : "skipped",
     security: shard === 4 ? "success" : "skipped",
@@ -32,6 +33,41 @@ test("combined runners report independent unit, static, security and web verdict
     web: "success",
   });
   expect(aggregateRunnerResults(passing(false), false).web).toBe("skipped");
+});
+
+test("partial reruns retain successful legs and use the newest whole receipt per shard", () => {
+  const first = passing();
+  first[1]!.unit = "failure";
+  const retry = { ...passing()[1]!, attempt: 2 };
+  for (const rows of [
+    [...first, retry],
+    [retry, ...first],
+  ])
+    expect(aggregateRunnerResults(rows, true)).toEqual({
+      unit: "success",
+      static: "success",
+      security: "success",
+      web: "success",
+    });
+  // A newer failure must replace success, and missing lane evidence must not
+  // be filled from an older attempt of the same runner.
+  expect(
+    aggregateRunnerResults([...passing(), { ...retry, web: "failure" }], true)
+      .web,
+  ).toBe("failure");
+  expect(
+    aggregateRunnerResults(
+      [...passing(), { ...retry, static: "skipped" }],
+      true,
+    ).static,
+  ).toBe("failure");
+  for (const attempt of [0, -1, 1.5, NaN, undefined])
+    expect(() =>
+      aggregateRunnerResults(
+        [...first, { ...retry, attempt } as RunnerResults],
+        true,
+      ),
+    ).toThrow();
 });
 
 test("missing, duplicate, foreign or malformed runner evidence cannot pass", () => {

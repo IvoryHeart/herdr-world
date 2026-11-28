@@ -158,13 +158,20 @@ journeys. Missing consumers and unknown assets keep the full-mode fallback;
 deletions and both sides of renames retain their consumers. Golden comparisons
 remain advisory and help picture generation remains an explicit capture command.
 
-Scope checks out the complete Git history with `filter: blob:none`. The PR
+Scope and Delivery check out the complete Git history with `filter: blob:none`. The PR
 description policy runs in Delivery after the code and model evidence steps.
 Units carry the existing static, dependency security and web browser checks;
 World browser and model groups remain separate runners.
 **Delivery checks** depends directly on the combined leaves and requires each
 selected lane to succeed; unselected lanes must be skipped. There are no intervening
 repository, web-browser or behavioral aggregate runners in the PR graph.
+Each World runner admits its three existing case workers; browser-wide native
+tracing drains the shared browser and remains exclusive. Local World runs bound
+workers and contexts by the available CPU count. Raw fixture/context phase records
+are retained beside JUnit so admission wait can be separated from execution.
+Capture/probe tools join the runner's managed Chrome and dispose only their own
+context; standalone tools own a queued session, including one owner for repeated
+golden runs. Smoke, warm-up and GPU probes launch only from the shared helper.
 Delivery downloads the model manifests and resource receipts, applies the same
 complete source/tool/model/resource checks, and retains the canonical evidence
 artifact. This aggregation needs Bun and Git, without Node, Java, dependency
@@ -185,7 +192,9 @@ IDE lifecycle retains replay plus three check groups; core runtime retains repla
 plus three control groups, so their longest controls can overlap other parts.
 The 27 immutable model/part identities are packed longest-first by recorded
 resource-step times from main run 46077711273 into four balanced groups
-(`scripts/ci-model-plan.ts`). Each group admits at most four concurrent parts inside one existing
+(`scripts/ci-model-plan.ts`). Whole-part timing estimates now use run 46155401222;
+the padded memory peaks retain the earlier isolated measurements.
+Each group admits at most four concurrent parts inside one existing
 400% CPU / 4 GiB cgroup. Every part keeps its scope, controls, cache validation and
 resource receipt; the complete aggregate still requires all 27 parts. A group
 cache restores the latest bundle set, and each part independently validates its
@@ -205,6 +214,9 @@ validation. Evidence and code failures still hold the head red. Older separate
 **PR description** jobs retain their existing recovery behavior. This also works after
 **Re-run failed jobs**: successful/skipped leaves may carry earlier attempts,
 while the failed description check and Delivery must belong to the current attempt.
+Combined-runner receipts are downloaded across all attempts, with one newest whole
+receipt selected per shard. A newer failed or missing lane cannot borrow an older
+passing lane; duplicate shard/attempt pairs and missing shards fail closed.
 Failed Delivery evidence is still not reusable, and an earlier code failure still holds the head
 red. Rerunning an older description job alone replays its original event body.
 

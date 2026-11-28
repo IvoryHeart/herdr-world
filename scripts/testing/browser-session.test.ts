@@ -3,6 +3,7 @@ import {
   endpointForTarget,
   launchTestBrowser,
   managedRenderingFlags,
+  toolBrowserSession,
 } from "./browser-session";
 
 test("a target endpoint is qualified by the owning browser and target", () => {
@@ -15,10 +16,6 @@ test("a target endpoint is qualified by the owning browser and target", () => {
 });
 
 test("case teardown disposes its context once and waits for acknowledgement", async () => {
-  const previous = {
-    url: process.env.HERDR_TEST_BROWSER,
-    token: process.env.HERDR_TEST_BROWSER_TOKEN,
-  };
   const requests: unknown[] = [];
   const disposing = Promise.withResolvers<void>();
   const arrived = Promise.withResolvers<void>();
@@ -43,12 +40,14 @@ test("case teardown disposes its context once and waits for acknowledgement", as
     },
   });
   try {
-    process.env.HERDR_TEST_BROWSER = server.url.href;
-    process.env.HERDR_TEST_BROWSER_TOKEN = "test-session";
     const handle = await launchTestBrowser(
       ["chrome", "about:blank"],
       undefined,
       { exclusive: true },
+      {
+        HERDR_TEST_BROWSER: server.url.href,
+        HERDR_TEST_BROWSER_TOKEN: "test-session",
+      },
     );
     await handle.start();
     await handle.start();
@@ -71,11 +70,6 @@ test("case teardown disposes its context once and waits for acknowledgement", as
   } finally {
     disposing.resolve();
     server.stop(true);
-    if (previous.url === undefined) delete process.env.HERDR_TEST_BROWSER;
-    else process.env.HERDR_TEST_BROWSER = previous.url;
-    if (previous.token === undefined)
-      delete process.env.HERDR_TEST_BROWSER_TOKEN;
-    else process.env.HERDR_TEST_BROWSER_TOKEN = previous.token;
   }
 });
 
@@ -95,4 +89,54 @@ test("managed GPU selection needs no probe Chrome and CI stays calibrated softwa
   const selected = managedRenderingFlags({});
   selected.push("synthetic");
   expect(managedRenderingFlags({})).not.toContain("synthetic");
+});
+
+test("tools use their explicit session and dispose once without changing the runner connection", async () => {
+  const runner = process.env.HERDR_TEST_BROWSER;
+  const requests: unknown[] = [];
+  const closed = Promise.withResolvers<void>();
+  const server = Bun.serve({
+    hostname: "127.0.0.1",
+    port: 0,
+    async fetch(request) {
+      expect(request.headers.get("authorization")).toBe("tool-owner");
+      const data = await request.json();
+      requests.push(data);
+      if (data.watch) {
+        await closed.promise;
+        return Response.json({ code: 0 });
+      }
+      if (data.context) {
+        closed.resolve();
+        return Response.json({});
+      }
+      return Response.json({
+        context: "tool",
+        port: "1234",
+        processId: 42,
+        browserEndpoint: "ws://127.0.0.1:4321/devtools/browser/tool-owner",
+      });
+    },
+  });
+  try {
+    const connection = {
+      HERDR_TEST_BROWSER: server.url.href,
+      HERDR_TEST_BROWSER_TOKEN: "tool-owner",
+    };
+    const tool = await toolBrowserSession("synthetic-chrome", {}, connection);
+    connection.HERDR_TEST_BROWSER = "http://127.0.0.1:1/";
+    expect(tool.browser.processId).toBe(42);
+    expect(tool.browser.browserEndpoint).toEndWith("/tool-owner");
+    await tool.browser.start();
+    await Promise.all([tool.close(), tool.close()]);
+    expect(process.env.HERDR_TEST_BROWSER).toBe(runner);
+    expect(requests).toHaveLength(4);
+    expect(requests).toContainEqual({
+      args: ["synthetic-chrome", "about:blank"],
+      exclusive: true,
+    });
+  } finally {
+    closed.resolve();
+    server.stop(true);
+  }
 });

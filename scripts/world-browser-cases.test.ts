@@ -274,7 +274,7 @@ test("case workers stay bounded and a failed group does not hide later violation
   expect(seen.sort()).toEqual(["a1", "a2", "b1", "b2", "c1", "c2"]);
 });
 
-for (const concurrency of [1, 2])
+for (const concurrency of [1, 2, 3])
   test(`case workers honor scene isolation at concurrency ${concurrency}`, async () => {
     const queues = ["a", "b", "c"].map((prefix) =>
       [1, 2].map((index) => ({

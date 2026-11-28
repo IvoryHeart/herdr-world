@@ -6,6 +6,8 @@ import {
   appendFileSync,
   existsSync,
   mkdirSync,
+  mkdtempSync,
+  rmSync,
   readFileSync,
   statSync,
 } from "node:fs";
@@ -18,15 +20,12 @@ import type {
 } from "../../web/src/world/testing/sharedBrowserBuild";
 import { createBrowserTLS } from "./browser-tls";
 import { browserCapacity } from "./browser-capacity";
+import { acquireCheckSlot } from "../check-lock";
 import {
   GPU_FLAGS,
   SWIFTSHADER_FLAGS,
   isHardwareRenderer,
 } from "../../web/src/world/testing/chromeRendering";
-
-/** Native launch boundary, also used by standalone capture/probe commands. */
-export const spawnTestChrome = Bun.spawn;
-export const spawnTestChromeSync = Bun.spawnSync;
 
 /** Queue conservatively, but never download/start Chrome for synthetic unit probes. */
 export function browserSelectionNeedsChrome(
@@ -82,7 +81,7 @@ export function managedRenderingFlags(
 /** The runner owns Chrome; individual tests own only an incognito context. */
 export async function browserSession(
   chrome: string,
-  options: { golden?: boolean; maxContexts?: number } = {},
+  options: { golden?: boolean; maxContexts?: number; gpu?: boolean } = {},
 ): Promise<{ env: Record<string, string>; close(): Promise<void> }> {
   if (process.env.HERDR_TEST_BROWSER)
     return {
@@ -100,10 +99,17 @@ export async function browserSession(
     throw error;
   });
   const started = performance.now();
-  const rendering = managedRenderingFlags();
+  const rendering = managedRenderingFlags(
+    options.gpu === undefined
+      ? process.env
+      : {
+          ...process.env,
+          HERDR_TEST_BROWSER_RENDERING: options.gpu ? "gpu" : "swiftshader",
+        },
+  );
   let child: Bun.Subprocess<"ignore", "ignore", "pipe">;
   try {
-    child = spawnTestChrome(
+    child = Bun.spawn(
       [
         chrome,
         "--headless=new",
@@ -111,6 +117,7 @@ export async function browserSession(
         `--user-data-dir=${profile}`,
         "--no-first-run",
         "--no-default-browser-check",
+        "--mute-audio",
         "--password-store=basic",
         "--disable-dev-shm-usage",
         "--disable-background-networking",
@@ -565,6 +572,7 @@ export async function browserSession(
           context: browserContextId,
           port: String(proxy.port),
           ws,
+          browserEndpoint: await endpoint.promise,
           processId: child.pid,
         });
       } catch (error) {
@@ -616,6 +624,56 @@ export function endpointForTarget(browserEndpoint: string, target: string) {
   );
 }
 
+/** Capture/probe tools join the runner's Chrome, or own one standalone session. */
+export async function toolBrowserSession(
+  chrome: string,
+  options: {
+    golden?: boolean;
+    gpu?: boolean;
+    url?: string;
+    exclusive?: boolean;
+  } = {},
+  connection?: Record<string, string>,
+) {
+  const release = connection
+    ? () => {}
+    : await acquireCheckSlot("browser", { lane: "capture/probe tool" });
+  let session: Awaited<ReturnType<typeof browserSession>> | undefined;
+  let browser: TestBrowser;
+  try {
+    session = connection
+      ? { env: connection, close: async () => {} }
+      : await browserSession(chrome, options);
+    browser = await launchTestBrowser(
+      [chrome, options.url ?? "about:blank"],
+      undefined,
+      { exclusive: options.exclusive ?? true },
+      session.env,
+    );
+  } catch (error) {
+    try {
+      await session?.close();
+    } finally {
+      release();
+    }
+    throw error;
+  }
+  let disposal: Promise<void> | undefined;
+  return {
+    browser,
+    close() {
+      return (disposal ??= (async () => {
+        try {
+          browser.kill();
+          await browser.exited;
+        } finally {
+          await session!.close().finally(release);
+        }
+      })());
+    },
+  };
+}
+
 export type TestBrowser = {
   exited: Promise<number>;
   exitCode: number | null;
@@ -623,6 +681,7 @@ export type TestBrowser = {
   devtoolsPort: string;
   contextId: string;
   processId: number;
+  browserEndpoint: string;
   start(): Promise<void>;
 };
 
@@ -637,25 +696,29 @@ export async function launchTestBrowser(
     proxyServer?: string;
     proxyBypassList?: string;
   } = {},
+  sessionEnv: Record<string, string | undefined> = process.env,
 ): Promise<TestBrowser> {
-  if (!process.env.HERDR_TEST_BROWSER)
+  const address = sessionEnv.HERDR_TEST_BROWSER;
+  if (!address)
     throw new Error("Browser tests must run through bun run test / test:world");
   const headers = {
-    authorization: process.env.HERDR_TEST_BROWSER_TOKEN!,
+    authorization: sessionEnv.HERDR_TEST_BROWSER_TOKEN!,
     "content-type": "application/json",
   };
-  const response = await fetch(process.env.HERDR_TEST_BROWSER, {
+  const response = await fetch(address, {
     method: "POST",
     headers,
     body: JSON.stringify({ args, ...mode }),
   });
   if (!response.ok)
     throw new Error(`Browser context failed: ${await response.text()}`);
-  const { context, port, processId } = (await response.json()) as {
-    context: string;
-    port: string;
-    processId: number;
-  };
+  const { context, port, processId, browserEndpoint } =
+    (await response.json()) as {
+      context: string;
+      port: string;
+      processId: number;
+      browserEndpoint: string;
+    };
   const closed = Promise.withResolvers<number>();
   let closing = false;
   let started = false;
@@ -663,12 +726,13 @@ export async function launchTestBrowser(
     devtoolsPort: port,
     contextId: context,
     processId,
+    browserEndpoint,
     exitCode: null,
     exited: closed.promise,
     async start() {
       if (started) return;
       started = true;
-      const response = await fetch(process.env.HERDR_TEST_BROWSER!, {
+      const response = await fetch(address, {
         method: "POST",
         headers,
         body: JSON.stringify({ start: context }),
@@ -679,7 +743,7 @@ export async function launchTestBrowser(
     kill() {
       if (closing) return;
       closing = true;
-      void fetch(process.env.HERDR_TEST_BROWSER!, {
+      void fetch(address, {
         method: "POST",
         headers,
         body: JSON.stringify({ context }),
@@ -700,7 +764,7 @@ export async function launchTestBrowser(
       errorOutput,
       "Shared Chrome case; diagnostics are retained in browser-errors.jsonl and browser-state.jsonl.\n",
     );
-  void fetch(process.env.HERDR_TEST_BROWSER, {
+  void fetch(address, {
     method: "POST",
     headers,
     body: JSON.stringify({ watch: context }),
@@ -728,4 +792,110 @@ export async function launchTestBrowser(
     );
   }
   return handle;
+}
+
+export async function warmChrome(
+  chrome: string,
+  options: {
+    timeoutMs?: number;
+    log?: (message: string) => void;
+    env?: NodeJS.ProcessEnv;
+  } = {},
+): Promise<number | undefined> {
+  const log = options.log ?? ((message: string) => console.info(message));
+  const profile = mkdtempSync(join(tmpdir(), "chrome-warmup-"));
+  const began = performance.now();
+  try {
+    const child = Bun.spawn(
+      [
+        chrome,
+        "--headless=new",
+        "--no-first-run",
+        "--no-default-browser-check",
+        "--disable-dev-shm-usage",
+        "--disable-background-networking",
+        `--user-data-dir=${profile}`,
+        "--dump-dom",
+        "about:blank",
+      ],
+      { stdout: "ignore", stderr: "ignore", env: options.env ?? process.env },
+    );
+    const timer = setTimeout(
+      () => child.kill("SIGKILL"),
+      options.timeoutMs ?? 120_000,
+    );
+    const code = await child.exited;
+    clearTimeout(timer);
+    const seconds = (performance.now() - began) / 1000;
+    // A failed warm-up is reported, not fatal: the suites then show the real error.
+    log(
+      code === 0
+        ? `[chrome-warmup] first Chrome launch took ${seconds.toFixed(1)}s`
+        : `[chrome-warmup] Chrome exited ${code} after ${seconds.toFixed(1)}s`,
+    );
+    return code === 0 ? seconds : undefined;
+  } catch (error) {
+    log(`[chrome-warmup] could not start Chrome: ${String(error)}`);
+    return undefined;
+  } finally {
+    rmSync(profile, { recursive: true, force: true });
+  }
+}
+
+export function smokeTestChrome(chrome: string) {
+  const profile = mkdtempSync(join(tmpdir(), "test-chrome-smoke-"));
+  try {
+    const result = Bun.spawnSync(
+      [
+        chrome,
+        "--headless=new",
+        "--no-first-run",
+        "--no-default-browser-check",
+        "--disable-dev-shm-usage",
+        `--user-data-dir=${profile}`,
+        "--dump-dom",
+        "about:blank",
+      ],
+      { timeout: 60_000 },
+    );
+    if (result.exitCode !== 0 || !result.stdout.toString().includes("<html"))
+      throw new Error(
+        `Test Chrome did not start headless (${result.signalCode ?? `exit ${result.exitCode}`}): ${result.stderr.toString().slice(-2000)}`,
+      );
+  } finally {
+    rmSync(profile, { recursive: true, force: true });
+  }
+}
+
+const PROBE_PAGE = `data:text/html,<body></body><script>const c=document.createElement("canvas");const g=c.getContext("webgl2")||c.getContext("webgl");let r="no-webgl";if(g){const e=g.getExtension("WEBGL_debug_renderer_info");r=e?g.getParameter(e.UNMASKED_RENDERER_WEBGL):g.getParameter(g.RENDERER)}document.body.textContent="RENDERER="+r</script>`;
+export const PROBE_TIMEOUT_MS = 20_000;
+
+export async function runProbeChrome(chrome: string, profile: string) {
+  const child = Bun.spawn(
+    [
+      chrome,
+      "--headless=new",
+      "--no-first-run",
+      "--no-default-browser-check",
+      `--user-data-dir=${profile}`,
+      ...GPU_FLAGS,
+      "--dump-dom",
+      PROBE_PAGE,
+    ],
+    { stdout: "pipe", stderr: "ignore" },
+  );
+  let timedOut = false;
+  const timer = setTimeout(() => {
+    timedOut = true;
+    child.kill("SIGKILL");
+  }, PROBE_TIMEOUT_MS);
+  try {
+    const [output, exitCode] = await Promise.all([
+      new Response(child.stdout).text(),
+      child.exited,
+    ]);
+    return { output, exitCode, timedOut };
+  } finally {
+    clearTimeout(timer);
+  }
 }

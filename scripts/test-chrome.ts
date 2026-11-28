@@ -11,7 +11,7 @@ import {
 import { homedir, tmpdir } from "node:os";
 import { dirname, join } from "node:path";
 import pin from "../tools/chrome/test-chrome.json";
-import { spawnTestChromeSync } from "./testing/browser-session";
+export { smokeTestChrome } from "./testing/browser-session";
 
 /**
  * The Chrome that CI's browser suites and the latency trend run on: one
@@ -151,31 +151,6 @@ function allowSandbox(chrome: string) {
 }
 
 /** Start the pinned browser headless once, as the suites do, sandbox on. */
-export function smokeTestChrome(chrome: string) {
-  const profile = mkdtempSync(join(tmpdir(), "test-chrome-smoke-"));
-  try {
-    const result = spawnTestChromeSync(
-      [
-        chrome,
-        "--headless=new",
-        "--no-first-run",
-        "--no-default-browser-check",
-        "--disable-dev-shm-usage",
-        `--user-data-dir=${profile}`,
-        "--dump-dom",
-        "about:blank",
-      ],
-      { timeout: 60_000 },
-    );
-    if (result.exitCode !== 0 || !result.stdout.toString().includes("<html"))
-      throw new Error(
-        `Test Chrome did not start headless (${result.signalCode ?? `exit ${result.exitCode}`}): ${result.stderr.toString().slice(-2000)}`,
-      );
-  } finally {
-    rmSync(profile, { recursive: true, force: true });
-  }
-}
-
 /** What the timing depends on: the browser build and the runner's CPU. */
 export function describeMachine(chrome: string): string {
   const version = Bun.spawnSync([chrome, "--version"]).stdout.toString().trim();

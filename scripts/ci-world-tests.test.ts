@@ -50,7 +50,7 @@ if (process.env.HERDR_WORLD_TEST_LABEL?.endsWith("-pass-${failPass}")) process.e
           args.filter((arg) => /\.test\.[cm]?[jt]sx?$/.test(arg)).sort(),
         ).toEqual([...worldBrowserShards[0]!].sort());
         expect(args).toContain("--shard=1/6");
-        expect(args).toContain("--parallel=2");
+        expect(args).toContain("--parallel=3");
         expect(args).toContain("--retry-flaky=browser");
       }
       expect(

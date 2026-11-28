@@ -1,4 +1,4 @@
-import { spawnTestChrome } from "./testing/browser-session";
+import { toolBrowserSession } from "./testing/browser-session";
 /**
  * Help pictures: captures each help entry's control (web/src/help/) from
  * the production components with the website's synthetic scene, at phone
@@ -19,7 +19,7 @@ import { tmpdir } from "node:os";
 import { basename, join } from "node:path";
 import type { BunPlugin } from "bun";
 import { assetUrlImports } from "../web/src/world/testing/assetUrlImports";
-import { Cdp, endpoint } from "./town-golden";
+import { Cdp } from "./town-golden";
 import {
   HELP_PICTURE_CROPS,
   HELP_PICTURE_DIRECTORY,
@@ -40,10 +40,6 @@ import {
   type HelpEntry,
   type HelpPictureSize,
 } from "../web/src/help/helpEntry";
-import {
-  GPU_FLAGS,
-  SWIFTSHADER_FLAGS,
-} from "../web/src/world/testing/chromeRendering";
 
 type Box = { x: number; y: number; width: number; height: number };
 
@@ -123,26 +119,15 @@ export async function runHelpPictures(options: {
         : new Response("Not found", { status: 404 });
     },
   });
-  const browser = spawnTestChrome(
-    [
-      options.chrome,
-      "--headless=new",
-      "--remote-debugging-port=0",
-      "--remote-debugging-address=127.0.0.1",
-      "--enable-webgl",
-      ...(options.gpu ? GPU_FLAGS : SWIFTSHADER_FLAGS),
-      "--disable-background-networking",
-      "--no-first-run",
-      "--no-default-browser-check",
-      `--user-data-dir=${join(scratch, "profile")}`,
-      "about:blank",
-    ],
-    { stdout: "ignore", stderr: "pipe" },
-  );
+  let session: Awaited<ReturnType<typeof toolBrowserSession>> | undefined;
   const written: string[] = [];
   const missing: string[] = [];
   let cdp: Cdp | undefined;
   try {
+    session = await toolBrowserSession(options.chrome, {
+      gpu: options.gpu,
+    });
+    const browser = session.browser;
     const build = await Bun.build({
       ...helpPictureBuildConfig,
       entrypoints: [page],
@@ -152,7 +137,7 @@ export async function runHelpPictures(options: {
       throw new AggregateError(build.logs, "Help stage build failed");
     for (const output of build.outputs)
       assets.set("/" + basename(output.path), output);
-    cdp = await Cdp.connect(await endpoint(browser.stderr));
+    cdp = await Cdp.connect(browser.browserEndpoint);
     // One page per scene, size and theme; each entry's control in turn.
     const groups = new Map<string, HelpEntry[]>();
     for (const entry of entries)
@@ -169,6 +154,7 @@ export async function runHelpPictures(options: {
       ];
       const viewport = HELP_PICTURE_VIEWPORTS[size];
       const { targetId } = await cdp.command("Target.createTarget", {
+        browserContextId: browser.contextId,
         url: "about:blank",
       });
       try {
@@ -275,8 +261,7 @@ export async function runHelpPictures(options: {
     return { written };
   } finally {
     cdp?.close();
-    browser.kill();
-    await browser.exited;
+    await session?.close();
     server.stop(true);
     await rm(scratch, { recursive: true, force: true });
   }

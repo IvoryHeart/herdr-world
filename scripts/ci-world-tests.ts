@@ -28,7 +28,7 @@ for (let pass = 1; pass <= runs; pass++) {
       "scripts/run-world-tests.ts",
       ...files,
       `--shard=${shard}/${worldBrowserShards.length}`,
-      "--parallel=2",
+      "--parallel=3",
       "--max-concurrency=1",
       "--retry-flaky=browser",
       `--flake-report=.agents/delivery/flakes-world-${shard}-${pass}-${process.env.GITHUB_RUN_ATTEMPT || "local"}.json`,

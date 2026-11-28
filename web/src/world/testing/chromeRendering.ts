@@ -1,4 +1,7 @@
-import { spawnTestChrome } from "../../../../scripts/testing/browser-session";
+import {
+  runProbeChrome,
+  PROBE_TIMEOUT_MS,
+} from "../../../../scripts/testing/browser-session";
 import {
   mkdtempSync,
   readFileSync,
@@ -41,8 +44,6 @@ export type GpuProbe = {
   at: number;
 };
 
-const PROBE_PAGE = `data:text/html,<body></body><script>const c=document.createElement("canvas");const g=c.getContext("webgl2")||c.getContext("webgl");let r="no-webgl";if(g){const e=g.getExtension("WEBGL_debug_renderer_info");r=e?g.getParameter(e.UNMASKED_RENDERER_WEBGL):g.getParameter(g.RENDERER)}document.body.textContent="RENDERER="+r</script>`;
-
 /** A hardware renderer, as opposed to no WebGL or a software one. */
 export function isHardwareRenderer(renderer: string): boolean {
   return (
@@ -57,38 +58,6 @@ export type ProbeRun = {
   exitCode: number | null;
   timedOut: boolean;
 };
-
-const PROBE_TIMEOUT_MS = 20_000;
-
-async function runProbeChrome(chrome: string, profile: string) {
-  const child = spawnTestChrome(
-    [
-      chrome,
-      "--headless=new",
-      "--no-first-run",
-      "--no-default-browser-check",
-      `--user-data-dir=${profile}`,
-      ...GPU_FLAGS,
-      "--dump-dom",
-      PROBE_PAGE,
-    ],
-    { stdout: "pipe", stderr: "ignore" },
-  );
-  let timedOut = false;
-  const timer = setTimeout(() => {
-    timedOut = true;
-    child.kill("SIGKILL");
-  }, PROBE_TIMEOUT_MS);
-  try {
-    const [output, exitCode] = await Promise.all([
-      new Response(child.stdout).text(),
-      child.exited,
-    ]);
-    return { output, exitCode, timedOut };
-  } finally {
-    clearTimeout(timer);
-  }
-}
 
 /**
  * GPU mode only when Chrome ran to completion and reported a hardware
