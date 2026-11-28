@@ -2,7 +2,7 @@
 // watch and by the tab's stand-in while the watch (and xterm) still loads, so
 // a key typed before the chunk arrives reaches the same terminal, once.
 
-/** Keys a person types to a terminal, as xterm sends them. */
+/** Keys a person types to a terminal, as xterm sends them. @internal */
 export function typedKey(event: KeyboardEvent): string | null {
   if (event.ctrlKey || event.metaKey || event.altKey || event.isComposing)
     return null;

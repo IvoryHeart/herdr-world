@@ -80,13 +80,14 @@ export function initialAssetFiles(
 /**
  * main.tsx mounts the World app as soon as the entry runs, and the World app
  * opens Town by default, so a first load fetches all three graphs together.
+ * @internal Test seam.
  */
 export const STARTUP_SOURCES = [
   "src/world/WorldFoundationApp.tsx",
   "src/world/TownView.tsx",
 ];
 
-/** Every JS and CSS file a first load of World fetches. */
+/** Every JS and CSS file a first load of World fetches. @internal */
 export function startupAssetFiles(manifest) {
   const entries = Object.keys(manifest).filter((key) => manifest[key].isEntry);
   if (!entries.length) throw new Error("Vite manifest has no entry points");
@@ -101,16 +102,20 @@ export function startupAssetFiles(manifest) {
  * string only that library carries: xterm (Terminal.open) loads with the
  * first terminal, and Shiki's JavaScript regex engine (oniguruma-to-es) is
  * never shipped because diffs always use the WASM engine.
+ * @internal Test seam.
  */
 export const XTERM_MARKER = "Terminal requires a parent element";
+/** @internal Test seam. */
 export const JS_REGEX_ENGINE_MARKER = "Unsupported absence function";
 
+/** @internal Test seam. */
 export function startupXtermFiles(startupTexts) {
   return startupTexts
     .filter(({ content }) => content.includes(XTERM_MARKER))
     .map(({ name }) => name);
 }
 
+/** @internal Test seam. */
 export function jsRegexEngineFiles(texts) {
   return texts
     .filter(({ content }) => content.includes(JS_REGEX_ENGINE_MARKER))
@@ -120,6 +125,7 @@ export function jsRegexEngineFiles(texts) {
 /**
  * Diffs load only Pierre's default pair; any other Shiki or Pierre theme in
  * the manifest means the theme filter in web/vite.config.ts stopped working.
+ * @internal Test seam.
  */
 export function unusedThemeChunks(manifest) {
   return Object.keys(manifest).filter(
@@ -130,7 +136,7 @@ export function unusedThemeChunks(manifest) {
   );
 }
 
-export const COMMON_GRAMMARS = [
+const COMMON_GRAMMARS = [
   "javascript",
   "css",
   "html",
@@ -145,6 +151,7 @@ export const COMMON_GRAMMARS = [
  * Common grammars keep their own chunk: no grammar a family group embeds
  * (javascript, css, shellscript…) may pull a `syntax-*` group in, so its
  * diff fetches only that grammar.
+ * @internal Test seam.
  */
 export function groupedGrammarLeaks(manifest, languages = COMMON_GRAMMARS) {
   const groups = new Set(

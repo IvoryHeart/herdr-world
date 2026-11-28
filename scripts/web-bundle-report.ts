@@ -28,14 +28,14 @@ type ManifestChunk = {
   css?: string[];
   assets?: string[];
 };
-export type Manifest = Record<string, ManifestChunk>;
+type Manifest = Record<string, ManifestChunk>;
 
 const repoRoot = join(import.meta.dir, "..");
 const BASE64 =
   "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/";
 const BASE64_VALUE = new Map([...BASE64].map((char, index) => [char, index]));
 
-/** Decode one source-map segment's base64 VLQ fields. */
+/** Decode one source-map segment's base64 VLQ fields. @internal */
 export function decodeVlq(segment: string): number[] {
   const values: number[] = [];
   let value = 0;
@@ -58,6 +58,7 @@ export function decodeVlq(segment: string): number[] {
 /**
  * Generated characters per original source, from a v3 source map and the
  * generated text. Characters with no mapping count as "(unmapped)".
+ * @internal Test seam.
  */
 export function attributeSourceMap(
   code: string,
@@ -94,6 +95,7 @@ export function attributeSourceMap(
 /**
  * The owning package (`name@version`) of a source path, or the app folder for
  * World's own sources (`web/src/world/town`), or the path itself.
+ * @internal Test seam.
  */
 export function ownerOf(source: string): string {
   const parts = source.split("node_modules/");
@@ -112,7 +114,9 @@ export function ownerOf(source: string): string {
   return source.replace(/^(\.\.\/)+/, "");
 }
 
-/** Files reached from the given manifest keys through static imports only. */
+/** Files reached from the given manifest keys through static imports only.
+ * @internal
+ */
 export function staticClosure(manifest: Manifest, keys: string[]): string[] {
   const seen = new Set<string>();
   const files = new Set<string>();
@@ -129,7 +133,7 @@ export function staticClosure(manifest: Manifest, keys: string[]): string[] {
   return [...files];
 }
 
-export const keyOf = (manifest: Manifest, src: string) => {
+const keyOf = (manifest: Manifest, src: string) => {
   const key = Object.keys(manifest).find((candidate) =>
     candidate.endsWith(src),
   );
@@ -141,6 +145,7 @@ export const keyOf = (manifest: Manifest, src: string) => {
  * The three steps of a first load of /town: the entry's static graph, the
  * World app that main.tsx always mounts, and the default Town view. Each step
  * lists only files the earlier steps did not already fetch.
+ * @internal Test seam.
  */
 export function firstLoadSteps(manifest: Manifest) {
   const entries = Object.keys(manifest).filter((key) => manifest[key].isEntry);
@@ -230,7 +235,7 @@ async function build(outDir: string) {
   if ((await vite.exited) !== 0) throw new Error("vite build failed");
 }
 
-export async function report(root: string, top: number) {
+async function report(root: string, top: number) {
   const manifest: Manifest = JSON.parse(
     await readFile(join(root, ".vite/manifest.json"), "utf8"),
   );

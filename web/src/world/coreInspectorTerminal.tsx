@@ -47,7 +47,7 @@ type DraftScope = { connectionId: string; generation: number };
  * are held here: a scope lets go (and its drafts go) only when its
  * generation leaves, an actual change of owner, never when a view closes.
  */
-export function useCoreDraftScopes(scopes: readonly DraftScope[]) {
+function useCoreDraftScopes(scopes: readonly DraftScope[]) {
   const held = useRef(new Map<string, () => void>());
   const key = JSON.stringify(
     [
@@ -154,6 +154,7 @@ function CoreInspectorTerminal({
  * Stands in for the watch while its code loads. It takes focus and keys as
  * the terminal would, so the first key typed after opening the tab is kept
  * and sent once the watch is here.
+ * @internal Test seam.
  */
 export function CoreWatchLoading({
   title,
