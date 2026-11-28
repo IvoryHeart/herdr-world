@@ -113,6 +113,7 @@ export async function browserSession(
         "--password-store=basic",
         "--disable-dev-shm-usage",
         "--disable-background-networking",
+        "--blink-settings=primaryPointerType=4,availablePointerTypes=4,primaryHoverType=2,availableHoverTypes=2",
         // Match legacy web tests' CPU canvas without disabling Town's WebGL.
         "--disable-accelerated-2d-canvas",
         "--disable-background-timer-throttling",
@@ -223,6 +224,7 @@ export async function browserSession(
       started: number;
       phases: Record<string, number>;
       url: string;
+      pointer?: string;
       release(): void;
       closed: ReturnType<typeof Promise.withResolvers<number>>;
     }
@@ -323,6 +325,16 @@ export async function browserSession(
         const context = contexts.get(data.start);
         if (!context) return new Response("Unknown context", { status: 404 });
         await context.page.command("Page.navigate", { url: context.url });
+        // Disabled touch emulation is reset by navigation. Reapply the native
+        // headless 'none' capability to the new document, before start returns.
+        if (context.pointer === "1") {
+          await context.page.command("Emulation.setTouchEmulationEnabled", {
+            enabled: true,
+          });
+          await context.page.command("Emulation.setTouchEmulationEnabled", {
+            enabled: false,
+          });
+        }
         return Response.json({});
       }
       if (data.build) {
@@ -485,6 +497,22 @@ export async function browserSession(
           await page.command("Emulation.setEmulatedMedia", {
             features: [{ name: "prefers-reduced-motion", value: "reduce" }],
           });
+        // A touch override resets Blink's primary pointer to coarse, or to
+        // the headless platform's none. Leave the startup fine pointer intact.
+        const pointer = args
+          .find((arg) => arg.startsWith("--blink-settings="))
+          ?.slice("--blink-settings=".length)
+          .match(/(?:^|,)primaryPointerType=(1|2|4)(?:,|$)/)?.[1];
+        if (pointer && pointer !== "4") {
+          await page.command("Emulation.setTouchEmulationEnabled", {
+            enabled: true,
+            maxTouchPoints: 5,
+          });
+          if (pointer === "1")
+            await page.command("Emulation.setTouchEmulationEnabled", {
+              enabled: false,
+            });
+        }
         const proxy = Bun.serve({
           hostname: "127.0.0.1",
           port: 0,
@@ -525,6 +553,7 @@ export async function browserSession(
           started: began,
           phases,
           url,
+          pointer,
           release,
           closed: Promise.withResolvers<number>(),
         });

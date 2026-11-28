@@ -1,4 +1,5 @@
 import { clock as fixtureTime } from "../testing/installTestClock";
+import { presentTestFrame } from "../testing/testClock";
 import { flushSync } from "react-dom";
 import { createRoot } from "react-dom/client";
 import "../../styles/tokens.css";
@@ -250,11 +251,13 @@ const near = (a: number, b: number) => Math.abs(a - b) < 1;
 async function checkFrameTheme(frame: HTMLIFrameElement) {
   const media = frame.contentWindow?.matchMedia("(prefers-color-scheme: dark)");
   if (!media) return check(false, "the workbench frame can be read");
-  const themeIs = (theme: "dark" | "light") =>
-    until(
+  const themeIs = async (theme: "dark" | "light") => {
+    await presentTestFrame(fixtureTime);
+    return until(
       () => media.matches === (theme === "dark"),
       `the workbench frame prefers World's ${theme} theme`,
     );
+  };
   let changes = 0;
   media.addEventListener("change", () => changes++);
   document.documentElement.dataset.theme = "dark";

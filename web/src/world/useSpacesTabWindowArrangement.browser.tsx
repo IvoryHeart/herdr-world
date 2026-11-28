@@ -1,4 +1,5 @@
 import { clock as fixtureTime } from "./testing/installTestClock";
+import { presentTestFrame } from "./testing/testClock";
 import { flushSync } from "react-dom";
 import { createRoot } from "react-dom/client";
 import { useSpacesTabWindowArrangement } from "./useSpacesTabWindowArrangement";
@@ -50,7 +51,7 @@ const check = (condition: boolean, message: string) => {
   if (!condition) failures.push(message);
   progress(message);
 };
-const advance = () => fixtureTime.advance(40);
+const advance = () => presentTestFrame(fixtureTime, 40);
 
 async function until(predicate: () => boolean) {
   for (let attempt = 0; attempt < 40; attempt += 1) {

@@ -48,6 +48,17 @@ export type TestClock = {
 
 export const FRAME_MS = 16;
 
+/** Layout, ResizeObserver, scrolling and media-query events need native presentation. */
+export async function presentTestFrame(clock: TestClock, ms = 2 * FRAME_MS) {
+  await clock.advance(ms);
+  if (clock.real.requestAnimationFrame)
+    await new Promise<void>((resolve) =>
+      clock.real.requestAnimationFrame!(() =>
+        clock.real.requestAnimationFrame!(() => resolve()),
+      ),
+    );
+}
+
 /** Where the clock installs: the page, or a plain object in unit tests. */
 export type ClockTarget = Pick<
   typeof globalThis,

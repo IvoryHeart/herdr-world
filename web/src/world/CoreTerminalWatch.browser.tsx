@@ -1,4 +1,5 @@
 import { clock as fixtureTime } from "./testing/installTestClock";
+import { presentTestFrame } from "./testing/testClock";
 import { createRoot } from "react-dom/client";
 import { flushSync } from "react-dom";
 import { bridge } from "../api";
@@ -81,6 +82,7 @@ const screenText = () =>
 const viewport = async (width: number, height: number) => {
   await fetch(`/viewport?width=${width}&height=${height}`);
   await frames(4);
+  await presentTestFrame(fixtureTime);
 };
 /** A real key press (CDP), into whatever has focus. */
 const press = (key: string) => fetch(`/key?key=${encodeURIComponent(key)}`);

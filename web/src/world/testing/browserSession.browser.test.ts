@@ -7,6 +7,34 @@ import {
 import { connectCapture } from "./connectCapture";
 import { waitForPage } from "./browserEvents";
 
+test("case pointer flags reach native CSS media queries after navigation", async () => {
+  for (const [pointer, flag] of [
+    ["fine", 4],
+    ["coarse", 2],
+    ["none", 1],
+  ] as const) {
+    const handle = await launchTestBrowser([
+      process.env.CHROME_BIN!,
+      `--blink-settings=primaryPointerType=${flag}`,
+      "data:text/html,<body>synthetic pointer</body>",
+    ]);
+    let page: Awaited<ReturnType<typeof connectCapture>> | undefined;
+    try {
+      await handle.start();
+      page = await connectCapture(handle.devtoolsPort);
+      const result = await page.command("Runtime.evaluate", {
+        expression: `matchMedia('(pointer: ${pointer})').matches`,
+        returnByValue: true,
+      });
+      expect(result.result.value).toBe(true);
+    } finally {
+      page?.close();
+      handle.kill();
+      await handle.exited;
+    }
+  }
+});
+
 test("one Chrome owns isolated case storage, targets and independent lifetimes", async () => {
   const fixture = Bun.serve({
     hostname: "127.0.0.1",
@@ -49,6 +77,19 @@ test("one Chrome owns isolated case storage, targets and independent lifetimes",
     );
     expect(await evaluate(1, "localStorage.getItem('fixture-key')")).toBeNull();
     expect(await evaluate(1, "document.cookie")).toBe("");
+    const pointerFeatures =
+      "JSON.stringify(['fine','coarse','none'].map(value => matchMedia('(pointer: '+value+')').matches))";
+    const siblingPointer = await evaluate(1, pointerFeatures);
+    for (const pointer of ["fine", "coarse", "none"]) {
+      if (pointer !== "fine")
+        await pages[0]!.command("Emulation.setTouchEmulationEnabled", {
+          enabled: pointer === "coarse",
+        });
+      expect(JSON.parse(await evaluate(0, pointerFeatures))).toEqual(
+        ["fine", "coarse", "none"].map((value) => value === pointer),
+      );
+      expect(await evaluate(1, pointerFeatures)).toBe(siblingPointer);
+    }
     await pages[0]!.command("Target.createTarget", {
       url: fixture.url.href,
       browserContextId: handles[0]!.contextId,

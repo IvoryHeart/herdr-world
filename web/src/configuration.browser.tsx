@@ -2,6 +2,7 @@ import {
   clock as fixtureTime,
   restoreNativeMotion,
 } from "./world/testing/installTestClock";
+import { observeCondition } from "./world/testing/browserEvents";
 restoreNativeMotion();
 import "./styles/tokens.css";
 import "./styles/base.css";
@@ -1146,7 +1147,9 @@ async function run() {
   click("Settings");
   // Lazy mounting exposes the DOM before the dialog's focus effect runs.
   // Wait for focus before dispatching keys, or that effect can steal it back.
-  await waitFor(
+  // The parent owns the delayed bundle/drag handoff; its real I/O must not
+  // spend this page's synthetic timeout while it is deliberately held.
+  await observeCondition(
     () =>
       !configurationTest.loadingRace &&
       !!document
@@ -1280,7 +1283,7 @@ async function run() {
   await key(firstControl, "Tab", true);
   check(document.activeElement === lastControl, "Shift+Tab escaped Settings");
   click("Open Layout");
-  await waitFor(
+  await observeCondition(
     () =>
       !configurationTest.loadingRace &&
       !!document.querySelector("[aria-label='Layout Preferences']"),

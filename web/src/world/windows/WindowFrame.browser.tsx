@@ -1,4 +1,5 @@
 import { clock as fixtureTime } from "../testing/installTestClock";
+import { presentTestFrame } from "../testing/testClock";
 import { useState } from "react";
 import { flushSync } from "react-dom";
 import { createRoot } from "react-dom/client";
@@ -128,7 +129,7 @@ const failures: string[] = [];
 const check = (condition: boolean, message: string) => {
   if (!condition) failures.push(message);
 };
-const advance = () => fixtureTime.advance(40);
+const advance = () => presentTestFrame(fixtureTime, 40);
 const frame = (id = "A") =>
   document.querySelector<HTMLElement>(`[data-window-id="${id}"]`)!;
 const geometry = (id = "A") => windowGeometry(harness.state, id, harness.size)!;

@@ -1,11 +1,39 @@
 import { describe, expect, test } from "bun:test";
-import { installTestClock, type ClockTarget } from "./testClock";
+import {
+  installTestClock,
+  presentTestFrame,
+  type ClockTarget,
+} from "./testClock";
 
 function clockOnObject() {
   const target = {} as ClockTarget;
   const time = { now: () => 0 };
   return { target, clock: installTestClock(target, time), time };
 }
+
+test("layout presentation advances test time then waits for both native frames", async () => {
+  const { clock } = clockOnObject();
+  const requested = Promise.withResolvers<void>();
+  const frames: FrameRequestCallback[] = [];
+  clock.real.requestAnimationFrame = (callback) => {
+    frames.push(callback);
+    requested.resolve();
+    return frames.length;
+  };
+  let presented = false;
+  const presentation = presentTestFrame(clock, 32).then(() => {
+    presented = true;
+  });
+  await requested.promise;
+  expect(clock.now()).toBe(32);
+  expect(presented).toBe(false);
+  frames.shift()!(32);
+  expect(presented).toBe(false);
+  expect(frames).toHaveLength(1);
+  frames.shift()!(48);
+  await presentation;
+  expect(presented).toBe(true);
+});
 
 describe("test clock", () => {
   test("a timer's promise continuations run before the next timer, as natively (review)", async () => {

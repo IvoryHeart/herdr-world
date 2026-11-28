@@ -59,12 +59,13 @@ await mkdir(".agents/delivery", { recursive: true });
 // World runs take the browser slot. A nested runner already holds its
 // parent's slot and skips acquisition.
 const release = await acquireCheckSlot("browser", { lane: `world ${label}` });
+const localCapacity = Math.min(availableParallelism(), 8);
 let session: { env: Record<string, string>; close(): Promise<void> } = {
   env: {},
   close: async () => {},
 };
 try {
-  session = await browserSession(chrome, { maxContexts: 4 });
+  session = await browserSession(chrome, { maxContexts: localCapacity });
   const began = performance.now();
   await buildWorldBrowserBundle("HostsFilter", directory);
   if (files.some((path) => path.includes("AnswerDeliveries.browser")))
@@ -92,7 +93,7 @@ try {
         ...selection,
         ...(!testArgs.some((arg) => /^--parallel(?:=|$)/.test(arg))
           ? [
-              `--parallel=${shard ? 1 : Bun.env.HERDR_TEST_PARALLEL || Math.min(availableParallelism(), 4)}`,
+              `--parallel=${shard ? 1 : Bun.env.HERDR_TEST_PARALLEL || localCapacity}`,
             ]
           : []),
         ...(!testArgs.some((arg) => /^--max-concurrency(?:=|$)/.test(arg))
@@ -167,7 +168,7 @@ try {
           );
     if (!Number.isInteger(requested) || requested < 1)
       throw new Error("Invalid local case concurrency");
-    const capacity = Math.min(4, requested);
+    const capacity = Math.min(localCapacity, requested);
     const workers = planWorldBrowserCases(
       files,
       timings.cases,

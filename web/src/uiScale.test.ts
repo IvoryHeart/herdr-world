@@ -286,6 +286,7 @@ test.skipIf(!chrome).concurrent.each([
             socket!.send(JSON.stringify({ id: requestId, method, params }));
           }),
           `CDP ${method}${params.expression ? `: ${String(params.expression).slice(0, 180)}` : ""}`,
+          params.awaitPromise ? 25_000 : undefined,
         ).finally(() => pending.delete(requestId));
       };
       const evaluate = async (expression: string) => {
