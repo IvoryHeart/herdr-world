@@ -5,6 +5,7 @@ import {
   sharedChromeCount,
   sharedChromeEndpoints,
   testChromeFlags,
+  watch,
 } from "./chromeBrowser";
 
 test("the job's CPUs are its affinity, lowered by a cgroup CPU quota", () => {
@@ -35,4 +36,46 @@ test("a runner shares one Chrome per four job CPUs, at least one", () => {
     sharedChromeEndpoints({ [SHARED_CHROME_ENV]: "ws://a/1 ws://b/2" }),
   ).toEqual(["ws://a/1", "ws://b/2"]);
   expect(sharedChromeEndpoints({})).toEqual([]);
+});
+
+test("a finished wait schedules no further animation frame", async () => {
+  const frames = new Map<number, () => void>();
+  let nextFrame = 0;
+  let observers = 0;
+  let checks = 0;
+  const page = {
+    requestAnimationFrame: (callback: () => void) => {
+      frames.set(++nextFrame, callback);
+      return nextFrame;
+    },
+    cancelAnimationFrame: (id: number) => frames.delete(id),
+    MutationObserver: class {
+      observe() {
+        observers++;
+      }
+      disconnect() {
+        observers--;
+      }
+    },
+    document: { addEventListener() {}, removeEventListener() {} },
+    ready: () => ++checks >= 3,
+  };
+  const waiting = new Function(
+    ...Object.keys(page),
+    `return ${watch("ready()")};`,
+  )(...Object.values(page)) as Promise<boolean>;
+  const runFrames = () => {
+    const due = [...frames.values()];
+    frames.clear();
+    for (const callback of due) callback();
+  };
+  runFrames();
+  runFrames();
+  expect(await waiting).toBe(true);
+  const settled = checks;
+  runFrames();
+  runFrames();
+  expect(frames.size).toBe(0);
+  expect(checks).toBe(settled);
+  expect(observers).toBe(0);
 });

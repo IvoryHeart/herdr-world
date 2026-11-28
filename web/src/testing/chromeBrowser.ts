@@ -327,12 +327,19 @@ export type ChromePage = {
   close(): Promise<void>;
 };
 
-const watch = (expression: string) => `new Promise((resolve) => {
+/**
+ * The in-page watcher behind `waitFor`. Once the condition holds it removes
+ * every observer and schedules no further frame, so a finished wait leaves no
+ * frame loop running through the case's later steps. @internal
+ */
+export const watch = (expression: string) => `new Promise((resolve) => {
   const test = () => { try { return !!(${expression}); } catch { return false; } };
   if (test()) return resolve(true);
   let frame = 0;
+  let finished = false;
   const done = () => {
-    if (!test()) return;
+    if (finished || !test()) return;
+    finished = true;
     observer.disconnect();
     document.removeEventListener("focusin", done, true);
     document.removeEventListener("focusout", done, true);
@@ -343,7 +350,7 @@ const watch = (expression: string) => `new Promise((resolve) => {
   observer.observe(document, { subtree: true, childList: true, attributes: true, characterData: true });
   document.addEventListener("focusin", done, true);
   document.addEventListener("focusout", done, true);
-  const tick = () => { done(); frame = requestAnimationFrame(tick); };
+  const tick = () => { done(); if (!finished) frame = requestAnimationFrame(tick); };
   frame = requestAnimationFrame(tick);
 })`;
 
