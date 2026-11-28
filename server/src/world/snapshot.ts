@@ -329,10 +329,13 @@ export class WorldSnapshotService<Runtime extends RuntimeWithOperations> {
       published = await this.publication.values();
       if (this.revision === revision || attempt >= 3) break;
     }
-    const connections = this.newest(gathered, priorities);
+    const newest = this.newest(gathered, priorities);
+    const attributed = this.publication?.attribute?.(newest);
+    const connections = attributed?.connections ?? newest;
     return {
       ...published,
-      ...this.publication?.derive?.(published, connections),
+      ...this.publication?.derive?.(published, newest),
+      ...(attributed ? { agents: attributed.agents } : {}),
       revision,
       observed_at: this.now(),
       connections,

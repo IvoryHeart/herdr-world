@@ -6,6 +6,9 @@ import { herdrRuntimeFixture } from "../adapters/testing/runtime";
 import { runWorldCommand } from "../cli/world";
 import type { CliContext } from "../cli/command";
 import { createGuiSettingsStore } from "../config/gui-settings";
+import { createAgentsPort, type AgentsPort } from "../storage/agent-store";
+import { openWorldWriter } from "../storage/world-writer";
+import { createAgentRecords } from "./agent-records";
 import { composeWorldPublication } from "../service/world-commands";
 import { BoardStore } from "./board-store";
 import { parseObservationBase } from "./observation-v1";
@@ -137,69 +140,131 @@ beforeEach(() => {
 });
 afterEach(() => rmSync(root, { recursive: true, force: true }));
 
-function service({ catalogue, core, rooms }: Fixture = sharedSocket) {
+/**
+ * World's agent store over its real single writer, as the service runs it.
+ * `settled` waits for the last write a complete listing started.
+ */
+function agentStore(database: string) {
+  const writer = openWorldWriter(
+    database,
+    join(root, "agents-ledger.json"),
+    1_000,
+    "synthetic",
+  );
+  let last: Promise<unknown> = Promise.resolve();
+  const port = createAgentsPort(
+    writer.read().agents ?? [],
+    async <T>(
+      request: Parameters<typeof writer.batch>[0][number]["request"],
+    ) => {
+      const [result] = writer.batch([{ ticket: 0, request }], 2_000);
+      if (result!.error) throw new Error(result!.error);
+      return result!.result as T;
+    },
+  );
+  return {
+    port: {
+      ...port,
+      observe: (adapter, observation) =>
+        (last = port.observe(adapter, observation)) as never,
+    } satisfies AgentsPort,
+    settled: () => last,
+    close: () => {
+      port.close();
+      writer.close();
+    },
+  };
+}
+
+function service(
+  { catalogue, core, rooms }: Fixture = sharedSocket,
+  agents?: AgentsPort,
+) {
   /** Connections that answer, with their runtime generation. */
   const live = new Map([...catalogue, ...core].map(({ id }) => [id, 1]));
+  /** Connections whose pane listing repeats a terminal. */
+  const doubled = new Set<string>();
   let now = 1_000;
-  const snapshots = new WorldSnapshotService({
-    list: () => [
-      ...catalogue.map(({ id, label, source, is_default }) => ({
-        id,
-        label,
-        source,
-        is_default,
-        state: live.has(id) ? ("ready" as const) : ("error" as const),
-        generation: live.get(id) ?? 1,
-      })),
-      ...core.map(({ id, label, source, is_default }) => ({
-        id,
-        label,
-        source,
-        is_default,
-        runtime: "herdr-core" as const,
-        state: live.has(id) ? ("ready" as const) : ("error" as const),
-        generation: live.get(id) ?? 1,
-      })),
-    ],
-    readyRuntimeLease: (id: string) => {
-      const generation = live.get(id);
-      if (generation === undefined) return null;
-      const workspaces = rooms[id]!.map((label, index) => ({
-        workspace_id: `w${index + 1}`,
-        label,
-      }));
-      return {
-        connectionId: id,
-        generation,
-        isCurrent: () => live.get(id) === generation,
-        runtime: herdrRuntimeFixture({
-          async call(method: string) {
-            if (method === "workspace.list") return { workspaces };
-            if (method === "tab.list")
-              return {
-                tabs: workspaces.map(({ workspace_id }) => ({
-                  workspace_id,
-                  tab_id: `${workspace_id}:t1`,
-                  label: "desk",
-                })),
-              };
-            if (method === "pane.list")
-              return {
-                panes: workspaces.map(({ workspace_id }) => ({
+  const records = createAgentRecords({
+    port: () => agents,
+    adapter: (id) =>
+      core.some((each) => each.id === id) ? "herdr-core" : "herdr",
+    isCurrent: (id, generation) => live.get(id) === generation,
+    publish: () => world.publishWorld(),
+    log: () => {},
+  });
+  const snapshots = new WorldSnapshotService(
+    {
+      list: () => [
+        ...catalogue.map(({ id, label, source, is_default }) => ({
+          id,
+          label,
+          source,
+          is_default,
+          state: live.has(id) ? ("ready" as const) : ("error" as const),
+          generation: live.get(id) ?? 1,
+        })),
+        ...core.map(({ id, label, source, is_default }) => ({
+          id,
+          label,
+          source,
+          is_default,
+          runtime: "herdr-core" as const,
+          state: live.has(id) ? ("ready" as const) : ("error" as const),
+          generation: live.get(id) ?? 1,
+        })),
+      ],
+      readyRuntimeLease: (id: string) => {
+        const generation = live.get(id);
+        if (generation === undefined) return null;
+        const workspaces = rooms[id]!.map((label, index) => ({
+          workspace_id: `w${index + 1}`,
+          label,
+        }));
+        return {
+          connectionId: id,
+          generation,
+          isCurrent: () => live.get(id) === generation,
+          runtime: herdrRuntimeFixture({
+            async call(method: string) {
+              if (method === "workspace.list") return { workspaces };
+              if (method === "tab.list")
+                return {
+                  tabs: workspaces.map(({ workspace_id }) => ({
+                    workspace_id,
+                    tab_id: `${workspace_id}:t1`,
+                    label: "desk",
+                  })),
+                };
+              if (method === "pane.list") {
+                const panes = workspaces.map(({ workspace_id }) => ({
                   workspace_id,
                   tab_id: `${workspace_id}:t1`,
                   pane_id: `${workspace_id}:p1`,
                   terminal_id: `${id}-${workspace_id}`,
                   agent: "claude",
                   agent_status: "idle",
-                })),
-              };
-            return { agents: [] };
-          },
-        }),
-      };
-    },
-  } as never);
+                }));
+                return {
+                  panes: doubled.has(id)
+                    ? [...panes, { ...panes[0]!, pane_id: "copy" }]
+                    : panes,
+                };
+              }
+              return { agents: [] };
+            },
+          }),
+        };
+      },
+    } as never,
+    undefined,
+    undefined,
+    undefined,
+    undefined,
+    undefined,
+    (...args: [string, number, readonly Record<string, unknown>[]]) =>
+      records.observeComplete(args[0], args[1], args[2]),
+  );
   const ledger = new WorldLedger(join(root, "ledger.json"), {
     persist: false,
     now: () => now,
@@ -218,6 +283,7 @@ function service({ catalogue, core, rooms }: Fixture = sharedSocket) {
     broadcast: (line) =>
       notices.push(JSON.parse(line).control.revision as number),
     profiles: () => ({ list: () => catalogue, coreList: () => core }),
+    ...(agents ? { agents: records } : {}),
   });
   const cli = createWorldCli({
     board: new BoardStore(join(root, "board.json")),
@@ -267,6 +333,11 @@ function service({ catalogue, core, rooms }: Fixture = sharedSocket) {
     },
     reconnect(id: string, generation: number) {
       live.set(id, generation);
+      snapshots.invalidate(id);
+    },
+    /** The host's next listing repeats a terminal: World cannot tell. */
+    double(id: string) {
+      doubled.add(id);
       snapshots.invalidate(id);
     },
   };
@@ -638,4 +709,86 @@ test("grouping: two runtimes on one machine and a second machine are 2 hosts eve
       `Group runtimes: one per ${setting} (${town.length} Town buildings)\nLaptop\n`,
     );
   }
+});
+
+// Fact 2. agents (world-agent-identity task 6.1): one record per agent, in
+// the same reply and revision as the terminal rows it sits in.
+test("agents: one World record per agent across both runtimes, a reload and a service restart", async () => {
+  const database = join(root, "world.sqlite");
+  type Reply = {
+    revision: number;
+    agents?: {
+      agent_id: string;
+      state: string;
+      name: string | null;
+      seat: { connection_id: string; terminal_id: string } | null;
+    }[];
+    connections: {
+      connection_id: string;
+      snapshot?: { panes: Record<string, unknown>[] };
+    }[];
+  };
+  const look = (reply: Reply) =>
+    Object.fromEntries(
+      (reply.agents ?? []).map((agent) => [
+        agent.seat!.connection_id,
+        [agent.agent_id, agent.state, agent.name],
+      ]),
+    );
+  /** Each terminal row's agent_id is its seated agent's, in the same reply. */
+  const rowsAgree = (reply: Reply) => {
+    const seated = new Map(
+      (reply.agents ?? []).map((agent) => [
+        `${agent.seat!.connection_id}/${agent.seat!.terminal_id}`,
+        agent.agent_id,
+      ]),
+    );
+    for (const connection of reply.connections)
+      for (const pane of connection.snapshot?.panes ?? [])
+        expect(pane.agent_id).toBe(
+          seated.get(`${connection.connection_id}/${pane.terminal_id}`),
+        );
+  };
+
+  let store = agentStore(database);
+  let world = service(twoMachines, store.port);
+  // The first complete listing admits each agent; the reply that follows
+  // the commit carries the records and the rows they sit in.
+  await world.reply();
+  await store.settled();
+  const admitted = (await world.reply()) as Reply;
+  const ids = look(admitted);
+  expect(Object.keys(ids).sort()).toEqual(["box", "core", "tui"]);
+  for (const [id, state, name] of Object.values(ids)) {
+    expect(id).toMatch(/^a-[0-9a-z]{8}$/);
+    expect([state, name]).toEqual(["live", "desk"]);
+  }
+  rowsAgree(admitted);
+
+  // A browser reload asks again: the same records, nothing written.
+  const reloaded = (await world.reply()) as Reply;
+  expect(look(reloaded)).toEqual(ids);
+
+  // A host World cannot see: its agent is unresolved under the same ID.
+  world.offline("box");
+  const away = (await world.reply()) as Reply;
+  expect(look(away).box).toEqual([ids.box![0], "unresolved", null]);
+  expect(look(away).tui).toEqual(ids.tui);
+
+  // A listing that repeats a terminal binds and ends nothing.
+  world.double("tui");
+  const doubled = (await world.reply()) as Reply;
+  await store.settled();
+  expect(look(doubled).tui).toEqual([ids.tui![0], "unresolved", null]);
+
+  // A service restart: the same agents from the store, live again.
+  store.close();
+  store = agentStore(database);
+  world = service(twoMachines, store.port);
+  await world.reply();
+  await store.settled();
+  const restarted = (await world.reply()) as Reply;
+  expect(look(restarted)).toEqual(ids);
+  rowsAgree(restarted);
+  store.close();
 });

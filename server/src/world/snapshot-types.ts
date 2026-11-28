@@ -70,10 +70,38 @@ export type WorldConnectionSnapshot = {
   snapshot: WorldSnapshot | null;
 };
 
+/**
+ * One World agent (openspec world-agent-identity): its store-issued ID,
+ * derived state, observed labels, conversation and seat. Ended agents stay
+ * in the store and are not published.
+ */
+export type WorldAgentEntry = {
+  agent_id: string;
+  state: "live" | "away" | "unresolved" | "ended";
+  harness: string;
+  folder: string | null;
+  /** The seat's runtime name while live; World stores no name yet. */
+  name: string | null;
+  conversation: {
+    state: "known" | "unknown" | "conflict";
+    /** `<harness>/<conversation ID>`. */
+    item: string | null;
+  };
+  seat: {
+    connection_id: string;
+    terminal_id: string;
+    pane_id?: string;
+    tab_id?: string;
+    workspace_id?: string;
+  } | null;
+};
+
 export type WorldSnapshotResult = {
   revision: number;
   observed_at: number;
   connections: WorldConnectionSnapshot[];
+  /** World's agents under this revision; terminal rows carry `agent_id`. */
+  agents?: WorldAgentEntry[];
   /** Host catalogue; runtime topology remains indexed by immutable connection_id. */
   hosts?: WorldHostSnapshot[];
   /** How every view groups the runtimes, derived under this revision. */
@@ -102,4 +130,12 @@ export type WorldPublication = {
     published: WorldPublished,
     connections: readonly WorldConnectionSnapshot[],
   ): WorldPublished;
+  /**
+   * The reply's connections as published: the same ones, with terminal rows
+   * attributed (`agent_id`). Copies; cached snapshots are never changed.
+   */
+  attribute?(connections: readonly WorldConnectionSnapshot[]): {
+    agents: WorldAgentEntry[];
+    connections: WorldConnectionSnapshot[];
+  };
 };
