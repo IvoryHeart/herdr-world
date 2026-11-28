@@ -16,11 +16,7 @@ import { InputDriver, denseSnapshot } from "./browserAcceptanceFixture";
 import { startIndependentInput } from "./independentInputSchedule";
 import { pageCdpEndpoint } from "./testing/pageCdpEndpoint";
 import { recordLatency } from "./testing/latencyTrend";
-import { chromeMajor, concurrentWorkViolations } from "./testing/workCeilings";
-
-const browserMajor = chrome
-  ? chromeMajor(Bun.spawnSync([chrome, "--version"]).stdout.toString())
-  : undefined;
+import { concurrentWorkViolations } from "./testing/workCeilings";
 
 test.skipIf(!chrome).each([1440, 390])(
   "two mounted runtimes retain terminals and Files across focus and host retirement at %i pixels",
@@ -222,9 +218,9 @@ test.skipIf(!chrome).each([1440, 390])(
       expect(observed.measurements.outputFrames).toBe(1536);
       expect(observed.measurements.snapshotBytes).toBeGreaterThan(20_000_000);
       // Work ceilings, not timings: see testing/workCeilings.ts.
-      expect(
-        concurrentWorkViolations(observed.measurements, width, browserMajor),
-      ).toEqual([]);
+      expect(concurrentWorkViolations(observed.measurements, width)).toEqual(
+        [],
+      );
       expect(observed.stressReceipts).toHaveLength(sentInputs.length);
       const inputDelays: number[] = [];
       for (const phase of ["projection", "render", "refresh", "noisy-output"]) {
