@@ -2,28 +2,36 @@ import { expect, test } from "bun:test";
 import { createUiSettingsRpcHandler } from "./settings-rpc";
 import { defaultGuiSettings, type GuiSettings } from "../config/gui-settings";
 import {
-  createRuntimeGroupingPreference,
-  RUNTIME_GROUPING_CACHE_KEY,
   RUNTIME_GROUPING_SETTING_KEY,
   type RuntimeGrouping,
-} from "../../../web/src/world/runtimeGrouping";
+} from "../../../shared/hostGrouping";
+import {
+  createSettingCommands,
+  type SettingCommandRecord,
+} from "../world/setting-commands";
+import { createRuntimeGroupingMigration } from "../../../web/src/world/runtimeGrouping";
 import { OFFICE_PREFERENCES_KEY } from "../../../web/src/world/officePreferences";
 
 /**
- * Bounded exhaustive check of World's "Group runtimes" preference (#1307):
- * every order in which browsers' requests reach the service, the service's
- * answers and pushes reach each browser, and browsers act, with the real
- * UI-settings handler (settings-rpc.ts) and the real browser preference
- * (web/src/world/runtimeGrouping.ts). Each browser's requests reach the
- * service in order; the service answers the sender and pushes to the others
- * at commit, as rpc/bridge.ts does, and a browser may receive its waiting
- * answers and pushes in any order. Every schedule is replayed from the start.
+ * Bounded exhaustive check of World's "Group runtimes" setting (#1307,
+ * #1397): every order in which browsers' requests reach the service, the
+ * service's answers and publications reach each browser, and browsers act,
+ * with the real UI-settings handler (settings-rpc.ts), the real World
+ * setting command (world/setting-commands.ts) and the real browser offer of
+ * an older Town choice (web/src/world/runtimeGrouping.ts). An explicit
+ * choice is a `world.command`; the older choice is an only-if-absent
+ * settings write. Each commit is published to every browser under its
+ * revision; a browser's replica adopts only a newer revision, whatever order
+ * publications and answers arrive in (late replies included). Every
+ * schedule is replayed from the start.
  *
  * Checked in every schedule, once nothing is left to do:
- * - every browser shows, and caches, the value the service holds;
+ * - every connected browser shows the value the service holds;
  * - a browser's one-time migration never replaces a value already stored;
  * - once a browser's explicit choice is stored, the service ends on the
- *   last explicit choice it stored.
+ *   last explicit choice it stored;
+ * - each stored explicit choice leaves exactly one history record with the
+ *   value before and after it; the migration leaves none.
  */
 
 type Step = "connect" | RuntimeGrouping;
@@ -35,7 +43,7 @@ type Scenario = {
   name: string;
   stored?: RuntimeGrouping;
   browsers: Browser[];
-  /** How many update requests the service may refuse in one schedule. */
+  /** How many writes the service may refuse in one schedule. */
   refusals: number;
 };
 
@@ -47,7 +55,7 @@ type Request = {
 };
 type Message =
   | { kind: "answer"; deliver: () => void }
-  | { kind: "push"; value: unknown; revision?: number };
+  | { kind: "publication"; value: unknown; revision: number };
 
 const settle = async () => {
   for (let i = 0; i < 12; i += 1) await Promise.resolve();
@@ -71,15 +79,23 @@ async function runSchedule(
       ? { [RUNTIME_GROUPING_SETTING_KEY]: scenario.stored }
       : {},
   };
+  let revision = 0;
   const handler = createUiSettingsRpcHandler({
     readSettings: async () => settings,
-    updateSettings: async (update) => (settings = await update(settings)),
+    updateSettings: async (update) => {
+      settings = await update(settings);
+      revision += 1;
+      return settings;
+    },
   });
   const stored = () => settings.ui[RUNTIME_GROUPING_SETTING_KEY];
   const violations: string[] = [];
   /** The last explicit choice the service stored, if any. */
   let explicit: unknown;
   let refusals = scenario.refusals;
+  const history: SettingCommandRecord[] = [];
+  /** Explicit choices stored, as the settings saw them around each commit. */
+  const choices: Array<{ before: unknown; after: unknown }> = [];
 
   const browsers = scenario.browsers.map((spec) => {
     const storage = memoryStorage(
@@ -91,11 +107,11 @@ async function runSchedule(
           }
         : {},
     );
-    const preference = createRuntimeGroupingPreference(storage);
     const browser = {
       spec,
-      storage,
-      preference,
+      migration: createRuntimeGroupingMigration(storage),
+      /** The replica: the newest publication this browser adopted. */
+      replica: { revision: -1, value: undefined as unknown },
       toService: [] as Request[],
       toBrowser: [] as Message[],
       next: 0,
@@ -106,32 +122,76 @@ async function runSchedule(
           browser.toService.push({ method, params, answer, refuse }),
         );
       },
+      /** world/runtimeStore.ts: an older revision never replaces a newer. */
+      adopt(value: unknown, at: number) {
+        if (at < browser.replica.revision) return;
+        browser.replica = { revision: at, value };
+        // store/uiSettings.ts hands each publication to the offer.
+        browser.migration.adopt(value);
+      },
     };
     return browser;
+  });
+
+  /** Every commit is published to every browser (world_invalidated). */
+  const publish = () => {
+    for (const browser of browsers)
+      browser.toBrowser.push({
+        kind: "publication",
+        value: stored(),
+        revision,
+      });
+  };
+  const commands = createSettingCommands({
+    now: () => 0,
+    write: async (key, value) => {
+      const result = (await handler("bridge.ui_settings.update", {
+        key,
+        value,
+      })) as { before: unknown; value: unknown };
+      return { before: result.before, value: result.value };
+    },
+    read: async () => stored(),
+    publish,
+    // One record per command, replaced in place by its outcome.
+    record: async (record) => {
+      const index = history.findIndex(({ id }) => id === record.id);
+      if (index >= 0) history[index] = record;
+      else history.push(record);
+    },
+    unsettled: () => history.filter(({ state }) => state === "accepted"),
+    log: () => {},
   });
 
   type Simulated = (typeof browsers)[number];
   async function runStep(browser: Simulated, step: Step) {
     if (step === "connect") {
       const result = await browser.call("bridge.ui_settings.get", {});
-      // store/uiSettings.ts: install the write path, then adopt.
-      browser.preference.connect(async (value, options) => {
-        const answer = await browser.call("bridge.ui_settings.update", {
+      // store/uiSettings.ts: install the offer's write path, then adopt.
+      browser.migration.connect((value) =>
+        browser.call("bridge.ui_settings.update", {
           key: RUNTIME_GROUPING_SETTING_KEY,
           value,
-          ...(options?.onlyIfAbsent ? { only_if_absent: true } : {}),
-        });
-        return { value: answer.value, revision: answer.revision };
-      });
-      browser.connected = true;
-      browser.preference.adopt(
-        result.ui[RUNTIME_GROUPING_SETTING_KEY],
-        result.revision,
+          only_if_absent: true,
+        }),
       );
-    } else
-      await browser.preference.save(step).catch(() => {
-        /* A refused save shows the service's value again. */
-      });
+      browser.connected = true;
+      browser.adopt(result.ui[RUNTIME_GROUPING_SETTING_KEY], result.revision);
+    }
+    // The Settings control: a World command naming the value it shows.
+    else
+      await browser
+        .call("world.command", {
+          // Each browser names its commands uniquely (worldCommands.ts).
+          id: `choice-${browsers.indexOf(browser)}-${browser.next}`,
+          entity: { kind: "setting", key: RUNTIME_GROUPING_SETTING_KEY },
+          field: "value",
+          expected: browser.replica.value ?? null,
+          value: step,
+        })
+        .catch(() => {
+          /* A refused command changes nothing; the publication stays. */
+        });
     browser.busy = false;
   }
 
@@ -140,7 +200,7 @@ async function runSchedule(
     const actions: Action[] = [];
     browsers.forEach((browser) => {
       const step = browser.spec.script[browser.next];
-      // A browser acts once its previous step is answered; it saves only
+      // A browser acts once its previous step is answered; it chooses only
       // while connected, as the settings control does.
       if (step && !browser.busy && (step === "connect" || browser.connected))
         actions.push(async () => {
@@ -152,6 +212,7 @@ async function runSchedule(
 
       const request = browser.toService[0];
       if (request) {
+        const writes = request.method !== "bridge.ui_settings.get";
         const serve = async (refused: boolean) => {
           browser.toService.shift();
           if (refused) {
@@ -163,20 +224,22 @@ async function runSchedule(
             return;
           }
           const before = stored();
-          const result = await handler(request.method, request.params);
-          if (request.method === "bridge.ui_settings.update") {
-            const after = stored();
-            if (request.params.only_if_absent) {
+          let result: unknown;
+          if (request.method === "world.command") {
+            const record = await commands.submit(request.params as never);
+            if (record.state === "stored") {
+              explicit = stored();
+              choices.push({ before, after: stored() });
+            }
+            result = record;
+          } else {
+            result = await handler(request.method, request.params);
+            if (writes) {
+              const after = stored();
               if (before !== undefined && after !== before)
                 violations.push(`migration replaced ${before} with ${after}`);
-            } else explicit = after;
-            for (const other of browsers)
-              if (other !== browser)
-                other.toBrowser.push({
-                  kind: "push",
-                  value: (result as { value: unknown }).value,
-                  revision: (result as { revision?: number }).revision,
-                });
+              publish();
+            }
           }
           browser.toBrowser.push({
             kind: "answer",
@@ -184,16 +247,14 @@ async function runSchedule(
           });
         };
         actions.push(() => serve(false));
-        if (refusals > 0 && request.method === "bridge.ui_settings.update")
-          actions.push(() => serve(true));
+        if (refusals > 0 && writes) actions.push(() => serve(true));
       }
-      // The service sends an answer and its pushes from separate
-      // continuations, so a browser may get them in any order.
+      // Answers and publications reach a browser in any order.
       browser.toBrowser.forEach((message, at) =>
         actions.push(async () => {
           browser.toBrowser.splice(at, 1);
           if (message.kind === "answer") message.deliver();
-          else browser.preference.adopt(message.value, message.revision);
+          else browser.adopt(message.value, message.revision);
         }),
       );
     });
@@ -212,13 +273,27 @@ async function runSchedule(
     violations.push(`service holds ${value}, last explicit choice ${explicit}`);
   browsers.forEach((browser, index) => {
     if (!browser.connected || value === undefined) return;
-    const shown = browser.preference.current();
-    if (shown !== value)
-      violations.push(`browser ${index} shows ${shown}, service ${value}`);
-    const cached = browser.storage.getItem(RUNTIME_GROUPING_CACHE_KEY);
-    if (cached !== JSON.stringify(value))
-      violations.push(`browser ${index} caches ${cached}, service ${value}`);
+    if (browser.replica.value !== value)
+      violations.push(
+        `browser ${index} shows ${browser.replica.value}, service ${value}`,
+      );
   });
+  const recorded = history.map(({ before, observed }) => ({
+    before,
+    after: observed,
+  }));
+  if (
+    JSON.stringify(recorded) !==
+    JSON.stringify(
+      choices.map(({ before, after }) => ({
+        before: before ?? null,
+        after,
+      })),
+    )
+  )
+    violations.push(
+      `history ${JSON.stringify(recorded)}, choices ${JSON.stringify(choices)}`,
+    );
   return violations;
 }
 

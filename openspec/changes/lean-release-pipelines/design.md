@@ -44,7 +44,17 @@ accepts only that intentional skip, requiring every publisher and label job to
 succeed.
 
 Linux PR jobs retry failed test steps once within the job. Main reports immutable
-PR proof without running heavy jobs; absence stays visible in the main-red issue.
+PR proof; absence stays visible in the main-red issue. An independent main-only
+job warms per-model evidence caches for PRs. Its model jobs use four TLC workers
+and a 400% CPU quota (owner approval, 2026-11-26); other lanes and the local
+resource command retain their existing envelope. Each model has its own content
+closure and exact tool identity. IDE lifecycle splits into replay plus three
+exhaustive check jobs, core runtime into replay plus two fault-control jobs, and
+other models each have a job. Space admission overlaps independent exhaustive
+verification and sampling. Partial scopes never substitute for canonical evidence;
+Delivery requires every expected part, complete origin receipts and resource proof.
+Only main saves caches; PRs validate them before tool installation, and misses
+run the affected checks. Queue, nightly and release model execution stays fresh.
 Merge-group checks run the existing Linux graph with a full selection on the
 queue commit. The non-PR selector never queries PR reuse for a merge group;
 the required aggregate keeps the exact `Delivery checks` name. Checkout uses

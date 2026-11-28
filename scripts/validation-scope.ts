@@ -1,4 +1,11 @@
-import { affected, buildGraph, gitChanges, TEST, type Graph } from "./affected";
+import {
+  affected,
+  buildGraph,
+  checkAssetOwner,
+  gitChanges,
+  TEST,
+  type Graph,
+} from "./affected";
 import { readFileSync } from "node:fs";
 import { readCoverageScope } from "./coverage-scope";
 import { isCoveragePath } from "./coverage";
@@ -182,8 +189,12 @@ export function selectValidation(
     paths.includes("scripts/balance-shards.ts");
   const world = new Set(worldBrowserSuites);
   const web = new Set(webBrowserSuites);
+  const sourcePaths = paths.filter((path) => {
+    const owner = checkAssetOwner(path, graph.files);
+    return !owner || graph.gone.has(owner);
+  });
   const runtime =
-    !tooling && !full && paths.some((path) => WORLD_RUNTIME.test(path));
+    !tooling && !full && sourcePaths.some((path) => WORLD_RUNTIME.test(path));
   const affectedWorld =
     full || shardTable
       ? worldBrowserSuites
@@ -199,7 +210,8 @@ export function selectValidation(
   // Keep the real-entry journey selected even across that build-tool seam.
   const boot = "web/src/productionBoot.browser.test.ts";
   const bootChanged =
-    paths.some((path) => path.startsWith("web/src/")) && graph.files.has(boot);
+    sourcePaths.some((path) => path.startsWith("web/src/")) &&
+    graph.files.has(boot);
   return {
     full,
     tooling,

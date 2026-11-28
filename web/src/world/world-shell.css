@@ -74,6 +74,15 @@
   align-items: center;
   gap: 8px;
 }
+.world-hosts-row {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+}
+.world-hosts-runtimes {
+  font-size: 11px;
+  opacity: 0.75;
+}
 .world-hosts-control > [role="status"] {
   position: absolute;
   top: 100%;

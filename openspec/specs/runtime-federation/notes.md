@@ -32,6 +32,7 @@
 - `server/src/connections/host-service.test.ts`
 - `server/src/connections/host-discovery.test.ts`
 - `server/src/service/host-connections.test.ts`
+- `server/src/service/testing/services.ts` (real-socket test client delivers replies after the native read completes, keeping same-process host events and RPCs from reentering Bun's frame parser)
 - `server/src/world/host-snapshots.test.ts`
 - `server/src/connections/local-discovery.ts`
 - `server/src/connections/first-run.test.ts`

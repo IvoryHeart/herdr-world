@@ -1432,7 +1432,9 @@ describe("WorldSnapshotService", () => {
       admitted.resolve();
       return true;
     });
-    service.publishWith(() => ({ commands: settled ? ["settled"] : [] }));
+    service.publishWith({
+      values: () => ({ commands: settled ? ["settled"] : [] }),
+    });
     await service.snapshot();
     // The first reply takes host a from its fresh cache, then waits on b.
     holdB = true;

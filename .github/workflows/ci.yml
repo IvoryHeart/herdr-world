@@ -122,6 +122,7 @@ jobs:
             selection: ${{ steps.scope.outputs.selection }}
             world: ${{ steps.scope.outputs.world }}
             verification: ${{ steps.scope.outputs.verification }}
+            unit_comparison: ${{ steps.unit-comparison.outputs.required }}
         steps:
             - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
               with:
@@ -145,6 +146,11 @@ jobs:
                   REQUIRED_JOB_NAME: Delivery checks
                   REQUIRED_FULL_STEP: Run full repository check
               run: bun scripts/ci-reuse-full-check.ts
+            - name: Determine unit comparison requirement
+              id: unit-comparison
+              env:
+                  UNIT_COMPARISON_BASE: ${{ github.event.pull_request.base.sha || github.event.merge_group.base_sha }}
+              run: bun scripts/ci-unit-comparison.ts required
             # A title, description or label change on a head whose latest
             # result is red keeps it red and starts no code job. Re-running
             # this job decides again, so it reuses that result once it passes.
@@ -196,11 +202,17 @@ jobs:
             - run: bun run security:check
 
     static:
-        name: Static checks
+        name: Static checks (${{ matrix.group }})
         needs: validation-scope
         if: needs.validation-scope.outputs.mode != 'reuse' && needs.validation-scope.outputs.mode != 'hold'
         runs-on: ubuntu-latest
         timeout-minutes: 30
+        strategy:
+            fail-fast: false
+            matrix:
+                # Keep CPU-heavy builds and type checking off the analysis runner.
+                # Docs still run their existing command once, on the repository runner.
+                group: ${{ fromJSON(needs.validation-scope.outputs.mode == 'docs' && '["repository"]' || '["repository","types","build"]') }}
         env:
             HERDR_WORLD_RATCHET_TARGET: ${{ github.event.pull_request.base.sha || github.event.merge_group.base_sha }}
             HERDR_CI_SELECTION: ${{ needs.validation-scope.outputs.selection }}
@@ -209,6 +221,8 @@ jobs:
               with:
                   persist-credentials: false
                   fetch-depth: 0
+                  # Keep history for ratchets without downloading historical blobs.
+                  filter: blob:none
                   # Match the immutable event base even if the PR merge ref advances.
                   ref: ${{ github.sha }}
             - uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2
@@ -221,18 +235,32 @@ jobs:
               run: bun run check:docs
             - name: Run static repository checks
               if: needs.validation-scope.outputs.mode != 'docs'
-              run: bun run check:static
+              run: bun run check:static --static-group=${{ matrix.group }}
+            - name: Upload static check logs
+              if: always() && needs.validation-scope.outputs.mode != 'docs'
+              uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7
+              with:
+                  name: static-check-logs-${{ matrix.group }}
+                  path: .agents/delivery/lanes/static-*.log
+                  include-hidden-files: true
+                  if-no-files-found: error
 
     unit-tests:
-        name: Non-browser tests (${{ matrix.shard }}/2)
+        name: Non-browser tests (${{ matrix.shard }}/4)
         needs: validation-scope
         if: needs.validation-scope.outputs.mode != 'reuse' && needs.validation-scope.outputs.mode != 'hold' && needs.validation-scope.outputs.mode != 'docs'
         runs-on: ubuntu-latest
-        timeout-minutes: 20
+        # Scheduling changes require twenty paired serial/parallel controls.
+        timeout-minutes: ${{ needs.validation-scope.outputs.unit_comparison == 'true' && 120 || 20 }}
+        env:
+            HERDR_CI_SELECTION: ${{ needs.validation-scope.outputs.selection }}
+            HERDR_TEST_PARALLEL: "4"
+            HERDR_TEST_MAX_CONCURRENCY: "2"
+            HERDR_TEST_EXCLUDE_WORLD_BROWSER: "1"
         strategy:
             fail-fast: false
             matrix:
-                shard: [1, 2]
+                shard: [1, 2, 3, 4]
         steps:
             - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
               with:
@@ -242,15 +270,29 @@ jobs:
                   bun-version: "1.4.4"
                   no-cache: true
             - run: bun install --frozen-lockfile
+            - name: Plan unit shard
+              id: unit-plan
+              run: bun scripts/ci-tests.ts unit ${{ matrix.shard }}/4 --plan
             - name: Build process-test assets on this runner
+              if: steps.unit-plan.outputs.build == 'true'
               run: bun run build
             - name: Run affected non-browser tests
-              env:
-                  HERDR_CI_SELECTION: ${{ needs.validation-scope.outputs.selection }}
-                  HERDR_TEST_PARALLEL: "1"
-                  HERDR_TEST_MAX_CONCURRENCY: "2"
-                  HERDR_TEST_EXCLUDE_WORLD_BROWSER: "1"
-              run: bun scripts/ci-tests.ts unit ${{ matrix.shard }}/2
+              if: needs.validation-scope.outputs.unit_comparison != 'true'
+              run: bun scripts/ci-tests.ts unit ${{ matrix.shard }}/4
+            - name: Require twenty serial and parallel unit comparisons
+              if: needs.validation-scope.outputs.unit_comparison == 'true'
+              run: bun scripts/ci-unit-comparison.ts run ${{ matrix.shard }}/4
+            - name: Retain unit JUnit, comparison inventory and timings
+              if: always()
+              uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7
+              with:
+                  name: unit-evidence-${{ matrix.shard }}-${{ github.run_attempt }}
+                  path: |
+                      .agents/delivery/unit-*.xml
+                      .agents/delivery/unit-comparison
+                  include-hidden-files: true
+                  if-no-files-found: warn
+                  retention-days: 7
             - name: Retain flaky test evidence
               if: always()
               uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7
@@ -285,6 +327,12 @@ jobs:
         name: Behavioral verification
         needs: validation-scope
         if: needs.validation-scope.outputs.verification == 'true'
+        uses: ./.github/workflows/behavioral-verification.yml
+
+    model-evidence:
+        name: Main model evidence
+        needs: validation-scope
+        if: github.event_name == 'push' && github.ref == 'refs/heads/main'
         uses: ./.github/workflows/behavioral-verification.yml
 
     delivery:
@@ -371,6 +419,11 @@ jobs:
                   WEB_RESULT: ${{ needs.web-browser.result }}
                   BEHAVIORAL_RESULT: ${{ needs.behavioral.result }}
               run: bun scripts/ci-delivery-result.ts
+            - name: Report run timings
+              if: always()
+              env:
+                  GH_TOKEN: ${{ github.token }}
+              run: bun scripts/ci-run-timing.ts
 
     # A title or description edit rebuilds no preview; a new commit, a new base
     # or adding a label still does.

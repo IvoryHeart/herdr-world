@@ -1,3 +1,4 @@
+import { verificationJobs, modelPartScope } from "./ci-model-plan";
 import { lockedQuintVersion } from "./verification-setup";
 import { expect, test } from "bun:test";
 import { execFileSync } from "node:child_process";
@@ -22,50 +23,48 @@ import {
   fingerprintInputs,
   type VerificationManifest,
 } from "./verification-evidence";
-import limits from "../tools/quint/resources.json";
+import limits from "../tools/quint/model-resources.json";
 
 const run = process.env.GITHUB_RUN_ID || "local";
 const attempt = Number(process.env.GITHUB_RUN_ATTEMPT || 1);
 const headers = (): Shard[] =>
-  [1, 2, 3].map((index) => ({
-    kind: "ci-shard",
-    index,
-    total: 3,
-    attempt,
-    run,
-    complete: true,
-    records: verificationShard(index).map((model) => ({
-      model,
-      path: `.agents/verification/runs/case-${model}/manifest.json`,
-      elapsedMs: 1,
-    })),
-  }));
+  verificationJobs
+    .map((_, index) => index + 1)
+    .map((index) => ({
+      kind: "ci-shard",
+      index,
+      total: verificationJobs.length,
+      attempt,
+      run,
+      complete: true,
+      records: verificationShard(index).map((model) => ({
+        model,
+        path: `.agents/verification/runs/case-${model}-${index}/manifest.json`,
+        elapsedMs: 1,
+      })),
+    }));
 
-test("three disjoint model groups cover the complete canonical inventory", () => {
-  const all = [1, 2, 3].flatMap(verificationShard);
-  expect([...all].sort()).toEqual([...verificationModels].sort());
-  expect(new Set(all).size).toBe(all.length);
-  for (const index of [0, 4, 1.5, NaN])
+test("every maintained model group is required, with four IDE and three core parts", () => {
+  const all = verificationJobs
+    .map((_, index) => verificationShard(index + 1))
+    .flat();
+  expect([...new Set(all)].sort()).toEqual([...verificationModels].sort());
+  expect(all.filter((model) => model === "ide-lifecycle")).toHaveLength(4);
+  expect(all.filter((model) => model === "herdr-core-runtime")).toHaveLength(3);
+  for (const index of [0, verificationJobs.length + 1, 1.5, NaN])
     expect(() => verificationShard(index)).toThrow();
 });
 
-test("the core and IDE models each own a dedicated two-CPU shard before their controls parallelize", () => {
-  for (const model of ["herdr-core-runtime", "ide-lifecycle"]) {
-    const shard = [1, 2, 3]
-      .map(verificationShard)
-      .find((models) => models.includes(model));
-    expect(shard).toEqual([model]);
-  }
-});
-
 test("the newest complete attempt per group is mandatory; omissions, duplicates and foreign runs fail", () => {
-  expect(selectVerificationShards(headers(), run, attempt)).toHaveLength(3);
+  expect(selectVerificationShards(headers(), run, attempt)).toHaveLength(
+    verificationJobs.length,
+  );
   const old = headers();
   old[0]!.attempt = attempt - 1;
   if (attempt > 1)
     expect(
       selectVerificationShards([...old, headers()[0]!], run, attempt),
-    ).toHaveLength(3);
+    ).toHaveLength(verificationJobs.length);
   for (const bad of [
     headers().slice(0, 2),
     [...headers(), headers()[0]!],
@@ -77,7 +76,7 @@ test("the newest complete attempt per group is mandatory; omissions, duplicates 
     expect(() => selectVerificationShards(bad, run, attempt)).toThrow();
   }
   const duplicate = headers();
-  duplicate[0]!.records[1] = duplicate[0]!.records[0]!;
+  duplicate[0]!.records.push(duplicate[0]!.records[0]!);
   expect(() => selectVerificationShards(duplicate, run, attempt)).toThrow();
 });
 
@@ -124,7 +123,7 @@ async function fixture(
       for (const record of shard.records) {
         const manifest: VerificationManifest = {
           schemaVersion: 1,
-          scope: { kind: "focused", models: [record.model] },
+          scope: modelPartScope(shard.index),
           sourceRevision: git("rev-parse", "HEAD"),
           sourceInputs,
           tools: {
@@ -151,7 +150,7 @@ async function fixture(
               log: "check.log",
             },
           ],
-          results: [{ name: record.model }],
+          results: [{ name: record.model, controls: [] }],
           complete: true,
         };
         await mkdir(resolve(root, record.path, ".."), { recursive: true });
@@ -192,7 +191,23 @@ test("distributed acceptance requires every model, current source/tools and ever
     expect(
       complete.results.map((r: { name: string }) => r.name).sort(),
     ).toEqual([...verificationModels].sort());
-    expect(complete.ciShards).toHaveLength(3);
+    expect(complete.ciShards).toHaveLength(verificationJobs.length);
+    const control = complete.commands.find(
+      (command: { label: string }) =>
+        command.label === "herdr-core-runtime:controls-1:synthetic-check",
+    );
+    const controlIndex =
+      verificationJobs.findIndex(
+        (job) =>
+          job.model === "herdr-core-runtime" && job.part === "controls-1",
+      ) + 1;
+    expect(resolve(root, control.log)).toBe(
+      resolve(
+        root,
+        `.agents/verification/runs/case-herdr-core-runtime-${controlIndex}/check.log`,
+      ),
+    );
+
     const resourcePath = resolve(
       root,
       ".agents/verification/resources/r1/resources.json",
@@ -232,6 +247,14 @@ test("distributed acceptance requires every model, current source/tools and ever
       { ...manifest, sourceInputs: [] },
       { ...manifest, tools: { ...manifest.tools, node: "other" } },
       { ...manifest, complete: false },
+      {
+        ...manifest,
+        scope: {
+          kind: "focused",
+          models: [verificationJobs[0]!.model],
+          part: "foreign",
+        },
+      },
     ]) {
       await writeFile(resolve(root, path), JSON.stringify(wrong));
       await expect(aggregateCIShards(root, signal)).rejects.toThrow();

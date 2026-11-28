@@ -4,6 +4,7 @@ import type {
   AgentMoveOutcome,
 } from "../../../../shared/agentMove";
 import { tabCardKey } from "../../../../shared/terminalColor";
+import { moveBoardRefuses } from "../moveBoardRefuses";
 import type { BoardTab, BoardWorkspace } from "../board/boardModel";
 import type { OfficeDesk } from "../herdrOfficeProjection";
 import { canHandoffDesk } from "./townMoveEligibility";
@@ -122,6 +123,7 @@ export async function requestAgentHandoff(
         workspace_id: room.workspaceRef.nativeId,
       },
       ...(fresh ? { fresh: true } : {}),
+      ...(moveBoardRefuses() ? { test_board_refuses: true } : {}),
       move_id: moveId(),
     };
     // The move runs on in the service when the page's socket closes (a slow
@@ -159,6 +161,8 @@ export async function requestAgentHandoff(
         status: "moved",
         tab_id: result.target.tab_id,
         workspace_id: result.target.workspace_id,
+        // What stayed behind (its desk details), in the service's words.
+        ...(result.message ? { message: result.message } : {}),
       }
     : result.status === "uncertain"
       ? {

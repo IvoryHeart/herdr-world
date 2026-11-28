@@ -170,10 +170,10 @@ pre-push uses the same complete-PR classification for non-browser units only;
 browser suites and behavioral verification run in CI. The explicit local
 `check:delivery` always runs the complete `verification:gate`.
 
-CI partitions all accepted models across three runners by measured work
-(`scripts/verification-timings.json`), retaining the same model inventory and bounds.
-The core runtime and IDE lifecycle models each own a runner and run their
-independent exhaustive checks two at a time; the third runner takes the rest. Every model still runs
+CI gives every accepted model its own job (`scripts/ci-model-plan.ts`).
+IDE lifecycle has four jobs (replay and three exhaustive groups); core runtime
+has three (replay and two fault-control groups). Space admission overlaps
+independent exhaustive verification and simulation. Every model still runs
 its maintained bounds, replay and sensitivity checks. Partial `ci-shard` artifacts
 are not canonical evidence. The final aggregate requires all groups and every
 model exactly once, current source/revision and matching tool identities, plus
@@ -183,10 +183,12 @@ fails. Only that aggregate publishes canonical success; late cancellation
 invalidates publication. The diagnostic, OOM and cancellation controls remain
 mandatory on every group runner. Local canonical commands remain unfiltered.
 
-Each Linux CI group executes in an isolated cgroup with hard 4 GiB memory,
-zero swap and two CPUs of quota. The explicit local `verification:resources`
-command retains one such envelope; ordinary local canonical execution is unchanged.
-The CI aggregate preserves all three per-runner accounting records rather than
+Each Linux model CI group executes in an isolated cgroup with hard 4 GiB memory,
+zero swap and four CPUs of quota (`tools/quint/model-resources.json`), with four
+TLC workers (`tools/quint/tlc-ci.json`). The owner approved this model-only CPU
+change on 2026-11-26. The explicit local `verification:resources` command retains
+its original two-CPU envelope (`resources.json`) and one TLC worker; ordinary local canonical execution is unchanged.
+The CI aggregate preserves every per-runner accounting record rather than
 claiming a single global peak across separate machines. The payload subtree's `memory.peak`, enforced
 limits and OOM events are retained, bound to the canonical manifest. An actual
 64 MiB over-budget control must be OOM-killed and an actual cancellation control
@@ -195,7 +197,7 @@ The service delegates sibling `payload` and `supervisor` cgroups. The hard memor
 limit, zero swap and measured peak cover the payload and all its descendants;
 the supervisor sits outside that memory envelope so payload-wide OOM kills
 cannot destroy its exit notification or accounting. Both siblings share the
-service's two-CPU quota. The live OOM regression checks their separate membership,
+service's CPU quota. The live OOM regression checks their separate membership,
 requires a real OOM kill and retains accounting after the whole payload dies.
 `bun run verification:resources` exercises this through a local systemd user manager;
 CI uses `--system` and its existing passwordless sudo. Missing cgroup accounting or
@@ -213,10 +215,16 @@ be recreated through `verification:setup`; production code does not depend on Qu
 ## Content-matched CI evidence
 
 Applicable PR model groups may reuse a complete passing result with the exact
-model/adapter/production import closure, tool/lock/workflow and seed hash. Main,
+model/adapter/production import closure, tool/lock and seed hash. Unrelated
+models and workflows do not enter that model's key. Main,
 nightly and release executions remain fresh; model inventories, bounds, witnesses,
-mutations and replay are unchanged. The shared runner's adapter imports widen
-the closure conservatively. Cache misses and invalid evidence execute the entire
+mutations and replay are unchanged. Shared runner/helper code stays in every
+applicable closure; runtime dispatch selects only the relevant adapter branches.
+Quint module imports and transitive production dependencies enter the closure;
+unresolved imports refuse reuse. Only passing main-push jobs save reusable
+evidence, under main's cache scope. PRs validate restored evidence before
+installing model tools. IDE/core partial evidence must contain every expected
+part and match source/tools before combination. Cache misses and invalid evidence execute the entire
 group. Original manifests and enforced resource records are retained, and the
 aggregate records each group's `ran` or `reused` mode, hash and origin revision/run
 while binding the current complete source inventory. Reused evidence never claims

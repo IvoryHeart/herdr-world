@@ -36,6 +36,8 @@ import { buildWorldObject, type WorldObject } from "./worldObject";
 import { worldObjectForHosts } from "./worldFilters";
 import { useHostsFilter } from "./hostsFilter";
 import { HostsControl, selectedHostCount } from "./HostsControl";
+import { useHostGrouping } from "./useHostGroups";
+import { installRuntimeGroupingControl } from "./worldCommands";
 import { worldHosts } from "../worldHosts";
 import { WorldNavigator } from "./WorldNavigator";
 import { useSpacesTabWindowArrangement } from "./useSpacesTabWindowArrangement";
@@ -172,6 +174,7 @@ export default function WorldFoundationApp() {
     (snapshot) => snapshot.activeConnectionId,
   );
   const hosts = useStoreSelector(worldHosts);
+  const hostGrouping = useHostGrouping();
   const catalogueReady = useStoreSelector(
     (snapshot) => snapshot.catalogueReady,
   );
@@ -260,6 +263,8 @@ export default function WorldFoundationApp() {
     worldRuntimeStore.start();
     // Preferences arrive in the same publication as topology.
     const offSettings = followPublishedUiSettings(worldRuntimeStore);
+    // Settings' "Group runtimes" reads and changes the published grouping.
+    installRuntimeGroupingControl();
     // Open again in a core float shell takes authority from this read model.
     const offFloat = provideFloatShellAuthority(
       coreAuthorityFrom(worldRuntimeStore),
@@ -716,7 +721,7 @@ export default function WorldFoundationApp() {
                     selectedHostLabel={
                       hostsFilter.ids === null
                         ? "All hosts"
-                        : `${selectedHostCount(hosts, hostsFilter.ids)} selected hosts`
+                        : `${selectedHostCount(hosts, hostsFilter.ids, hostGrouping)} selected hosts`
                     }
                   />
                   <div

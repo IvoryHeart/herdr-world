@@ -1,6 +1,11 @@
 import assert from "node:assert/strict";
-import { mkdirSync, writeFileSync } from "node:fs";
+import { appendFileSync, mkdirSync, writeFileSync } from "node:fs";
 import type { ValidationSelection } from "./validation-scope";
+import {
+  UNIT_PARALLEL,
+  unitNeedsBuild,
+  unitTestShards,
+} from "./ci-unit-shards";
 import {
   worldBrowserParallelSuites,
   worldBrowserShards,
@@ -25,7 +30,11 @@ export function selectedCITests(
       ),
     "Invalid CI test selection",
   );
-  if ((lane === "unit" || lane === "web") && shard) {
+  if (lane === "unit" && shard) {
+    assert(/^[1234]\/4$/.test(shard), "Invalid unit shard");
+    files = unitTestShards(files)[Number(shard[0]) - 1]!;
+  }
+  if (lane === "web" && shard) {
     assert(/^[12]\/2$/.test(shard), "Invalid test shard");
     files = files.filter((_, index) => index % 2 === Number(shard[0]) - 1);
   }
@@ -47,7 +56,9 @@ export function ciTestBatches(
 ) {
   const files = selectedCITests(selection, lane, shard);
   if (lane !== "world")
-    return files.length ? [{ files, parallel: lane === "unit" ? 1 : 2 }] : [];
+    return files.length
+      ? [{ files, parallel: lane === "unit" ? UNIT_PARALLEL : 2 }]
+      : [];
   const parallel = new Set(worldBrowserParallelSuites);
   return [
     { files: files.filter((file) => !parallel.has(file)), parallel: 1 },
@@ -56,11 +67,32 @@ export function ciTestBatches(
 }
 
 if (import.meta.main) {
-  const [lane, shard] = process.argv.slice(2);
+  const [lane, shard, ...options] = process.argv.slice(2);
   const selection = JSON.parse(
     process.env.HERDR_CI_SELECTION || "null",
   ) as ValidationSelection;
   assert(selection && lane, "Missing CI selection");
+  if (options.includes("--plan")) {
+    assert(
+      lane === "unit" && process.env.GITHUB_OUTPUT,
+      "Unit plan needs GITHUB_OUTPUT",
+    );
+    appendFileSync(
+      process.env.GITHUB_OUTPUT,
+      `build=${unitNeedsBuild(selectedCITests(selection, lane, shard))}\n`,
+    );
+    process.exit(0);
+  }
+  const unitRun = options
+    .find((option) => option.startsWith("--unit-run="))
+    ?.slice("--unit-run=".length);
+  assert(
+    !unitRun ||
+      (lane === "unit" &&
+        /^comparison-([1-9]|1[0-9]|20)-(serial|parallel)$/.test(unitRun)),
+    "Invalid unit comparison run",
+  );
+  const runSuffix = unitRun ? `-${unitRun}` : "";
   const runs =
     lane === "world" ? Number(process.env.HERDR_CI_WORLD_RUNS || 1) : 1;
   assert(runs === 1 || runs === 3, "World browser runs must be 1 or 3");
@@ -74,7 +106,9 @@ if (import.meta.main) {
     );
   }
   passes: for (let pass = 1; pass <= runs; pass++) {
-    for (const { files, parallel } of batches) {
+    for (const batch of batches) {
+      const { files } = batch;
+      const parallel = unitRun?.endsWith("-serial") ? 1 : batch.parallel;
       mkdirSync(".agents/delivery", { recursive: true });
       const child = Bun.spawn(
         [
@@ -85,12 +119,15 @@ if (import.meta.main) {
           ...files,
           `--parallel=${parallel}`,
           `--max-concurrency=${lane === "world" ? 1 : 2}`,
+          ...(lane === "unit"
+            ? ["--timings=scripts/ci-unit-timings.json"]
+            : []),
           `--retry-flaky=${lane === "unit" ? "unit" : "browser"}`,
-          `--flake-report=.agents/delivery/flakes-${lane}-${shard?.replace("/", "-of-") || "all"}-${pass}-${parallel}-${process.env.GITHUB_RUN_ATTEMPT || "local"}.json`,
+          `--flake-report=.agents/delivery/flakes-${lane}-${shard?.replace("/", "-of-") || "all"}-${pass}-${parallel}-${process.env.GITHUB_RUN_ATTEMPT || "local"}${runSuffix}.json`,
           ...(lane !== "world"
             ? [
                 "--reporter=junit",
-                `--reporter-outfile=.agents/delivery/${lane === "web" ? "web-browser" : lane}-${shard?.replace("/", "-of-") || "all"}.xml`,
+                `--reporter-outfile=.agents/delivery/${lane === "web" ? "web-browser" : lane}-${shard?.replace("/", "-of-") || "all"}${runSuffix}.xml`,
               ]
             : []),
         ],

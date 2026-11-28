@@ -78,7 +78,8 @@
     and every desk, agent and action stays on its own runtime's connection.
     **Settings → This World → Group runtimes → One per runtime** gives each
     runtime its own building again (**One per machine** is the default); the
-    same setting groups World's navigator and Desk (`web/src/world/runtimeGrouping.ts`).
+    setting changes only Town's buildings: hosts stay machines in the navigator,
+    Desk, Board and the Hosts control (`shared/hostGrouping.ts`).
     Two Herdr TUI connections to the same socket (the startup default and a
     saved profile) show its rooms once, through the writable one.
   - The Town board counts the whole town, every building, in four one-word

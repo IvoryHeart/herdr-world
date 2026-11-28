@@ -25,6 +25,11 @@ export type AgentMoveRequest = {
    */
   move_id?: string;
   follow?: boolean;
+  /**
+   * Testing switch (`?moveBoardRefuses=1`): the Board refuses this move's
+   * desk rehome, so the "desk details stayed behind" outcome can be tried.
+   */
+  test_board_refuses?: boolean;
 };
 /** Why a move was refused (the message says it in plain words). */
 export type AgentMoveRefusal =
@@ -44,7 +49,11 @@ export type AgentMoveRefusal =
   /** A followed move World has no record of (it restarted). */
   | "untracked";
 export type AgentMoveOutcome =
-  | { status: "moved"; target: AgentAddress }
+  /**
+   * It moved. `message` says what stayed behind: its desk details (colour,
+   * pin, links) when the Board refused them after a close-first move.
+   */
+  | { status: "moved"; target: AgentAddress; message?: string }
   | { status: "refused"; reason?: AgentMoveRefusal; message: string }
   /** Nothing to resume: ask, then send again with `fresh`. */
   | { status: "confirm"; message: string }
