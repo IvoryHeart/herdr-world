@@ -1,0 +1,343 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1840" height="860" viewBox="0 0 1840 860">
+<rect x="0" y="0" width="1840" height="860" fill="#1a1b26"/>
+<text x="32" y="34" font-family="Inter, 'Segoe UI', system-ui, sans-serif" font-size="18" fill="#ffffff" font-weight="700" text-anchor="start">Flow 1 — Profile cards: the University opens one window of profiles</text>
+<text x="32" y="56" font-family="Inter, 'Segoe UI', system-ui, sans-serif" font-size="12" fill="#d5dcff" font-weight="400" text-anchor="start">Hire and Edit sit on every card. Colleges are a second tab. The editor opens inside the same window (Back returns).</text>
+<rect x="32" y="66" width="190.39999999999998" height="20" rx="10" fill="rgba(224,175,104,0.12)" stroke="#e0af68" stroke-width="1"/>
+<text x="42" y="80" font-family="Inter, 'Segoe UI', system-ui, sans-serif" font-size="11" fill="#d5dcff" font-weight="400" text-anchor="start">Hire from a profile:</text>
+<text x="159.6" y="80" font-family="Inter, 'Segoe UI', system-ui, sans-serif" font-size="11" fill="#e0af68" font-weight="700" text-anchor="start">2 clicks</text>
+<rect x="232.39999999999998" y="66" width="116.19999999999999" height="20" rx="10" fill="rgba(224,175,104,0.12)" stroke="#e0af68" stroke-width="1"/>
+<text x="242.39999999999998" y="80" font-family="Inter, 'Segoe UI', system-ui, sans-serif" font-size="11" fill="#d5dcff" font-weight="400" text-anchor="start">Edit a profile:</text>
+<text x="332.0" y="80" font-family="Inter, 'Segoe UI', system-ui, sans-serif" font-size="11" fill="#e0af68" font-weight="700" text-anchor="start">3</text>
+<rect x="358.59999999999997" y="66" width="194.6" height="20" rx="10" fill="rgba(224,175,104,0.12)" stroke="#e0af68" stroke-width="1"/>
+<text x="368.59999999999997" y="80" font-family="Inter, 'Segoe UI', system-ui, sans-serif" font-size="11" fill="#d5dcff" font-weight="400" text-anchor="start">Attach a skill or MCP server:</text>
+<text x="536.5999999999999" y="80" font-family="Inter, 'Segoe UI', system-ui, sans-serif" font-size="11" fill="#e0af68" font-weight="700" text-anchor="start">4</text>
+<rect x="563.1999999999999" y="66" width="127.39999999999999" height="20" rx="10" fill="rgba(224,175,104,0.12)" stroke="#e0af68" stroke-width="1"/>
+<text x="573.1999999999999" y="80" font-family="Inter, 'Segoe UI', system-ui, sans-serif" font-size="11" fill="#d5dcff" font-weight="400" text-anchor="start">Browse a college:</text>
+<text x="673.9999999999999" y="80" font-family="Inter, 'Segoe UI', system-ui, sans-serif" font-size="11" fill="#e0af68" font-weight="700" text-anchor="start">3</text>
+<rect x="700.5999999999999" y="66" width="99.39999999999999" height="20" rx="10" fill="rgba(224,175,104,0.12)" stroke="#e0af68" stroke-width="1"/>
+<text x="710.5999999999999" y="80" font-family="Inter, 'Segoe UI', system-ui, sans-serif" font-size="11" fill="#d5dcff" font-weight="400" text-anchor="start">New profile:</text>
+<text x="783.3999999999999" y="80" font-family="Inter, 'Segoe UI', system-ui, sans-serif" font-size="11" fill="#e0af68" font-weight="700" text-anchor="start">3</text>
+<text x="32" y="126" font-family="Inter, 'Segoe UI', system-ui, sans-serif" font-size="13" fill="#ffffff" font-weight="600" text-anchor="start">1. Find it</text>
+<text x="32" y="142" font-family="Inter, 'Segoe UI', system-ui, sans-serif" font-size="11" fill="#737aa2" font-weight="400" text-anchor="start">Between the town center and the Library; its sign or the building.</text>
+<rect x="32" y="152" width="330" height="236" rx="8" fill="#202331" stroke="#2f3549" stroke-width="1"/>
+<rect x="42" y="192" width="310" height="150" rx="4" fill="#2c5a32" stroke="#2f3549" stroke-width="1"/>
+<rect x="42" y="285.0" width="310" height="18.0" rx="0" fill="#3a3d48" stroke="none" stroke-width="1"/>
+<rect x="51.3" y="237.0" width="37.199999999999996" height="45.0" rx="1" fill="#e8dcc0" stroke="#1c1722" stroke-width="1"/>
+<text x="69.89999999999999" y="263.5" font-family="Inter, 'Segoe UI', system-ui, sans-serif" font-size="8" fill="#1c1722" font-weight="600" text-anchor="middle">Post</text>
+<rect x="96.25" y="237.0" width="80.60000000000001" height="45.0" rx="1" fill="#e8dcc0" stroke="#1c1722" stroke-width="1"/>
+<text x="136.55" y="263.5" font-family="Inter, 'Segoe UI', system-ui, sans-serif" font-size="8" fill="#1c1722" font-weight="600" text-anchor="middle">Center</text>
+<rect x="184.60000000000002" y="237.0" width="74.39999999999999" height="45.0" rx="1" fill="#d9cfb8" stroke="#1c1722" stroke-width="1"/>
+<rect x="184.60000000000002" y="237.0" width="3" height="3" rx="0" fill="#f2d24b" stroke="none" stroke-width="1"/>
+<rect x="190.60000000000002" y="237.0" width="3" height="3" rx="0" fill="#f2d24b" stroke="none" stroke-width="1"/>
+<rect x="196.60000000000002" y="237.0" width="3" height="3" rx="0" fill="#f2d24b" stroke="none" stroke-width="1"/>
+<rect x="202.60000000000002" y="237.0" width="3" height="3" rx="0" fill="#f2d24b" stroke="none" stroke-width="1"/>
+<rect x="208.60000000000002" y="237.0" width="3" height="3" rx="0" fill="#f2d24b" stroke="none" stroke-width="1"/>
+<rect x="214.60000000000002" y="237.0" width="3" height="3" rx="0" fill="#f2d24b" stroke="none" stroke-width="1"/>
+<rect x="220.60000000000002" y="237.0" width="3" height="3" rx="0" fill="#f2d24b" stroke="none" stroke-width="1"/>
+<rect x="226.60000000000002" y="237.0" width="3" height="3" rx="0" fill="#f2d24b" stroke="none" stroke-width="1"/>
+<rect x="232.60000000000002" y="237.0" width="3" height="3" rx="0" fill="#f2d24b" stroke="none" stroke-width="1"/>
+<rect x="238.60000000000002" y="237.0" width="3" height="3" rx="0" fill="#f2d24b" stroke="none" stroke-width="1"/>
+<rect x="244.60000000000002" y="237.0" width="3" height="3" rx="0" fill="#f2d24b" stroke="none" stroke-width="1"/>
+<rect x="250.60000000000002" y="237.0" width="3" height="3" rx="0" fill="#f2d24b" stroke="none" stroke-width="1"/>
+<text x="221.8" y="260.5" font-family="Inter, 'Segoe UI', system-ui, sans-serif" font-size="8" fill="#1c1722" font-weight="700" text-anchor="middle">UNIVERSITY</text>
+<text x="221.8" y="269.5" font-family="Inter, 'Segoe UI', system-ui, sans-serif" font-size="7" fill="#b8452f" font-weight="600" text-anchor="middle">placeholder</text>
+<rect x="188.60000000000002" y="273.0" width="6" height="9" rx="0" fill="#d9775a" stroke="none" stroke-width="1"/>
+<rect x="206.9529411764706" y="273.0" width="6" height="9" rx="0" fill="#3f6fb4" stroke="none" stroke-width="1"/>
+<rect x="231.25788235294118" y="273.0" width="6" height="9" rx="0" fill="#7d6aa8" stroke="none" stroke-width="1"/>
+<rect x="249.6108235294118" y="273.0" width="6" height="9" rx="0" fill="#6f8f7a" stroke="none" stroke-width="1"/>
+<rect x="266.75" y="237.0" width="49.6" height="45.0" rx="1" fill="#e8dcc0" stroke="#1c1722" stroke-width="1"/>
+<text x="291.55" y="263.5" font-family="Inter, 'Segoe UI', system-ui, sans-serif" font-size="8" fill="#1c1722" font-weight="600" text-anchor="middle">Library</text>
+<rect x="324.1" y="237.0" width="31.0" height="45.0" rx="1" fill="#e8dcc0" stroke="#1c1722" stroke-width="1"/>
+<text x="339.6" y="263.5" font-family="Inter, 'Segoe UI', system-ui, sans-serif" font-size="8" fill="#1c1722" font-weight="600" text-anchor="middle">Obs.</text>
+<rect x="42" y="192" width="310" height="150" fill="none" stroke="#2f3549" rx="4"/>
+<rect x="169.8" y="213.0" width="104" height="18" rx="3" fill="#1c1722" stroke="#e0af68" stroke-width="1"/>
+<text x="221.8" y="226.0" font-family="Inter, 'Segoe UI', system-ui, sans-serif" font-size="9" fill="#fff0b0" font-weight="600" text-anchor="middle">University · 6 profiles</text>
+<circle cx="277.8" cy="222.0" r="9" fill="#e0af68" stroke="#11121a" stroke-width="2"/>
+<text x="277.8" y="226.0" font-family="Inter, 'Segoe UI', system-ui, sans-serif" font-size="11" fill="#11121a" font-weight="700" text-anchor="middle">1</text>
+<text x="44" y="366" font-family="Inter, 'Segoe UI', system-ui, sans-serif" font-size="10" fill="#737aa2" font-weight="400" text-anchor="start">Also: town center → Buildings, Settings, Actions, Board.</text>
+<text x="388" y="126" font-family="Inter, 'Segoe UI', system-ui, sans-serif" font-size="13" fill="#ffffff" font-weight="600" text-anchor="start">2. Profiles (opens here)</text>
+<text x="388" y="142" font-family="Inter, 'Segoe UI', system-ui, sans-serif" font-size="11" fill="#737aa2" font-weight="400" text-anchor="start">Cards grouped by college; Hire is first.</text>
+<rect x="388" y="152" width="330" height="236" rx="8" fill="#202331" stroke="#2f3549" stroke-width="1"/>
+<text x="400" y="174" font-family="Inter, 'Segoe UI', system-ui, sans-serif" font-size="12" fill="#ffffff" font-weight="600" text-anchor="start">University</text>
+<rect x="470" y="162" width="56" height="18" rx="5" fill="#7aa2f7" stroke="#7aa2f7" stroke-width="1"/>
+<text x="498.0" y="174.0" font-family="Inter, 'Segoe UI', system-ui, sans-serif" font-size="9" fill="#11121a" font-weight="600" text-anchor="middle">Profiles</text>
+<rect x="530" y="162" width="56" height="18" rx="5" fill="rgba(255,255,255,0.05)" stroke="#2f3549" stroke-width="1"/>
+<text x="558.0" y="174.0" font-family="Inter, 'Segoe UI', system-ui, sans-serif" font-size="9" fill="#d5dcff" font-weight="500" text-anchor="middle">Colleges</text>
+<rect x="632" y="162" width="74" height="18" rx="5" fill="rgba(255,255,255,0.05)" stroke="#2f3549" stroke-width="1"/>
+<text x="669.0" y="174.0" font-family="Inter, 'Segoe UI', system-ui, sans-serif" font-size="9" fill="#d5dcff" font-weight="500" text-anchor="middle">+ New profile</text>
+<text x="400" y="198" font-family="Inter, 'Segoe UI', system-ui, sans-serif" font-size="9" fill="#d9775a" font-weight="700" text-anchor="start">CLAUDE CODE</text>
+<rect x="400" y="204" width="306" height="62" rx="6" fill="rgba(255,255,255,0.03)" stroke="#2f3549" stroke-width="1"/>
+<rect x="408" y="212" width="18" height="22" rx="2" fill="#d9775a" stroke="#1c1722" stroke-width="1"/>
+<text x="434" y="222" font-family="Inter, 'Segoe UI', system-ui, sans-serif" font-size="11" fill="#ffffff" font-weight="600" text-anchor="start">Builder</text>
+<text x="434" y="235" font-family="Inter, 'Segoe UI', system-ui, sans-serif" font-size="9" fill="#737aa2" font-weight="400" text-anchor="start">Claude Code · high · 2 skills · 1 MCP</text>
+<rect x="434" y="242" width="66" height="18" rx="5" fill="#7aa2f7" stroke="#7aa2f7" stroke-width="1"/>
+<text x="467.0" y="254.0" font-family="Inter, 'Segoe UI', system-ui, sans-serif" font-size="9" fill="#11121a" font-weight="600" text-anchor="middle">Hire in api</text>
+<rect x="506" y="242" width="34" height="18" rx="5" fill="rgba(255,255,255,0.05)" stroke="#2f3549" stroke-width="1"/>
+<text x="523.0" y="254.0" font-family="Inter, 'Segoe UI', system-ui, sans-serif" font-size="9" fill="#d5dcff" font-weight="500" text-anchor="middle">Edit</text>
+<rect x="546" y="242" width="34" height="18" rx="5" fill="rgba(255,255,255,0.05)" stroke="#2f3549" stroke-width="1"/>
+<text x="563.0" y="254.0" font-family="Inter, 'Segoe UI', system-ui, sans-serif" font-size="9" fill="#d5dcff" font-weight="500" text-anchor="middle">Copy</text>
+<rect x="586" y="242" width="40" height="18" rx="5" fill="rgba(255,255,255,0.05)" stroke="#2f3549" stroke-width="1"/>
+<text x="606.0" y="254.0" font-family="Inter, 'Segoe UI', system-ui, sans-serif" font-size="9" fill="#d5dcff" font-weight="500" text-anchor="middle">Retire</text>
+<text x="400" y="282" font-family="Inter, 'Segoe UI', system-ui, sans-serif" font-size="9" fill="#3f6fb4" font-weight="700" text-anchor="start">CODEX</text>
+<rect x="400" y="288" width="306" height="62" rx="6" fill="rgba(255,255,255,0.03)" stroke="#2f3549" stroke-width="1"/>
+<rect x="408" y="296" width="18" height="22" rx="2" fill="#3f6fb4" stroke="#1c1722" stroke-width="1"/>
+<text x="434" y="306" font-family="Inter, 'Segoe UI', system-ui, sans-serif" font-size="11" fill="#ffffff" font-weight="600" text-anchor="start">Reviewer</text>
+<text x="434" y="319" font-family="Inter, 'Segoe UI', system-ui, sans-serif" font-size="9" fill="#737aa2" font-weight="400" text-anchor="start">Codex · 1 skill · 1 MCP · 2 working now</text>
+<rect x="434" y="326" width="66" height="18" rx="5" fill="#7aa2f7" stroke="#7aa2f7" stroke-width="1"/>
+<text x="467.0" y="338.0" font-family="Inter, 'Segoe UI', system-ui, sans-serif" font-size="9" fill="#11121a" font-weight="600" text-anchor="middle">Hire in api</text>
+<rect x="506" y="326" width="34" height="18" rx="5" fill="rgba(255,255,255,0.05)" stroke="#2f3549" stroke-width="1"/>
+<text x="523.0" y="338.0" font-family="Inter, 'Segoe UI', system-ui, sans-serif" font-size="9" fill="#d5dcff" font-weight="500" text-anchor="middle">Edit</text>
+<rect x="546" y="326" width="34" height="18" rx="5" fill="rgba(255,255,255,0.05)" stroke="#2f3549" stroke-width="1"/>
+<text x="563.0" y="338.0" font-family="Inter, 'Segoe UI', system-ui, sans-serif" font-size="9" fill="#d5dcff" font-weight="500" text-anchor="middle">Copy</text>
+<rect x="586" y="326" width="40" height="18" rx="5" fill="rgba(255,255,255,0.05)" stroke="#2f3549" stroke-width="1"/>
+<text x="606.0" y="338.0" font-family="Inter, 'Segoe UI', system-ui, sans-serif" font-size="9" fill="#d5dcff" font-weight="500" text-anchor="middle">Retire</text>
+<circle cx="504" cy="322" r="9" fill="#e0af68" stroke="#11121a" stroke-width="2"/>
+<text x="504" y="326" font-family="Inter, 'Segoe UI', system-ui, sans-serif" font-size="11" fill="#11121a" font-weight="700" text-anchor="middle">2</text>
+<text x="400" y="366" font-family="Inter, 'Segoe UI', system-ui, sans-serif" font-size="10" fill="#737aa2" font-weight="400" text-anchor="start">▸ Retired (1)</text>
+<text x="488" y="366" font-family="Inter, 'Segoe UI', system-ui, sans-serif" font-size="9" fill="#737aa2" font-weight="400" text-anchor="start">Hire in api starts now; ▾ = other room, a task</text>
+<text x="744" y="126" font-family="Inter, 'Segoe UI', system-ui, sans-serif" font-size="13" fill="#ffffff" font-weight="600" text-anchor="start">3. Edit, attach</text>
+<text x="744" y="142" font-family="Inter, 'Segoe UI', system-ui, sans-serif" font-size="11" fill="#737aa2" font-weight="400" text-anchor="start">One page, no tabs: who, brain, brief, skills, MCP, look.</text>
+<rect x="744" y="152" width="330" height="236" rx="8" fill="#202331" stroke="#2f3549" stroke-width="1"/>
+<text x="756" y="174" font-family="Inter, 'Segoe UI', system-ui, sans-serif" font-size="11" fill="#ffffff" font-weight="600" text-anchor="start">‹ Back   Edit Reviewer · Codex college</text>
+<circle cx="1060" cy="170" r="9" fill="#e0af68" stroke="#11121a" stroke-width="2"/>
+<text x="1060" y="174" font-family="Inter, 'Segoe UI', system-ui, sans-serif" font-size="11" fill="#11121a" font-weight="700" text-anchor="middle">2</text>
+<text x="1046" y="174" font-family="Inter, 'Segoe UI', system-ui, sans-serif" font-size="9" fill="#737aa2" font-weight="400" text-anchor="end">(Edit on the card)</text>
+<text x="756" y="196" font-family="Inter, 'Segoe UI', system-ui, sans-serif" font-size="9" fill="#d5dcff" font-weight="400" text-anchor="start">Model  default    Effort  high    Permission  on request</text>
+<text x="756" y="218" font-family="Inter, 'Segoe UI', system-ui, sans-serif" font-size="10" fill="#737aa2" font-weight="600" text-anchor="start">SKILLS FROM THIS COLLEGE</text>
+<rect x="756" y="231" width="10" height="10" rx="2" fill="#7aa2f7" stroke="#737aa2" stroke-width="1"/>
+<text x="761" y="240" font-family="Inter, 'Segoe UI', system-ui, sans-serif" font-size="9" fill="#11121a" font-weight="700" text-anchor="middle">✓</text>
+<text x="772" y="240" font-family="Inter, 'Segoe UI', system-ui, sans-serif" font-size="10" fill="#d5dcff" font-weight="400" text-anchor="start">code-review</text>
+<text x="1062" y="240" font-family="Inter, 'Segoe UI', system-ui, sans-serif" font-size="9" fill="#737aa2" font-weight="400" text-anchor="end">this computer ●  build-box ●</text>
+<rect x="756" y="247" width="10" height="10" rx="2" fill="none" stroke="#737aa2" stroke-width="1"/>
+<text x="772" y="256" font-family="Inter, 'Segoe UI', system-ui, sans-serif" font-size="10" fill="#d5dcff" font-weight="400" text-anchor="start">release-notes</text>
+<text x="1062" y="256" font-family="Inter, 'Segoe UI', system-ui, sans-serif" font-size="9" fill="#e0af68" font-weight="400" text-anchor="end">build-box missing</text>
+<text x="756" y="274" font-family="Inter, 'Segoe UI', system-ui, sans-serif" font-size="10" fill="#737aa2" font-weight="600" text-anchor="start">MCP SERVERS FROM THIS COLLEGE</text>
+<rect x="756" y="287" width="10" height="10" rx="2" fill="#7aa2f7" stroke="#737aa2" stroke-width="1"/>
+<text x="761" y="296" font-family="Inter, 'Segoe UI', system-ui, sans-serif" font-size="9" fill="#11121a" font-weight="700" text-anchor="middle">✓</text>
+<text x="772" y="296" font-family="Inter, 'Segoe UI', system-ui, sans-serif" font-size="10" fill="#d5dcff" font-weight="400" text-anchor="start">github</text>
+<text x="1062" y="296" font-family="Inter, 'Segoe UI', system-ui, sans-serif" font-size="9" fill="#737aa2" font-weight="400" text-anchor="end">both ●</text>
+<rect x="756" y="303" width="10" height="10" rx="2" fill="none" stroke="#737aa2" stroke-width="1"/>
+<text x="772" y="312" font-family="Inter, 'Segoe UI', system-ui, sans-serif" font-size="10" fill="#d5dcff" font-weight="400" text-anchor="start">docs-search</text>
+<text x="1062" y="312" font-family="Inter, 'Segoe UI', system-ui, sans-serif" font-size="9" fill="#737aa2" font-weight="400" text-anchor="end">this computer only</text>
+<circle cx="750" cy="302" r="9" fill="#e0af68" stroke="#11121a" stroke-width="2"/>
+<text x="750" y="306" font-family="Inter, 'Segoe UI', system-ui, sans-serif" font-size="11" fill="#11121a" font-weight="700" text-anchor="middle">3</text>
+<rect x="1002" y="358" width="60" height="22" rx="5" fill="#7aa2f7" stroke="#7aa2f7" stroke-width="1"/>
+<text x="1032.0" y="373.0" font-family="Inter, 'Segoe UI', system-ui, sans-serif" font-size="11" fill="#11121a" font-weight="600" text-anchor="middle">Save</text>
+<circle cx="1062" cy="358" r="9" fill="#e0af68" stroke="#11121a" stroke-width="2"/>
+<text x="1062" y="362" font-family="Inter, 'Segoe UI', system-ui, sans-serif" font-size="11" fill="#11121a" font-weight="700" text-anchor="middle">4</text>
+<text x="756" y="374" font-family="Inter, 'Segoe UI', system-ui, sans-serif" font-size="9" fill="#737aa2" font-weight="400" text-anchor="start">Gives: model default · 1 skill · 1 MCP</text>
+<text x="1100" y="126" font-family="Inter, 'Segoe UI', system-ui, sans-serif" font-size="13" fill="#ffffff" font-weight="600" text-anchor="start">4. Colleges tab</text>
+<text x="1100" y="142" font-family="Inter, 'Segoe UI', system-ui, sans-serif" font-size="11" fill="#737aa2" font-weight="400" text-anchor="start">One row per harness; a row opens its college page.</text>
+<rect x="1100" y="152" width="330" height="236" rx="8" fill="#202331" stroke="#2f3549" stroke-width="1"/>
+<text x="1112" y="174" font-family="Inter, 'Segoe UI', system-ui, sans-serif" font-size="12" fill="#ffffff" font-weight="600" text-anchor="start">University</text>
+<rect x="1182" y="162" width="56" height="18" rx="5" fill="rgba(255,255,255,0.05)" stroke="#2f3549" stroke-width="1"/>
+<text x="1210.0" y="174.0" font-family="Inter, 'Segoe UI', system-ui, sans-serif" font-size="9" fill="#d5dcff" font-weight="500" text-anchor="middle">Profiles</text>
+<rect x="1242" y="162" width="56" height="18" rx="5" fill="#7aa2f7" stroke="#7aa2f7" stroke-width="1"/>
+<text x="1270.0" y="174.0" font-family="Inter, 'Segoe UI', system-ui, sans-serif" font-size="9" fill="#11121a" font-weight="600" text-anchor="middle">Colleges</text>
+<circle cx="1298" cy="164" r="9" fill="#e0af68" stroke="#11121a" stroke-width="2"/>
+<text x="1298" y="168" font-family="Inter, 'Segoe UI', system-ui, sans-serif" font-size="11" fill="#11121a" font-weight="700" text-anchor="middle">2</text>
+<rect x="1112" y="190" width="306" height="30" rx="6" fill="rgba(255,255,255,0.03)" stroke="#2f3549" stroke-width="1"/>
+<rect x="1118" y="197" width="4" height="16" rx="1" fill="#d9775a" stroke="none" stroke-width="1"/>
+<text x="1130" y="203" font-family="Inter, 'Segoe UI', system-ui, sans-serif" font-size="10" fill="#ffffff" font-weight="600" text-anchor="start">Claude Code</text>
+<text x="1130" y="215" font-family="Inter, 'Segoe UI', system-ui, sans-serif" font-size="9" fill="#737aa2" font-weight="400" text-anchor="start">skills ✓  MCP ✓</text>
+<text x="1410" y="209" font-family="Inter, 'Segoe UI', system-ui, sans-serif" font-size="9" fill="#9ece6a" font-weight="500" text-anchor="end">2 hosts</text>
+<rect x="1112" y="226" width="306" height="30" rx="6" fill="rgba(255,255,255,0.03)" stroke="#2f3549" stroke-width="1"/>
+<rect x="1118" y="233" width="4" height="16" rx="1" fill="#3f6fb4" stroke="none" stroke-width="1"/>
+<text x="1130" y="239" font-family="Inter, 'Segoe UI', system-ui, sans-serif" font-size="10" fill="#ffffff" font-weight="600" text-anchor="start">Codex</text>
+<text x="1130" y="251" font-family="Inter, 'Segoe UI', system-ui, sans-serif" font-size="9" fill="#737aa2" font-weight="400" text-anchor="start">skills ✓  MCP ✓</text>
+<text x="1410" y="245" font-family="Inter, 'Segoe UI', system-ui, sans-serif" font-size="9" fill="#e0af68" font-weight="500" text-anchor="end">Log in on build-box</text>
+<rect x="1112" y="262" width="306" height="30" rx="6" fill="rgba(255,255,255,0.03)" stroke="#2f3549" stroke-width="1"/>
+<rect x="1118" y="269" width="4" height="16" rx="1" fill="#7d6aa8" stroke="none" stroke-width="1"/>
+<text x="1130" y="275" font-family="Inter, 'Segoe UI', system-ui, sans-serif" font-size="10" fill="#ffffff" font-weight="600" text-anchor="start">Kimi Code</text>
+<text x="1130" y="287" font-family="Inter, 'Segoe UI', system-ui, sans-serif" font-size="9" fill="#737aa2" font-weight="400" text-anchor="start">skills planned  MCP not built</text>
+<text x="1410" y="281" font-family="Inter, 'Segoe UI', system-ui, sans-serif" font-size="9" fill="#e0af68" font-weight="500" text-anchor="end">Logged out</text>
+<rect x="1112" y="298" width="306" height="30" rx="6" fill="rgba(255,255,255,0.03)" stroke="#2f3549" stroke-width="1"/>
+<rect x="1118" y="305" width="4" height="16" rx="1" fill="#6f8f7a" stroke="none" stroke-width="1"/>
+<text x="1130" y="311" font-family="Inter, 'Segoe UI', system-ui, sans-serif" font-size="10" fill="#ffffff" font-weight="600" text-anchor="start">Pi</text>
+<text x="1130" y="323" font-family="Inter, 'Segoe UI', system-ui, sans-serif" font-size="9" fill="#737aa2" font-weight="400" text-anchor="start">skills ✓  MCP planned</text>
+<text x="1410" y="317" font-family="Inter, 'Segoe UI', system-ui, sans-serif" font-size="9" fill="#f7768e" font-weight="500" text-anchor="end">Not installed</text>
+<rect x="1112" y="334" width="306" height="30" rx="6" fill="rgba(255,255,255,0.03)" stroke="#2f3549" stroke-width="1"/>
+<rect x="1118" y="341" width="4" height="16" rx="1" fill="#6f8f7a" stroke="none" stroke-width="1"/>
+<text x="1130" y="347" font-family="Inter, 'Segoe UI', system-ui, sans-serif" font-size="10" fill="#ffffff" font-weight="600" text-anchor="start">+ 16 more</text>
+<text x="1130" y="359" font-family="Inter, 'Segoe UI', system-ui, sans-serif" font-size="9" fill="#737aa2" font-weight="400" text-anchor="start">planned / not built, with reasons</text>
+<circle cx="1112" cy="241" r="9" fill="#e0af68" stroke="#11121a" stroke-width="2"/>
+<text x="1112" y="245" font-family="Inter, 'Segoe UI', system-ui, sans-serif" font-size="11" fill="#11121a" font-weight="700" text-anchor="middle">3</text>
+<text x="1456" y="126" font-family="Inter, 'Segoe UI', system-ui, sans-serif" font-size="13" fill="#ffffff" font-weight="600" text-anchor="start">5. Fresh out of the University</text>
+<text x="1456" y="142" font-family="Inter, 'Segoe UI', system-ui, sans-serif" font-size="11" fill="#737aa2" font-weight="400" text-anchor="start">The hire walks out of the gate to its room.</text>
+<rect x="1456" y="152" width="330" height="236" rx="8" fill="#202331" stroke="#2f3549" stroke-width="1"/>
+<rect x="1466" y="182" width="310" height="150" rx="4" fill="#2c5a32" stroke="#2f3549" stroke-width="1"/>
+<rect x="1466" y="275.0" width="310" height="18.0" rx="0" fill="#3a3d48" stroke="none" stroke-width="1"/>
+<rect x="1475.3" y="227.0" width="37.199999999999996" height="45.0" rx="1" fill="#e8dcc0" stroke="#1c1722" stroke-width="1"/>
+<text x="1493.8999999999999" y="253.5" font-family="Inter, 'Segoe UI', system-ui, sans-serif" font-size="8" fill="#1c1722" font-weight="600" text-anchor="middle">Post</text>
+<rect x="1520.25" y="227.0" width="80.60000000000001" height="45.0" rx="1" fill="#e8dcc0" stroke="#1c1722" stroke-width="1"/>
+<text x="1560.55" y="253.5" font-family="Inter, 'Segoe UI', system-ui, sans-serif" font-size="8" fill="#1c1722" font-weight="600" text-anchor="middle">Center</text>
+<rect x="1608.6" y="227.0" width="74.39999999999999" height="45.0" rx="1" fill="#d9cfb8" stroke="#1c1722" stroke-width="1"/>
+<rect x="1608.6" y="227.0" width="3" height="3" rx="0" fill="#f2d24b" stroke="none" stroke-width="1"/>
+<rect x="1614.6" y="227.0" width="3" height="3" rx="0" fill="#f2d24b" stroke="none" stroke-width="1"/>
+<rect x="1620.6" y="227.0" width="3" height="3" rx="0" fill="#f2d24b" stroke="none" stroke-width="1"/>
+<rect x="1626.6" y="227.0" width="3" height="3" rx="0" fill="#f2d24b" stroke="none" stroke-width="1"/>
+<rect x="1632.6" y="227.0" width="3" height="3" rx="0" fill="#f2d24b" stroke="none" stroke-width="1"/>
+<rect x="1638.6" y="227.0" width="3" height="3" rx="0" fill="#f2d24b" stroke="none" stroke-width="1"/>
+<rect x="1644.6" y="227.0" width="3" height="3" rx="0" fill="#f2d24b" stroke="none" stroke-width="1"/>
+<rect x="1650.6" y="227.0" width="3" height="3" rx="0" fill="#f2d24b" stroke="none" stroke-width="1"/>
+<rect x="1656.6" y="227.0" width="3" height="3" rx="0" fill="#f2d24b" stroke="none" stroke-width="1"/>
+<rect x="1662.6" y="227.0" width="3" height="3" rx="0" fill="#f2d24b" stroke="none" stroke-width="1"/>
+<rect x="1668.6" y="227.0" width="3" height="3" rx="0" fill="#f2d24b" stroke="none" stroke-width="1"/>
+<rect x="1674.6" y="227.0" width="3" height="3" rx="0" fill="#f2d24b" stroke="none" stroke-width="1"/>
+<text x="1645.8" y="250.5" font-family="Inter, 'Segoe UI', system-ui, sans-serif" font-size="8" fill="#1c1722" font-weight="700" text-anchor="middle">UNIVERSITY</text>
+<text x="1645.8" y="259.5" font-family="Inter, 'Segoe UI', system-ui, sans-serif" font-size="7" fill="#b8452f" font-weight="600" text-anchor="middle">placeholder</text>
+<rect x="1612.6" y="263.0" width="6" height="9" rx="0" fill="#d9775a" stroke="none" stroke-width="1"/>
+<rect x="1630.9529411764704" y="263.0" width="6" height="9" rx="0" fill="#3f6fb4" stroke="none" stroke-width="1"/>
+<rect x="1655.2578823529411" y="263.0" width="6" height="9" rx="0" fill="#7d6aa8" stroke="none" stroke-width="1"/>
+<rect x="1673.6108235294116" y="263.0" width="6" height="9" rx="0" fill="#6f8f7a" stroke="none" stroke-width="1"/>
+<rect x="1690.75" y="227.0" width="49.6" height="45.0" rx="1" fill="#e8dcc0" stroke="#1c1722" stroke-width="1"/>
+<text x="1715.55" y="253.5" font-family="Inter, 'Segoe UI', system-ui, sans-serif" font-size="8" fill="#1c1722" font-weight="600" text-anchor="middle">Library</text>
+<rect x="1748.1" y="227.0" width="31.0" height="45.0" rx="1" fill="#e8dcc0" stroke="#1c1722" stroke-width="1"/>
+<text x="1763.6" y="253.5" font-family="Inter, 'Segoe UI', system-ui, sans-serif" font-size="8" fill="#1c1722" font-weight="600" text-anchor="middle">Obs.</text>
+<rect x="1466" y="182" width="310" height="150" fill="none" stroke="#2f3549" rx="4"/>
+<path d="M1645.8 272.0 q 0 40 -70 60" fill="none" stroke="#e0af68" stroke-width="2" stroke-dasharray="4 3"/>
+<text x="1468" y="352" font-family="Inter, 'Segoe UI', system-ui, sans-serif" font-size="10" fill="#d5dcff" font-weight="400" text-anchor="start">Toast: Reviewer hired in api · Given at hire →</text>
+<text x="1468" y="370" font-family="Inter, 'Segoe UI', system-ui, sans-serif" font-size="9" fill="#737aa2" font-weight="400" text-anchor="start">On a host without code-review: refused, says where it looked.</text>
+<text x="32" y="444" font-family="Inter, 'Segoe UI', system-ui, sans-serif" font-size="12" fill="#ffffff" font-weight="600" text-anchor="start">On a phone (390 px): the same window is a bottom sheet; Back at its top closes the inner page first. No swipes.</text>
+<rect x="32" y="458" width="150" height="300" rx="16" fill="#0b0c12" stroke="#3a3f55" stroke-width="2"/>
+<text x="107.0" y="774" font-family="Inter, 'Segoe UI', system-ui, sans-serif" font-size="10" fill="#737aa2" font-weight="500" text-anchor="middle">1. tap the sign</text>
+<svg x="38" y="512" width="138" height="110">
+<rect x="0" y="0" width="138" height="110" rx="4" fill="#2c5a32" stroke="#2f3549" stroke-width="1"/>
+<rect x="0" y="68.2" width="138" height="13.2" rx="0" fill="#3a3d48" stroke="none" stroke-width="1"/>
+<rect x="-41.4" y="33.0" width="55.2" height="33.0" rx="1" fill="#e8dcc0" stroke="#1c1722" stroke-width="1"/>
+<text x="-13.799999999999997" y="53.5" font-family="Inter, 'Segoe UI', system-ui, sans-serif" font-size="8" fill="#1c1722" font-weight="600" text-anchor="middle">Center</text>
+<rect x="17.250000000000007" y="33.0" width="57.96" height="33.0" rx="1" fill="#d9cfb8" stroke="#1c1722" stroke-width="1"/>
+<rect x="17.250000000000007" y="33.0" width="3" height="3" rx="0" fill="#f2d24b" stroke="none" stroke-width="1"/>
+<rect x="23.250000000000007" y="33.0" width="3" height="3" rx="0" fill="#f2d24b" stroke="none" stroke-width="1"/>
+<rect x="29.250000000000007" y="33.0" width="3" height="3" rx="0" fill="#f2d24b" stroke="none" stroke-width="1"/>
+<rect x="35.25000000000001" y="33.0" width="3" height="3" rx="0" fill="#f2d24b" stroke="none" stroke-width="1"/>
+<rect x="41.25000000000001" y="33.0" width="3" height="3" rx="0" fill="#f2d24b" stroke="none" stroke-width="1"/>
+<rect x="47.25000000000001" y="33.0" width="3" height="3" rx="0" fill="#f2d24b" stroke="none" stroke-width="1"/>
+<rect x="53.25000000000001" y="33.0" width="3" height="3" rx="0" fill="#f2d24b" stroke="none" stroke-width="1"/>
+<rect x="59.25000000000001" y="33.0" width="3" height="3" rx="0" fill="#f2d24b" stroke="none" stroke-width="1"/>
+<rect x="65.25" y="33.0" width="3" height="3" rx="0" fill="#f2d24b" stroke="none" stroke-width="1"/>
+<text x="46.230000000000004" y="50.5" font-family="Inter, 'Segoe UI', system-ui, sans-serif" font-size="7" fill="#1c1722" font-weight="700" text-anchor="middle">UNIVERSITY</text>
+<text x="46.230000000000004" y="59.5" font-family="Inter, 'Segoe UI', system-ui, sans-serif" font-size="7" fill="#b8452f" font-weight="600" text-anchor="middle">placeholder</text>
+<rect x="21.250000000000007" y="57.0" width="6" height="9" rx="0" fill="#d9775a" stroke="none" stroke-width="1"/>
+<rect x="34.767647058823535" y="57.0" width="6" height="9" rx="0" fill="#3f6fb4" stroke="none" stroke-width="1"/>
+<rect x="52.92209411764707" y="57.0" width="6" height="9" rx="0" fill="#7d6aa8" stroke="none" stroke-width="1"/>
+<rect x="66.43974117647059" y="57.0" width="6" height="9" rx="0" fill="#6f8f7a" stroke="none" stroke-width="1"/>
+<rect x="78.66000000000001" y="33.0" width="41.4" height="33.0" rx="1" fill="#e8dcc0" stroke="#1c1722" stroke-width="1"/>
+<text x="99.36000000000001" y="53.5" font-family="Inter, 'Segoe UI', system-ui, sans-serif" font-size="8" fill="#1c1722" font-weight="600" text-anchor="middle">Library</text>
+<rect x="0" y="0" width="138" height="110" fill="none" stroke="#2f3549" rx="4"/>
+</svg>
+<rect x="32.230000000000004" y="521.0" width="104" height="18" rx="3" fill="#1c1722" stroke="#e0af68" stroke-width="1"/>
+<text x="84.23" y="534.0" font-family="Inter, 'Segoe UI', system-ui, sans-serif" font-size="9" fill="#fff0b0" font-weight="600" text-anchor="middle">University</text>
+<circle cx="124.23" cy="530.0" r="9" fill="#e0af68" stroke="#11121a" stroke-width="2"/>
+<text x="124.23" y="534.0" font-family="Inter, 'Segoe UI', system-ui, sans-serif" font-size="11" fill="#11121a" font-weight="700" text-anchor="middle">1</text>
+<rect x="232" y="458" width="150" height="300" rx="16" fill="#0b0c12" stroke="#3a3f55" stroke-width="2"/>
+<text x="307.0" y="774" font-family="Inter, 'Segoe UI', system-ui, sans-serif" font-size="10" fill="#737aa2" font-weight="500" text-anchor="middle">2. Hire on the card</text>
+<rect x="238" y="488.32" width="138" height="255.68" rx="10" fill="#202331" stroke="#2f3549" stroke-width="1"/>
+<rect x="293.0" y="492.32" width="28" height="3" rx="1" fill="#2f3549" stroke="none" stroke-width="1"/>
+<text x="248" y="510.32" font-family="Inter, 'Segoe UI', system-ui, sans-serif" font-size="11" fill="#ffffff" font-weight="600" text-anchor="start">University</text>
+<rect x="246" y="518.3199999999999" width="52" height="16" rx="5" fill="#7aa2f7" stroke="#7aa2f7" stroke-width="1"/>
+<text x="272.0" y="528.8199999999999" font-family="Inter, 'Segoe UI', system-ui, sans-serif" font-size="8" fill="#11121a" font-weight="600" text-anchor="middle">Profiles</text>
+<rect x="302" y="518.3199999999999" width="52" height="16" rx="5" fill="rgba(255,255,255,0.05)" stroke="#2f3549" stroke-width="1"/>
+<text x="328.0" y="528.8199999999999" font-family="Inter, 'Segoe UI', system-ui, sans-serif" font-size="8" fill="#d5dcff" font-weight="500" text-anchor="middle">Colleges</text>
+<rect x="246" y="542.3199999999999" width="122" height="56" rx="6" fill="rgba(255,255,255,0.03)" stroke="#2f3549" stroke-width="1"/>
+<rect x="252" y="548.3199999999999" width="12" height="16" rx="2" fill="#d9775a" stroke="#1c1722" stroke-width="1"/>
+<text x="270" y="558.3199999999999" font-family="Inter, 'Segoe UI', system-ui, sans-serif" font-size="10" fill="#ffffff" font-weight="600" text-anchor="start">Builder</text>
+<rect x="252" y="572.3199999999999" width="64" height="18" rx="5" fill="#7aa2f7" stroke="#7aa2f7" stroke-width="1"/>
+<text x="284.0" y="583.8199999999999" font-family="Inter, 'Segoe UI', system-ui, sans-serif" font-size="8" fill="#11121a" font-weight="600" text-anchor="middle">Hire in api</text>
+<rect x="320" y="572.3199999999999" width="34" height="18" rx="5" fill="rgba(255,255,255,0.05)" stroke="#2f3549" stroke-width="1"/>
+<text x="337.0" y="583.8199999999999" font-family="Inter, 'Segoe UI', system-ui, sans-serif" font-size="8" fill="#d5dcff" font-weight="500" text-anchor="middle">Edit</text>
+<rect x="246" y="604.3199999999999" width="122" height="56" rx="6" fill="rgba(255,255,255,0.03)" stroke="#2f3549" stroke-width="1"/>
+<rect x="252" y="610.3199999999999" width="12" height="16" rx="2" fill="#3f6fb4" stroke="#1c1722" stroke-width="1"/>
+<text x="270" y="620.3199999999999" font-family="Inter, 'Segoe UI', system-ui, sans-serif" font-size="10" fill="#ffffff" font-weight="600" text-anchor="start">Reviewer</text>
+<rect x="252" y="634.3199999999999" width="64" height="18" rx="5" fill="#7aa2f7" stroke="#7aa2f7" stroke-width="1"/>
+<text x="284.0" y="645.8199999999999" font-family="Inter, 'Segoe UI', system-ui, sans-serif" font-size="8" fill="#11121a" font-weight="600" text-anchor="middle">Hire in api</text>
+<rect x="320" y="634.3199999999999" width="34" height="18" rx="5" fill="rgba(255,255,255,0.05)" stroke="#2f3549" stroke-width="1"/>
+<text x="337.0" y="645.8199999999999" font-family="Inter, 'Segoe UI', system-ui, sans-serif" font-size="8" fill="#d5dcff" font-weight="500" text-anchor="middle">Edit</text>
+<circle cx="314" cy="636.3199999999999" r="9" fill="#e0af68" stroke="#11121a" stroke-width="2"/>
+<text x="314" y="640.3199999999999" font-family="Inter, 'Segoe UI', system-ui, sans-serif" font-size="11" fill="#11121a" font-weight="700" text-anchor="middle">2</text>
+<rect x="246" y="666.3199999999999" width="122" height="56" rx="6" fill="rgba(255,255,255,0.03)" stroke="#2f3549" stroke-width="1"/>
+<rect x="252" y="672.3199999999999" width="12" height="16" rx="2" fill="#3f6fb4" stroke="#1c1722" stroke-width="1"/>
+<text x="270" y="682.3199999999999" font-family="Inter, 'Segoe UI', system-ui, sans-serif" font-size="10" fill="#ffffff" font-weight="600" text-anchor="start">Tester</text>
+<rect x="252" y="696.3199999999999" width="64" height="18" rx="5" fill="#7aa2f7" stroke="#7aa2f7" stroke-width="1"/>
+<text x="284.0" y="707.8199999999999" font-family="Inter, 'Segoe UI', system-ui, sans-serif" font-size="8" fill="#11121a" font-weight="600" text-anchor="middle">Hire in api</text>
+<rect x="320" y="696.3199999999999" width="34" height="18" rx="5" fill="rgba(255,255,255,0.05)" stroke="#2f3549" stroke-width="1"/>
+<text x="337.0" y="707.8199999999999" font-family="Inter, 'Segoe UI', system-ui, sans-serif" font-size="8" fill="#d5dcff" font-weight="500" text-anchor="middle">Edit</text>
+<rect x="432" y="458" width="150" height="300" rx="16" fill="#0b0c12" stroke="#3a3f55" stroke-width="2"/>
+<text x="507.0" y="774" font-family="Inter, 'Segoe UI', system-ui, sans-serif" font-size="10" fill="#737aa2" font-weight="500" text-anchor="middle">3. Edit: one column</text>
+<rect x="438" y="488.32" width="138" height="255.68" rx="10" fill="#202331" stroke="#2f3549" stroke-width="1"/>
+<rect x="493.0" y="492.32" width="28" height="3" rx="1" fill="#2f3549" stroke="none" stroke-width="1"/>
+<text x="448" y="510.32" font-family="Inter, 'Segoe UI', system-ui, sans-serif" font-size="11" fill="#ffffff" font-weight="600" text-anchor="start">‹ Back  Reviewer</text>
+<text x="450" y="524.3199999999999" font-family="Inter, 'Segoe UI', system-ui, sans-serif" font-size="9" fill="#737aa2" font-weight="400" text-anchor="start">Name, role</text>
+<text x="450" y="546.3199999999999" font-family="Inter, 'Segoe UI', system-ui, sans-serif" font-size="9" fill="#737aa2" font-weight="400" text-anchor="start">Model · effort</text>
+<text x="450" y="568.3199999999999" font-family="Inter, 'Segoe UI', system-ui, sans-serif" font-size="9" fill="#737aa2" font-weight="400" text-anchor="start">Skills (college)</text>
+<text x="450" y="590.3199999999999" font-family="Inter, 'Segoe UI', system-ui, sans-serif" font-size="9" fill="#d5dcff" font-weight="400" text-anchor="start">☑ code-review</text>
+<text x="450" y="612.3199999999999" font-family="Inter, 'Segoe UI', system-ui, sans-serif" font-size="9" fill="#d5dcff" font-weight="400" text-anchor="start">☐ release-notes</text>
+<text x="450" y="634.3199999999999" font-family="Inter, 'Segoe UI', system-ui, sans-serif" font-size="9" fill="#737aa2" font-weight="400" text-anchor="start">MCP servers</text>
+<text x="450" y="656.3199999999999" font-family="Inter, 'Segoe UI', system-ui, sans-serif" font-size="9" fill="#d5dcff" font-weight="400" text-anchor="start">☑ github</text>
+<text x="450" y="678.3199999999999" font-family="Inter, 'Segoe UI', system-ui, sans-serif" font-size="9" fill="#737aa2" font-weight="400" text-anchor="start">Brief, look</text>
+<rect x="446" y="714" width="122" height="20" rx="5" fill="#7aa2f7" stroke="#7aa2f7" stroke-width="1"/>
+<text x="507.0" y="727.0" font-family="Inter, 'Segoe UI', system-ui, sans-serif" font-size="9" fill="#11121a" font-weight="600" text-anchor="middle">Save</text>
+<rect x="632" y="458" width="150" height="300" rx="16" fill="#0b0c12" stroke="#3a3f55" stroke-width="2"/>
+<text x="707.0" y="774" font-family="Inter, 'Segoe UI', system-ui, sans-serif" font-size="10" fill="#737aa2" font-weight="500" text-anchor="middle">4. Colleges tab</text>
+<rect x="638" y="488.32" width="138" height="255.68" rx="10" fill="#202331" stroke="#2f3549" stroke-width="1"/>
+<rect x="693.0" y="492.32" width="28" height="3" rx="1" fill="#2f3549" stroke="none" stroke-width="1"/>
+<text x="648" y="510.32" font-family="Inter, 'Segoe UI', system-ui, sans-serif" font-size="11" fill="#ffffff" font-weight="600" text-anchor="start">University</text>
+<rect x="646" y="518.3199999999999" width="52" height="16" rx="5" fill="rgba(255,255,255,0.05)" stroke="#2f3549" stroke-width="1"/>
+<text x="672.0" y="528.8199999999999" font-family="Inter, 'Segoe UI', system-ui, sans-serif" font-size="8" fill="#d5dcff" font-weight="500" text-anchor="middle">Profiles</text>
+<rect x="702" y="518.3199999999999" width="52" height="16" rx="5" fill="#7aa2f7" stroke="#7aa2f7" stroke-width="1"/>
+<text x="728.0" y="528.8199999999999" font-family="Inter, 'Segoe UI', system-ui, sans-serif" font-size="8" fill="#11121a" font-weight="600" text-anchor="middle">Colleges</text>
+<rect x="646" y="542.3199999999999" width="122" height="28" rx="6" fill="rgba(255,255,255,0.03)" stroke="#2f3549" stroke-width="1"/>
+<rect x="650" y="548.3199999999999" width="3" height="16" rx="1" fill="#d9775a" stroke="none" stroke-width="1"/>
+<text x="658" y="555.3199999999999" font-family="Inter, 'Segoe UI', system-ui, sans-serif" font-size="9" fill="#ffffff" font-weight="600" text-anchor="start">Claude Code</text>
+<text x="658" y="565.3199999999999" font-family="Inter, 'Segoe UI', system-ui, sans-serif" font-size="8" fill="#737aa2" font-weight="400" text-anchor="start">2 hosts</text>
+<rect x="646" y="576.3199999999999" width="122" height="28" rx="6" fill="rgba(255,255,255,0.03)" stroke="#2f3549" stroke-width="1"/>
+<rect x="650" y="582.3199999999999" width="3" height="16" rx="1" fill="#3f6fb4" stroke="none" stroke-width="1"/>
+<text x="658" y="589.3199999999999" font-family="Inter, 'Segoe UI', system-ui, sans-serif" font-size="9" fill="#ffffff" font-weight="600" text-anchor="start">Codex</text>
+<text x="658" y="599.3199999999999" font-family="Inter, 'Segoe UI', system-ui, sans-serif" font-size="8" fill="#737aa2" font-weight="400" text-anchor="start">Log in</text>
+<rect x="646" y="610.3199999999999" width="122" height="28" rx="6" fill="rgba(255,255,255,0.03)" stroke="#2f3549" stroke-width="1"/>
+<rect x="650" y="616.3199999999999" width="3" height="16" rx="1" fill="#7d6aa8" stroke="none" stroke-width="1"/>
+<text x="658" y="623.3199999999999" font-family="Inter, 'Segoe UI', system-ui, sans-serif" font-size="9" fill="#ffffff" font-weight="600" text-anchor="start">Kimi Code</text>
+<text x="658" y="633.3199999999999" font-family="Inter, 'Segoe UI', system-ui, sans-serif" font-size="8" fill="#737aa2" font-weight="400" text-anchor="start">Logged out</text>
+<rect x="646" y="644.3199999999999" width="122" height="28" rx="6" fill="rgba(255,255,255,0.03)" stroke="#2f3549" stroke-width="1"/>
+<rect x="650" y="650.3199999999999" width="3" height="16" rx="1" fill="#6f8f7a" stroke="none" stroke-width="1"/>
+<text x="658" y="657.3199999999999" font-family="Inter, 'Segoe UI', system-ui, sans-serif" font-size="9" fill="#ffffff" font-weight="600" text-anchor="start">Pi</text>
+<text x="658" y="667.3199999999999" font-family="Inter, 'Segoe UI', system-ui, sans-serif" font-size="8" fill="#737aa2" font-weight="400" text-anchor="start">Not installed</text>
+<rect x="832" y="458" width="150" height="300" rx="16" fill="#0b0c12" stroke="#3a3f55" stroke-width="2"/>
+<text x="907.0" y="774" font-family="Inter, 'Segoe UI', system-ui, sans-serif" font-size="10" fill="#737aa2" font-weight="500" text-anchor="middle">5. hired; walks out</text>
+<svg x="838" y="512" width="138" height="110">
+<rect x="0" y="0" width="138" height="110" rx="4" fill="#2c5a32" stroke="#2f3549" stroke-width="1"/>
+<rect x="0" y="68.2" width="138" height="13.2" rx="0" fill="#3a3d48" stroke="none" stroke-width="1"/>
+<rect x="-41.4" y="33.0" width="55.2" height="33.0" rx="1" fill="#e8dcc0" stroke="#1c1722" stroke-width="1"/>
+<text x="-13.799999999999997" y="53.5" font-family="Inter, 'Segoe UI', system-ui, sans-serif" font-size="8" fill="#1c1722" font-weight="600" text-anchor="middle">Center</text>
+<rect x="17.250000000000007" y="33.0" width="57.96" height="33.0" rx="1" fill="#d9cfb8" stroke="#1c1722" stroke-width="1"/>
+<rect x="17.250000000000007" y="33.0" width="3" height="3" rx="0" fill="#f2d24b" stroke="none" stroke-width="1"/>
+<rect x="23.250000000000007" y="33.0" width="3" height="3" rx="0" fill="#f2d24b" stroke="none" stroke-width="1"/>
+<rect x="29.250000000000007" y="33.0" width="3" height="3" rx="0" fill="#f2d24b" stroke="none" stroke-width="1"/>
+<rect x="35.25000000000001" y="33.0" width="3" height="3" rx="0" fill="#f2d24b" stroke="none" stroke-width="1"/>
+<rect x="41.25000000000001" y="33.0" width="3" height="3" rx="0" fill="#f2d24b" stroke="none" stroke-width="1"/>
+<rect x="47.25000000000001" y="33.0" width="3" height="3" rx="0" fill="#f2d24b" stroke="none" stroke-width="1"/>
+<rect x="53.25000000000001" y="33.0" width="3" height="3" rx="0" fill="#f2d24b" stroke="none" stroke-width="1"/>
+<rect x="59.25000000000001" y="33.0" width="3" height="3" rx="0" fill="#f2d24b" stroke="none" stroke-width="1"/>
+<rect x="65.25" y="33.0" width="3" height="3" rx="0" fill="#f2d24b" stroke="none" stroke-width="1"/>
+<text x="46.230000000000004" y="50.5" font-family="Inter, 'Segoe UI', system-ui, sans-serif" font-size="7" fill="#1c1722" font-weight="700" text-anchor="middle">UNIVERSITY</text>
+<text x="46.230000000000004" y="59.5" font-family="Inter, 'Segoe UI', system-ui, sans-serif" font-size="7" fill="#b8452f" font-weight="600" text-anchor="middle">placeholder</text>
+<rect x="21.250000000000007" y="57.0" width="6" height="9" rx="0" fill="#d9775a" stroke="none" stroke-width="1"/>
+<rect x="34.767647058823535" y="57.0" width="6" height="9" rx="0" fill="#3f6fb4" stroke="none" stroke-width="1"/>
+<rect x="52.92209411764707" y="57.0" width="6" height="9" rx="0" fill="#7d6aa8" stroke="none" stroke-width="1"/>
+<rect x="66.43974117647059" y="57.0" width="6" height="9" rx="0" fill="#6f8f7a" stroke="none" stroke-width="1"/>
+<rect x="78.66000000000001" y="33.0" width="41.4" height="33.0" rx="1" fill="#e8dcc0" stroke="#1c1722" stroke-width="1"/>
+<text x="99.36000000000001" y="53.5" font-family="Inter, 'Segoe UI', system-ui, sans-serif" font-size="8" fill="#1c1722" font-weight="600" text-anchor="middle">Library</text>
+<rect x="0" y="0" width="138" height="110" fill="none" stroke="#2f3549" rx="4"/>
+</svg>
+<rect x="846" y="694" width="122" height="34" rx="6" fill="#202331" stroke="#2f3549" stroke-width="1"/>
+<text x="852" y="714" font-family="Inter, 'Segoe UI', system-ui, sans-serif" font-size="9" fill="#d5dcff" font-weight="600" text-anchor="start">Reviewer hired in api</text>
+<rect x="1032" y="458" width="260" height="112" rx="8" fill="rgba(122,162,247,0.06)" stroke="#2f3549" stroke-width="1"/>
+<text x="1044" y="480" font-family="Inter, 'Segoe UI', system-ui, sans-serif" font-size="11" fill="#d5dcff" font-weight="400" text-anchor="start">Phone taps: hire 2, edit 3, attach 4.</text>
+<text x="1044" y="498" font-family="Inter, 'Segoe UI', system-ui, sans-serif" font-size="11" fill="#d5dcff" font-weight="400" text-anchor="start">Cards stack in one column, Hire first.</text>
+<text x="1044" y="516" font-family="Inter, 'Segoe UI', system-ui, sans-serif" font-size="11" fill="#d5dcff" font-weight="400" text-anchor="start">Tabs stay one tap away at the top.</text>
+<text x="1044" y="534" font-family="Inter, 'Segoe UI', system-ui, sans-serif" font-size="11" fill="#d5dcff" font-weight="400" text-anchor="start">Host dots become a short line:</text>
+<text x="1044" y="552" font-family="Inter, 'Segoe UI', system-ui, sans-serif" font-size="11" fill="#d5dcff" font-weight="400" text-anchor="start">“Missing on build-box”.</text>
+<circle cx="42" cy="846" r="9" fill="#e0af68" stroke="#11121a" stroke-width="2"/>
+<text x="42" y="850" font-family="Inter, 'Segoe UI', system-ui, sans-serif" font-size="11" fill="#11121a" font-weight="700" text-anchor="middle">1</text>
+<text x="58" y="850" font-family="Inter, 'Segoe UI', system-ui, sans-serif" font-size="11" fill="#737aa2" font-weight="400" text-anchor="start">numbered marks = the clicks or taps, in order; the University art is a marked placeholder (Town&#x27;s art direction is undecided, #1117)</text>
+</svg>

@@ -1,0 +1,112 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1200" height="900" viewBox="0 0 1200 900">
+<rect x="0" y="0" width="1200" height="900" fill="#11121a" />
+<rect x="40" y="30" width="1120" height="840" rx="12" fill="#202331" stroke="#2f3549" />
+<g transform="translate(60,48) scale(0.8333333333333334)" fill="none" stroke="#7aa2f7" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21.42 10.922a1 1 0 0 0-.019-1.838L12.83 5.18a2 2 0 0 0-1.66 0L2.6 9.08a1 1 0 0 0 0 1.832l8.57 3.908a2 2 0 0 0 1.66 0z"/><path d="M22 10v6"/><path d="M6 12.5V16a6 3 0 0 0 12 0v-3.5"/></g>
+<text x="90" y="64" font-family="Inter, 'Segoe UI', system-ui, sans-serif" font-size="17" fill="#ffffff" font-weight="600">University</text>
+<g transform="translate(1122,50) scale(0.75)" fill="none" stroke="#737aa2" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M18 6 6 18"/><path d="m6 6 12 12"/></g>
+<rect x="299" y="44" width="82" height="28" rx="14" fill="rgba(122,162,247,0.18)" stroke="#7aa2f7" />
+<text x="225" y="63" font-family="Inter, 'Segoe UI', system-ui, sans-serif" font-size="13" fill="#737aa2" font-weight="400">Profiles</text>
+<text x="311" y="63" font-family="Inter, 'Segoe UI', system-ui, sans-serif" font-size="13" fill="#7aa2f7" font-weight="600">Colleges</text>
+<rect x="40" y="86" width="1120" height="1" fill="#2f3549" />
+<rect x="64" y="110" width="18" height="22" fill="#3f6fb4" stroke="#1c1722" stroke-width="2"/>
+<text x="94" y="128" font-family="Inter, 'Segoe UI', system-ui, sans-serif" font-size="18" fill="#ffffff" font-weight="600">Codex college</text>
+<text x="64" y="170" font-family="Inter, 'Segoe UI', system-ui, sans-serif" font-size="14" fill="#ffffff" font-weight="600">Hosts</text>
+<rect x="64" y="186" width="520" height="38" rx="8" fill="#262a3b" stroke="#2f3549" />
+<g transform="translate(76,197) scale(0.6666666666666666)" fill="none" stroke="#737aa2" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect width="20" height="8" x="2" y="2" rx="2" ry="2"/><rect width="20" height="8" x="2" y="14" rx="2" ry="2"/><line x1="6" x2="6.01" y1="6" y2="6"/><line x1="6" x2="6.01" y1="18" y2="18"/></g>
+<text x="102" y="210" font-family="Inter, 'Segoe UI', system-ui, sans-serif" font-size="13" fill="#d5dcff" font-weight="600">this computer</text>
+<text x="284" y="210" font-family="Inter, 'Segoe UI', system-ui, sans-serif" font-size="12" fill="#9ece6a" font-weight="400">Installed · Logged in (ChatGPT)</text>
+<g transform="translate(556,197) scale(0.6666666666666666)" fill="none" stroke="#737aa2" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 12a9 9 0 0 1 9-9 9.75 9.75 0 0 1 6.74 2.74L21 8"/><path d="M21 3v5h-5"/><path d="M21 12a9 9 0 0 1-9 9 9.75 9.75 0 0 1-6.74-2.74L3 16"/><path d="M8 16H3v5"/></g>
+<rect x="64" y="232" width="520" height="38" rx="8" fill="#262a3b" stroke="#2f3549" />
+<g transform="translate(76,243) scale(0.6666666666666666)" fill="none" stroke="#737aa2" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect width="20" height="8" x="2" y="2" rx="2" ry="2"/><rect width="20" height="8" x="2" y="14" rx="2" ry="2"/><line x1="6" x2="6.01" y1="6" y2="6"/><line x1="6" x2="6.01" y1="18" y2="18"/></g>
+<text x="102" y="256" font-family="Inter, 'Segoe UI', system-ui, sans-serif" font-size="13" fill="#d5dcff" font-weight="600">build-box.example.net</text>
+<text x="284" y="256" font-family="Inter, 'Segoe UI', system-ui, sans-serif" font-size="12" fill="#e0af68" font-weight="400">Installed · Logged out</text>
+<rect x="496" y="237" width="80" height="28" rx="6" fill="rgba(255,255,255,0.05)" stroke="#2f3549" />
+<g transform="translate(507,245) scale(0.5)" fill="none" stroke="#d5dcff" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m10 17 5-5-5-5"/><path d="M15 12H3"/><path d="M15 3h4a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2h-4"/></g>
+<text x="525" y="255.32" font-family="Inter, 'Segoe UI', system-ui, sans-serif" font-size="12" fill="#d5dcff" font-weight="500">Log in</text>
+<rect x="64" y="278" width="520" height="38" rx="8" fill="#262a3b" stroke="#2f3549" />
+<g transform="translate(76,289) scale(0.6666666666666666)" fill="none" stroke="#737aa2" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect width="20" height="8" x="2" y="2" rx="2" ry="2"/><rect width="20" height="8" x="2" y="14" rx="2" ry="2"/><line x1="6" x2="6.01" y1="6" y2="6"/><line x1="6" x2="6.01" y1="18" y2="18"/></g>
+<text x="102" y="302" font-family="Inter, 'Segoe UI', system-ui, sans-serif" font-size="13" fill="#d5dcff" font-weight="600">win-lab.example.org</text>
+<text x="284" y="302" font-family="Inter, 'Segoe UI', system-ui, sans-serif" font-size="12" fill="#737aa2" font-weight="400">Not checked: Windows host</text>
+<g transform="translate(556,289) scale(0.6666666666666666)" fill="none" stroke="#737aa2" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 12a9 9 0 0 1 9-9 9.75 9.75 0 0 1 6.74 2.74L21 8"/><path d="M21 3v5h-5"/><path d="M21 12a9 9 0 0 1-9 9 9.75 9.75 0 0 1-6.74-2.74L3 16"/><path d="M8 16H3v5"/></g>
+<text x="64" y="350" font-family="Inter, 'Segoe UI', system-ui, sans-serif" font-size="14" fill="#ffffff" font-weight="600">Room folder</text>
+<text x="164" y="350" font-family="Inter, 'Segoe UI', system-ui, sans-serif" font-size="12" fill="#737aa2" font-weight="400">repository skills and project MCP servers depend on it</text>
+<text x="64" y="362" font-family="Inter, 'Segoe UI', system-ui, sans-serif" font-size="12" fill="#737aa2" font-weight="400"></text>
+<rect x="64" y="370" width="520" height="32" rx="6" fill="#1a1b26" stroke="#2f3549" />
+<text x="76" y="391" font-family="Inter, 'Segoe UI', system-ui, sans-serif" font-size="13" fill="#d5dcff" font-weight="400">api  ·  this computer</text>
+<g transform="translate(558,378) scale(0.6666666666666666)" fill="none" stroke="#737aa2" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m6 9 6 6 6-6"/></g>
+<text x="64" y="442" font-family="Inter, 'Segoe UI', system-ui, sans-serif" font-size="14" fill="#ffffff" font-weight="600">Skills</text>
+<text x="116" y="442" font-family="Inter, 'Segoe UI', system-ui, sans-serif" font-size="12" fill="#737aa2" font-weight="400">supported · only these · disabled per launch with -c skills.config</text>
+<text x="64" y="470" font-family="ui-monospace, 'SFMono-Regular', Menlo, monospace" font-size="13" fill="#d5dcff" font-weight="400">code-review</text>
+<text x="264" y="470" font-family="Inter, 'Segoe UI', system-ui, sans-serif" font-size="12" fill="#737aa2" font-weight="400">user · ~/.agents/skills</text>
+<text x="64" y="494" font-family="ui-monospace, 'SFMono-Regular', Menlo, monospace" font-size="13" fill="#d5dcff" font-weight="400">pdf</text>
+<text x="264" y="494" font-family="Inter, 'Segoe UI', system-ui, sans-serif" font-size="12" fill="#737aa2" font-weight="400">user · ~/.codex/skills</text>
+<text x="64" y="518" font-family="ui-monospace, 'SFMono-Regular', Menlo, monospace" font-size="13" fill="#d5dcff" font-weight="400">release-notes</text>
+<text x="264" y="518" font-family="Inter, 'Segoe UI', system-ui, sans-serif" font-size="12" fill="#737aa2" font-weight="400">repository · .agents/skills</text>
+<text x="64" y="542" font-family="ui-monospace, 'SFMono-Regular', Menlo, monospace" font-size="13" fill="#d5dcff" font-weight="400">openspec-explore</text>
+<text x="264" y="542" font-family="Inter, 'Segoe UI', system-ui, sans-serif" font-size="12" fill="#737aa2" font-weight="400">repository · .agents/skills</text>
+<text x="64" y="590" font-family="Inter, 'Segoe UI', system-ui, sans-serif" font-size="14" fill="#ffffff" font-weight="600">MCP servers</text>
+<text x="168" y="590" font-family="Inter, 'Segoe UI', system-ui, sans-serif" font-size="12" fill="#737aa2" font-weight="400">supported · only these · from Codex's listing, none started</text>
+<text x="64" y="618" font-family="ui-monospace, 'SFMono-Regular', Menlo, monospace" font-size="13" fill="#d5dcff" font-weight="400">github</text>
+<text x="264" y="618" font-family="Inter, 'Segoe UI', system-ui, sans-serif" font-size="12" fill="#737aa2" font-weight="400">stdio · user</text>
+<text x="424" y="618" font-family="Inter, 'Segoe UI', system-ui, sans-serif" font-size="12" fill="#9ece6a" font-weight="400">enabled</text>
+<text x="64" y="642" font-family="ui-monospace, 'SFMono-Regular', Menlo, monospace" font-size="13" fill="#d5dcff" font-weight="400">linear</text>
+<text x="264" y="642" font-family="Inter, 'Segoe UI', system-ui, sans-serif" font-size="12" fill="#737aa2" font-weight="400">http · user</text>
+<text x="424" y="642" font-family="Inter, 'Segoe UI', system-ui, sans-serif" font-size="12" fill="#737aa2" font-weight="400">disabled in Codex config</text>
+<text x="64" y="666" font-family="ui-monospace, 'SFMono-Regular', Menlo, monospace" font-size="13" fill="#d5dcff" font-weight="400">docs</text>
+<text x="264" y="666" font-family="Inter, 'Segoe UI', system-ui, sans-serif" font-size="12" fill="#737aa2" font-weight="400">stdio · repository</text>
+<text x="424" y="666" font-family="Inter, 'Segoe UI', system-ui, sans-serif" font-size="12" fill="#9ece6a" font-weight="400">enabled</text>
+<text x="64" y="720" font-family="Inter, 'Segoe UI', system-ui, sans-serif" font-size="12" fill="#737aa2" font-weight="400">Read-only. To add a skill or server, use Codex itself; World lists what it finds.</text>
+<rect x="620" y="154" width="516" height="260" rx="10" fill="#262a3b" stroke="#2f3549" />
+<text x="636" y="180" font-family="Inter, 'Segoe UI', system-ui, sans-serif" font-size="14" fill="#ffffff" font-weight="600">Models, efforts, permission modes</text>
+<text x="636" y="214" font-family="Inter, 'Segoe UI', system-ui, sans-serif" font-size="12" fill="#737aa2" font-weight="400">Model</text>
+<text x="730" y="214" font-family="Inter, 'Segoe UI', system-ui, sans-serif" font-size="13" fill="#d5dcff" font-weight="400">Harness default, or a model name</text>
+<text x="636" y="244" font-family="Inter, 'Segoe UI', system-ui, sans-serif" font-size="12" fill="#737aa2" font-weight="400">Effort</text>
+<text x="730" y="244" font-family="Inter, 'Segoe UI', system-ui, sans-serif" font-size="13" fill="#d5dcff" font-weight="400">minimal · low · medium · high</text>
+<text x="636" y="274" font-family="Inter, 'Segoe UI', system-ui, sans-serif" font-size="12" fill="#737aa2" font-weight="400">Approval</text>
+<text x="730" y="274" font-family="Inter, 'Segoe UI', system-ui, sans-serif" font-size="13" fill="#d5dcff" font-weight="400">untrusted · on request · never</text>
+<text x="636" y="304" font-family="Inter, 'Segoe UI', system-ui, sans-serif" font-size="12" fill="#737aa2" font-weight="400">Sandbox</text>
+<text x="730" y="304" font-family="Inter, 'Segoe UI', system-ui, sans-serif" font-size="13" fill="#d5dcff" font-weight="400">read only · workspace write · full access</text>
+<text x="636" y="346" font-family="Inter, 'Segoe UI', system-ui, sans-serif" font-size="12" fill="#737aa2" font-weight="400">Moved here from the editor's per-harness table</text>
+<text x="636" y="366" font-family="Inter, 'Segoe UI', system-ui, sans-serif" font-size="12" fill="#737aa2" font-weight="400">(HARNESS_CHOICES); the editor reads it from World.</text>
+<rect x="620" y="434" width="516" height="236" rx="10" fill="#262a3b" stroke="#2f3549" />
+<text x="636" y="460" font-family="Inter, 'Segoe UI', system-ui, sans-serif" font-size="14" fill="#ffffff" font-weight="600">Profiles in this college</text>
+<rect x="990" y="442" width="114" height="28" rx="6" fill="rgba(255,255,255,0.05)" stroke="#2f3549" />
+<g transform="translate(1001,450) scale(0.5)" fill="none" stroke="#d5dcff" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12h14"/><path d="M12 5v14"/></g>
+<text x="1019" y="460.32" font-family="Inter, 'Segoe UI', system-ui, sans-serif" font-size="12" fill="#d5dcff" font-weight="500">New profile</text>
+<rect x="641.2" y="482" width="20.8" height="2.6" fill="#1c1722" />
+<rect x="638.6" y="484.6" width="26" height="18.2" fill="#1c1722" />
+<rect x="638.6" y="502.8" width="26" height="15.600000000000001" fill="#1c1722" />
+<rect x="641.2" y="518.4" width="20.8" height="5.2" fill="#1c1722" />
+<rect x="643.8" y="487.2" width="15.600000000000001" height="13" fill="#e3ad80" />
+<rect x="641.2" y="484.6" width="20.8" height="5.2" fill="#ece4da" />
+<rect x="646.4" y="492.4" width="2.6" height="2.6" fill="#1c1722" />
+<rect x="654.2" y="492.4" width="2.6" height="2.6" fill="#1c1722" />
+<rect x="643.8" y="492.4" width="15.600000000000001" height="2.6" fill="#1c1722" />
+<rect x="641.2" y="502.8" width="20.8" height="10.4" fill="#f1efe6" />
+<rect x="641.2" y="513.2" width="20.8" height="5.2" fill="#30404a" />
+<rect x="643.8" y="518.4" width="5.2" height="2.6" fill="#30404a" />
+<rect x="654.2" y="518.4" width="5.2" height="2.6" fill="#30404a" />
+<text x="680" y="500" font-family="Inter, 'Segoe UI', system-ui, sans-serif" font-size="14" fill="#ffffff" font-weight="600">Reviewer</text>
+<text x="680" y="518" font-family="Inter, 'Segoe UI', system-ui, sans-serif" font-size="12" fill="#737aa2" font-weight="400">Reviews a PR for correctness and security</text>
+<rect x="641.2" y="554" width="20.8" height="2.6" fill="#1c1722" />
+<rect x="638.6" y="556.6" width="26" height="18.2" fill="#1c1722" />
+<rect x="638.6" y="574.8" width="26" height="15.600000000000001" fill="#1c1722" />
+<rect x="641.2" y="590.4" width="20.8" height="5.2" fill="#1c1722" />
+<rect x="643.8" y="559.2" width="15.600000000000001" height="13" fill="#f7d9bb" />
+<rect x="641.2" y="556.6" width="20.8" height="5.2" fill="#3d4f8f" />
+<rect x="641.2" y="561.8" width="2.6" height="13" fill="#3d4f8f" />
+<rect x="659.4" y="561.8" width="2.6" height="13" fill="#3d4f8f" />
+<rect x="646.4" y="564.4" width="2.6" height="2.6" fill="#1c1722" />
+<rect x="654.2" y="564.4" width="2.6" height="2.6" fill="#1c1722" />
+<rect x="641.2" y="574.8" width="20.8" height="10.4" fill="#9b6ad6" />
+<rect x="641.2" y="585.2" width="20.8" height="5.2" fill="#4a3b2f" />
+<rect x="643.8" y="590.4" width="5.2" height="2.6" fill="#4a3b2f" />
+<rect x="654.2" y="590.4" width="5.2" height="2.6" fill="#4a3b2f" />
+<text x="680" y="572" font-family="Inter, 'Segoe UI', system-ui, sans-serif" font-size="14" fill="#ffffff" font-weight="600">Researcher</text>
+<text x="680" y="590" font-family="Inter, 'Segoe UI', system-ui, sans-serif" font-size="12" fill="#737aa2" font-weight="400">Reads code and upstream issues, writes notes</text>
+<rect x="620" y="690" width="516" height="80" rx="10" fill="#1a1b26" stroke="#2f3549" />
+<g transform="translate(636,706) scale(0.6666666666666666)" fill="none" stroke="#737aa2" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><path d="M9.09 9a3 3 0 0 1 5.83 1c0 2-3 3-3 3"/><path d="M12 17h.01"/></g>
+<text x="660" y="720" font-family="Inter, 'Segoe UI', system-ui, sans-serif" font-size="13" fill="#d5dcff" font-weight="600">Muse college, for comparison:</text>
+<text x="660" y="742" font-family="Inter, 'Segoe UI', system-ui, sans-serif" font-size="12" fill="#737aa2" font-weight="400">Skills, MCP servers: not built. Muse documents no per-launch</text>
+<text x="660" y="758" font-family="Inter, 'Segoe UI', system-ui, sans-serif" font-size="12" fill="#737aa2" font-weight="400">option for either (dev.meta.ai/docs/muse-code). Registry: none.</text>
+</svg>
