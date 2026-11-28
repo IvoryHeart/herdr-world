@@ -34,7 +34,6 @@ import { diagnostics, type TownFrameTrace } from "./townDiagnostics";
 export type { TownFrameTrace } from "./townDiagnostics";
 import { DEVTOOLS, type ViewTrace } from "../devtools/flag";
 import { townPixelsEnabled } from "../devtools/renderer";
-
 import {
   TownActors,
   townActorWorld,
