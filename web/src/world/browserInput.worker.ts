@@ -1,3 +1,4 @@
+import { scriptedInput } from "./testing/scriptedInput";
 import { InputDriver } from "./browserAcceptanceFixture";
 import { startIndependentInput } from "./independentInputSchedule";
 
@@ -8,6 +9,7 @@ const runs = new Map<
   {
     stop(): void;
     pending: Promise<unknown>[];
+    done?: Promise<void>;
   }
 >();
 self.onmessage = async ({ data }) => {
@@ -50,55 +52,62 @@ self.onmessage = async ({ data }) => {
       const run = {
         stop: () => {},
         pending: [] as Promise<unknown>[],
+        done: undefined as Promise<void> | undefined,
       };
       const emit = (input: {
         sequence: number;
-        dueAt: number;
-        sentAt: number;
+        dueAt?: number;
+        sentAt?: number;
       }) => {
+        const cdpSentAt = Date.now();
         self.postMessage({
           input: {
             phase,
             ...input,
+            dueAt: input.dueAt ?? cdpSentAt,
+            sentAt: input.sentAt ?? cdpSentAt,
           },
         });
-        // Send the ordered key pair together; protocol acknowledgements do not
-        // gate later independently timed user intents.
-        const cdpSentAt = Date.now();
-        run.pending.push(
-          Promise.all([
-            driver.call("Input.dispatchKeyEvent", {
-              type: "keyDown",
-              key: "z",
-              code: "KeyZ",
-              text: "z",
-              windowsVirtualKeyCode: 90,
-            }),
-            driver.call("Input.dispatchKeyEvent", {
-              type: "keyUp",
-              key: "z",
-              code: "KeyZ",
-              windowsVirtualKeyCode: 90,
-            }),
-          ]).then(() => {
-            if (data.timings || data.tracePath)
-              self.postMessage({
-                dispatch: {
-                  phase,
-                  sequence: input.sequence,
-                  cdpSentAt,
-                  cdpCompleteAt: Date.now(),
-                },
-              });
+        // A native cadence queues pairs independently. Scripted behaviour
+        // awaits this delivery receipt before sending its next pair.
+        const delivered = Promise.all([
+          driver.call("Input.dispatchKeyEvent", {
+            type: "keyDown",
+            key: "z",
+            code: "KeyZ",
+            text: "z",
+            windowsVirtualKeyCode: 90,
           }),
-        );
+          driver.call("Input.dispatchKeyEvent", {
+            type: "keyUp",
+            key: "z",
+            code: "KeyZ",
+            windowsVirtualKeyCode: 90,
+          }),
+        ]).then(() => {
+          if (data.timings || data.tracePath)
+            self.postMessage({
+              dispatch: {
+                phase,
+                sequence: input.sequence,
+                cdpSentAt,
+                cdpCompleteAt: Date.now(),
+              },
+            });
+        });
+        run.pending.push(delivered);
+        return delivered;
       };
-      run.stop = startIndependentInput(emit);
+      if (data.inputMode === "scripted") {
+        run.done = scriptedInput((sequence) => emit({ sequence }));
+        void run.done.catch(() => {});
+      } else run.stop = startIndependentInput(emit);
       runs.set(phase, run);
       self.postMessage({ id, result: "ready" });
     } else {
       const run = runs.get(phase)!;
       run.stop();
+      await run.done;
       await Promise.all(run.pending);
       let hotspots: unknown[] | undefined;
       if (profile) {

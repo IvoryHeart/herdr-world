@@ -30,6 +30,18 @@ export function testServerConfig(
   };
 }
 
+/** Private discovery by default; peers opt into a shared scratch registry. @internal */
+export function testServicePaths(
+  root: string,
+  environment: Record<string, string> = {},
+) {
+  return resolveDataPaths({
+    HERDR_WORLD_INSTANCE_REGISTRY_DIR: join(root, "instances"),
+    ...environment,
+    HERDR_WORLD_DATA_DIR: root,
+  });
+}
+
 /**
  * One started World service in this process, its data folder at `root`.
  * `environment` holds per-file overrides, resolved as the entry point does.
@@ -44,16 +56,7 @@ export async function startTestService(
 ) {
   const service = await createWorldService({
     config: testServerConfig(root, overrides),
-    paths: resolveDataPaths({
-      // Its own instance registry unless the caller shares one (through the
-      // registry folder or XDG_STATE_HOME): test files run in parallel, and
-      // a per-user registry lists other files' services.
-      ...(environment.XDG_STATE_HOME
-        ? {}
-        : { HERDR_WORLD_INSTANCE_REGISTRY_DIR: join(root, "instances") }),
-      ...environment,
-      HERDR_WORLD_DATA_DIR: root,
-    }),
+    paths: testServicePaths(root, environment),
     clock: systemClock,
     scheduler: systemScheduler,
     storage: openStorage,

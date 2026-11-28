@@ -18,7 +18,10 @@ export type Clock = {
  * bounds lateness to 60 s.
  */
 export type Scheduler = {
-  schedule(callback: () => void, delayMs: number): { cancel(): void };
+  schedule(
+    callback: () => void,
+    delayMs: number,
+  ): { cancel(): void; unref?(): void };
 };
 
 /** Yield to native input/I/O without waiting for elapsed fixture time. */
@@ -34,6 +37,6 @@ export const systemClock: Clock = {
 export const systemScheduler: Scheduler = {
   schedule(callback, delayMs) {
     const timer = setTimeout(callback, delayMs);
-    return { cancel: () => clearTimeout(timer) };
+    return { cancel: () => clearTimeout(timer), unref: () => timer.unref() };
   },
 };

@@ -61,13 +61,6 @@
       },
       "reason": "Legacy native time; migrate this owner to the injected clock/scheduler port."
     },
-    "server/src/agent/herdr-conversation.ts": {
-      "counts": {
-        "Date.now": 6,
-        "setTimeout": 1
-      },
-      "reason": "Legacy native time; migrate this owner to the injected clock/scheduler port."
-    },
     "server/src/agent/launch.ts": {
       "counts": {
         "Date.now": 1,

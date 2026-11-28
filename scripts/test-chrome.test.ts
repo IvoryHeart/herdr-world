@@ -20,7 +20,7 @@ import {
   verifyArchive,
 } from "./test-chrome";
 
-test("local Linux browser gates use CI's pin unless a browser is explicitly selected", async () => {
+test("local Linux browser gates use CI's pin, including explicitly selected paths", async () => {
   const installs: string[] = [];
   const install = async (directory: string) => {
     installs.push(directory);
@@ -42,6 +42,8 @@ test("local Linux browser gates use CI's pin unless a browser is explicitly sele
       "linux",
       "x64",
       install,
+      (chrome) => chrome,
+      () => `Google Chrome for Testing ${pin.version}`,
     ),
   ).toBe("/synthetic/override");
   expect(await localTestChrome({}, "darwin", "arm64", install)).toBeUndefined();
@@ -140,3 +142,21 @@ test.skipIf(process.platform === "win32")(
     }
   },
 );
+
+test("an explicit Chrome from another version is refused before any browser fixture runs", async () => {
+  let installs = 0;
+  await expect(
+    localTestChrome(
+      { CHROME_BIN: "/synthetic/chrome-157" },
+      "linux",
+      "x64",
+      async () => {
+        installs++;
+        return "/synthetic/pin";
+      },
+      (chrome) => chrome,
+      () => "Google Chrome 157.0.0.0",
+    ),
+  ).rejects.toThrow(`expected pinned Chrome ${pin.version}`);
+  expect(installs).toBe(0);
+});

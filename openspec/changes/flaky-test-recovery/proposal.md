@@ -21,3 +21,7 @@ removals, phase timing and model packing, retaining memory bounds and every chec
 ## Impact
 
 CI workflows, retry evidence, daily trusted issue reporting, contributor guidance and verification consumer mapping. No application storage or runtime changes.
+
+Issue #1487 additionally authorizes root-cause repairs: deterministic process/time
+ports, sealed test discovery, matching local/CI Chrome and a separate repeated
+quiet performance lane. Existing tests, assertions and budgets remain binding.

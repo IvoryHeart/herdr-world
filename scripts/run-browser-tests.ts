@@ -9,6 +9,7 @@ import { acquireCheckSlot, heldEnv } from "./check-lock";
 import {
   webBrowserSuites,
   worldBrowserSuites,
+  worldPerformanceSuites,
   reportBrowserSuites,
   includesBrowserSuites,
 } from "./world-browser-suites";
@@ -37,6 +38,7 @@ const needsChrome =
   includesBrowserSuites(files) &&
   browserSelectionNeedsChrome(files, [
     ...worldBrowserSuites,
+    ...worldPerformanceSuites,
     ...webBrowserSuites,
     ...reportBrowserSuites,
   ]);

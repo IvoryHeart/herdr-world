@@ -1,3 +1,8 @@
+import {
+  nativeInputMode,
+  scriptedInput,
+  SCRIPTED_INPUT_COUNT,
+} from "./testing/scriptedInput";
 import { sharedBrowserBuild } from "./testing/sharedBrowserBuild";
 import {
   launchTestBrowser,
@@ -28,9 +33,10 @@ test.skipIf(!chrome).each([1440, 390])(
     const assets = new Map<string, Blob>();
     const payload = await denseSnapshot();
     let driver: InputDriver | undefined;
+    const inputMode = nativeInputMode(Bun.env);
     const inputRuns = new Map<
       string,
-      { stop(): void; pending: Promise<void>[] }
+      { stop(): void; pending: Promise<void>[]; done?: Promise<void> }
     >();
     const sentInputs: { phase: string; sentAt: number; dueAt: number }[] = [];
     const result = Promise.withResolvers<{
@@ -109,29 +115,37 @@ test.skipIf(!chrome).each([1440, 390])(
             sentAt: number;
           }) => {
             sentInputs.push({ phase, ...input });
-            pending.push(
-              (async () => {
-                await driver!.call("Input.dispatchKeyEvent", {
-                  type: "keyDown",
-                  key: "z",
-                  code: "KeyZ",
-                  text: "z",
-                  windowsVirtualKeyCode: 90,
-                });
-                await driver!.call("Input.dispatchKeyEvent", {
-                  type: "keyUp",
-                  key: "z",
-                  code: "KeyZ",
-                  windowsVirtualKeyCode: 90,
-                });
-              })(),
-            );
+            const delivered = (async () => {
+              await driver!.call("Input.dispatchKeyEvent", {
+                type: "keyDown",
+                key: "z",
+                code: "KeyZ",
+                text: "z",
+                windowsVirtualKeyCode: 90,
+              });
+              await driver!.call("Input.dispatchKeyEvent", {
+                type: "keyUp",
+                key: "z",
+                code: "KeyZ",
+                windowsVirtualKeyCode: 90,
+              });
+            })();
+            pending.push(delivered);
+            return delivered;
           };
-          const stop = startIndependentInput(send);
-          inputRuns.set(phase, {
+          const run = {
             pending,
-            stop,
-          });
+            stop: () => {},
+            done: undefined as Promise<void> | undefined,
+          };
+          if (inputMode === "scripted") {
+            run.done = scriptedInput((sequence) => {
+              const now = Date.now();
+              return send({ sequence, dueAt: now, sentAt: now });
+            });
+            void run.done.catch(() => {});
+          } else run.stop = startIndependentInput(send);
+          inputRuns.set(phase, run);
           return new Response("ready");
         }
         if (path === "/input-complete") {
@@ -139,6 +153,7 @@ test.skipIf(!chrome).each([1440, 390])(
             new URL(request.url).searchParams.get("phase")!,
           )!;
           run.stop();
+          await run.done;
           await Promise.all(run.pending);
           return Response.json({ count: run.pending.length });
         }
@@ -274,6 +289,8 @@ test.skipIf(!chrome).each([1440, 390])(
         const sent = sentInputs.filter((input) => input.phase === phase);
         expect(receipts).toHaveLength(sent.length);
         expect(receipts.length).toBeGreaterThan(0);
+        if (inputMode === "scripted")
+          expect(receipts).toHaveLength(SCRIPTED_INPUT_COUNT);
         expect(
           receipts.every(
             (receipt) =>

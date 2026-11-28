@@ -1,3 +1,6 @@
+import { createConversationDeadlines } from "./conversation-deadlines";
+import type { Clock, Scheduler } from "../service/clock";
+import { systemClock, systemScheduler } from "../service/clock";
 import { AgentClaims } from "./agent-claims";
 import { createPromptActions } from "./prompt-answer";
 import {
@@ -28,7 +31,6 @@ import {
 } from "./conversation";
 import {
   createDeliveryLedger,
-  DELIVERY_CHECK_MS,
   type DeliveryClock,
   type DeliveryView,
 } from "./conversation-delivery";
@@ -86,6 +88,8 @@ function withoutMessages(conversation: Conversation): ConversationLatest {
  */
 export function createHerdrConversationSource(args: {
   herdrCall: HerdrCall;
+  clock?: Clock;
+  scheduler?: Scheduler;
   files: AgentSessionFileAccess;
   context: AgentSessionResolverContext;
   cache: SessionProjectionCache;
@@ -95,6 +99,8 @@ export function createHerdrConversationSource(args: {
   /** A sent message's check ended without a read; recheck watched panes. */
   onDeliveriesChanged?: () => void;
 }): ConversationSource & { dispose(): void } {
+  const time = args.clock ?? systemClock;
+  const scheduler = args.scheduler ?? systemScheduler;
   const deliveries = createDeliveryLedger();
   const claims = new AgentClaims();
   const sendGuard = createSendGuard();
@@ -119,29 +125,20 @@ export function createHerdrConversationSource(args: {
   let measured: { clock: DeliveryClock; at: number } | null = null;
   const clock = async (): Promise<DeliveryClock | null> => {
     if (!args.files.clockOffset) return { offsetMs: 0, uncertaintyMs: 0 };
-    if (!measured || Date.now() - measured.at > 10 * 60_000) {
+    if (!measured || time.now() - measured.at > 10 * 60_000) {
       try {
-        measured = { clock: await args.files.clockOffset(), at: Date.now() };
+        measured = { clock: await args.files.clockOffset(), at: time.now() };
       } catch {
         return null;
       }
     }
     return measured.clock;
   };
-  // Each sent message's check ends at its deadline even if nothing reads
-  // the pane: a last read settles what it can, the rest becomes unverified,
-  // and watched panes are rechecked so browsers showing them reread.
-  const deadlines = new Set<ReturnType<typeof setTimeout>>();
-  const scheduleDeadline = (paneId: string) => {
-    const timer = setTimeout(async () => {
-      deadlines.delete(timer);
-      await read({ pane_id: paneId }).catch(() => {});
-      deliveries.expire(paneId);
-      args.onDeliveriesChanged?.();
-    }, DELIVERY_CHECK_MS + 1000);
-    (timer as { unref?: () => void }).unref?.();
-    deadlines.add(timer);
-  };
+  const deadlines = createConversationDeadlines(scheduler, async (paneId) => {
+    await read({ pane_id: paneId }).catch(() => {});
+    deliveries.expire(paneId, time.now());
+    args.onDeliveriesChanged?.();
+  });
   const codexSessions = createCodexSessionWatch(args);
 
   const agentInfo = async (paneId: string) => {
@@ -331,7 +328,7 @@ export function createHerdrConversationSource(args: {
         latest_request: latestRequest(messages),
         quest: projection.quest,
         running_tool: tool,
-        usage_stop: usageStopCurrent(projection.usage_stop, Date.now())
+        usage_stop: usageStopCurrent(projection.usage_stop, time.now())
           ? projection.usage_stop
           : null,
         field_claims: claims.transcript(claimsCapture, {
@@ -376,7 +373,7 @@ export function createHerdrConversationSource(args: {
             },
           ]
         : [];
-    for (const fingerprint of deliveries.watching(paneId)) {
+    for (const fingerprint of deliveries.watching(paneId, time.now())) {
       if (fingerprint === current) continue;
       const session = sessions.get(fingerprint);
       if (!session) {
@@ -395,7 +392,7 @@ export function createHerdrConversationSource(args: {
         views.push({ fingerprint, label: session.label, messages: null });
       }
     }
-    deliveries.evaluate(paneId, current, views);
+    deliveries.evaluate(paneId, current, views, time.now());
   };
 
   /** The session and Herdr state a prompt is read under. */
@@ -623,8 +620,7 @@ export function createHerdrConversationSource(args: {
     dispose: () => {
       trustPrompts.close();
       claims.clear();
-      for (const timer of deadlines) clearTimeout(timer);
-      deadlines.clear();
+      deadlines.dispose();
       codexSessions.close();
       args.context.codexDiscovery.clear();
     },
@@ -651,7 +647,7 @@ export function createHerdrConversationSource(args: {
       // Transcripts on this machine that can still settle a sent message.
       const others = args.files.remote
         ? []
-        : [...deliveries.watching(pane_id)]
+        : [...deliveries.watching(pane_id, time.now())]
             .filter((fingerprint) => fingerprint !== base.session_fingerprint)
             .map((fingerprint) => sessions.get(fingerprint)?.resolved.file)
             .filter((other): other is NonNullable<typeof other> => !!other);
@@ -792,7 +788,7 @@ export function createHerdrConversationSource(args: {
             return {
               ...found,
               ...desk,
-              usage_stop: usageStopCurrent(desk.usage_stop, Date.now())
+              usage_stop: usageStopCurrent(desk.usage_stop, time.now())
                 ? desk.usage_stop
                 : null,
             };
@@ -829,7 +825,7 @@ export function createHerdrConversationSource(args: {
       // All slash commands use the same qualified admission, with unchecked
       // receipts because changing sessions can be their intended effect.
       const command = isSlashCommand(text);
-      if (deliveries.full(pane_id))
+      if (deliveries.full(pane_id, time.now()))
         return {
           status: "refused",
           reason: "unsettled",
@@ -929,7 +925,7 @@ export function createHerdrConversationSource(args: {
         info = await agentInfo(pane_id);
         if (bindingOf(info)?.fingerprint !== session_fingerprint)
           return changed;
-        if (deliveries.full(pane_id))
+        if (deliveries.full(pane_id, time.now()))
           return {
             status: "refused",
             reason: "unsettled",
@@ -951,7 +947,7 @@ export function createHerdrConversationSource(args: {
       if (inputWitness(info) !== screenWitness) return changed;
       if (bindingOf(info)?.fingerprint !== session_fingerprint) return changed;
       if (guard && (!info || !guard(info))) return changed;
-      const startedAt = Date.now();
+      const startedAt = time.now();
       const submission = await submitPrompt(
         args.herdrCall,
         target,
@@ -960,7 +956,7 @@ export function createHerdrConversationSource(args: {
       );
       if (!("result" in submission)) return submission;
       const { result } = submission;
-      const endedAt = Date.now();
+      const endedAt = time.now();
       const sent =
         isRecord(result) && isRecord(result.agent) ? result.agent : null;
       if (sent?.pane_id !== pane_id)
@@ -991,7 +987,7 @@ export function createHerdrConversationSource(args: {
             }
           : {}),
       });
-      scheduleDeadline(pane_id);
+      deadlines.schedule(pane_id);
       submitted?.(landed?.fingerprint ?? null);
       return { status: "sent", delivery };
     },

@@ -660,3 +660,20 @@ an isolated real-clock child, and two opt-in live core checks without a held-sen
 signal. Browser allowances are zero. The allowance may only shrink. Task-turn
 condition checks are distinct from fixed dwells; native core I/O without a fixture
 notification yields to the event loop and rechecks the actual condition.
+
+### Native frame budgets
+
+The World latency trend workflow also runs `bun run test:performance` on its
+ConcurrentContexts runner. This separate lane retains all four Town frame-budget
+cases and their original thresholds. It uses Ubuntu 24.04, pinned Bun, the reviewed Chrome pin, SwiftShader,
+serial case execution and three quiet runs; every run must pass. Busy admission
+fails before measurement, and a failed budget is neither retried nor averaged away.
+The ordinary World shards keep functional and bounded-work acceptance. The lane
+adds no job and preserves the workflow's existing advisory status.
+
+Functional ProductionContexts and ConcurrentContexts cases retain the production transport, real native
+input, all assertions and the 5,000 ms RPC deadline, with exactly 16 ordered key
+pairs per phase. This finite workload awaits delivery instead of producing more
+keys as a slow phase takes longer. Latency/tracing runs retain the original
+independent 75 ms schedule; latency CI now requires quiet admission rather than
+measuring after a busy-host warning.

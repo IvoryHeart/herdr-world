@@ -78,6 +78,15 @@ Deliver with the [candidate-delivery skill](.agents/skills/candidate-delivery/SK
 Use the adapted `world-openspec-*` skills for OpenSpec work; see the
 [skill guide](docs/agent-development.md#openspec-skills). These names survive CLI updates.
 
+## Testing approach
+
+- Reproduce a reported flake on the unchanged target baseline under CPU pressure before diagnosing it. Record the cause and the baseline; a CI-rework branch report alone does not establish a product regression. Never skip, delete or loosen a test, reduce a budget, or lengthen its timeout to obtain a pass.
+- Drive time through the injected server clock/scheduler or browser clock, including frames. Await an actual completion event for asynchronous work; neither a wall-clock wait nor a fixed number of IO turns establishes completion.
+- Put speed, frame and raster budgets in the separate performance lane (`bun run test:performance`). Retain every budget and assertion; use the reviewed Chrome pin on a quiet setup and require all three runs to pass. A busy setup refuses measurement. Ordinary behaviour tests assert behaviour and bounded work without depending on machine speed.
+- Test logic in units and components with fake server, process and Chrome ports. Keep only a few short, independent end-to-end journeys and a couple of native process sanity checks per boundary. Split long journeys at observable acceptance boundaries; preserve every scenario and negative control.
+- Seal each case: a fresh temporary folder, OS-selected loopback ports, isolated registries, and the same pinned Chrome locally and in CI. An explicit `CHROME_BIN` must match the pin. Test services share discovery only through an explicit scratch `HERDR_WORLD_INSTANCE_REGISTRY_DIR`; environment defaults never opt a case into sharing.
+- For a fixed file, require twenty consecutive local pressure runs without retry and three green hosted runs. Report main/target versus branch files, cases, skips, `expect()` counts, every changed threshold (old → new and reason), and any acceptance evidence still pending.
+
 ## Output bounds
 
 Bound long output while preserving status: `set -o pipefail; … 2>&1 | tail -80`.

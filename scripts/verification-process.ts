@@ -1,3 +1,50 @@
+import {
+  type Clock,
+  type Scheduler,
+  systemClock,
+  systemScheduler,
+} from "../server/src/service/clock";
+
+/** The supervisor owns only the group returned by its process port. @internal */
+export type VerificationProcessPorts = {
+  clock: Pick<Clock, "monotonic">;
+  scheduler: Scheduler;
+  spawn(
+    command: string[],
+    options: { cwd?: string; env?: ProcessOptions["env"] },
+  ): {
+    pid: number;
+    exited: Promise<number>;
+    stdout: ReadableStream<Uint8Array>;
+    stderr: ReadableStream<Uint8Array>;
+    resourceUsage(): { maxRSS: number } | undefined;
+  };
+  signalGroup(pid: number, signal: NodeJS.Signals | 0): boolean;
+};
+
+/** Native adapter exposed for the two port sanity checks. @internal */
+export const systemVerificationProcessPorts: VerificationProcessPorts = {
+  clock: systemClock,
+  scheduler: systemScheduler,
+  spawn: (command, options) =>
+    Bun.spawn(command, {
+      ...options,
+      detached: true,
+      stdin: "ignore",
+      stdout: "pipe",
+      stderr: "pipe",
+    }),
+  signalGroup(pid, signal) {
+    try {
+      process.kill(-pid, signal);
+      return true;
+    } catch (error) {
+      if ((error as NodeJS.ErrnoException).code === "ESRCH") return false;
+      throw error;
+    }
+  },
+};
+
 export class VerificationProcessError extends Error {
   constructor(
     readonly reason: "timeout" | "aborted" | "output-limit",
@@ -44,6 +91,7 @@ export async function runVerificationMetadata(
 export async function runVerificationProcess(
   command: string[],
   options: ProcessOptions,
+  ports = systemVerificationProcessPorts,
 ) {
   if (process.platform === "win32")
     throw new Error(
@@ -56,33 +104,22 @@ export async function runVerificationProcess(
       "aborted",
       "Verification command aborted before spawn",
     );
-  const started = performance.now();
-  const child = Bun.spawn(command, {
+  const started = ports.clock.monotonic();
+  const child = ports.spawn(command, {
     cwd: options.cwd,
     env: options.env,
-    detached: true,
-    stdin: "ignore",
-    stdout: "pipe",
-    stderr: "pipe",
   });
   let failure: unknown;
   let stopped: Promise<void> | undefined;
   let bytes = 0;
   const limit = options.maxOutputBytes ?? 8 * 1024 * 1024;
-  const signalGroup = (signal: NodeJS.Signals | 0) => {
-    try {
-      process.kill(-child.pid, signal);
-      return true;
-    } catch (error) {
-      if ((error as NodeJS.ErrnoException).code === "ESRCH") return false;
-      throw error;
-    }
-  };
+  const signalGroup = (signal: NodeJS.Signals | 0) =>
+    ports.signalGroup(child.pid, signal);
   const stop = () => {
     if (stopped) return stopped;
     if (!signalGroup("SIGTERM")) return Promise.resolve();
     stopped = new Promise<void>((resolve, reject) => {
-      setTimeout(() => {
+      ports.scheduler.schedule(() => {
         try {
           signalGroup("SIGKILL");
           resolve();
@@ -103,7 +140,7 @@ export async function runVerificationProcess(
     fail(
       new VerificationProcessError("aborted", "Verification command aborted"),
     );
-  const timer = setTimeout(
+  const timer = ports.scheduler.schedule(
     () =>
       fail(
         new VerificationProcessError(
@@ -166,11 +203,11 @@ export async function runVerificationProcess(
       code,
       stdout,
       stderr,
-      elapsedMs: Math.round(performance.now() - started),
+      elapsedMs: Math.round(ports.clock.monotonic() - started),
       maxRSSBytes: child.resourceUsage()?.maxRSS,
     };
   } finally {
-    clearTimeout(timer);
+    timer.cancel();
     options.signal?.removeEventListener("abort", abort);
     await stop();
   }

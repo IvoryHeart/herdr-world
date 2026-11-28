@@ -1,3 +1,4 @@
+import chromePin from "../tools/chrome/test-chrome.json";
 import { expect, test } from "bun:test";
 import { execFileSync, spawnSync } from "node:child_process";
 import {
@@ -62,6 +63,12 @@ function exercise(
       readFileSync(join(root, "package.json")),
     );
     writeFileSync(record, "");
+    // Chrome is a version-only port double; no fixture launches a real browser.
+    writeFileSync(
+      join(directory, "fixture-chrome"),
+      `#!/bin/sh\n[ "$1" = "--version" ] || exit 97\nprintf '%s\\n' 'Google Chrome for Testing ${chromePin.version}'\n`,
+      { mode: 0o755 },
+    );
     mkdirSync(record + ".started");
     // No command can finish until every static command has started. This
     // detects serialized execution without asserting a machine-speed limit.

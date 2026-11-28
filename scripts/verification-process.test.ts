@@ -1,5 +1,5 @@
 import { expect, test } from "bun:test";
-import { createConnection } from "node:net";
+import { checkerProcess } from "./testing/verification-process.fixture";
 import {
   runVerificationProcess,
   VerificationProcessError,
@@ -8,82 +8,117 @@ import {
 const unixTest = process.platform === "win32" ? test.skip : test;
 
 unixTest("bounded checker commands preserve output and status", async () => {
-  const result = await runVerificationProcess(
-    ["node", "-e", "console.log('synthetic-output'); process.exit(7)"],
+  const process = checkerProcess();
+  const running = runVerificationProcess(
+    ["synthetic-checker"],
     { timeoutMs: 2000 },
+    process.ports,
   );
+  process.output("synthetic-output\n");
+  process.error("synthetic-error\n");
+  process.clock.advance(1999);
+  process.finish(7);
+  const result = await running;
   expect(result.code).toBe(7);
   expect(result.stdout.trim()).toBe("synthetic-output");
+  expect(result.stderr.trim()).toBe("synthetic-error");
+  expect(result.elapsedMs).toBe(1999);
+  expect(result.maxRSSBytes).toBe(1024);
+  expect(process.clock.pending).toBe(0);
 });
 
 unixTest("timeout drains a SIGTERM-resistant checker grandchild", async () => {
+  const process = checkerProcess();
   let port = 0;
-  const grandchild =
-    "process.on('SIGTERM',()=>{}); const server=require('node:net').createServer(); server.listen(0,'127.0.0.1',()=>console.log(server.address().port));";
-  const parent = `const child=require('node:child_process').spawn(process.execPath,['-e',${JSON.stringify(grandchild)}],{stdio:['ignore','pipe','inherit']}); child.stdout.pipe(process.stdout); setInterval(()=>{},1000);`;
-  await expect(
-    runVerificationProcess(["node", "-e", parent], {
+  const running = runVerificationProcess(
+    ["synthetic-checker"],
+    {
       timeoutMs: 500,
       graceMs: 50,
       onOutput: (text) => {
         port = Number(text.trim());
       },
-    }),
-  ).rejects.toMatchObject({ reason: "timeout" });
+    },
+    process.ports,
+  );
+  void running.catch(() => {});
+  process.output("12345\n");
+  // The parent exits, but a resistant grandchild still owns its pipes.
+  process.exit(0);
+  process.clock.advance(499);
+  expect(process.signals).toEqual([]);
+  process.clock.advance(1);
+  expect(process.signals).toEqual(["SIGTERM"]);
+  expect(process.alive()).toBe(true);
+  process.clock.advance(49);
+  expect(process.alive()).toBe(true);
+  process.clock.advance(1);
+  await expect(running).rejects.toMatchObject({ reason: "timeout" });
   expect(port).toBeGreaterThan(0);
-  await new Promise<void>((resolve, reject) => {
-    const socket = createConnection({ host: "127.0.0.1", port });
-    socket.once("connect", () => {
-      socket.destroy();
-      reject(new Error("Checker grandchild survived timeout"));
-    });
-    socket.once("error", (error: NodeJS.ErrnoException) => {
-      if (error.code === "ECONNREFUSED") resolve();
-      else reject(error);
-    });
-  });
+  expect(process.signals).toEqual(["SIGTERM", "SIGKILL"]);
+  expect(process.alive()).toBe(false);
+  expect(process.clock.pending).toBe(0);
 });
 
 unixTest(
   "abort drains the owned command without crediting cancellation as success",
   async () => {
+    const process = checkerProcess();
     const controller = new AbortController();
-    await expect(
-      runVerificationProcess(
-        ["node", "-e", "console.log('ready'); setInterval(()=>{},1000)"],
-        {
-          timeoutMs: 2000,
-          signal: controller.signal,
-          graceMs: 20,
-          onOutput: () => controller.abort(),
-        },
-      ),
-    ).rejects.toMatchObject({ reason: "aborted" });
+    const running = runVerificationProcess(
+      ["synthetic-checker"],
+      {
+        timeoutMs: 2000,
+        signal: controller.signal,
+        graceMs: 20,
+        onOutput: () => controller.abort(),
+      },
+      process.ports,
+    );
+    void running.catch(() => {});
+    process.output("ready");
+    await process.terminated;
+    process.clock.advance(20);
+    await expect(running).rejects.toMatchObject({ reason: "aborted" });
+    expect(process.signals).toEqual(["SIGTERM", "SIGKILL"]);
+    expect(process.clock.pending).toBe(0);
   },
 );
 
 unixTest("observer errors and excessive output fail the command", async () => {
   const failure = new Error("synthetic observer failure");
-  await expect(
-    runVerificationProcess(
-      ["node", "-e", "console.log('ready'); setInterval(()=>{},1000)"],
-      {
-        timeoutMs: 2000,
-        graceMs: 20,
-        onOutput: () => {
-          throw failure;
-        },
+  const process = checkerProcess();
+  const running = runVerificationProcess(
+    ["synthetic-checker"],
+    {
+      timeoutMs: 2000,
+      graceMs: 20,
+      onOutput: () => {
+        throw failure;
       },
-    ),
-  ).rejects.toBe(failure);
-  await expect(
-    runVerificationProcess(
-      ["node", "-e", "console.log('x'.repeat(4096)); setInterval(()=>{},1000)"],
-      {
-        timeoutMs: 2000,
-        graceMs: 20,
-        maxOutputBytes: 100,
-      },
-    ),
-  ).rejects.toBeInstanceOf(VerificationProcessError);
+    },
+    process.ports,
+  );
+  void running.catch(() => {});
+  process.output("ready");
+  await process.terminated;
+  process.clock.advance(20);
+  await expect(running).rejects.toBe(failure);
+  const excessive = checkerProcess();
+  const limited = runVerificationProcess(
+    ["synthetic-checker"],
+    {
+      timeoutMs: 2000,
+      graceMs: 20,
+      maxOutputBytes: 100,
+    },
+    excessive.ports,
+  );
+  void limited.catch(() => {});
+  excessive.output("x".repeat(4096));
+  await excessive.terminated;
+  excessive.clock.advance(20);
+  await expect(limited).rejects.toBeInstanceOf(VerificationProcessError);
+  expect(excessive.signals).toEqual(["SIGTERM", "SIGKILL"]);
+  expect(excessive.clock.pending).toBe(0);
 });

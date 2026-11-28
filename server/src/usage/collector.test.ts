@@ -29,9 +29,11 @@ async function write(root: string, name: string, records: unknown[]) {
     path,
     records.map((r) => JSON.stringify(r)).join("\n") + "\n",
   );
+  // Inventory ordering is fixture data, independent of file creation speed.
+  await fs.utimes(path, new Date(now - 1000), new Date(now - 1000));
   return path;
 }
-const now = Date.now() + 1000;
+const now = Date.UTC(2026, 10, 19, 12);
 const assistant = (id = "response-a") => ({
   type: "assistant",
   sessionId: "synthetic-session",
