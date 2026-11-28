@@ -1,9 +1,7 @@
-import { connectCapture } from "./testing/connectCapture";
 import { captureScene, resizeCapture } from "./testing/captureScene";
-import { captureResumeViewports } from "./testing/resumeVisualCapture";
+import { captureResumeViewportsOnPage } from "./testing/resumeCaptureOnPage";
 import { afterAll, expect, test } from "bun:test";
-import { existsSync } from "node:fs";
-import { mkdtemp, readFile, rm } from "node:fs/promises";
+import { mkdtemp, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { basename, dirname, join } from "node:path";
 import { assetUrlImports } from "./testing/assetUrlImports";
@@ -12,14 +10,11 @@ import {
   waitForBrowserFixture,
 } from "../browserChrome";
 import { casePhases } from "./testing/casePhases";
-import { chromeRenderingFlags } from "./testing/chromeRendering";
-
-const chrome =
-  Bun.env.CHROME_BIN ||
-  (process.platform === "darwin" &&
-  existsSync("/Applications/Google Chrome.app/Contents/MacOS/Google Chrome")
-    ? "/Applications/Google Chrome.app/Contents/MacOS/Google Chrome"
-    : Bun.which("google-chrome") || Bun.which("chromium"));
+import {
+  chromeBinary as chrome,
+  openChromePage,
+  type ChromePage,
+} from "../testing/sharedChrome";
 
 // Every case loads the same bundle: build it once per test process.
 let bundleDirectory: Promise<string> | undefined;
@@ -108,6 +103,7 @@ test
     const result = Promise.withResolvers<unknown>();
     const publicDir = join(import.meta.dir, "..", "..", "public");
     const pageRequested = Promise.withResolvers<void>();
+    let browser: ChromePage | undefined;
     const server = Bun.serve({
       hostname: "127.0.0.1",
       port: 0,
@@ -145,11 +141,8 @@ test
           path === "/capture/resume-recovery"
         ) {
           if (resumeCaptureDir) {
-            const [port] = (
-              await readFile(join(dir, "profile", "DevToolsActivePort"), "utf8")
-            ).split("\n");
-            await captureResumeViewports(
-              port!,
+            await captureResumeViewportsOnPage(
+              browser!.command,
               resumeCaptureDir,
               path.endsWith("disconnected") ? "disconnected" : "recovery",
               {
@@ -166,49 +159,38 @@ test
         }
         if (path === "/capture/desktop" || path === "/capture/mobile") {
           if (captureDir) {
-            const [port] = (
-              await readFile(join(dir, "profile", "DevToolsActivePort"), "utf8")
-            ).split("\n");
-            const { command, close } = await connectCapture(port!);
-            try {
-              const original = await command("Runtime.evaluate", {
-                expression: "({width:innerWidth,height:innerHeight})",
-                returnByValue: true,
-              });
-              const dimensions = path.endsWith("mobile")
-                ? { width: 390, height: 844 }
-                : original.result.value;
-              if (path.endsWith("mobile"))
-                await resizeCapture(
-                  command,
-                  dimensions.width,
-                  dimensions.height,
-                );
-              const screenshot = await captureScene(command, {
-                ...dimensions,
-                content: {
-                  selector:
-                    ".workspace-inspector .workspace-inspector-tabs, .workspace-inspector .workspace-inspector-view-select",
-                  scope: "document",
-                },
-              });
-              await Bun.write(
-                join(captureDir, `${path.split("/").pop()}.png`),
-                screenshot.bytes,
+            const command = browser!.command;
+            const original = await command("Runtime.evaluate", {
+              expression: "({width:innerWidth,height:innerHeight})",
+              returnByValue: true,
+            });
+            const dimensions = path.endsWith("mobile")
+              ? { width: 390, height: 844 }
+              : original.result.value;
+            if (path.endsWith("mobile"))
+              await resizeCapture(command, dimensions.width, dimensions.height);
+            const screenshot = await captureScene(command, {
+              ...dimensions,
+              content: {
+                selector:
+                  ".workspace-inspector .workspace-inspector-tabs, .workspace-inspector .workspace-inspector-view-select",
+                scope: "document",
+              },
+            });
+            await Bun.write(
+              join(captureDir, `${path.split("/").pop()}.png`),
+              screenshot.bytes,
+            );
+            if (path.endsWith("mobile")) {
+              await resizeCapture(
+                command,
+                original.result.value.width,
+                original.result.value.height,
               );
-              if (path.endsWith("mobile")) {
-                await resizeCapture(
-                  command,
-                  original.result.value.width,
-                  original.result.value.height,
-                );
-                await command("Runtime.evaluate", {
-                  expression: `window.__HERDR_WORLD_CAPTURE__.wait(${JSON.stringify({ ...original.result.value, timeoutMs: 15000 })})`,
-                  awaitPromise: true,
-                });
-              }
-            } finally {
-              close();
+              await command("Runtime.evaluate", {
+                expression: `window.__HERDR_WORLD_CAPTURE__.wait(${JSON.stringify({ ...original.result.value, timeoutMs: 15000 })})`,
+                awaitPromise: true,
+              });
             }
           }
           return new Response(null, { status: 204 });
@@ -225,43 +207,27 @@ test
         );
       },
     });
-    let browser: ReturnType<typeof Bun.spawn> | undefined;
     try {
       const build = await handoffBuild();
       expect(build.success).toBe(true);
       for (const output of build.outputs) {
         assets.set(`/${basename(output.path)}`, output);
       }
-      const browserLog = join(dir, "browser.log");
       phases.mark("build");
       void pageRequested.promise.then(() => phases.mark("load"));
-      browser = Bun.spawn(
-        [
-          chrome!,
-          "--headless=new",
-          ...(captureDir || resumeCaptureDir
-            ? ["--remote-debugging-port=0"]
-            : []),
-          "--window-size=1440,1000",
-          "--enable-webgl",
-          ...(await chromeRenderingFlags(chrome!)),
-          "--disable-dev-shm-usage",
-          "--disable-background-networking",
-          "--no-first-run",
-          "--no-default-browser-check",
-          `--user-data-dir=${join(dir, "profile")}`,
+      browser = await openChromePage({
+        viewport: { width: 1440, height: 1000 },
+        pixels: !!(captureDir || resumeCaptureDir),
+      });
+      void browser
+        .navigate(
           `${server.url.href}town?scenario=${scenario}${resumeCaptureDir ? "&resume-gallery" : ""}`,
-        ],
-        { stdout: "ignore", stderr: Bun.file(browserLog) },
-      );
+        )
+        .catch(() => {});
       const observed = await waitForBrowserFixture(
         pageRequested.promise,
         result.promise,
-        browser.exited.then(async (code) => {
-          throw new Error(
-            `Browser exited (${code}): ${await readFile(browserLog, "utf8")}`,
-          );
-        }),
+        browser.exited,
         "World terminal handoff",
         // Independent phases keep the original per-step bounds and hang guard.
         // Measured case weights schedule work; they are not runtime deadlines.
@@ -272,8 +238,7 @@ test
         console.info("World handoff failure detail", JSON.stringify(observed));
       expect(observed).toEqual([]);
     } finally {
-      browser?.kill();
-      if (browser) await browser.exited;
+      await browser?.close();
       server.stop(true);
       await rm(dir, { recursive: true, force: true });
       phases.done();

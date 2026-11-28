@@ -4,18 +4,17 @@ import { tmpdir, loadavg } from "node:os";
 import { join, basename } from "node:path";
 import {
   BROWSER_STARTUP_TIMEOUT_MS,
-  stopChrome,
-  waitForChromePort,
   withBrowserDeadline,
 } from "../../browserChrome";
-import { chromeRenderingFlags } from "./chromeRendering";
-import { connectCapture } from "./connectCapture";
+import {
+  chromeBinary as chrome,
+  type ChromePage,
+  openChromePage,
+} from "../../testing/sharedChrome";
 import { captureScene, resizeCapture } from "./captureScene";
-import { captureResumeViewports } from "./resumeVisualCapture";
+import { captureResumeViewportsOnPage } from "./resumeCaptureOnPage";
 
 export function registerCaptureReadinessTests() {
-  const chrome =
-    Bun.env.CHROME_BIN || Bun.which("google-chrome") || Bun.which("chromium");
   test.skipIf(!chrome).each(["assets", "views", "recovery"])(
     "capture readiness (%s): controlled assets, resize/view fences and negative controls",
     async (scenario) => {
@@ -75,8 +74,7 @@ export function registerCaptureReadinessTests() {
           return new Response("Not found", { status: 404 });
         },
       });
-      let child: ReturnType<typeof Bun.spawn> | undefined;
-      let connection: Awaited<ReturnType<typeof connectCapture>> | undefined;
+      let page: ChromePage | undefined;
       try {
         const build = await Bun.build({
           entrypoints: [join(import.meta.dir, "CaptureReadiness.browser.tsx")],
@@ -107,24 +105,13 @@ export function registerCaptureReadinessTests() {
         expect(build.success).toBe(true);
         for (const output of build.outputs)
           assets.set(`/${basename(output.path)}`, output);
-        const log = join(dir, "chrome.log"),
-          profile = join(dir, "profile");
-        child = Bun.spawn(
-          [
-            chrome!,
-            "--headless=new",
-            "--remote-debugging-port=0",
-            "--no-first-run",
-            "--no-default-browser-check",
-            `--user-data-dir=${profile}`,
-            ...(await chromeRenderingFlags(chrome!)),
-            server.url.href,
-          ],
-          { stdout: "ignore", stderr: Bun.file(log) },
-        );
-        const port = await waitForChromePort(child, profile, log);
-        connection = await connectCapture(port);
-        const command = connection.command;
+        // Captures are asserted pixels: the Town draws.
+        page = await openChromePage({
+          viewport: { width: 1512, height: 982 },
+          pixels: true,
+        });
+        await page.navigate(server.url.href);
+        const command = page.command;
         const evaluate = async (expression: string) => {
           const r = await command("Runtime.evaluate", {
             expression,
@@ -212,8 +199,8 @@ export function registerCaptureReadinessTests() {
           }
           // Request-driven captures: all five sizes, the same synthetic topology.
           if (Bun.env.WORLD_CAPTURE_EVIDENCE_DIR)
-            await captureResumeViewports(
-              port,
+            await captureResumeViewportsOnPage(
+              command,
               Bun.env.WORLD_CAPTURE_EVIDENCE_DIR,
               "town",
               { content: { selector: "canvas[data-office-canvas]" } },
@@ -258,8 +245,8 @@ export function registerCaptureReadinessTests() {
               ),
             ).toBe(false);
             if (Bun.env.WORLD_CAPTURE_EVIDENCE_DIR)
-              await captureResumeViewports(
-                port,
+              await captureResumeViewportsOnPage(
+                command,
                 Bun.env.WORLD_CAPTURE_EVIDENCE_DIR,
                 view,
                 {
@@ -353,7 +340,7 @@ export function registerCaptureReadinessTests() {
           const failedDir = join(dir, "failed-capture");
           let neverArtifact = "";
           try {
-            await captureResumeViewports(port, failedDir, "never", {
+            await captureResumeViewportsOnPage(command, failedDir, "never", {
               timeoutMs: 100,
             });
           } catch (e) {
@@ -413,8 +400,7 @@ export function registerCaptureReadinessTests() {
         image.resolve();
         font.resolve();
         never.resolve();
-        connection?.close();
-        await stopChrome(child);
+        await page?.close();
         server.stop(true);
         await rm(dir, { recursive: true, force: true });
       }

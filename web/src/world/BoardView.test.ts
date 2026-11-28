@@ -3,24 +3,18 @@ import { registerCaptureReadinessTests } from "./testing/captureReadinessBrowser
 registerCaptureReadinessTests();
 import { expect, test } from "bun:test";
 import { existsSync } from "node:fs";
-import { mkdir, mkdtemp, readFile, rm } from "node:fs/promises";
+import { mkdir, mkdtemp, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { basename, join } from "node:path";
 import {
   BROWSER_STARTUP_TIMEOUT_MS,
-  stopChrome,
-  waitForChromePort,
   waitForBrowserFixture,
-  withBrowserDeadline,
 } from "../browserChrome";
-import { chromeRenderingFlags } from "./testing/chromeRendering";
-
-const chrome =
-  Bun.env.CHROME_BIN ||
-  (process.platform === "darwin" &&
-  existsSync("/Applications/Google Chrome.app/Contents/MacOS/Google Chrome")
-    ? "/Applications/Google Chrome.app/Contents/MacOS/Google Chrome"
-    : Bun.which("google-chrome") || Bun.which("chromium"));
+import {
+  chromeBinary as chrome,
+  type ChromePage,
+  openChromePage,
+} from "../testing/sharedChrome";
 
 const unavailableObservability = {
   health: "unavailable",
@@ -117,11 +111,7 @@ test.skipIf(!chrome).each([
         return new Response("Not found", { status: 404 });
       },
     });
-    let browser: ReturnType<typeof Bun.spawn> | undefined;
-    let socket: WebSocket | undefined;
-    let cdp:
-      | ((method: string, params?: object) => Promise<Record<string, unknown>>)
-      | undefined;
+    let page: ChromePage | undefined;
     try {
       const build = await Bun.build({
         entrypoints: [join(import.meta.dir, "BoardView.browser.tsx")],
@@ -131,91 +121,16 @@ test.skipIf(!chrome).each([
       expect(build.success).toBe(true);
       for (const output of build.outputs)
         assets.set(`/${basename(output.path)}`, output);
-      const browserLog = join(dir, "browser.log");
-      browser = Bun.spawn(
-        [
-          chrome!,
-          "--headless=new",
-          "--remote-debugging-port=0",
-          `--window-size=${width},${height}`,
-          ...(motion === " with reduced motion"
-            ? ["--force-prefers-reduced-motion"]
-            : []),
-          "--enable-webgl",
-          ...(await chromeRenderingFlags(chrome!)),
-          "--disable-background-networking",
-          "--no-first-run",
-          "--no-default-browser-check",
-          `--user-data-dir=${join(dir, "profile")}`,
-          "about:blank",
-        ],
-        { stdout: "ignore", stderr: Bun.file(browserLog) },
-      );
-      // Headless Chrome clamps a narrow window to 500 CSS px. Set the actual
-      // viewport before navigation; all setup remains in the startup deadline.
+      page = await openChromePage({
+        viewport: { width, height, mobile: width <= 720 },
+        touch: width <= 720,
+        reducedMotion: motion === " with reduced motion",
+      });
+      // BOARD_SCENARIO="<name>[|<name>…]" selects focused diagnostics.
+      const chosen = Bun.env.BOARD_SCENARIO || scenario;
+      const opened = page;
       const requested = (async () => {
-        const port = await waitForChromePort(
-          browser!,
-          join(dir, "profile"),
-          browserLog,
-        );
-        const targets = (await withBrowserDeadline(
-          fetch(`http://127.0.0.1:${port}/json/list`).then((response) =>
-            response.json(),
-          ),
-          "Board debugger discovery",
-        )) as { type: string; webSocketDebuggerUrl: string }[];
-        socket = new WebSocket(
-          targets.find((target) => target.type === "page")!
-            .webSocketDebuggerUrl,
-        );
-        await withBrowserDeadline(
-          new Promise<void>((resolve, reject) => {
-            socket!.onopen = () => resolve();
-            socket!.onerror = () =>
-              reject(new Error("Board CDP connection failed"));
-          }),
-          "Board CDP connection",
-        );
-        let id = 0;
-        const pending = new Map<
-          number,
-          {
-            resolve(value: Record<string, unknown>): void;
-            reject(reason: Error): void;
-          }
-        >();
-        socket.onmessage = (event) => {
-          const response = JSON.parse(String(event.data));
-          const request = pending.get(response.id);
-          if (!request) return;
-          pending.delete(response.id);
-          if (response.error) request.reject(new Error(response.error.message));
-          else request.resolve(response.result);
-        };
-        cdp = (method, params = {}) =>
-          withBrowserDeadline(
-            new Promise((resolve, reject) => {
-              pending.set(++id, { resolve, reject });
-              socket!.send(JSON.stringify({ id, method, params }));
-            }),
-            `Board CDP ${method}`,
-          );
-        await cdp("Emulation.setDeviceMetricsOverride", {
-          width,
-          height,
-          deviceScaleFactor: 1,
-          mobile: width <= 720,
-        });
-        await cdp("Emulation.setFocusEmulationEnabled", { enabled: true });
-        if (width <= 720)
-          await cdp("Emulation.setTouchEmulationEnabled", {
-            enabled: true,
-            maxTouchPoints: 1,
-          });
-        // BOARD_SCENARIO="<name>[|<name>…]" selects focused diagnostics.
-        const chosen = Bun.env.BOARD_SCENARIO || scenario;
-        await cdp("Page.navigate", {
+        await opened.command("Page.navigate", {
           url: `${server.url.href}?mode=test&width=${width}&height=${height}${chosen ? `&scenario=${encodeURIComponent(chosen)}` : ""}`,
         });
         await pageRequested.promise;
@@ -223,19 +138,16 @@ test.skipIf(!chrome).each([
       const failures = await waitForBrowserFixture(
         requested,
         result.promise,
-        browser.exited.then(async (code) => {
-          throw new Error(
-            `Browser exited (${code}): ${await readFile(browserLog, "utf8")}`,
-          );
-        }),
+        page.exited,
         "Board browser check",
         // The check walks the whole board on test time (about 20 s of it),
         // which takes about a second locally; the rest is headroom.
         30_000,
       );
       expect(failures).toEqual([]);
-      if (cdp) {
-        const command = cdp;
+      {
+        const command = (method: string, params?: Record<string, unknown>) =>
+          opened.command(method, params) as Promise<Record<string, unknown>>;
         const writeCapture = async (filename: string) => {
           const capture = await captureScene(command, {
             view: "board",
@@ -279,8 +191,7 @@ test.skipIf(!chrome).each([
         }
       }
     } finally {
-      socket?.close();
-      await stopChrome(browser);
+      await page?.close();
       server.stop(true);
       await rm(dir, { recursive: true, force: true });
     }

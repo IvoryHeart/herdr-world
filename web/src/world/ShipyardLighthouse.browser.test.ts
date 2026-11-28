@@ -1,25 +1,17 @@
 import { expect, test } from "bun:test";
-import { existsSync } from "node:fs";
 import { mkdtemp, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import {
   BROWSER_STARTUP_TIMEOUT_MS,
-  stopChrome,
   waitForBrowserFixture,
-  waitForChromePort,
 } from "../browserChrome";
+import {
+  chromeBinary as chrome,
+  type ChromePage,
+  openChromePage,
+} from "../testing/sharedChrome";
 import { buildWorldBrowserBundle } from "./testing/browserBundles";
-import { connectCapture } from "./testing/connectCapture";
-
-const chrome =
-  Bun.env.CHROME_BIN ||
-  Bun.which("google-chrome") ||
-  Bun.which("chromium") ||
-  (process.platform === "darwin" &&
-  existsSync("/Applications/Google Chrome.app/Contents/MacOS/Google Chrome")
-    ? "/Applications/Google Chrome.app/Contents/MacOS/Google Chrome"
-    : undefined);
 
 const VIEWPORTS = [
   { name: "phone", width: 390, height: 844, mobile: false },
@@ -57,38 +49,18 @@ test.skipIf(!chrome)(
           : new Response("Not found", { status: 404 });
       },
     });
-    let child: ReturnType<typeof Bun.spawn> | undefined;
-    let connection: Awaited<ReturnType<typeof connectCapture>> | undefined;
+    let page: ChromePage | undefined;
     try {
-      const log = join(dir, "chrome.log");
-      const profile = join(dir, "profile");
-      child = Bun.spawn(
-        [
-          chrome!,
-          "--headless=new",
-          "--disable-gpu",
-          "--remote-debugging-port=0",
-          "--window-size=1512,982",
-          "--no-first-run",
-          "--no-default-browser-check",
-          `--user-data-dir=${profile}`,
-          "about:blank",
-        ],
-        { stdout: "ignore", stderr: Bun.file(log) },
-      );
-      const exited = child.exited.then(async (code) => {
-        throw new Error(`Chrome exited ${code}: ${await Bun.file(log).text()}`);
+      page = await openChromePage({
+        viewport: { width: VIEWPORTS[1].width, height: VIEWPORTS[1].height },
       });
-      connection = await connectCapture(
-        await waitForChromePort(child, profile, log),
-      );
       for (const viewport of VIEWPORTS)
         for (const mode of MODES)
           for (const town of TOWNS)
             for (const partial of mode === "many" && town === "usual"
               ? [false, true]
               : [false]) {
-              await connection.command("Emulation.setDeviceMetricsOverride", {
+              await page.command("Emulation.setDeviceMetricsOverride", {
                 width: viewport.width,
                 height: viewport.height,
                 deviceScaleFactor: 1,
@@ -96,7 +68,7 @@ test.skipIf(!chrome)(
               });
               result = Promise.withResolvers<string[]>();
               requested = Promise.withResolvers<void>();
-              await connection.command("Page.navigate", {
+              await page.command("Page.navigate", {
                 url: `${server.url.href}?mode=${mode}${viewport.name === "phone" ? "&phone" : ""}${town === "large" ? "&large" : ""}${partial ? "&partial" : ""}`,
               });
               const scene = `${mode}-${town}-${viewport.name}${partial ? "-partial" : ""}`;
@@ -105,15 +77,14 @@ test.skipIf(!chrome)(
                 failures: await waitForBrowserFixture(
                   requested.promise,
                   result.promise,
-                  exited,
+                  page.exited,
                   `Shipyard lighthouse ${scene}`,
                   BROWSER_STARTUP_TIMEOUT_MS,
                 ),
               }).toEqual({ scene, failures: [] });
             }
     } finally {
-      connection?.close();
-      await stopChrome(child);
+      await page?.close();
       server.stop(true);
       await rm(dir, { recursive: true, force: true });
     }

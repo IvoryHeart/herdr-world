@@ -1,9 +1,15 @@
-import { existsSync } from "node:fs";
+import { existsSync, readFileSync } from "node:fs";
 import { mkdtemp, rm } from "node:fs/promises";
-import { tmpdir } from "node:os";
+import { availableParallelism, tmpdir } from "node:os";
 import { join } from "node:path";
 import { withBrowserDeadline } from "../browserChrome";
-import { chromeRenderingFlags } from "../world/testing/chromeRendering";
+import {
+  chromeRenderingFlags,
+  GPU_FLAGS,
+  PROBE_PAGE,
+  PROBE_TIMEOUT_MS,
+  type ProbeRun,
+} from "../world/testing/chromeRendering";
 
 /**
  * The one place test code starts Chrome (AGENTS.md: one shared browser per
@@ -31,6 +37,26 @@ const LAUNCH_TIMEOUT_MS = 30_000;
 /** How much of Chrome's stderr a failure quotes. */
 const LOG_TAIL = 16_000;
 
+/**
+ * The CPUs this job really has: the process's CPU affinity, lowered by a
+ * cgroup CPU quota (`cpu.max`, as in containers and CI sandboxes) when one
+ * is set.
+ */
+export function jobCpus(
+  cpuMax: () => string = () => readFileSync("/sys/fs/cgroup/cpu.max", "utf8"),
+  affinity: number = availableParallelism(),
+): number {
+  let quota = Number.POSITIVE_INFINITY;
+  try {
+    const [limit, period] = cpuMax().trim().split(/\s+/);
+    if (limit && limit !== "max" && Number(period) > 0)
+      quota = Math.ceil(Number(limit) / Number(period));
+  } catch {
+    // No cgroup v2 CPU controller: the affinity is the limit.
+  }
+  return Math.max(1, Math.min(affinity, quota));
+}
+
 /** Flags every test browser shares; a case's needs are page emulation. */
 export async function testChromeFlags(chrome: string): Promise<string[]> {
   return [
@@ -46,16 +72,57 @@ export async function testChromeFlags(chrome: string): Promise<string[]> {
     "--disable-extensions",
     "--disable-sync",
     "--disable-dev-shm-usage",
+    "--mute-audio",
     // Concurrent cases share one browser; none may be throttled as hidden.
     "--disable-background-timer-throttling",
     "--disable-backgrounding-occluded-windows",
     "--disable-renderer-backgrounding",
-    // Pages that use WebGL get SwiftShader (or the local GPU opt-in).
+    // Pages that use WebGL get SwiftShader (or the local GPU opt-in). One
+    // Chrome per job means one SwiftShader pool, which follows the CPU
+    // affinity; raster threads stay within the job's CPUs too.
     "--enable-webgl",
+    `--num-raster-threads=${Math.min(4, jobCpus())}`,
     ...(await chromeRenderingFlags(chrome)),
     // Containers running as root have no usable sandbox.
     ...(process.getuid?.() === 0 ? ["--no-sandbox"] : []),
   ];
+}
+
+/**
+ * The local GPU opt-in's probe (chromeRendering.ts): one short Chrome that
+ * prints its WebGL renderer and exits.
+ */
+export async function runProbeChrome(
+  chrome: string,
+  profile: string,
+): Promise<ProbeRun> {
+  const child = Bun.spawn(
+    [
+      chrome,
+      "--headless=new",
+      "--no-first-run",
+      "--no-default-browser-check",
+      `--user-data-dir=${profile}`,
+      ...GPU_FLAGS,
+      "--dump-dom",
+      PROBE_PAGE,
+    ],
+    { stdout: "pipe", stderr: "ignore" },
+  );
+  let timedOut = false;
+  const timer = setTimeout(() => {
+    timedOut = true;
+    child.kill("SIGKILL");
+  }, PROBE_TIMEOUT_MS);
+  try {
+    const [output, exitCode] = await Promise.all([
+      new Response(child.stdout).text(),
+      child.exited,
+    ]);
+    return { output, exitCode, timedOut };
+  } finally {
+    clearTimeout(timer);
+  }
 }
 
 export type LaunchedChrome = {
@@ -249,6 +316,8 @@ export type ChromePage = {
   navigate(url: string): Promise<void>;
   /** Rejects if the browser goes away while the case runs. */
   exited: Promise<never>;
+  /** The case's own browser context, for a second tab of the same window. */
+  browserContextId: string;
   close(): Promise<void>;
 };
 
@@ -388,6 +457,15 @@ export async function openPage(
   };
   await command("Runtime.enable");
   await command("Page.enable");
+  // A case's page starts on about:blank. Drop that entry once its first page
+  // has loaded its document (the commit event itself can come before the
+  // browser records the entry), so the app's history starts there, as in a
+  // Chrome launched on that address: `history.back()` from the first view
+  // must not leave it.
+  const offFirstDocument = on("Page.domContentEventFired", () => {
+    offFirstDocument();
+    void command("Page.resetNavigationHistory").catch(() => {});
+  });
   // Only one window holds real focus; every case behaves as the focused page.
   await command("Emulation.setFocusEmulationEnabled", { enabled: true });
   await command("Emulation.setDeviceMetricsOverride", {
@@ -418,6 +496,7 @@ export async function openPage(
     waitFor,
     navigate,
     exited,
+    browserContextId,
     async close() {
       browser.listeners.delete(sessionId);
       await browser

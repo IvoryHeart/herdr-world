@@ -1,17 +1,13 @@
 import { expect, test } from "bun:test";
-import { existsSync } from "node:fs";
 import { mkdtemp, readFile, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { basename, join } from "node:path";
 import { assetUrlImports } from "./world/testing/assetUrlImports";
-import { stopChrome } from "./browserChrome";
-
-const chrome =
-  Bun.env.CHROME_BIN ||
-  (process.platform === "darwin" &&
-  existsSync("/Applications/Google Chrome.app/Contents/MacOS/Google Chrome")
-    ? "/Applications/Google Chrome.app/Contents/MacOS/Google Chrome"
-    : Bun.which("google-chrome") || Bun.which("chromium"));
+import {
+  chromeBinary as chrome,
+  openChromePage,
+  type ChromePage,
+} from "./testing/sharedChrome";
 
 for (const narrow of [false, true])
   test.skipIf(!chrome)(
@@ -55,7 +51,7 @@ for (const narrow of [false, true])
           return new Response("Not found", { status: 404 });
         },
       });
-      let child: ReturnType<typeof Bun.spawn> | undefined;
+      let page: ChromePage | undefined;
       let timer: ReturnType<typeof setTimeout> | undefined;
       try {
         const build = await Bun.build({
@@ -90,7 +86,6 @@ for (const narrow of [false, true])
         expect(build.success).toBe(true);
         for (const asset of build.outputs)
           assets.set(`/${basename(asset.path)}`, asset);
-        const errorOutput = join(dir, "browser.log");
         const browserUrl = `http://127.0.0.1:${server.port}/${narrow ? "?annotations-only" : ""}`;
         events.push(`server.url=${server.url.href}; browserUrl=${browserUrl}`);
         const selfCheck = await fetch(browserUrl, {
@@ -98,36 +93,15 @@ for (const narrow of [false, true])
         });
         events.push(`self-check status=${selfCheck.status}`);
         expect(selfCheck.status).toBe(200);
-        child = Bun.spawn(
-          [
-            chrome!,
-            "--headless=new",
-            narrow ? "--window-size=390,844" : "--window-size=1280,900",
-            "--disable-gpu",
-            "--disable-background-networking",
-            "--disable-component-update",
-            "--no-first-run",
-            "--no-default-browser-check",
-            "--disable-sync",
-            "--disable-default-apps",
-            "--disable-extensions",
-            "--metrics-recording-only",
-            "--no-proxy-server",
-            `--user-data-dir=${join(dir, "profile")}`,
-            "--enable-logging=stderr",
-            "--v=1",
-            `--log-net-log=${join(dir, "netlog.json")}`,
-            browserUrl,
-          ],
-          { stdout: "ignore", stderr: Bun.file(errorOutput) },
-        );
+        page = await openChromePage({
+          viewport: narrow
+            ? { width: 390, height: 844 }
+            : { width: 1280, height: 900 },
+        });
+        await page.command("Page.navigate", { url: browserUrl });
         const failures = await Promise.race([
           promise,
-          child.exited.then(async (code) => {
-            throw new Error(
-              `Browser exited (${code}): ${await readFile(errorOutput, "utf8")}`,
-            );
-          }),
+          page.exited,
           new Promise<never>((_, reject) => {
             timer = setTimeout(
               () =>
@@ -147,7 +121,7 @@ for (const narrow of [false, true])
       } finally {
         clearTimeout(timer);
         server.stop(true);
-        await stopChrome(child);
+        await page?.close();
         await writeFile(join(dir, "events.log"), events.join("\n"));
         console.info(`Browser fixture evidence: ${dir}`);
       }

@@ -1,13 +1,16 @@
 import { expect, test } from "bun:test";
-import { existsSync } from "node:fs";
-import { mkdtemp, readFile, rm } from "node:fs/promises";
+import { mkdtemp, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import {
   BROWSER_STARTUP_TIMEOUT_MS,
-  stopChrome,
   waitForBrowserFixture,
 } from "../../../web/src/browserChrome";
+import {
+  chromeBinary as chrome,
+  type ChromePage,
+  openChromePage,
+} from "../../../web/src/testing/sharedChrome";
 import { browserRequestAdmissionError } from "../http/browser-admission";
 import { type IdeUpstream, proxyIdeHttp } from "./proxy";
 
@@ -21,12 +24,6 @@ import { type IdeUpstream, proxyIdeHttp } from "./proxy";
  * and pages' service-worker scope.
  */
 
-const chrome =
-  Bun.env.CHROME_BIN ||
-  (process.platform === "darwin" &&
-  existsSync("/Applications/Google Chrome.app/Contents/MacOS/Google Chrome")
-    ? "/Applications/Google Chrome.app/Contents/MacOS/Google Chrome"
-    : Bun.which("google-chrome") || Bun.which("chromium"));
 const openssl = Bun.which("openssl");
 
 const ID = "AbCdEfGhIjKlMnOpQrStUv";
@@ -217,33 +214,23 @@ test.skipIf(!chrome || !openssl)(
       },
     });
 
-    let child: ReturnType<typeof Bun.spawn> | undefined;
+    let page: ChromePage | undefined;
     try {
-      const errorOutput = join(dir, "browser.log");
-      child = Bun.spawn(
-        [
-          chrome!,
-          "--headless",
-          "--disable-gpu",
-          "--window-size=1000,700",
-          "--no-first-run",
-          "--no-default-browser-check",
-          "--ignore-certificate-errors",
+      // Chrome maps the webview host to the local HTTPS server: a launch flag.
+      page = await openChromePage({
+        viewport: { width: 1000, height: 700 },
+        launchFlags: [
           `--host-resolver-rules=MAP ${WEBVIEW_HOST}:443 127.0.0.1:${webviews.port}, EXCLUDE 127.0.0.1, MAP * ~NOTFOUND`,
-          `--user-data-dir=${join(dir, "profile")}`,
-          `${worldOrigin}/start`,
         ],
-        { stdout: "ignore", stderr: Bun.file(errorOutput) },
-      );
-      const exited = child.exited.then(async (code) => {
-        throw new Error(
-          `Browser exited (${code}): ${await readFile(errorOutput, "utf8")}`,
-        );
       });
+      await page.command("Security.setIgnoreCertificateErrors", {
+        ignore: true,
+      });
+      await page.command("Page.navigate", { url: `${worldOrigin}/start` });
       const { hostile, violations } = await waitForBrowserFixture(
         pageRequested.promise,
         result.promise,
-        exited,
+        page.exited,
         "Webview origin",
         40_000,
       );
@@ -277,7 +264,7 @@ test.skipIf(!chrome || !openssl)(
       world.stop(true);
       webviews.stop(true);
       ide.stop(true);
-      await stopChrome(child);
+      await page?.close();
       await rm(dir, { recursive: true, force: true });
     }
   },

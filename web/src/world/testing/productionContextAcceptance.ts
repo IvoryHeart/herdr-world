@@ -20,16 +20,17 @@ import {
 import {
   BROWSER_STARTUP_TIMEOUT_MS,
   waitForBrowserFixture,
-  waitForChromePort,
 } from "../../browserChrome";
+import {
+  chromeBinary as chrome,
+  openChromePage,
+  type ChromePage,
+} from "../../testing/sharedChrome";
 import { worldBrowserBundle } from "./worldBrowserBundle";
 import { casePhases } from "./casePhases";
-import { chromeRenderingFlags } from "./chromeRendering";
+import { pageCdpEndpoint } from "./pageCdpEndpoint";
 import { recordLatency } from "./latencyTrend";
 import { productionWorkCeilings, workViolations } from "./workCeilings";
-
-const chrome =
-  Bun.env.CHROME_BIN || Bun.which("google-chrome") || Bun.which("chromium");
 
 export function registerProductionContextTests(group: ProductionContextGroup) {
   test
@@ -264,6 +265,7 @@ export function registerProductionContextTests(group: ProductionContextGroup) {
           "terminal-frame",
         );
       const pageRequested = Promise.withResolvers<void>();
+      let stopCdp = () => {};
       const server = Bun.serve({
         hostname: "127.0.0.1",
         port: 0,
@@ -277,16 +279,8 @@ export function registerProductionContextTests(group: ProductionContextGroup) {
           }
           if (url.pathname === "/input-ready") {
             const phase = url.searchParams.get("phase")!;
-            // Chrome chose its own DevTools port (no reserved number another
-            // server could be handed) and wrote it to the profile.
-            const debuggingPort = await waitForChromePort(
-              browser!,
-              dir + "/profile",
-              dir + "/browser.log",
-            );
-            const pages = (await (
-              await fetch("http://127.0.0.1:" + debuggingPort + "/json/list")
-            ).json()) as { type: string; webSocketDebuggerUrl: string }[];
+            const cdp = await pageCdpEndpoint(browser!);
+            stopCdp = cdp.stop;
             await command({
               action: "start",
               timings: diagnostic,
@@ -296,8 +290,7 @@ export function registerProductionContextTests(group: ProductionContextGroup) {
                 ? `${Bun.env.WORLD_TRACE_PREFIX}-${view}${entry ? `-${entry}` : ""}-${width}-${phase}.json`
                 : undefined,
               phase,
-              url: pages.find((page) => page.type === "page")!
-                .webSocketDebuggerUrl,
+              url: cdp.url,
             });
             return new Response("ready");
           }
@@ -532,40 +525,31 @@ export function registerProductionContextTests(group: ProductionContextGroup) {
           },
         },
       });
-      let browser: ReturnType<typeof Bun.spawn> | undefined;
+      let browser: ChromePage | undefined;
       try {
         phases.mark("setup");
         void pageRequested.promise.then(() => phases.mark("load"));
-        browser = Bun.spawn(
-          [
-            chrome!,
-            "--headless=new",
-            "--no-sandbox",
-            "--disable-dev-shm-usage",
-            ...(await chromeRenderingFlags(chrome!)),
-            "--disable-background-timer-throttling",
-            "--disable-renderer-backgrounding",
-            "--disable-backgrounding-occluded-windows",
-            "--remote-debugging-port=0",
-            "--user-data-dir=" + dir + "/profile",
-            "--window-size=" + width + ",1100",
+        browser = await openChromePage({
+          viewport: { width, height: 1100 },
+          // The case budgets presented frames: Town draws for real.
+          pixels: true,
+        });
+        void browser
+          .navigate(
             server.url +
               "?view=" +
               view +
               "&entry=" +
               entry +
               (Bun.env.WORLD_TRACE_PREFIX ? "&trace=1" : ""),
-          ],
-          { stdout: "ignore", stderr: Bun.file(dir + "/browser.log") },
-        );
+          )
+          .catch(() => {});
         // Keep both observation/render phases and the deliberate 20-second stall
         // in the original fixture budget. Input latency has separate budgets.
         const observed = await waitForBrowserFixture(
           pageRequested.promise,
           result.promise,
-          browser.exited.then((code) => {
-            throw new Error(`Browser exited ${code}`);
-          }),
+          browser.exited,
           "Production context acceptance deadline",
           90_000,
         );
@@ -727,8 +711,8 @@ export function registerProductionContextTests(group: ProductionContextGroup) {
         fixture?.release();
         producer.terminate();
         clearInterval(noise);
-        browser?.kill();
-        if (browser) await browser.exited;
+        await browser?.close();
+        stopCdp();
         server.stop(true);
         await rm(dir, { recursive: true, force: true });
         phases.done();

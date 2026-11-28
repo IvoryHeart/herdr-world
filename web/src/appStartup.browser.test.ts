@@ -2,11 +2,13 @@ import { expect, test } from "bun:test";
 import { mkdtemp, mkdir, rm } from "node:fs/promises";
 import { join, resolve } from "node:path";
 import { createServer } from "vite";
-import { stopChrome, waitForBrowserFixture } from "./browserChrome";
-import { SWIFTSHADER_FLAGS } from "./world/testing/chromeRendering";
+import { waitForBrowserFixture } from "./browserChrome";
+import {
+  chromeBinary as chrome,
+  openChromePage,
+  type ChromePage,
+} from "./testing/sharedChrome";
 
-const chrome =
-  Bun.env.CHROME_BIN || Bun.which("google-chrome") || Bun.which("chromium");
 const root = resolve(import.meta.dir, "../..");
 type Result = { mounted: boolean; entry: string | null; errors: string[] };
 
@@ -27,7 +29,7 @@ test.skipIf(!chrome).each(["app", "title-spinner", "board-text"] as const)(
       fetch: () => Response.json({}),
     });
     const target = backend.url.origin;
-    let child: ReturnType<typeof Bun.spawn> | undefined;
+    let page: ChromePage | undefined;
     let vite: Awaited<ReturnType<typeof createServer>> | undefined;
     try {
       vite = await createServer({
@@ -176,35 +178,18 @@ test.skipIf(!chrome).each(["app", "title-spinner", "board-text"] as const)(
       const address = vite.resolvedUrls?.local[0];
       if (!address) throw new Error("Missing isolated dev URL");
       expect([8787, 8788, 8789]).not.toContain(Number(new URL(address).port));
-      child = Bun.spawn(
-        [
-          chrome!,
-          "--headless=new",
-          "--no-sandbox",
-          "--disable-dev-shm-usage",
-          "--no-first-run",
-          "--no-default-browser-check",
-          "--disable-background-networking",
-          "--disable-component-update",
-          "--disable-sync",
-          "--no-proxy-server",
-          "--window-size=1440,900",
-          `--user-data-dir=${join(directory, "profile")}`,
-          ...SWIFTSHADER_FLAGS,
-          spinnerPreview
-            ? address + "?titleSpinnerFixture&keep=yes"
-            : boardPreview
-              ? address + "?boardTextConflictFixture&keep=yes"
-              : address,
-        ],
-        { stdout: "ignore", stderr: "ignore" },
-      );
+      page = await openChromePage({ viewport: { width: 1440, height: 900 } });
+      await page.command("Page.navigate", {
+        url: spinnerPreview
+          ? address + "?titleSpinnerFixture&keep=yes"
+          : boardPreview
+            ? address + "?boardTextConflictFixture&keep=yes"
+            : address,
+      });
       const observed = await waitForBrowserFixture(
         pageRequested.promise,
         result.promise,
-        child.exited.then((code) => {
-          throw new Error(`Browser exited ${code}`);
-        }),
+        page.exited,
         "Real application startup",
         95000,
       );
@@ -213,7 +198,7 @@ test.skipIf(!chrome).each(["app", "title-spinner", "board-text"] as const)(
     } finally {
       backend.stop(true);
       try {
-        await stopChrome(child);
+        await page?.close();
       } finally {
         try {
           await vite?.close();

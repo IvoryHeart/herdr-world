@@ -6,15 +6,18 @@ import { assetUrlImports } from "./testing/assetUrlImports";
 import {
   BROWSER_STARTUP_TIMEOUT_MS,
   waitForBrowserFixture,
-  waitForChromePort,
 } from "../browserChrome";
+import {
+  chromeBinary as chrome,
+  openChromePage,
+  type ChromePage,
+} from "../testing/sharedChrome";
 import { InputDriver, denseSnapshot } from "./browserAcceptanceFixture";
 import { startIndependentInput } from "./independentInputSchedule";
+import { pageCdpEndpoint } from "./testing/pageCdpEndpoint";
 import { recordLatency } from "./testing/latencyTrend";
 import { chromeMajor, concurrentWorkViolations } from "./testing/workCeilings";
 
-const chrome =
-  Bun.env.CHROME_BIN || Bun.which("google-chrome") || Bun.which("chromium");
 const browserMajor = chrome
   ? chromeMajor(Bun.spawnSync([chrome, "--version"]).stdout.toString())
   : undefined;
@@ -26,6 +29,7 @@ test.skipIf(!chrome).each([1440, 390])(
     const assets = new Map<string, Blob>();
     const payload = await denseSnapshot();
     let driver: InputDriver | undefined;
+    let stopCdp = () => {};
     const inputRuns = new Map<
       string,
       { stop(): void; pending: Promise<void>[] }
@@ -75,21 +79,9 @@ test.skipIf(!chrome).each([1440, 390])(
         if (path === "/input-ready") {
           const phase = new URL(request.url).searchParams.get("phase")!;
           if (!driver) {
-            // The page's readiness request proves Chrome has started. Chrome
-            // chose its own DevTools port (no reserved number another server
-            // could be handed) and wrote it to the profile.
-            const debuggingPort = await waitForChromePort(
-              browser!,
-              join(dir, "profile"),
-              join(dir, "browser.log"),
-            );
-            const targets = (await (
-              await fetch(`http://127.0.0.1:${debuggingPort}/json/list`)
-            ).json()) as { type: string; webSocketDebuggerUrl: string }[];
-            const socket = new WebSocket(
-              targets.find((target) => target.type === "page")!
-                .webSocketDebuggerUrl,
-            );
+            const cdp = await pageCdpEndpoint(browser!);
+            stopCdp = cdp.stop;
+            const socket = new WebSocket(cdp.url);
             await new Promise<void>((resolve, reject) => {
               socket.onopen = () => resolve();
               socket.onerror = () =>
@@ -160,7 +152,7 @@ test.skipIf(!chrome).each([1440, 390])(
         },
       },
     });
-    let browser: ReturnType<typeof Bun.spawn> | undefined;
+    let browser: ChromePage | undefined;
     try {
       const build = await Bun.build({
         entrypoints: [join(import.meta.dir, "ConcurrentContexts.browser.tsx")],
@@ -192,27 +184,17 @@ test.skipIf(!chrome).each([1440, 390])(
       expect(build.success).toBe(true);
       for (const output of build.outputs)
         assets.set(`/${basename(output.path)}`, output);
-      browser = Bun.spawn(
-        [
-          chrome!,
-          "--headless=new",
-          "--remote-debugging-port=0",
-          `--window-size=${width},1000`,
-          "--disable-dev-shm-usage",
-          "--disable-background-networking",
-          "--no-first-run",
-          "--no-default-browser-check",
-          `--user-data-dir=${join(dir, "profile")}`,
-          server.url.href,
-        ],
-        { stdout: "ignore", stderr: Bun.file(join(dir, "browser.log")) },
-      );
+      browser = await openChromePage({
+        // Headless Chrome never made a window narrower than 500 pixels or
+        // taller than 857 here; the 390 budgets were measured in that page.
+        viewport:
+          width < 500 ? { width: 500, height: 857 } : { width, height: 1000 },
+      });
+      void browser.navigate(server.url.href).catch(() => {});
       const observed = await waitForBrowserFixture(
         pageRequested.promise,
         result.promise,
-        browser.exited.then((code) => {
-          throw new Error(`Browser exited ${code}`);
-        }),
+        browser.exited,
         "Concurrent context browser acceptance",
         45_000,
       );
@@ -297,8 +279,8 @@ test.skipIf(!chrome).each([1440, 390])(
     } finally {
       for (const run of inputRuns.values()) run.stop();
       driver?.close();
-      browser?.kill();
-      if (browser) await browser.exited;
+      stopCdp();
+      await browser?.close();
       server.stop(true);
       await rm(dir, { recursive: true, force: true });
     }

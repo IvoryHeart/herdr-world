@@ -1,17 +1,13 @@
 import { expect, test } from "bun:test";
-import { existsSync } from "node:fs";
-import { mkdtemp, readFile, rm } from "node:fs/promises";
+import { mkdtemp, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { basename, join } from "node:path";
-import { stopChrome } from "../../browserChrome";
+import {
+  chromeBinary as chrome,
+  type ChromePage,
+  openChromePage,
+} from "../../testing/sharedChrome";
 import { assetUrlImports } from "../testing/assetUrlImports";
-
-const chrome =
-  Bun.env.CHROME_BIN ||
-  (process.platform === "darwin" &&
-  existsSync("/Applications/Google Chrome.app/Contents/MacOS/Google Chrome")
-    ? "/Applications/Google Chrome.app/Contents/MacOS/Google Chrome"
-    : Bun.which("google-chrome") || Bun.which("chromium"));
 
 // The Library (#1027) on its synthetic host, as MemoryLibrary.browser.tsx
 // drives it: a laptop shows readers, shelves and the book side by side; a
@@ -45,7 +41,7 @@ test.skipIf(!chrome).each([
         return new Response("Not found", { status: 404 });
       },
     });
-    let child: ReturnType<typeof Bun.spawn> | undefined;
+    let page: ChromePage | undefined;
     let timer: ReturnType<typeof setTimeout> | undefined;
     try {
       const build = await Bun.build({
@@ -59,27 +55,11 @@ test.skipIf(!chrome).each([
       if (!build.success) throw new Error(build.logs.join("\n"));
       for (const asset of build.outputs)
         assets.set(`/${basename(asset.path)}`, asset);
-      const errorOutput = join(dir, "browser.log");
-      child = Bun.spawn(
-        [
-          chrome!,
-          "--headless",
-          "--disable-gpu",
-          `--window-size=${width},${height}`,
-          "--no-first-run",
-          "--no-default-browser-check",
-          `--user-data-dir=${join(dir, "profile")}`,
-          server.url.href,
-        ],
-        { stdout: "ignore", stderr: Bun.file(errorOutput) },
-      );
+      page = await openChromePage({ viewport: { width, height } });
+      void page.navigate(server.url.href).catch(() => {});
       const failures = await Promise.race([
         promise,
-        child.exited.then(async (code) => {
-          throw new Error(
-            `Browser exited (${code}): ${await readFile(errorOutput, "utf8")}`,
-          );
-        }),
+        page.exited,
         new Promise<never>((_, reject) => {
           timer = setTimeout(
             () => reject(new Error("The Library checks timed out")),
@@ -91,7 +71,7 @@ test.skipIf(!chrome).each([
     } finally {
       clearTimeout(timer);
       server.stop(true);
-      await stopChrome(child);
+      await page?.close();
       await rm(dir, { recursive: true, force: true });
     }
   },

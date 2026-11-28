@@ -1,5 +1,5 @@
 import { afterAll, beforeAll, expect, test } from "bun:test";
-import { mkdtemp, readFile, rm } from "node:fs/promises";
+import { mkdtemp, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import {
@@ -32,12 +32,13 @@ import {
   BROWSER_STARTUP_TIMEOUT_MS,
   waitForBrowserFixture,
 } from "../browserChrome";
-import { InputDriver } from "./browserAcceptanceFixture";
+import {
+  chromeBinary as chrome,
+  openChromePage,
+  type ChromePage,
+} from "../testing/sharedChrome";
 import { casePhases } from "./testing/casePhases";
-import { chromeRenderingFlags } from "./testing/chromeRendering";
 
-const chrome =
-  Bun.env.CHROME_BIN || Bun.which("google-chrome") || Bun.which("chromium");
 test
   .skipIf(!chrome)
   .each(
@@ -53,7 +54,6 @@ test
     const dir = await mkdtemp(join(tmpdir(), "world-shared-creation-"));
     const assets = new Map<string, Blob>();
     const result = Promise.withResolvers<string[]>();
-    let socket: WebSocket | undefined;
     const pageRequested = Promise.withResolvers<void>();
     const server = Bun.serve({
       hostname: "127.0.0.1",
@@ -62,33 +62,6 @@ test
         const path = new URL(request.url).pathname;
         if (path === "/") pageRequested.resolve();
         if (path === "/viewport-ready") {
-          const [port] = (
-            await readFile(join(dir, "profile", "DevToolsActivePort"), "utf8")
-          ).split("\n");
-          const targets = (await (
-            await fetch(`http://127.0.0.1:${port}/json/list`)
-          ).json()) as { type: string; webSocketDebuggerUrl: string }[];
-          socket = new WebSocket(
-            targets.find((target) => target.type === "page")!
-              .webSocketDebuggerUrl,
-          );
-          await new Promise<void>((resolve, reject) => {
-            socket!.onopen = () => resolve();
-            socket!.onerror = () => reject(new Error("CDP connection failed"));
-          });
-          const driver = new InputDriver(socket);
-          await driver.call("Emulation.setEmulatedMedia", {
-            features: [{ name: "prefers-reduced-motion", value: "reduce" }],
-          });
-          await driver.call("Emulation.setDeviceMetricsOverride", {
-            width,
-            height: width === 390 ? 844 : 1000,
-            deviceScaleFactor: 1,
-            mobile: width === 390,
-          });
-          await driver.call("Emulation.setTouchEmulationEnabled", {
-            enabled: width === 390,
-          });
           return new Response(String(width));
         }
         if (path === "/result") {
@@ -109,44 +82,35 @@ test
         );
       },
     });
-    let browser: ReturnType<typeof Bun.spawn> | undefined;
+    let page: ChromePage | undefined;
     try {
       for (const [path, output] of bundle.assets) assets.set(path, output);
       phases.mark("setup");
       void pageRequested.promise.then(() => phases.mark("load"));
-      browser = Bun.spawn(
-        [
-          chrome!,
-          "--headless=new",
-          "--remote-debugging-port=0",
-          "--window-size=1440,1000",
-          "--enable-webgl",
-          ...(await chromeRenderingFlags(chrome!)),
-          "--disable-dev-shm-usage",
-          "--disable-background-networking",
-          "--no-first-run",
-          "--no-default-browser-check",
-          `--user-data-dir=${join(dir, "profile")}`,
-          `${server.url.href}?scenario=${scenario}`,
-        ],
-        { stdout: "ignore", stderr: Bun.file(join(dir, "browser.log")) },
-      );
+      page = await openChromePage({
+        viewport: {
+          width,
+          height: width === 390 ? 844 : 1000,
+          mobile: width === 390,
+        },
+        touch: width === 390,
+        reducedMotion: true,
+      });
+      await page.command("Page.navigate", {
+        url: `${server.url.href}?scenario=${scenario}`,
+      });
       const observed = await waitForBrowserFixture(
         pageRequested.promise,
         result.promise,
-        browser.exited.then((code) => {
-          throw new Error(`Browser exited ${code}`);
-        }),
+        page.exited,
         "Shared creation browser",
-        120_000,
+        25_000,
       );
       phases.mark("scene");
       if (observed.length) console.info("Shared creation failures", observed);
       expect(observed).toEqual([]);
     } finally {
-      socket?.close();
-      browser?.kill();
-      if (browser) await browser.exited;
+      await page?.close();
       server.stop(true);
       await rm(dir, { recursive: true, force: true });
       phases.done();

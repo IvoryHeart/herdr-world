@@ -1,25 +1,17 @@
 import { expect, test } from "bun:test";
-import { existsSync } from "node:fs";
 import { mkdir, mkdtemp, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import {
   BROWSER_STARTUP_TIMEOUT_MS,
-  stopChrome,
   waitForBrowserFixture,
-  waitForChromePort,
 } from "../browserChrome";
+import {
+  chromeBinary as chrome,
+  type ChromePage,
+  openChromePage,
+} from "../testing/sharedChrome";
 import { buildWorldBrowserBundle } from "./testing/browserBundles";
-import { connectCapture } from "./testing/connectCapture";
-
-const chrome =
-  Bun.env.CHROME_BIN ||
-  Bun.which("google-chrome") ||
-  Bun.which("chromium") ||
-  (process.platform === "darwin" &&
-  existsSync("/Applications/Google Chrome.app/Contents/MacOS/Google Chrome")
-    ? "/Applications/Google Chrome.app/Contents/MacOS/Google Chrome"
-    : undefined);
 
 const VIEWPORTS = [
   { name: "phone", width: 390, height: 844, mobile: false },
@@ -58,34 +50,16 @@ test.skipIf(!chrome)(
     // Evidence captures for the PR, only when asked for.
     const captures = Bun.env.APARTMENTS_CAPTURES;
     if (captures) await mkdir(captures, { recursive: true });
-    let child: ReturnType<typeof Bun.spawn> | undefined;
-    let connection: Awaited<ReturnType<typeof connectCapture>> | undefined;
+    let page: ChromePage | undefined;
     try {
-      const log = join(dir, "chrome.log");
-      const profile = join(dir, "profile");
-      child = Bun.spawn(
-        [
-          chrome!,
-          "--headless=new",
-          "--disable-gpu",
-          "--remote-debugging-port=0",
-          "--window-size=1512,982",
-          "--no-first-run",
-          "--no-default-browser-check",
-          `--user-data-dir=${profile}`,
-          "about:blank",
-        ],
-        { stdout: "ignore", stderr: Bun.file(log) },
-      );
-      const exited = child.exited.then(async (code) => {
-        throw new Error(`Chrome exited ${code}: ${await Bun.file(log).text()}`);
+      // Pixels only when the optional captures are taken.
+      page = await openChromePage({
+        viewport: { width: VIEWPORTS[1].width, height: VIEWPORTS[1].height },
+        pixels: !!captures,
       });
-      connection = await connectCapture(
-        await waitForChromePort(child, profile, log),
-      );
       for (const viewport of VIEWPORTS)
         for (const open of SCENES) {
-          await connection.command("Emulation.setDeviceMetricsOverride", {
+          await page.command("Emulation.setDeviceMetricsOverride", {
             width: viewport.width,
             height: viewport.height,
             deviceScaleFactor: 1,
@@ -93,7 +67,7 @@ test.skipIf(!chrome)(
           });
           result = Promise.withResolvers<string[]>();
           requested = Promise.withResolvers<void>();
-          await connection.command("Page.navigate", {
+          await page.command("Page.navigate", {
             url: `${server.url.href}${open ? `?open=${open}` : ""}`,
           });
           const scene = `${open || "list"}-${viewport.name}`;
@@ -102,18 +76,18 @@ test.skipIf(!chrome)(
             failures: await waitForBrowserFixture(
               requested.promise,
               result.promise,
-              exited,
+              page.exited,
               `Apartments avatars ${scene}`,
               BROWSER_STARTUP_TIMEOUT_MS,
             ),
           }).toEqual({ scene, failures: [] });
           if (!captures) continue;
           for (const theme of ["dark", "light"] as const) {
-            await connection.command("Runtime.evaluate", {
+            await page.command("Runtime.evaluate", {
               expression: `document.documentElement.dataset.theme = ${JSON.stringify(theme)}; new Promise(r => requestAnimationFrame(() => requestAnimationFrame(r)))`,
               awaitPromise: true,
             });
-            const shot = await connection.command("Page.captureScreenshot", {
+            const shot = await page.command("Page.captureScreenshot", {
               format: "png",
             });
             await writeFile(
@@ -123,8 +97,7 @@ test.skipIf(!chrome)(
           }
         }
     } finally {
-      connection?.close();
-      await stopChrome(child);
+      await page?.close();
       server.stop(true);
       await rm(dir, { recursive: true, force: true });
     }

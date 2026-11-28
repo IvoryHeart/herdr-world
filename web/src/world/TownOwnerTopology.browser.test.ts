@@ -1,5 +1,4 @@
 import { expect, test } from "bun:test";
-import { existsSync } from "node:fs";
 import { mkdir, mkdtemp, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
@@ -13,13 +12,14 @@ import { worldRuntimeRegistry } from "../../../server/src/world/runtime-registry
 import { WorldSnapshotService } from "../../../server/src/world/snapshot";
 import {
   BROWSER_STARTUP_TIMEOUT_MS,
-  stopChrome,
   waitForBrowserFixture,
-  waitForChromePort,
 } from "../browserChrome";
+import {
+  chromeBinary as chrome,
+  type ChromePage,
+  openChromePage,
+} from "../testing/sharedChrome";
 import { casePhases } from "./testing/casePhases";
-import { chromeRenderingFlags } from "./testing/chromeRendering";
-import { connectCapture } from "./testing/connectCapture";
 import { worldBrowserBundle } from "./testing/worldBrowserBundle";
 
 // One machine as its owner runs it (#1198): two Herdr TUI connections on one
@@ -27,15 +27,6 @@ import { worldBrowserBundle } from "./testing/worldBrowserBundle";
 // pointer input reaches every room's controls, the TUI's rooms show once, a
 // building of 20 rooms with one saved spot stays about square, and New agent
 // starts in a core room.
-
-const chrome =
-  Bun.env.CHROME_BIN ||
-  Bun.which("google-chrome") ||
-  Bun.which("chromium") ||
-  (process.platform === "darwin" &&
-  existsSync("/Applications/Google Chrome.app/Contents/MacOS/Google Chrome")
-    ? "/Applications/Google Chrome.app/Contents/MacOS/Google Chrome"
-    : undefined);
 
 const TUI_ROOMS = 18;
 const CORE_ROOMS = ["core-alpha", "core-beta"];
@@ -234,68 +225,29 @@ test
         return new Response("Not found", { status: 404 });
       },
     });
-    const profile = join(dir, "profile"),
-      log = join(dir, "chrome.log");
-    let child: ReturnType<typeof Bun.spawn> | undefined;
-    let connection: Awaited<ReturnType<typeof connectCapture>> | undefined;
+    let page: ChromePage | undefined;
     try {
-      child = Bun.spawn(
-        [
-          chrome!,
-          "--headless=new",
-          "--remote-debugging-port=0",
-          "--window-size=1512,982",
-          "--enable-webgl",
-          ...(await chromeRenderingFlags(chrome!)),
-          "--disable-dev-shm-usage",
-          "--no-first-run",
-          "--no-default-browser-check",
-          `--user-data-dir=${profile}`,
-          "about:blank",
-        ],
-        { stdout: "ignore", stderr: Bun.file(log) },
-      );
-      const exited = child.exited.then(async (code) => {
-        throw new Error(`Chrome exited ${code}: ${await Bun.file(log).text()}`);
+      const captures = Bun.env.TOWN_OWNER_TOPOLOGY_CAPTURES;
+      // Pixels only when the optional screenshots are taken.
+      page = await openChromePage({
+        viewport: { width: 1512, height: 982 },
+        reducedMotion: true,
+        pixels: !!captures,
       });
+      const exited = page.exited;
       phases.mark("setup");
-      connection = await connectCapture(
-        await waitForChromePort(child, profile, log),
-      );
       phases.mark("chrome");
-      const { command } = connection;
-      await command("Emulation.setEmulatedMedia", {
-        features: [{ name: "prefers-reduced-motion", value: "reduce" }],
-      });
-      await command("Emulation.setDeviceMetricsOverride", {
-        width: 1512,
-        height: 982,
-        deviceScaleFactor: 1,
-        mobile: false,
-      });
-      const evaluate = async <T = unknown>(expression: string): Promise<T> => {
-        const reply = await command("Runtime.evaluate", {
-          expression,
-          awaitPromise: true,
-          returnByValue: true,
-        });
-        if (reply.exceptionDetails)
-          throw new Error(
-            `${expression.slice(0, 120)}: ${JSON.stringify(reply.exceptionDetails).slice(0, 600)}`,
-          );
-        return reply.result.value as T;
-      };
+      const { command } = page;
+      const evaluate = <T = unknown>(expression: string): Promise<T> =>
+        page!.evaluate<T>(expression);
       const frames = () =>
         evaluate(
           "new Promise(r => requestAnimationFrame(() => requestAnimationFrame(r)))",
         );
-      const waitFor = async (expression: string, label: string) => {
-        for (let attempt = 0; attempt < 200; attempt++) {
-          if (await evaluate<boolean>(expression)) return;
-          await Bun.sleep(50);
-        }
-        throw new Error(`timed out: ${label}`);
-      };
+      const waitFor = (expression: string, label: string) =>
+        page!.waitFor(expression, 10_000).catch((error: Error) => {
+          throw new Error(`timed out: ${label}: ${error.message}`);
+        });
       const settled = () =>
         waitFor(
           "!window.__HERDR_TOWN_RENDERER__.flying && !window.__HERDR_TOWN_RENDERER__.transitioning",
@@ -511,7 +463,6 @@ test
           ),
         ).toEqual([]);
         await settled();
-        const captures = Bun.env.TOWN_OWNER_TOPOLOGY_CAPTURES;
         const capture = async (name: string) => {
           if (!captures) return;
           // Buildings paint a few per frame: shoot once Town stops drawing.
@@ -771,7 +722,10 @@ test
             "the TUI's workspace order",
           );
           await settled();
-          await Bun.sleep(300);
+          await waitFor(
+            "window.__ownerTopology.calls.filter((c) => /:workspace\\./.test(c.method)).length > 1 && window.__ownerTopology.calls.some((c) => c.method === 'world.board.patch' && JSON.stringify(c.params).includes('\"room.place\"'))",
+            "the TUI's order and the saved spot reach the service",
+          );
           const after = await evaluate<{
             failures: string[];
             calls: { method: string; params: Record<string, unknown> }[];
@@ -800,8 +754,7 @@ test
       }
       phases.mark("steps");
     } finally {
-      connection?.close();
-      await stopChrome(child);
+      await page?.close();
       server.stop(true);
       await rm(dir, { recursive: true, force: true });
       phases.done();

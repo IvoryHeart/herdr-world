@@ -2,10 +2,13 @@ import { expect, test } from "bun:test";
 import { mkdtemp, readFile, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { basename, join } from "node:path";
-import { stopChrome, waitForBrowserFixture } from "./browserChrome";
+import { waitForBrowserFixture } from "./browserChrome";
+import {
+  chromeBinary as chrome,
+  openChromePage,
+  type ChromePage,
+} from "./testing/sharedChrome";
 
-const chrome =
-  Bun.env.CHROME_BIN || Bun.which("google-chrome") || Bun.which("chromium");
 for (const width of [1280, 390])
   test.skipIf(!chrome)(
     `Chat command menus and composer keys reach only their session (${width}px)`,
@@ -37,7 +40,7 @@ for (const width of [1280, 390])
           );
         },
       });
-      let browser: ReturnType<typeof Bun.spawn> | undefined;
+      let page: ChromePage | undefined;
       try {
         const build = await Bun.build({
           entrypoints: [join(import.meta.dir, "chatMenus.browser.tsx")],
@@ -68,35 +71,18 @@ for (const width of [1280, 390])
         expect(build.success).toBe(true);
         for (const asset of build.outputs)
           assets.set(`/${basename(asset.path)}`, asset);
-        const log = join(dir, "browser.log");
-        browser = Bun.spawn(
-          [
-            chrome!,
-            "--headless=new",
-            `--window-size=${width},920`,
-            "--disable-gpu",
-            "--disable-background-networking",
-            "--no-first-run",
-            "--no-default-browser-check",
-            `--user-data-dir=${join(dir, "profile")}`,
-            server.url.href,
-          ],
-          { stdout: "ignore", stderr: Bun.file(log) },
-        );
+        page = await openChromePage({ viewport: { width, height: 920 } });
+        await page.command("Page.navigate", { url: server.url.href });
         const observed = await waitForBrowserFixture(
           requested.promise,
           result.promise,
-          browser.exited.then(async (code): Promise<never> => {
-            throw new Error(
-              `Browser exited ${code}: ${(await readFile(log, "utf8")).slice(-4000)}`,
-            );
-          }),
+          page.exited,
           "Chat command menus",
           15000,
         );
         expect(observed.failures).toEqual([]);
       } finally {
-        await stopChrome(browser);
+        await page?.close();
         server.stop(true);
         await rm(dir, { recursive: true, force: true });
       }

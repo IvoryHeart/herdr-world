@@ -1,20 +1,16 @@
 import { expect, test } from "bun:test";
-import { existsSync } from "node:fs";
-import { mkdtemp, readFile, rm } from "node:fs/promises";
+import { mkdtemp, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { basename, dirname, join } from "node:path";
 import {
   BROWSER_STARTUP_TIMEOUT_MS,
-  stopChrome,
   waitForBrowserFixture,
 } from "../../browserChrome";
-
-const chrome =
-  Bun.env.CHROME_BIN ||
-  (process.platform === "darwin" &&
-  existsSync("/Applications/Google Chrome.app/Contents/MacOS/Google Chrome")
-    ? "/Applications/Google Chrome.app/Contents/MacOS/Google Chrome"
-    : Bun.which("google-chrome") || Bun.which("chromium"));
+import {
+  chromeBinary as chrome,
+  openChromePage,
+  type ChromePage,
+} from "../../testing/sharedChrome";
 
 test.skipIf(!chrome).each(["fine", "coarse", "none"])(
   "shared window frame coordinates presentation with a %s pointer",
@@ -41,7 +37,7 @@ test.skipIf(!chrome).each(["fine", "coarse", "none"])(
         );
       },
     });
-    let child: ReturnType<typeof Bun.spawn> | undefined;
+    let page: ChromePage | undefined;
     try {
       const build = await Bun.build({
         entrypoints: [join(import.meta.dir, "WindowFrame.browser.tsx")],
@@ -72,41 +68,30 @@ test.skipIf(!chrome).each(["fine", "coarse", "none"])(
       expect(build.success).toBe(true);
       for (const asset of build.outputs)
         assets.set(`/${basename(asset.path)}`, asset);
-      const errorOutput = join(dir, "browser.log");
-      child = Bun.spawn(
-        [
-          chrome!,
-          "--headless",
-          "--disable-gpu",
-          "--window-size=1100,700",
-          // Blink's pointer/hover "none" capability uses bit value 1.
+      page = await openChromePage({
+        viewport: { width: 1100, height: 700 },
+        launchFlags: [
           pointer === "coarse"
             ? "--blink-settings=primaryPointerType=2,availablePointerTypes=2,primaryHoverType=1,availableHoverTypes=1"
             : pointer === "fine"
               ? "--blink-settings=primaryPointerType=4,availablePointerTypes=4,primaryHoverType=2,availableHoverTypes=2"
               : "--blink-settings=primaryPointerType=1,availablePointerTypes=1,primaryHoverType=1,availableHoverTypes=1",
-          "--no-first-run",
-          "--no-default-browser-check",
-          `--user-data-dir=${join(dir, "profile")}`,
-          `${server.url.href}?pointer=${pointer}`,
         ],
-        { stdout: "ignore", stderr: Bun.file(errorOutput) },
-      );
+      });
+      await page.command("Page.navigate", {
+        url: `${server.url.href}?pointer=${pointer}`,
+      });
       const failures = await waitForBrowserFixture(
         pageRequested.promise,
         promise,
-        child.exited.then(async (code) => {
-          throw new Error(
-            `Browser exited (${code}): ${await readFile(errorOutput, "utf8")}`,
-          );
-        }),
+        page.exited,
         "Window frame browser test",
         30_000,
       );
       expect(failures).toEqual([]);
     } finally {
       server.stop(true);
-      await stopChrome(child);
+      await page?.close();
       await rm(dir, { recursive: true, force: true });
     }
   },

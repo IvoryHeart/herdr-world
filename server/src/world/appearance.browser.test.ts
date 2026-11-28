@@ -6,13 +6,14 @@ import { BoardStore } from "./board-store";
 import { handleAppearanceRpc } from "../features/appearance/rpc";
 import type { BridgeRpcContext } from "../rpc/context";
 import {
-  stopChrome,
-  waitForChromePort,
   withBrowserDeadline,
   BROWSER_STARTUP_TIMEOUT_MS,
 } from "../../../web/src/browserChrome";
-const chrome =
-  Bun.env.CHROME_BIN || Bun.which("google-chrome") || Bun.which("chromium");
+import {
+  chromeBinary as chrome,
+  openChromePage,
+  type ChromePage,
+} from "../../../web/src/testing/sharedChrome";
 
 test.skipIf(!chrome)(
   "shared appearance survives independent desktop and phone clients, native failure and per-pane reset",
@@ -203,80 +204,23 @@ test.skipIf(!chrome)(
         return new Response("not found", { status: 404 });
       },
     });
-    const children: ReturnType<typeof Bun.spawn>[] = [],
-      sockets: WebSocket[] = [];
+    const pages: ChromePage[] = [];
     async function start(
-      name: string,
+      _name: string,
       width: number,
       height: number,
       receiver: boolean,
       adapters = false,
     ) {
-      const profile = join(dir, name),
-        log = join(dir, `${name}.log`);
-      const child = Bun.spawn(
-        [
-          chrome!,
-          "--headless=new",
-          "--remote-debugging-port=0",
-          "--no-first-run",
-          "--no-default-browser-check",
-          `--user-data-dir=${profile}`,
-          "about:blank",
-        ],
-        { stdout: "ignore", stderr: Bun.file(log) },
-      );
-      children.push(child);
-      const port = await waitForChromePort(child, profile, log);
-      const targets = (await fetch(`http://127.0.0.1:${port}/json/list`).then(
-        (response) => response.json(),
-      )) as { type: string; webSocketDebuggerUrl: string }[];
-      const socket = new WebSocket(
-        targets.find((target) => target.type === "page")!.webSocketDebuggerUrl,
-      );
-      sockets.push(socket);
-      await withBrowserDeadline(
-        new Promise<void>((resolve, reject) => {
-          socket.onopen = () => resolve();
-          socket.onerror = () =>
-            reject(new Error("appearance debugger failed"));
-        }),
-        "appearance debugger",
-      );
-      let id = 0;
-      const pending = new Map<
-        number,
-        {
-          resolve(value: Record<string, unknown>): void;
-          reject(error: Error): void;
-        }
-      >();
-      socket.onmessage = (event) => {
-        const message = JSON.parse(String(event.data));
-        const waiter = pending.get(message.id);
-        if (!waiter) return;
-        pending.delete(message.id);
-        if (message.error) waiter.reject(new Error(message.error.message));
-        else waiter.resolve(message.result);
-      };
-      const cdp = (method: string, params: Record<string, unknown> = {}) =>
-        withBrowserDeadline(
-          new Promise<Record<string, unknown>>((resolve, reject) => {
-            pending.set(++id, { resolve, reject });
-            socket.send(JSON.stringify({ id, method, params }));
-          }),
-          `appearance ${method}`,
-        );
-      await cdp("Emulation.setDeviceMetricsOverride", {
-        width,
-        height,
-        deviceScaleFactor: 1,
-        mobile: receiver,
+      const page = await openChromePage({
+        viewport: { width, height, deviceScaleFactor: 1, mobile: receiver },
       });
-      await cdp("Page.navigate", {
-        url: `${server.url.href}${adapters ? "?adapters=1" : receiver ? "?receiver=1" : ""}`,
-      });
-      return cdp;
+      pages.push(page);
+      await page.navigate(
+        `${server.url.href}${adapters ? "?adapters=1" : receiver ? "?receiver=1" : ""}`,
+      );
+      return (method: string, params: Record<string, unknown> = {}) =>
+        page.command(method, params);
     }
     try {
       const build = await Bun.build({
@@ -356,8 +300,7 @@ test.skipIf(!chrome)(
           Buffer.from(String(shot.data), "base64"),
         );
       }
-      for (const socket of sockets) socket.close();
-      await Promise.all(children.map((child) => stopChrome(child)));
+      await Promise.all(pages.splice(0).map((page) => page.close()));
       destination = true;
       calls.length = 0;
       board.patch([
@@ -383,14 +326,13 @@ test.skipIf(!chrome)(
         ),
       ).toEqual([]);
     } finally {
-      for (const socket of sockets) socket.close();
       for (const stream of events) {
         try {
           stream.close();
         } catch {}
       }
       server.stop(true);
-      await Promise.all(children.map((child) => stopChrome(child)));
+      await Promise.all(pages.splice(0).map((page) => page.close()));
       // Keep requested visual evidence only; routine CI leaves no browser profiles.
       if (!Bun.env.APPEARANCE_KEEP_CAPTURE)
         await rm(dir, { recursive: true, force: true });

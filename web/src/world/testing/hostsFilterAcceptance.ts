@@ -6,10 +6,11 @@ import {
   BROWSER_STARTUP_TIMEOUT_MS,
   waitForBrowserFixture,
 } from "../../browserChrome";
-
-const chrome =
-  Bun.env.CHROME_BIN || Bun.which("google-chrome") || Bun.which("chromium");
-
+import {
+  chromeBinary as chrome,
+  type ChromePage,
+  openChromePage,
+} from "../../testing/sharedChrome";
 import {
   hostFilterCases,
   hostFilterGroup,
@@ -69,30 +70,18 @@ export function registerHostsFilterTests(group: HostFilterGroup) {
             );
           },
         });
-        let browser: ReturnType<typeof Bun.spawn> | undefined;
+        let page: ChromePage | undefined;
         try {
           phases.mark("setup");
           void pageRequested.promise.then(() => phases.mark("load"));
-          browser = Bun.spawn(
-            [
-              chrome!,
-              "--headless=new",
-              `--window-size=${width},${height}`,
-              "--disable-dev-shm-usage",
-              "--disable-background-networking",
-              "--no-first-run",
-              "--no-default-browser-check",
-              `--user-data-dir=${join(dir, "profile")}`,
-              `${server.url.href}?operation=${operation}&view=${view}`,
-            ],
-            { stdout: "ignore", stderr: Bun.file(join(dir, "browser.log")) },
-          );
+          page = await openChromePage({ viewport: { width, height } });
+          void page
+            .navigate(`${server.url.href}?operation=${operation}&view=${view}`)
+            .catch(() => {});
           const observed = await waitForBrowserFixture(
             pageRequested.promise,
             result.promise,
-            browser.exited.then((code) => {
-              throw new Error(`Browser exited ${code}`);
-            }),
+            page.exited,
             "Hosts filter browser acceptance",
             FIXTURE_MS,
           );
@@ -104,8 +93,7 @@ export function registerHostsFilterTests(group: HostFilterGroup) {
             );
           expect(observed).toEqual([]);
         } finally {
-          browser?.kill();
-          if (browser) await browser.exited;
+          await page?.close();
           server.stop(true);
           await rm(dir, { recursive: true, force: true });
           phases.done();

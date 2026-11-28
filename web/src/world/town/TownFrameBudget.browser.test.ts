@@ -1,19 +1,17 @@
 import { expect, test } from "bun:test";
-import { existsSync } from "node:fs";
-import { mkdtemp, rm } from "node:fs/promises";
-import { tmpdir } from "node:os";
-import { join } from "node:path";
 import {
   BROWSER_STARTUP_TIMEOUT_MS,
-  stopChrome,
   waitForBrowserFixture,
-  waitForChromePort,
 } from "../../browserChrome";
+import {
+  chromeBinary as chrome,
+  type ChromePage,
+  openChromePage,
+} from "../../testing/sharedChrome";
 import { casePhases } from "../testing/casePhases";
 import { worldBrowserBundle } from "../testing/worldBrowserBundle";
 import { SWIFTSHADER_FLAGS } from "../testing/chromeRendering";
 import { gestureTrace } from "../testing/frameTrace";
-import { connectCapture } from "../testing/connectCapture";
 
 /*
  * Town's frame budget at scale (#1248), on the town-scale page
@@ -24,15 +22,6 @@ import { connectCapture } from "../testing/connectCapture";
  * and frames shown with undrawn tiles while panning and zooming, and Town
  * draws while typing in the composer.
  */
-
-const chrome =
-  Bun.env.CHROME_BIN ||
-  Bun.which("google-chrome") ||
-  Bun.which("chromium") ||
-  (process.platform === "darwin" &&
-  existsSync("/Applications/Google Chrome.app/Contents/MacOS/Google Chrome")
-    ? "/Applications/Google Chrome.app/Contents/MacOS/Google Chrome"
-    : undefined);
 
 type TraceEvent = {
   name: string;
@@ -81,7 +70,6 @@ test.skipIf(!chrome).each(["home-pan", "zoom", "desk-pan", "composer"])(
   "Town frame budget (%s): display-rate pans, bounded zoom restyles and composer quiet",
   async (phase) => {
     const phases = casePhases(`TownFrameBudget ${phase}`);
-    const dir = await mkdtemp(join(tmpdir(), "town-frame-budget-"));
     const { assets } = await worldBrowserBundle("testing/town-scale/TownScale");
     const requested = Promise.withResolvers<void>();
     const loaded = Promise.withResolvers<void>();
@@ -107,46 +95,26 @@ test.skipIf(!chrome).each(["home-pan", "zoom", "desk-pan", "composer"])(
           : new Response("Not found", { status: 404 });
       },
     });
-    let child: ReturnType<typeof Bun.spawn> | undefined;
-    let connection: Awaited<ReturnType<typeof connectCapture>> | undefined;
+    let page: ChromePage | undefined;
     try {
-      const profile = join(dir, "profile"),
-        log = join(dir, "chrome.log");
       phases.mark("setup");
-      child = Bun.spawn(
-        [
-          chrome!,
-          "--headless=new",
-          "--no-sandbox",
-          "--disable-dev-shm-usage",
-          "--remote-debugging-port=0",
-          "--enable-webgl",
-          ...SWIFTSHADER_FLAGS,
-          "--window-size=1512,982",
-          "--force-device-scale-factor=1",
-          "--no-first-run",
-          "--no-default-browser-check",
-          `--user-data-dir=${profile}`,
-          server.url.href,
-        ],
-        { stdout: "ignore", stderr: Bun.file(log) },
-      );
+      // Its own Chrome (a distinct launch set): the trace reads every
+      // renderer in the browser, so no other case's frames may share it.
+      page = await openChromePage({
+        viewport: { width: 1512, height: 982 },
+        pixels: true,
+        launchFlags: SWIFTSHADER_FLAGS,
+      });
+      await page.navigate(server.url.href);
       await waitForBrowserFixture(
         requested.promise,
         loaded.promise,
-        child.exited.then(async (code) => {
-          throw new Error(
-            `Chrome exited ${code}: ${await Bun.file(log).text()}`,
-          );
-        }),
+        page.exited,
         "Town frame budget",
         30000,
       );
-      connection = await connectCapture(
-        await waitForChromePort(child, profile, log),
-      );
       phases.mark("load");
-      const { command, on } = connection;
+      const { command, on } = page;
       const evaluate = async (expression: string, deadlineMs?: number) => {
         const reply = await command(
           "Runtime.evaluate",
@@ -414,10 +382,8 @@ test.skipIf(!chrome).each(["home-pan", "zoom", "desk-pan", "composer"])(
       }
       phases.mark("steps");
     } finally {
-      connection?.close();
-      await stopChrome(child);
+      await page?.close();
       server.stop(true);
-      await rm(dir, { recursive: true, force: true });
       phases.done();
     }
   },

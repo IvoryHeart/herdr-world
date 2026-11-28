@@ -1,15 +1,12 @@
 import { expect, test } from "bun:test";
-import { existsSync } from "node:fs";
 import { mkdtemp, readFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { basename, join } from "node:path";
-
-const chrome =
-  Bun.env.CHROME_BIN ||
-  (process.platform === "darwin" &&
-  existsSync("/Applications/Google Chrome.app/Contents/MacOS/Google Chrome")
-    ? "/Applications/Google Chrome.app/Contents/MacOS/Google Chrome"
-    : Bun.which("google-chrome") || Bun.which("chromium"));
+import {
+  chromeBinary as chrome,
+  openChromePage,
+  type ChromePage,
+} from "./testing/sharedChrome";
 
 test.skipIf(!chrome).each([390, 320])(
   "mobile terminal trusted long press, endpoint handles, explicit input and frozen output (%dpx)",
@@ -32,8 +29,7 @@ test.skipIf(!chrome).each([390, 320])(
           : new Response("Not found", { status: 404 });
       },
     });
-    let child: ReturnType<typeof Bun.spawn> | undefined;
-    let socket: WebSocket | undefined;
+    let page: ChromePage | undefined;
     try {
       const build = await Bun.build({
         entrypoints: [join(import.meta.dir, "mobileTerminal.browser.tsx")],
@@ -61,96 +57,18 @@ test.skipIf(!chrome).each([390, 320])(
       expect(build.success).toBe(true);
       for (const asset of build.outputs)
         assets.set(`/${basename(asset.path)}`, asset);
-      child = Bun.spawn(
-        [
-          chrome!,
-          "--headless",
-          "--disable-gpu",
-          "--remote-debugging-port=0",
-          "--window-size=500,800",
-          "--no-first-run",
-          "--no-default-browser-check",
-          `--user-data-dir=${join(dir, "profile")}`,
-          "about:blank",
-        ],
-        { stdout: "ignore", stderr: Bun.file(join(dir, "browser.log")) },
+      page = await openChromePage({
+        viewport: { width, height: 800, deviceScaleFactor: 2, mobile: true },
+        touch: true,
+      });
+      page.on("Runtime.consoleAPICalled", (params) => {
+        if (params.type === "error") console.error(JSON.stringify(params.args));
+      });
+      page.on("Runtime.exceptionThrown", (params) =>
+        console.error(JSON.stringify(params)),
       );
-      const portFile = join(dir, "profile", "DevToolsActivePort");
-      const browserLog = join(dir, "browser.log");
-      let port = "";
-      for (let i = 0; i < 200 && !port; i++) {
-        if (existsSync(portFile)) {
-          port = (await readFile(portFile, "utf8")).split("\n")[0];
-        } else if (existsSync(browserLog)) {
-          port =
-            (await readFile(browserLog, "utf8")).match(
-              /DevTools listening on ws:\/\/127\.0\.0\.1:(\d+)/,
-            )?.[1] ?? "";
-        }
-        if (port) break;
-        await Bun.sleep(25);
-      }
-      if (!port) throw new Error("Chromium did not expose a DevTools port");
-      const targets = (await (
-        await fetch(`http://127.0.0.1:${port}/json/list`)
-      ).json()) as { type: string; webSocketDebuggerUrl: string }[];
-      socket = new WebSocket(
-        targets.find((target) => target.type === "page")!.webSocketDebuggerUrl,
-      );
-      await new Promise<void>((resolve, reject) => {
-        socket!.onopen = () => resolve();
-        socket!.onerror = () => reject(new Error("CDP connection failed"));
-      });
-      let id = 0;
-      const pending = new Map<
-        number,
-        { resolve: (value: any) => void; reject: (error: Error) => void }
-      >();
-      socket.onmessage = (event) => {
-        const response = JSON.parse(String(event.data));
-        if (
-          response.method === "Runtime.consoleAPICalled" &&
-          response.params.type === "error"
-        )
-          console.error(JSON.stringify(response.params.args));
-        if (response.method === "Runtime.exceptionThrown")
-          console.error(JSON.stringify(response.params));
-        const request = pending.get(response.id);
-        if (!request) return;
-        pending.delete(response.id);
-        if (response.error)
-          request.reject(new Error(JSON.stringify(response.error)));
-        else request.resolve(response.result);
-      };
-      const cdp = (
-        method: string,
-        params: Record<string, unknown> = {},
-      ): Promise<any> =>
-        new Promise((resolve, reject) => {
-          pending.set(++id, { resolve, reject });
-          socket!.send(JSON.stringify({ id, method, params }));
-        });
-      const evaluate = async (expression: string) => {
-        const result = await cdp("Runtime.evaluate", {
-          expression,
-          awaitPromise: true,
-          returnByValue: true,
-        });
-        if (result.exceptionDetails)
-          throw new Error(JSON.stringify(result.exceptionDetails));
-        return result.result.value;
-      };
-      await cdp("Emulation.setDeviceMetricsOverride", {
-        width,
-        height: 800,
-        deviceScaleFactor: 2,
-        mobile: true,
-      });
-      await cdp("Emulation.setTouchEmulationEnabled", {
-        enabled: true,
-        maxTouchPoints: 1,
-      });
-      await cdp("Runtime.enable");
+      const { evaluate } = page;
+      const cdp = page.command;
       if (width === 320) {
         await cdp("Emulation.setUserAgentOverride", {
           userAgent:
@@ -158,11 +76,8 @@ test.skipIf(!chrome).each([390, 320])(
           platform: "Linux x86_64",
         });
       }
-      await cdp("Page.navigate", { url: `http://127.0.0.1:${server.port}/` });
-      for (let i = 0; i < 200; i++) {
-        if (await evaluate("!!window.mobileTerminalTest")) break;
-        await Bun.sleep(25);
-      }
+      await page.navigate(`http://127.0.0.1:${server.port}/`);
+      await page.waitFor("!!window.mobileTerminalTest");
       const run = (method: string) =>
         evaluate(`mobileTerminalTest.${method}()`);
       await run("ready");
@@ -229,7 +144,7 @@ test.skipIf(!chrome).each([390, 320])(
         await evaluate(
           `document.documentElement.dataset.theme = ${JSON.stringify(theme)}`,
         );
-        await evaluate("new Promise(resolve => setTimeout(resolve, 180))");
+        await evaluate("__HERDR_TEST_CLOCK__.advance(180)");
         const screenshot = await cdp("Page.captureScreenshot", {
           format: "png",
         });
@@ -295,11 +210,7 @@ test.skipIf(!chrome).each([390, 320])(
       });
       expect(await run("desktop")).toEqual([]);
     } finally {
-      socket?.close();
-      if (child) {
-        child.kill();
-        await child.exited;
-      }
+      await page?.close();
       server.stop(true);
       console.log(`Mobile terminal browser artifacts: ${dir}`);
     }

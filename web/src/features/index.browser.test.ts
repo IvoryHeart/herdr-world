@@ -12,11 +12,11 @@ import {
 } from "../../../scripts/site-bundles";
 import { assetUrlImports } from "../world/testing/assetUrlImports";
 import { buildWorldBrowserBundle } from "../world/testing/browserBundles";
-import { stopChrome, withBrowserDeadline } from "../browserChrome";
+import { chromeBinary, openChromePage } from "../testing/sharedChrome";
 
 test("generated web index runs in every browser build path", async () => {
-  const chrome = process.env.CHROME_BIN;
-  if (!chrome) throw new Error("CHROME_BIN must name Chrome");
+  if (!process.env.CHROME_BIN && !chromeBinary)
+    throw new Error("CHROME_BIN must name Chrome");
   const root = await mkdtemp(join(tmpdir(), "feature-browser-"));
   const web = resolve(import.meta.dir, "../..");
   const entry = join(import.meta.dir, "testing/probe.browser.tsx");
@@ -36,32 +36,19 @@ test("generated web index runs in every browser build path", async () => {
     },
   });
   const run = async (label: string, url = server.url.href) => {
-    const child = Bun.spawn(
-      [
-        chrome,
-        "--headless=new",
-        "--no-sandbox",
-        "--disable-gpu",
-        "--disable-background-networking",
-        "--no-first-run",
-        "--no-default-browser-check",
-        `--user-data-dir=${join(root, "profile")}`,
-        "--dump-dom",
-        url,
-      ],
-      { stdout: "pipe", stderr: "ignore" },
-    );
+    const page = await openChromePage();
     try {
-      const [html, code] = await withBrowserDeadline(
-        Promise.all([new Response(child.stdout).text(), child.exited]),
-        label,
-        45_000,
+      await page.navigate(url);
+      await page.waitFor(
+        `document.body?.firstChild?.textContent === "span:web-feature"`,
       );
-      expect(code).toBe(0);
+      const html = await page.evaluate<string>(
+        "document.documentElement.outerHTML",
+      );
       expect(html).toContain("<body>span:web-feature");
       console.info(`PASS ${label}: span:web-feature`);
     } finally {
-      await stopChrome(child);
+      await page.close();
     }
   };
   const vite = await createServer({
