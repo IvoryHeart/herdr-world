@@ -1,3 +1,4 @@
+import { clock as fixtureTime } from "../world/testing/installTestClock";
 import { agentClass } from "../utils";
 import "../styles/tokens.css";
 import "../styles/base.css";
@@ -15,10 +16,8 @@ const failures: string[] = [];
 function check(condition: boolean, message: string) {
   if (!condition) failures.push(message);
 }
-async function settle() {
-  await new Promise<void>((resolve) =>
-    requestAnimationFrame(() => requestAnimationFrame(() => resolve())),
-  );
+async function advance() {
+  await fixtureTime.frame();
 }
 
 async function run() {
@@ -137,7 +136,7 @@ async function run() {
           sidebar.style.width = `${width}px`;
           for (const showBranch of [false, true]) {
             branch.hidden = !showBranch;
-            await settle();
+            await advance();
             const context = `${theme} ${layout} sidebar ${width}px branch=${showBranch}`;
             const gitRect = git.getBoundingClientRect();
             const viewport = treeContent.getBoundingClientRect();
@@ -186,13 +185,13 @@ async function run() {
     workspaceName.textContent = "sample-workspace";
     git.querySelector(".git-ahead")!.remove();
     git.querySelector(".git-behind")!.remove();
-    await settle();
+    await advance();
     check(
       branch.getBoundingClientRect().width >= 30,
       "a branch with a single count must retain readable space",
     );
     sidebar.style.width = "180px";
-    await settle();
+    await advance();
     check(
       git.getBoundingClientRect().height ===
         branch.getBoundingClientRect().height,
@@ -201,7 +200,7 @@ async function run() {
     sidebar.style.width = "480px";
     for (const branchName of ["feature-with-a-long-branch-name", "main"]) {
       branch.textContent = branchName;
-      await settle();
+      await advance();
       check(
         Math.abs(
           git.getBoundingClientRect().right -
@@ -211,7 +210,7 @@ async function run() {
       );
     }
     git.remove();
-    await settle();
+    await advance();
     check(
       row.getBoundingClientRect().height <=
         workspaceName.getBoundingClientRect().height + 8,
@@ -239,20 +238,20 @@ async function run() {
       new Promise((resolve) =>
         zenTopbar.addEventListener("transitionend", resolve, { once: true }),
       ),
-      new Promise((resolve) => setTimeout(resolve, 300)),
+      fixtureTime.advance(300),
     ]);
     check(
       getComputedStyle(zenTopbar).transform === "none",
       "focusing the zen island must reveal the topbar",
     );
     island.blur();
-    await settle();
+    await advance();
     zen.remove();
     for (const theme of ["dark", "light"]) {
       document.documentElement.dataset.theme = theme;
       for (const layout of ["desktop", "mobile"]) {
         document.documentElement.dataset.layout = layout;
-        await settle();
+        await advance();
         const label = `${theme} ${layout}`;
         const topbarStyle = getComputedStyle(topbar);
         check(
@@ -304,7 +303,7 @@ async function run() {
           ]) {
             stage.style.width = `${width}px`;
             stage.style.height = `${height}px`;
-            await settle();
+            await advance();
             const context = `${label} ${dock} ${width}x${height}`;
             const overlay = width <= 999 || height <= 466;
             check(
@@ -365,7 +364,7 @@ async function run() {
           stage.className = `workspace-stage has-inspector inspector-dock-${dock}`;
           slot.style.cssText =
             dock === "right" ? "width:400px" : "height:300px";
-          await settle();
+          await advance();
           const terminalRect = surface.getBoundingClientRect();
           const inspectorRect = slot.getBoundingClientRect();
           const annotationRect = annotations.getBoundingClientRect();
@@ -388,7 +387,7 @@ async function run() {
           );
           if (width === 1100 && dock === "right") {
             slot.style.width = "360px";
-            await settle();
+            await advance();
             check(
               slot.getBoundingClientRect().width === 360,
               `${context}: peer docking ignored Inspector resize`,

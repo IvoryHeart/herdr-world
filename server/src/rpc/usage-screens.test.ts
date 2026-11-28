@@ -56,7 +56,7 @@ function serviceClient() {
   };
 }
 
-async function settle(store: UsageAnalyticsStore) {
+async function readUsage(store: UsageAnalyticsStore) {
   const done = new Promise<UsageReadState>((resolve) => {
     const stop = store.subscribe(() => {
       const state = store.get();
@@ -74,7 +74,7 @@ test("every grouping and window the screens read is admitted and answered by the
   const client = serviceClient();
   for (const window of ["today", "7d"] as const)
     for (const group of USAGE_ANALYTICS_GROUPS) {
-      const state = await settle(
+      const state = await readUsage(
         new UsageAnalyticsStore(client, group, window),
       );
       expect({ group, window, status: state.status }).toEqual({
@@ -89,7 +89,7 @@ test("every grouping and window the screens read is admitted and answered by the
 });
 
 test("the observatory, Usage lens and agent card read runs, which the API admits", async () => {
-  const state = await settle(
+  const state = await readUsage(
     new UsageAnalyticsStore(serviceClient(), "run", "7d"),
   );
   expect(state.status).toBe("ready");

@@ -8,6 +8,9 @@ import type { CoreRecording } from "./testing/capture-core";
 import { FakeCore } from "./testing/fake-core";
 import { FrameDecoder, FrameKind } from "./wire";
 
+/** The in-memory streams deliver on microtasks: a macrotask turn runs them all. */
+const drain = () => new Promise<void>((resolve) => setImmediate(resolve));
+
 const recording: CoreRecording = JSON.parse(
   readFileSync(
     join(import.meta.dir, "testing/recorded/core-0.1.20.json"),
@@ -117,7 +120,7 @@ async function replay(index: number, split: Split, seed = 1) {
     });
   release(bytes.byteLength);
   if (index === 0) core.close();
-  await Bun.sleep(5);
+  await drain();
   return {
     client,
     mirror,
@@ -237,7 +240,7 @@ describe("the fake core matches the recorded core", () => {
     });
     fake.label(t1, { note: "café ü✓ 漢字" });
     fake.heartbeatNow();
-    await Bun.sleep(10);
+    await drain();
     expect(mirror.cursor).toBe(real.mirror.cursor);
     expect(project(mirror)).toEqual(project(real.mirror));
     client.close();

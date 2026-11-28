@@ -1,3 +1,4 @@
+import { toolBrowserSession } from "./testing/browser-session";
 /**
  * Town at scale: captures the production TownCanvas with the scale scene
  * (web/src/world/town/townScaleScene.ts) at every zoom step on a laptop and a
@@ -15,11 +16,11 @@
 import { mkdir, mkdtemp, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { basename, join, resolve } from "node:path";
-import { Cdp, endpoint } from "./town-golden";
+import { Cdp } from "./town-golden";
 import {
-  GPU_FLAGS,
-  SWIFTSHADER_FLAGS,
-} from "../web/src/world/testing/chromeRendering";
+  assetUrlImports,
+  rawSvgImports,
+} from "../web/src/world/testing/assetUrlImports";
 
 export const townScaleViewports = [
   { name: "laptop", width: 1512, height: 982 },
@@ -64,26 +65,16 @@ export async function runTownScale(options: {
         : new Response("Not found", { status: 404 });
     },
   });
-  const browser = Bun.spawn(
-    [
-      options.chrome,
-      "--headless=new",
-      "--remote-debugging-port=0",
-      "--remote-debugging-address=127.0.0.1",
-      "--enable-webgl",
-      ...(options.gpu ? GPU_FLAGS : SWIFTSHADER_FLAGS),
-      "--force-device-scale-factor=1",
-      "--disable-background-networking",
-      "--no-first-run",
-      "--no-default-browser-check",
-      `--user-data-dir=${join(scratch, "profile")}`,
-      "about:blank",
-    ],
-    { stdout: "ignore", stderr: "pipe" },
-  );
+  let session: Awaited<ReturnType<typeof toolBrowserSession>> | undefined;
   let cdp: Cdp | undefined;
   try {
+    session = await toolBrowserSession(options.chrome, {
+      gpu: options.gpu,
+      golden: true,
+    });
+    const browser = session.browser;
     const build = await Bun.build({
+      plugins: [rawSvgImports, assetUrlImports],
       entrypoints: [page],
       outdir: join(scratch, "bundle"),
       target: "browser",
@@ -92,10 +83,11 @@ export async function runTownScale(options: {
       throw new AggregateError(build.logs, "Scale fixture build failed");
     for (const output of build.outputs)
       assets.set("/" + basename(output.path), output);
-    cdp = await Cdp.connect(await endpoint(browser.stderr));
+    cdp = await Cdp.connect(browser.browserEndpoint);
     const version = (await cdp.command("Browser.getVersion")).product;
     for (const viewport of townScaleViewports) {
       const { targetId } = await cdp.command("Target.createTarget", {
+        browserContextId: browser.contextId,
         url: "about:blank",
       });
       try {
@@ -196,8 +188,7 @@ export async function runTownScale(options: {
     return report;
   } finally {
     cdp?.close();
-    browser.kill();
-    await browser.exited;
+    await session?.close();
     server.stop(true);
     await rm(scratch, { recursive: true, force: true });
   }

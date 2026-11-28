@@ -1,6 +1,10 @@
-import { expect, spyOn, test } from "bun:test";
+import { afterEach, expect, spyOn, test } from "bun:test";
 import type { ConnectionClient } from "../../api";
-import { installTestClock, type ClockTarget } from "../testing/testClock";
+import {
+  installTestClock,
+  type ClockTarget,
+  type TestClock,
+} from "../testing/testClock";
 import type { WorldLeafObject } from "../worldObject";
 import { TownStepStore } from "./townStepStore";
 import { TOWN_STEP_BATCH, TownStepReads } from "./useTownStepReads";
@@ -33,7 +37,32 @@ const reply = (paneId: string, tool: string | null, fields = {}) => ({
   ...fields,
 });
 
+// The reads' batch timers run on a test clock, so a test moves time instead
+// of waiting for it, and promise continuations run between steps.
+let clock: TestClock;
+let restoreTimers: (() => void) | undefined;
+afterEach(() => {
+  restoreTimers?.();
+  restoreTimers = undefined;
+});
+function installFixtureClock() {
+  const timers = {} as ClockTarget;
+  clock = installTestClock(timers, { now: () => 0 });
+  const timeout = spyOn(globalThis, "setTimeout").mockImplementation(
+    timers.setTimeout,
+  );
+  const clear = spyOn(globalThis, "clearTimeout").mockImplementation(
+    timers.clearTimeout,
+  );
+  restoreTimers = () => {
+    clear.mockRestore();
+    timeout.mockRestore();
+  };
+  return clock;
+}
+
 function setup(leaves: WorldLeafObject[]) {
+  installFixtureClock();
   const calls: { method: string; params: { pane_ids: string[] } }[] = [];
   let answer: (params: { pane_ids: string[] }) => unknown = () => ({
     conversations: [],
@@ -68,7 +97,7 @@ function setup(leaves: WorldLeafObject[]) {
   };
 }
 
-const settle = () => new Promise((resolve) => setTimeout(resolve, 5));
+const flushTasks = () => clock.advance(16);
 
 test("Town reads and watches only the agents it wants, in one call per connection", async () => {
   const { store, calls, watched, answer } = setup([
@@ -80,7 +109,7 @@ test("Town reads and watches only the agents it wants, in one call per connectio
     conversations: pane_ids.map((id) => reply(id, "Edit")),
   }));
   store.want(["a", "b"]);
-  await settle();
+  await flushTasks();
   expect([...watched.keys()]).toEqual(["pane-a", "pane-b"]);
   expect(calls).toEqual([
     {
@@ -102,7 +131,7 @@ test("a change the service reports reads that agent again, and its bubble follow
     conversations: pane_ids.map((id) => reply(id, "Read")),
   }));
   store.want(["a"]);
-  await settle();
+  await flushTasks();
   expect(store.get("a")?.kind).toBe("read");
   answer(({ pane_ids }) => ({
     conversations: pane_ids.map((id) =>
@@ -117,7 +146,7 @@ test("a change the service reports reads that agent again, and its bubble follow
     ),
   }));
   watched.get("pane-a")!();
-  await settle();
+  await flushTasks();
   expect(calls).toHaveLength(2);
   expect(store.get("a")).toEqual({
     kind: "test",
@@ -136,21 +165,21 @@ test("a guessed session, an unknown harness or a failed read shows no new step",
     ),
   }));
   store.want(["a", "g"]);
-  await settle();
+  await flushTasks();
   expect(store.get("a")).toBeUndefined();
   expect(store.get("g")).toBeUndefined();
   answer(({ pane_ids }) => ({
     conversations: pane_ids.map((id) => reply(id, "Edit")),
   }));
   watched.get("pane-a")!();
-  await settle();
+  await flushTasks();
   expect(store.get("a")?.kind).toBe("edit");
   // A failed read keeps the last step.
   answer(() => {
     throw new Error("offline");
   });
   watched.get("pane-a")!();
-  await settle();
+  await flushTasks();
   expect(store.get("a")?.kind).toBe("edit");
 });
 
@@ -195,14 +224,7 @@ test("a change during a read waits for it, even with a fresh client per lookup, 
   });
   // A real-time wait can finish before the reply schedules its next batch.
   // Drive both timers and promise continuations with the fixture clock.
-  const timers = {} as ClockTarget;
-  const clock = installTestClock(timers, { now: () => 0 });
-  const timeout = spyOn(globalThis, "setTimeout").mockImplementation(
-    timers.setTimeout,
-  );
-  const clear = spyOn(globalThis, "clearTimeout").mockImplementation(
-    timers.clearTimeout,
-  );
+  installFixtureClock();
   try {
     store.onWant(() => reads.sync());
     store.want(["a"]);
@@ -221,8 +243,6 @@ test("a change during a read waits for it, even with a fresh client per lookup, 
     expect(store.get("a")?.kind).toBe("read");
   } finally {
     reads.dispose();
-    clear.mockRestore();
-    timeout.mockRestore();
   }
 });
 
@@ -234,8 +254,8 @@ test("every working agent on screen is read, in turns of at most TOWN_STEP_BATCH
     conversations: pane_ids.map((id) => reply(id, "Edit")),
   }));
   store.want(leaves.map((entry) => entry.id));
-  await settle();
-  await settle();
+  await flushTasks();
+  await flushTasks();
   expect(calls.map((call) => call.params.pane_ids.length)).toEqual([
     TOWN_STEP_BATCH,
     60 - TOWN_STEP_BATCH,
@@ -255,7 +275,7 @@ test("a herdr-core agent is never read or watched for a Herdr step", async () =>
     conversations: pane_ids.map((id) => reply(id, "Edit")),
   }));
   store.want(["a", "core"]);
-  await settle();
+  await flushTasks();
   expect([...watched.keys()]).toEqual(["pane-a"]);
   expect(calls.map((call) => call.params.pane_ids)).toEqual([["pane-a"]]);
   expect(store.get("core")).toBeUndefined();

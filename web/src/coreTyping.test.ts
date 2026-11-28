@@ -49,7 +49,7 @@ function harness(size = { cols: 90, rows: 30 }, opening = false) {
       opening,
     },
   );
-  const settle = () => new Promise((resolve) => setTimeout(resolve, 0));
+  const flushTasks = () => new Promise((resolve) => setTimeout(resolve, 0));
   return {
     typing,
     log,
@@ -57,12 +57,12 @@ function harness(size = { cols: 90, rows: 30 }, opening = false) {
     changes,
     size,
     timers,
-    settle,
+    flushTasks,
     async answer(error?: Error) {
       const request = pending.shift()!;
       if (error) request.reject(error);
       else request.resolve();
-      await settle();
+      await flushTasks();
     },
     fire(handle: number) {
       const run = timers.get(handle)!;
@@ -78,7 +78,7 @@ describe("typing into a core terminal from the page", () => {
     void h.typing.type("a");
     void h.typing.type("b");
     void h.typing.type("c");
-    await h.settle();
+    await h.flushTasks();
     expect(h.log).toEqual(['key "a" 90x30']);
     await h.answer();
     expect(h.log).toEqual(['key "a" 90x30', 'key "bc" 90x30']);
@@ -89,7 +89,7 @@ describe("typing into a core terminal from the page", () => {
     void h.typing.type("x");
     void h.typing.type("\x1b[2;2R", true);
     void h.typing.type("y");
-    await h.settle();
+    await h.flushTasks();
     await h.answer();
     await h.answer();
     await h.answer();
@@ -103,19 +103,19 @@ describe("typing into a core terminal from the page", () => {
   test("the open view holds its size at once; later sizes settle first and go once", async () => {
     const h = harness();
     h.typing.hold({ cols: 90, rows: 30 });
-    await h.settle();
+    await h.flushTasks();
     expect(h.log).toEqual(["hold 90x30"]);
     // A drag: only the size it ends at is asked for.
     h.typing.hold({ cols: 80, rows: 30 });
     h.typing.hold({ cols: 70, rows: 28 });
     expect(h.timers.size).toBe(1);
     h.fire([...h.timers.keys()][0]!);
-    await h.settle();
+    await h.flushTasks();
     expect(h.log).toEqual(["hold 90x30", "hold 70x28"]);
     // The same size again sends nothing; there is no give-back on blur or idle.
     h.typing.hold({ cols: 70, rows: 28 });
     h.fire([...h.timers.keys()][0]!);
-    await h.settle();
+    await h.flushTasks();
     expect(h.log).toHaveLength(2);
     expect(h.changes).toEqual(["90x30", "70x28"]);
     h.typing.stop();
@@ -128,7 +128,7 @@ describe("typing into a core terminal from the page", () => {
     void h.typing.type("a");
     h.typing.hold({ cols: 90, rows: 30 });
     h.typing.hold({ cols: 0, rows: 0 });
-    await h.settle();
+    await h.flushTasks();
     expect(h.log).toEqual(['key "a" 90x30']);
     await h.answer();
     expect(h.log).toEqual(['key "a" 90x30', "hold 90x30"]);
@@ -143,7 +143,7 @@ describe("typing into a core terminal from the page", () => {
       );
     const first = outcome(h.typing.type("rm "));
     const second = outcome(h.typing.type("-rf"));
-    await h.settle();
+    await h.flushTasks();
     await h.answer(
       new Error("Not sent: World could not type into this terminal"),
     );
@@ -158,7 +158,7 @@ describe("typing into a core terminal from the page", () => {
   test("the size is read when a key is typed", async () => {
     const h = harness();
     void h.typing.type("a");
-    await h.settle();
+    await h.flushTasks();
     h.size.cols = 40;
     h.size.rows = 12;
     void h.typing.type("b");
@@ -169,7 +169,7 @@ describe("typing into a core terminal from the page", () => {
   test("a paste larger than one request goes in order, in pieces", async () => {
     const h = harness();
     const done = h.typing.type("é".repeat(CORE_INPUT_CHUNK));
-    await h.settle();
+    await h.flushTasks();
     let joined = "";
     const bytes: number[] = [];
     while (h.log.length > bytes.length) {
@@ -191,16 +191,16 @@ describe("typing into a core terminal from the page", () => {
     const h = harness({ cols: 90, rows: 30 }, true);
     const first = h.typing.type("a");
     const second = h.typing.type("b");
-    await h.settle();
+    await h.flushTasks();
     expect(h.log).toEqual([]);
     h.typing.open();
     h.typing.open();
-    await h.settle();
+    await h.flushTasks();
     expect(h.log).toEqual(['key "ab" 90x30']);
     await h.answer();
     await Promise.all([first, second]);
     void h.typing.type("c");
-    await h.settle();
+    await h.flushTasks();
     expect(h.log).toEqual(['key "ab" 90x30', 'key "c" 90x30']);
     expect(h.refused).toEqual([]);
   });
@@ -208,11 +208,11 @@ describe("typing into a core terminal from the page", () => {
   test("a watch that never opens drops the keys that waited, unsent", async () => {
     const h = harness({ cols: 90, rows: 30 }, true);
     const waiting = h.typing.type("a").catch((error: Error) => error.message);
-    await h.settle();
+    await h.flushTasks();
     h.typing.stop();
     expect(await waiting).toContain("closed");
     h.typing.open();
-    await h.settle();
+    await h.flushTasks();
     expect(h.log).toEqual([]);
     expect(h.refused).toEqual([]);
   });
@@ -221,7 +221,7 @@ describe("typing into a core terminal from the page", () => {
     const h = harness();
     void h.typing.type("a");
     const queued = h.typing.type("b").catch((error: Error) => error.message);
-    await h.settle();
+    await h.flushTasks();
     h.typing.stop();
     expect(await queued).toContain("closed");
     await h.answer();

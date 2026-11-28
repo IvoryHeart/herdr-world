@@ -62,12 +62,13 @@ function exercise(
       readFileSync(join(root, "package.json")),
     );
     writeFileSync(record, "");
+    mkdirSync(record + ".started");
     // No command can finish until every static command has started. This
     // detects serialized execution without asserting a machine-speed limit.
     writeFileSync(
       join(directory, "static-probe.ts"),
       `
-import { appendFileSync, readFileSync, watch } from "node:fs";
+import { appendFileSync, readdirSync, writeFileSync, watch } from "node:fs";
 const record = process.env.GATE_COMMANDS!;
 const command = process.argv.slice(2).join(" ");
 let complete = false;
@@ -76,10 +77,11 @@ const deadline = setTimeout(() => {
   finish();
   if (!complete) process.exit(88);
 }, 15000);
-const watcher = watch(record, finish);
+const watcher = watch(record + ".started", finish);
 appendFileSync(record, command + "\\n");
+writeFileSync(record + ".started/" + crypto.randomUUID(), command);
 function finish() {
-  if (complete || readFileSync(record, "utf8").trim().split("\\n").length !== ${staticCommands.length}) return;
+  if (complete || readdirSync(record + ".started").length !== ${staticCommands.length}) return;
   complete = true;
   watcher.close();
   clearTimeout(deadline);
@@ -184,6 +186,7 @@ finish();
       env: {
         ...process.env,
         CI: "true",
+        CHROME_BIN: join(directory, "fixture-chrome"),
         PATH: `${directory}:${process.env.PATH ?? ""}`,
         GATE_COMMANDS: record,
         GATE_REAL_BUN: process.execPath,
@@ -355,7 +358,7 @@ test.each([
     expect(result.commands).toContain(command);
   if (path.startsWith("openspec/"))
     expect(result.commands).toContain(
-      "scripts/run-tests.ts scripts/openspec-feature-map.test.ts",
+      "scripts/run-tests.ts scripts/openspec-feature-map.test.ts --timings=scripts/ci-unit-timings.json --reporter=junit --reporter-outfile=.agents/delivery/timing-unit.xml",
     );
 });
 
@@ -390,7 +393,7 @@ test("tooling scope runs static checks and affected units without heavy lanes", 
   expect(result.commands).toContain("run check:size");
   expect(result.commands).toContain("run typecheck:quick");
   expect(result.commands).toContain(
-    "scripts/run-tests.ts scripts/agent/example.test.ts",
+    "scripts/run-tests.ts scripts/agent/example.test.ts --timings=scripts/ci-unit-timings.json --reporter=junit --reporter-outfile=.agents/delivery/timing-unit.xml",
   );
   expect(
     result.commands.some((cmd) =>
@@ -416,6 +419,10 @@ test("tooling classification includes earlier PR commits on an incremental push"
     true,
   );
   expect(full.commands).toContain("run verification:gate");
+  const verification = full.commands.indexOf("run verification:gate");
+  for (const [index, command] of full.commands.entries())
+    if (/run-world-tests|scripts\/run-tests/.test(command))
+      expect(index).toBeLessThan(verification);
   expect(
     full.commands.some((cmd) => cmd.startsWith("scripts/run-world-tests.ts")),
   ).toBe(true);
@@ -434,7 +441,7 @@ test("an uncovered agent module runs the entire agent test inventory without hea
     expect(result.commands).toContain("run check:size");
     expect(result.commands).toContain("run typecheck:quick");
     expect(result.commands).toContain(
-      "scripts/run-tests.ts scripts/agent/example.test.ts scripts/agent/other.test.ts",
+      "scripts/run-tests.ts scripts/agent/example.test.ts scripts/agent/other.test.ts --timings=scripts/ci-unit-timings.json --reporter=junit --reporter-outfile=.agents/delivery/timing-unit.xml",
     );
     expect(
       result.commands.some((cmd) =>
@@ -448,7 +455,7 @@ test("pre-push keeps all non-browser units for gate changes and leaves heavy sui
   const result = exercise(["scripts/check-delivery.ts"], "", ["package.json"]);
   expect(result.status).toBe(0);
   expect(result.commands).toContain(
-    "scripts/run-tests.ts scripts/agent/example.test.ts scripts/agent/other.test.ts",
+    "scripts/run-tests.ts scripts/agent/example.test.ts scripts/agent/other.test.ts --timings=scripts/ci-unit-timings.json --reporter=junit --reporter-outfile=.agents/delivery/timing-unit.xml",
   );
   expect(
     result.commands.some((cmd) =>
@@ -460,7 +467,7 @@ test("pre-push keeps all non-browser units for gate changes and leaves heavy sui
   ]);
   expect(full.status).toBe(0);
   expect(full.commands).toContain(
-    "scripts/run-tests.ts web/src/uiScale.test.ts --parallel=2",
+    "scripts/run-browser-tests.ts web/src/uiScale.test.ts --parallel=4 --max-concurrency=12 --reporter=junit --reporter-outfile=.agents/delivery/timing-quiet.xml",
   );
   expect(full.commands).toContain("run verification:gate");
   expect(
@@ -521,7 +528,7 @@ test("Chrome lanes share the browser slot while unit and verification work hold 
     );
     expect(result.status).toBe(0);
     expect(result.commands).toContain(
-      "scripts/run-tests.ts web/src/uiScale.test.ts --parallel=2",
+      "scripts/run-browser-tests.ts web/src/uiScale.test.ts --parallel=4 --max-concurrency=12 --reporter=junit --reporter-outfile=.agents/delivery/timing-quiet.xml",
     );
     expect(
       result.commands.some((cmd) => /verification:gate|^run /.test(cmd)),

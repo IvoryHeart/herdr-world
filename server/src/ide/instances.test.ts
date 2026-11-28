@@ -51,7 +51,7 @@ async function until(done: () => boolean, what: string, ms = 10_000) {
   const deadline = Date.now() + ms;
   while (!done()) {
     if (Date.now() > deadline) throw new Error(`timed out: ${what}`);
-    await Bun.sleep(10);
+    await new Promise<void>((resolve) => setImmediate(resolve));
   }
 }
 
@@ -96,7 +96,7 @@ function setup() {
       forward,
       // The stand-in answers once it has made its socket.
       probe: async (upstream) => (existsSync(upstream.socketPath) ? 200 : null),
-      sleep: (ms) => Bun.sleep(Math.min(ms, 20)),
+      sleep: () => new Promise((resolve) => setImmediate(resolve)),
       stopGraceMs: 300,
     });
     worlds.push(instances);
@@ -128,7 +128,6 @@ test.if(hasSetsid())(
 
     first.closeAll();
     expect(first.upstream(opened.id)).toBeNull();
-    await Bun.sleep(100);
     expect(h.standIn.survivors().sort()).toEqual(
       [pids.launcher, pids.server, pids.shell].sort(),
     );
@@ -263,7 +262,6 @@ test.if(hasSetsid())(
     await until(() => world.get(opened.id)?.state === "detached", "detached");
     expect(world.get(opened.id)?.reason).toContain("still runs there");
     expect(revoked).toContain(opened.id);
-    await Bun.sleep(100);
     expect(h.standIn.survivors()).toHaveLength(3);
 
     // Open attaches again through a new forward; nothing new starts.
@@ -402,7 +400,7 @@ test.if(hasSetsid())(
       },
       forward: () => ({ exited: new Promise(() => {}), kill() {} }),
       probe: async () => null,
-      sleep: (ms) => Bun.sleep(Math.min(ms, 20)),
+      sleep: () => new Promise((resolve) => setImmediate(resolve)),
       stopGraceMs: 300,
       maxInstances: 1,
     });

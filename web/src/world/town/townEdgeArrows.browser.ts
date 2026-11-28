@@ -1,3 +1,4 @@
+import { clock } from "../testing/installTestClock";
 /**
  * Edge arrows and Next in a real zoomed-in Town (townEdgeArrows.ts,
  * townNext.ts): an arrow points at a waiting agent off screen, its click
@@ -92,7 +93,7 @@ export async function checkTownEdgeArrows({
   const sequence = needsYouState().request.sequence;
   if (phone) {
     press(document.body);
-    await new Promise((resolve) => setTimeout(resolve, 100));
+    await clock.advance(100);
     check(
       needsYouState().request.sequence === sequence && next()?.hidden !== false,
       "N acted on a phone, which has no N",

@@ -1,6 +1,7 @@
 import { installTownMasterFixture } from "./testing/townMasterFixture";
 // First: the page runs on test time (see testing/testClock.ts).
 import { clock } from "./testing/installHostsFilterClock";
+import { withTestClock } from "./testing/testClock";
 import { setTownDaylightMode } from "./town/townDaylight";
 import { runDeskRevealCancellationAcceptance } from "./testing/deskRevealCancellationAcceptance";
 import { runDeskRevealAcceptance } from "./testing/deskRevealAcceptance";
@@ -797,7 +798,7 @@ async function operationalScenario(unmount: () => void) {
       (settled as boolean | null) ?? "pending";
     check(
       result === (operation === "pending-inspector-delayed"),
-      "pending Inspector admission did not settle with its expected outcome",
+      "pending Inspector admission did not advance with its expected outcome",
     );
     if (operation === "pending-inspector-delayed") {
       await waitFor(
@@ -2503,11 +2504,14 @@ async function operationalScenario(unmount: () => void) {
 async function run() {
   // This renderer-only case needs neither the shell nor a first Town mount.
   if (operation === "town-idle-draws") {
-    await checkTownIdleDraws(
+    await withTestClock(
       clock,
-      parseWorldSnapshotResult(snapshot())!.connections,
-      check,
-      failures,
+      checkTownIdleDraws(
+        clock,
+        parseWorldSnapshotResult(snapshot())!.connections,
+        check,
+        failures,
+      ),
     );
     return;
   }
@@ -3030,7 +3034,7 @@ async function run() {
       ...(operation === "spaces-notifications" ? { gamma: session() } : {}),
     },
   });
-  await worldRuntimeStore.refresh();
+  await withTestClock(clock, worldRuntimeStore.refresh());
   const host = document.createElement("div");
   document.body.append(host);
   let root = createRoot(host);
@@ -3304,7 +3308,7 @@ async function run() {
         beta: { ...session(), panes: densePanes },
       },
     });
-    await worldRuntimeStore.refresh();
+    await withTestClock(clock, worldRuntimeStore.refresh());
     const needle = worldObjectId("beta", "terminal", "shared-19");
     for (const view of ["board", "town"]) {
       const viewSelect = document.querySelector<HTMLSelectElement>(
@@ -3640,7 +3644,7 @@ async function run() {
       })),
       "alpha",
     );
-    await worldRuntimeStore.refresh();
+    await withTestClock(clock, worldRuntimeStore.refresh());
     await frame();
     check(
       anchors().has(worldObjectId("alpha", "host", "alpha")) &&
@@ -3663,7 +3667,7 @@ async function run() {
       })),
       "alpha",
     );
-    await worldRuntimeStore.refresh();
+    await withTestClock(clock, worldRuntimeStore.refresh());
     await frame();
     check(
       anchors().has(worldObjectId("alpha", "host", "alpha")),
@@ -3682,7 +3686,7 @@ async function run() {
     );
     catalogue = [];
     __storeTesting.applyCatalog([], "");
-    await worldRuntimeStore.refresh();
+    await withTestClock(clock, worldRuntimeStore.refresh());
     await frame();
     check(anchors().size === 0, "empty catalogue invented qualified entities");
     check(

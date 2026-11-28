@@ -1,3 +1,4 @@
+import { clock } from "../../clock";
 /**
  * Testing only: `?outOfFuel=3` (minutes until the reset, or `1h`; a bare
  * `?outOfFuel` means 3) marks one Claude and one Codex agent as stopped on
@@ -104,7 +105,7 @@ export function useOutOfFuelTrial(
   const current = useSyncExternalStore(subscribe, snapshot);
   useEffect(() => {
     if (pending == null || !leaves.length) return;
-    const picked = pickOutOfFuelTrial(leaves, Date.now(), pending);
+    const picked = pickOutOfFuelTrial(leaves, clock.now(), pending);
     if (!picked.byLeaf.size) return;
     pending = null;
     trial = picked;

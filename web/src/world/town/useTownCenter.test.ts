@@ -67,7 +67,7 @@ function center(
   return { actions, action, calls };
 }
 
-const settle = () => new Promise((resolve) => setTimeout(resolve, 0));
+const flushTasks = () => new Promise((resolve) => setTimeout(resolve, 0));
 
 test("the ring offers a new agent first, then the Town master and the town's errands", () => {
   const { actions, action } = center();
@@ -114,7 +114,7 @@ test("a new agent starts in the open room when it can take one", () => {
 test("Town master opens the role holder's chat with no name fallback", async () => {
   const named = center();
   named.action("master").run();
-  await settle();
+  await flushTasks();
   expect(named.calls).toEqual([["chat", "leaf-1"]]);
 
   const holder = center({
@@ -122,7 +122,7 @@ test("Town master opens the role holder's chat with no name fallback", async () 
   });
   expect(holder.action("master").detail).toBeUndefined();
   holder.action("master").run();
-  await settle();
+  await flushTasks();
   expect(holder.calls).toEqual([["chat", "leaf-2"]]);
 });
 
@@ -131,7 +131,7 @@ test("a Town master missing from Town, or unopenable, says so instead", async ()
     holder: { connection_id: "local", terminal_id: "t-absent" },
   });
   missing.action("master").run();
-  await settle();
+  await flushTasks();
   expect(missing.calls).toEqual([
     ["toast", "error", "The Town master isn't in Town now"],
   ]);
@@ -140,7 +140,7 @@ test("a Town master missing from Town, or unopenable, says so instead", async ()
     roster: [agent("leaf-1", "firstmate", { stale: true })],
   });
   stale.action("master").run();
-  await settle();
+  await flushTasks();
   expect(stale.calls).toEqual([
     ["toast", "error", "firstmate can't be opened now"],
   ]);
@@ -152,7 +152,7 @@ test("an assigned Town master absent from Town is unavailable, never a namesake"
     holder: { connection_id: "host-a", terminal_id: "t-9" },
   });
   absent.action("master").run();
-  await settle();
+  await flushTasks();
   expect(absent.calls).toEqual([
     ["toast", "error", "The Town master isn't in Town now"],
   ]);

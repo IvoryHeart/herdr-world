@@ -8,9 +8,10 @@ import {
   rmSync,
   writeFileSync,
 } from "node:fs";
-import { tmpdir } from "node:os";
-import { join } from "node:path";
+import { homedir, tmpdir } from "node:os";
+import { dirname, join } from "node:path";
 import pin from "../tools/chrome/test-chrome.json";
+export { smokeTestChrome } from "./testing/browser-session";
 
 /**
  * The Chrome that CI's browser suites and the latency trend run on: one
@@ -52,6 +53,54 @@ export async function installTestChrome(
   if (!version.endsWith(` ${pin.version}`))
     throw new Error(`Test Chrome reports ${version}, expected ${pin.version}`);
   return chrome;
+}
+
+/** Match CI on Linux x64; explicit browser overrides remain available. @internal */
+export async function localTestChrome(
+  env = process.env,
+  platform = process.platform,
+  arch = process.arch,
+  install = installTestChrome,
+  sandbox = localChromeSandbox,
+) {
+  if (env.CHROME_BIN) return env.CHROME_BIN;
+  if (platform !== "linux" || arch !== "x64") return undefined;
+  return sandbox(
+    await install(
+      join(
+        env.XDG_CACHE_HOME || join(homedir(), ".cache"),
+        "herdr-test-chrome",
+      ),
+    ),
+  );
+}
+
+/** Keep the sandbox on using an already-loaded OS profile; never change host policy. @internal */
+export function chromeProfileLauncher(chrome: string, aaExec: string) {
+  const quote = (value: string) => `'${value.replaceAll("'", "'\\''")}'`;
+  return `#!/bin/sh\nexec ${quote(aaExec)} -p chrome -- ${quote(chrome)} "$@"\n`;
+}
+
+function localChromeSandbox(chrome: string) {
+  if (!userNamespacesRestricted()) return chrome;
+  const aaExec = Bun.which("aa-exec");
+  if (!aaExec) return chrome;
+  // Ubuntu's packaged Chrome profile already allows user namespaces. Reuse it
+  // only when the OS admits the transition; this needs no sudo/profile reload.
+  const probe = Bun.spawnSync([
+    aaExec,
+    "-p",
+    "chrome",
+    "--",
+    chrome,
+    "--version",
+  ]);
+  if (probe.exitCode !== 0) return chrome;
+  const launcher = join(dirname(chrome), "world-chrome");
+  writeFileSync(launcher, chromeProfileLauncher(chrome, aaExec), {
+    mode: 0o755,
+  });
+  return launcher;
 }
 
 /**
@@ -102,31 +151,6 @@ function allowSandbox(chrome: string) {
 }
 
 /** Start the pinned browser headless once, as the suites do, sandbox on. */
-export function smokeTestChrome(chrome: string) {
-  const profile = mkdtempSync(join(tmpdir(), "test-chrome-smoke-"));
-  try {
-    const result = Bun.spawnSync(
-      [
-        chrome,
-        "--headless=new",
-        "--no-first-run",
-        "--no-default-browser-check",
-        "--disable-dev-shm-usage",
-        `--user-data-dir=${profile}`,
-        "--dump-dom",
-        "about:blank",
-      ],
-      { timeout: 60_000 },
-    );
-    if (result.exitCode !== 0 || !result.stdout.toString().includes("<html"))
-      throw new Error(
-        `Test Chrome did not start headless (${result.signalCode ?? `exit ${result.exitCode}`}): ${result.stderr.toString().slice(-2000)}`,
-      );
-  } finally {
-    rmSync(profile, { recursive: true, force: true });
-  }
-}
-
 /** What the timing depends on: the browser build and the runner's CPU. */
 export function describeMachine(chrome: string): string {
   const version = Bun.spawnSync([chrome, "--version"]).stdout.toString().trim();
@@ -155,7 +179,8 @@ if (import.meta.main) {
           `  sudo apparmor_parser -r /etc/apparmor.d/herdr-test-chrome`,
       );
   }
-  smokeTestChrome(chrome);
+  // The runner validates HTML on its one owned Chrome. A separate smoke
+  // process here would duplicate the per-job launch and cold-start cost.
   console.info(describeMachine(chrome));
   if (Bun.env.GITHUB_ENV)
     appendFileSync(Bun.env.GITHUB_ENV, `CHROME_BIN=${chrome}\n`);

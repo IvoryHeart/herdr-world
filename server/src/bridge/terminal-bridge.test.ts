@@ -47,7 +47,11 @@ test("explicit half-page history retains legacy Wheel source and line count", as
       lines: 14,
       source: "history",
     });
-    await Bun.sleep(40);
+    await waitForCondition(
+      () => sources.length === 1,
+      "history scroll did not reach the terminal",
+    );
+    await turns();
     expect(sources).toEqual([0]);
   } finally {
     bridge.dispose();
@@ -252,23 +256,30 @@ async function startThinServer(
 }
 
 async function waitForTerminalFrame(messages: string[]) {
-  for (let attempt = 0; attempt < 50; attempt += 1) {
+  const deadline = Date.now() + 100;
+  while (Date.now() < deadline) {
     const frame = messages
       .map((message) => JSON.parse(message))
       .find((message) => message.terminal);
     if (frame) return frame.terminal;
-    await Bun.sleep(2);
+    await new Promise<void>((resolve) => setImmediate(resolve));
   }
   throw new Error("timed out waiting for terminal frame");
+}
+
+/** Event-loop turns, each polling the sockets, for "nothing more arrives" checks. */
+async function turns(count = 20) {
+  for (let i = 0; i < count; i++) await new Promise((r) => setImmediate(r));
 }
 
 async function waitForCondition(
   predicate: () => boolean,
   message: string,
 ): Promise<void> {
-  for (let attempt = 0; attempt < 50; attempt += 1) {
+  const deadline = Date.now() + 100;
+  while (Date.now() < deadline) {
     if (predicate()) return;
-    await Bun.sleep(2);
+    await new Promise<void>((resolve) => setImmediate(resolve));
   }
   throw new Error(message);
 }
@@ -450,7 +461,7 @@ describe("terminal bridge sharing", () => {
         rows: 30,
       },
     );
-    await Bun.sleep(5);
+    await turns();
     expect(
       messages
         .get(secondBrowser)!
@@ -866,7 +877,7 @@ describe("terminal bridge sharing", () => {
         rows: 30,
       },
     );
-    await Bun.sleep(5);
+    await turns();
 
     for (const sent of messages.values()) {
       expect(
@@ -991,22 +1002,20 @@ describe("terminal bridge sharing", () => {
       rows: 40,
     });
     for (
-      let attempt = 0;
-      attempt < 50 && !tracker.appSizes.includes("120x40");
-      attempt += 1
+      const iterationDeadline = Date.now() + 100;
+      Date.now() < iterationDeadline && !tracker.appSizes.includes("120x40");
     ) {
-      await Bun.sleep(2);
+      await new Promise<void>((resolve) => setImmediate(resolve));
     }
     expect(tracker.appSizes).toContain("120x40");
 
     // Once no browser is connected the relay has no consumer and closes.
     bridge.browserClientCountChanged(0);
     for (
-      let attempt = 0;
-      attempt < 50 && tracker.appCloses === 0;
-      attempt += 1
+      const iterationDeadline = Date.now() + 100;
+      Date.now() < iterationDeadline && tracker.appCloses === 0;
     ) {
-      await Bun.sleep(2);
+      await new Promise<void>((resolve) => setImmediate(resolve));
     }
     expect(tracker.appCloses).toBe(1);
 
@@ -1075,11 +1084,10 @@ describe("terminal bridge sharing", () => {
       { cols: 170, rows: 46, paneId: "pane_active" },
     ]);
     for (
-      let attempt = 0;
-      attempt < 50 && !tracker.appSizes.includes("170x46");
-      attempt += 1
+      const iterationDeadline = Date.now() + 100;
+      Date.now() < iterationDeadline && !tracker.appSizes.includes("170x46");
     ) {
-      await Bun.sleep(2);
+      await new Promise<void>((resolve) => setImmediate(resolve));
     }
     expect(tracker.appSizes).toEqual(["168x45", "170x46"]);
 
@@ -1094,7 +1102,7 @@ describe("terminal bridge sharing", () => {
         relay_active: false,
       },
     );
-    await Bun.sleep(5);
+    await turns();
     expect(tracker.appSizes).toEqual(["168x45", "170x46"]);
 
     await bridge.handleTerminalRpc(
@@ -1111,11 +1119,10 @@ describe("terminal bridge sharing", () => {
       },
     );
     for (
-      let attempt = 0;
-      attempt < 50 && !tracker.appSizes.includes("172x45");
-      attempt += 1
+      const iterationDeadline = Date.now() + 100;
+      Date.now() < iterationDeadline && !tracker.appSizes.includes("172x45");
     ) {
-      await Bun.sleep(2);
+      await new Promise<void>((resolve) => setImmediate(resolve));
     }
     expect(tracker.appSizes).toEqual(["168x45", "170x46", "172x45"]);
     bridge.cleanupWs(browser);
@@ -1161,7 +1168,10 @@ describe("terminal bridge sharing", () => {
         relay_rows: 40,
       },
     );
-    await Bun.sleep(5);
+    await waitForCondition(
+      () => tracker.events.filter((event) => event === "attach").length === 2,
+      "the delayed attach did not reach the terminal",
+    );
     await bridge.handleTerminalRpc(
       browser,
       "new-target",
@@ -1170,11 +1180,10 @@ describe("terminal bridge sharing", () => {
     );
     await delayedAttach;
     for (
-      let attempt = 0;
-      attempt < 50 && !tracker.appSizes.includes("140x50");
-      attempt += 1
+      const iterationDeadline = Date.now() + 100;
+      Date.now() < iterationDeadline && !tracker.appSizes.includes("140x50");
     ) {
-      await Bun.sleep(2);
+      await new Promise<void>((resolve) => setImmediate(resolve));
     }
     expect(tracker.appSizes).toContain("140x50");
     expect(tracker.appSizes).not.toContain("120x40");
@@ -1271,11 +1280,10 @@ describe("terminal bridge sharing", () => {
         .find((message) => message.id === "after-dispose")?.error.message,
     ).toBe("terminal bridge disposed");
     for (
-      let attempt = 0;
-      attempt < 50 && tracker.appCloses !== 1;
-      attempt += 1
+      const iterationDeadline = Date.now() + 100;
+      Date.now() < iterationDeadline && tracker.appCloses !== 1;
     ) {
-      await Bun.sleep(2);
+      await new Promise<void>((resolve) => setImmediate(resolve));
     }
     expect(tracker.appCloses).toBe(1);
   });
@@ -1710,7 +1718,7 @@ describe("shared terminal size after a viewer leaves", () => {
       const resizesBefore = resizes();
 
       bridge.cleanupWs(phone);
-      await Bun.sleep(10);
+      await turns();
 
       expect(resizes()).toBe(resizesBefore);
       expect(framesFor(desktop).at(-1)).toBe("170x47");

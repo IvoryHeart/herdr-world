@@ -7,6 +7,7 @@ export type DeliveryResults = Record<
   | "security"
   | "static"
   | "unit"
+  | "combined"
   | "world"
   | "web"
   | "behavioral",
@@ -40,15 +41,18 @@ export function assertDeliveryResults(
     security: mode === "reuse" ? "skipped" : "success",
     static: mode === "reuse" ? "skipped" : "success",
     unit: mode === "reuse" || mode === "docs" ? "skipped" : "success",
+    combined: mode === "reuse" || mode === "docs" ? "skipped" : "success",
     world: selected("world") ? "success" : "skipped",
     web: selected("web") ? "success" : "skipped",
     behavioral: selected("verification") ? "success" : "skipped",
   };
-  for (const lane of Object.keys(expected) as Array<keyof DeliveryResults>)
-    if (results[lane] !== expected[lane])
-      throw new Error(
-        `Delivery checks failed: mode=${mode}, ${lane}=${results[lane]}, expected=${expected[lane]}`,
-      );
+  const failures = (Object.keys(expected) as Array<keyof DeliveryResults>)
+    .filter((lane) => results[lane] !== expected[lane])
+    .map((lane) => `${lane}=${results[lane]}, expected=${expected[lane]}`);
+  if (failures.length)
+    throw new Error(
+      `Delivery checks failed: mode=${mode}, ${failures.join("; ")}`,
+    );
 }
 
 if (import.meta.main) {
@@ -60,6 +64,7 @@ if (import.meta.main) {
       security: Bun.env.SECURITY_RESULT,
       static: Bun.env.STATIC_RESULT,
       unit: Bun.env.UNIT_RESULT,
+      combined: Bun.env.COMBINED_RESULT,
       world: Bun.env.WORLD_RESULT,
       web: Bun.env.WEB_RESULT,
       behavioral: Bun.env.BEHAVIORAL_RESULT,

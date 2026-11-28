@@ -49,6 +49,9 @@ test("delivery requires every leaf: failure, cancellation, skipped and missing e
                 security: mode === "reuse" ? "skipped" : "success",
                 static: mode === "reuse" ? "skipped" : "success",
                 unit: ["docs", "reuse"].includes(mode) ? "skipped" : "success",
+                combined: ["docs", "reuse"].includes(mode)
+                  ? "skipped"
+                  : "success",
                 world: world ? "success" : "skipped",
                 web: web ? "success" : "skipped",
                 behavioral: verification ? "success" : "skipped",
@@ -80,6 +83,7 @@ test("unknown modes, held results and missing scoped plans cannot pass", () => {
     security: "success",
     static: "success",
     unit: "success",
+    combined: "success",
     world: "skipped",
     web: "skipped",
     behavioral: "skipped",

@@ -49,7 +49,7 @@ function replica() {
   };
 }
 
-const settle = () => new Promise((resolve) => setTimeout(resolve, 0));
+const flushTasks = () => new Promise((resolve) => setTimeout(resolve, 0));
 
 const BLOCKED = { default: ["blocked" as const], hosts: {} };
 const ASK = { default: ["ask" as const], hosts: {} };
@@ -58,14 +58,14 @@ const marks = () => townReceptionFilter().default.join();
 test("a newer publication skipped during this browser's save is applied when the save ends", async () => {
   installUiSettings();
   onStatus("connected");
-  await settle();
+  await flushTasks();
   const world = replica();
   followPublishedUiSettings(world);
   world.publish({ ui: {}, revision: 0 });
 
   // This browser saves "blocked" (commit 1); its answer is delayed.
   const saving = saveTownReceptionFilter(BLOCKED);
-  await settle();
+  await flushTasks();
   expect(marks()).toBe("blocked");
   // Another browser's later commit (2) is published first.
   world.publish({ ui: { [TOWN_RECEPTION_SETTING_KEY]: ASK }, revision: 2 });
@@ -81,7 +81,7 @@ test("a newer publication skipped during this browser's save is applied when the
   // it (commit 4): the restored value is applied, not suppressed as the
   // value this browser last adopted.
   const again = saveTownReceptionFilter(BLOCKED);
-  await settle();
+  await flushTasks();
   acks.shift()!(3);
   await again;
   expect(marks()).toBe("blocked");

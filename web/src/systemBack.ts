@@ -1,3 +1,4 @@
+import { clock } from "./clock";
 import { useEffect, useRef } from "react";
 import { useLayoutPreferences } from "./layoutPreferences";
 
@@ -87,15 +88,15 @@ let backPending = false;
 // it is pushed when the traversal lands.
 let deferredRoute: { state: Record<string, unknown>; url: URL } | null = null;
 
-let ownBackTimer: ReturnType<typeof setTimeout> | undefined;
+let ownBackTimer: ReturnType<typeof clock.setTimeout> | undefined;
 // A traversal that cannot move fires no popstate; stop waiting for it after
 // this long, so later routes and guards are not held back forever.
 const OWN_BACK_TIMEOUT_MS = 1_000;
 
 function goOwnBack(delta: number) {
   backPending = true;
-  clearTimeout(ownBackTimer);
-  ownBackTimer = setTimeout(() => {
+  clock.clearTimeout(ownBackTimer);
+  ownBackTimer = clock.setTimeout(() => {
     if (backPending) landOwnBack();
   }, OWN_BACK_TIMEOUT_MS);
   window.history.go(delta);
@@ -103,7 +104,7 @@ function goOwnBack(delta: number) {
 
 /** Our traversal landed (or never will): push a deferred route, reconcile. */
 function landOwnBack() {
-  clearTimeout(ownBackTimer);
+  clock.clearTimeout(ownBackTimer);
   backPending = false;
   const route = deferredRoute;
   deferredRoute = null;
@@ -161,7 +162,7 @@ function reconcile() {
     if (depth === 0) {
       base = {
         ...(typeof state === "object" && state ? state : {}),
-        [BASE]: `${Date.now()}:${++bases}`,
+        [BASE]: `${clock.now()}:${++bases}`,
       };
       window.history.replaceState(base, "");
     } else base = { ...(state as Record<string, unknown>) };

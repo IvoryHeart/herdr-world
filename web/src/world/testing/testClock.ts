@@ -14,7 +14,7 @@
  * By default time moves only in the fixture's own advance/until calls. A
  * fixture that awaits the app itself (store refreshes, commands with
  * deadlines) uses the running clock instead (`{ running: true }`, as the
- * Hosts filter fixture does in installHostsFilterClock.ts):
+ * a fixture doing only synthetic in-page work can):
  * frames then follow one another as fast as the page handles them, and
  * advance/until wait on that clock rather than drive it. Steps stay 16 ms of
  * test time with real task turns between them, so this is only as
@@ -47,6 +47,17 @@ export type TestClock = {
 };
 
 export const FRAME_MS = 16;
+
+/** Layout, ResizeObserver, scrolling and media-query events need native presentation. */
+export async function presentTestFrame(clock: TestClock, ms = 2 * FRAME_MS) {
+  await clock.advance(ms);
+  if (clock.real.requestAnimationFrame)
+    await new Promise<void>((resolve) =>
+      clock.real.requestAnimationFrame!(() =>
+        clock.real.requestAnimationFrame!(() => resolve()),
+      ),
+    );
+}
 
 /** Where the clock installs: the page, or a plain object in unit tests. */
 export type ClockTarget = Pick<
@@ -173,10 +184,38 @@ export function installTestClock(
   };
 
   /** A real task turn: React's scheduler and pending promises run. */
+  // Keep native task ordering (including React and network events), while a
+  // page reuses its ports instead of allocating two ports for every callback.
+  // Bun object-clock tests retain per-turn ports so no live handle survives.
+  const pageTurns =
+    typeof window !== "undefined" && target === window
+      ? new real.MessageChannel()
+      : undefined;
+  const turns: (() => void)[] = [];
+  if (pageTurns) {
+    pageTurns.port1.onmessage = () => turns.shift()?.();
+    window.addEventListener(
+      "pagehide",
+      () => {
+        pageTurns.port1.close();
+        pageTurns.port2.close();
+      },
+      { once: true },
+    );
+  }
   const turn = () =>
     new Promise<void>((resolve) => {
+      if (pageTurns) {
+        turns.push(resolve);
+        pageTurns.port2.postMessage(0);
+        return;
+      }
       const channel = new real.MessageChannel();
-      channel.port1.onmessage = () => resolve();
+      channel.port1.onmessage = () => {
+        channel.port1.close();
+        channel.port2.close();
+        resolve();
+      };
       channel.port2.postMessage(0);
     });
 
@@ -275,18 +314,41 @@ export function installTestClock(
     // ahead of `settled` during one) and are over once a step that reached
     // them has finished.
     async advance(ms) {
+      const completed = (
+        globalThis as unknown as { __herdrTestWait?: () => () => void }
+      ).__herdrTestWait?.();
       const end = now + ms;
       // Zero-delay timers first, as a real task turn would run them.
       if (!running) await runTimers();
       while (settled < end) await progress();
+      completed?.();
     },
     async until(done, message, limit = 10_000) {
+      const completed = (
+        globalThis as unknown as { __herdrTestWait?: () => () => void }
+      ).__herdrTestWait?.();
       const end = now + limit;
       if (!running) await runTimers();
+      let steps = 0;
       while (!done()) {
         if (settled >= end) throw new Error(message);
         await progress();
+        // Browser layout/ResizeObserver and GPU presentation are native events.
+        // Batch logical frames before asking for native presentation. Tying
+        // each 16 ms test step to a real frame made fake deadlines real waits.
+        // Task/microtask ordering still holds within every logical frame.
+        if (
+          !running &&
+          ++steps % 8 === 0 &&
+          typeof window !== "undefined" &&
+          target === window &&
+          real.requestAnimationFrame
+        )
+          await new Promise<void>((resolve) =>
+            real.requestAnimationFrame!(() => resolve()),
+          );
       }
+      completed?.();
     },
     real: {
       setTimeout: real.setTimeout,
@@ -297,45 +359,21 @@ export function installTestClock(
   };
 }
 
-/**
- * The same interface on real time, for a case that cannot yet run on test
- * time: advance sleeps and until polls. Each use names why, with its issue.
- */
-export function realTimeClock(): TestClock {
-  const sleep = (ms: number) =>
-    new Promise<void>((resolve) => setTimeout(resolve, ms));
-  return {
-    now: () => performance.now(),
-    advance: sleep,
-    frame: () =>
-      new Promise<void>((resolve) =>
-        requestAnimationFrame(() => requestAnimationFrame(() => resolve())),
-      ),
-    // As fixtures waited before test time: on each DOM change, or the limit.
-    until: (done, message, limit = 10_000) =>
-      done()
-        ? Promise.resolve()
-        : new Promise<void>((resolve, reject) => {
-            const observer = new MutationObserver(() => {
-              if (!done()) return;
-              clearTimeout(timeout);
-              observer.disconnect();
-              resolve();
-            });
-            const timeout = setTimeout(() => {
-              observer.disconnect();
-              if (done()) resolve();
-              else reject(new Error(message));
-            }, limit);
-            observer.observe(document.body, {
-              childList: true,
-              subtree: true,
-              attributes: true,
-            });
-          }),
-    real: {
-      setTimeout: window.setTimeout.bind(window),
-      now: performance.now.bind(performance),
-    },
-  };
+/** Drive logical deadlines while a real asynchronous event is outstanding. */
+export async function withTestClock<T>(
+  clock: TestClock,
+  operation: Promise<T>,
+): Promise<T> {
+  let done = false;
+  const result = operation.finally(() => {
+    done = true;
+  });
+  // Observe rejection here as well as when returning it; no unhandled gap.
+  void result.catch(() => {});
+  await clock.until(
+    () => done,
+    "Asynchronous fixture event did not complete",
+    30_000,
+  );
+  return result;
 }

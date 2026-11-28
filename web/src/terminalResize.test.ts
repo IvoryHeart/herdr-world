@@ -1,4 +1,4 @@
-import { describe, expect, test } from "bun:test";
+import { afterEach, beforeEach, describe, expect, jest, test } from "bun:test";
 import {
   TerminalAttachFrameWatchdog,
   TerminalResizeSync,
@@ -12,7 +12,16 @@ import {
   terminalRelayViewportSize,
 } from "./terminalResize";
 
-const tick = (ms: number) => new Promise((r) => setTimeout(r, ms));
+// Debounce and watchdog timers run on fake timers: time moves only by `tick`.
+beforeEach(() => {
+  jest.useFakeTimers();
+});
+afterEach(() => {
+  jest.useRealTimers();
+});
+const tick = (ms: number) => {
+  jest.advanceTimersByTime(ms);
+};
 
 describe("TerminalResizeSync", () => {
   test("sends a changed size after the debounce window", async () => {
@@ -24,7 +33,7 @@ describe("TerminalResizeSync", () => {
     sync.markAttached({ cols: 100, rows: 30 });
     sync.schedule({ cols: 120, rows: 40 });
     expect(sent).toEqual([]);
-    await tick(40);
+    tick(40);
     expect(sent).toEqual([{ cols: 120, rows: 40 }]);
     sync.dispose();
   });
@@ -38,11 +47,11 @@ describe("TerminalResizeSync", () => {
     sync.markAttached({ cols: 265, rows: 70 });
     // Simulates a CSS transition / window drag: many intermediate sizes.
     sync.schedule({ cols: 260, rows: 70 });
-    await tick(10);
+    tick(10);
     sync.schedule({ cols: 238, rows: 66 });
-    await tick(10);
+    tick(10);
     sync.schedule({ cols: 220, rows: 62 });
-    await tick(50);
+    tick(50);
     expect(sent).toEqual([{ cols: 220, rows: 62 }]);
     sync.dispose();
   });
@@ -56,7 +65,7 @@ describe("TerminalResizeSync", () => {
     sync.markAttached({ cols: 142, rows: 44 });
     sync.schedule({ cols: 142, rows: 44 });
     sync.sendNow({ cols: 142, rows: 44 });
-    await tick(30);
+    tick(30);
     expect(sent).toEqual([]);
     sync.dispose();
   });
@@ -69,9 +78,9 @@ describe("TerminalResizeSync", () => {
     }, 25);
     sync.markAttached({ cols: 142, rows: 44 });
     sync.schedule({ cols: 150, rows: 44 });
-    await tick(10);
+    tick(10);
     sync.schedule({ cols: 142, rows: 44 });
-    await tick(50);
+    tick(50);
     expect(sent).toEqual([]);
     sync.dispose();
   });
@@ -389,7 +398,7 @@ describe("TerminalAttachFrameWatchdog", () => {
     let timedOut = false;
     watchdog.markFrame();
     expect(watchdog.arm(attempt, 5, () => (timedOut = true))).toBe(false);
-    await tick(15);
+    tick(15);
     expect(timedOut).toBe(false);
     watchdog.dispose();
   });
@@ -399,9 +408,9 @@ describe("TerminalAttachFrameWatchdog", () => {
     const attempt = watchdog.begin();
     let timedOut = false;
     expect(watchdog.arm(attempt, 15, () => (timedOut = true))).toBe(true);
-    await tick(5);
+    tick(5);
     watchdog.markFrame();
-    await tick(20);
+    tick(20);
     expect(timedOut).toBe(false);
     watchdog.dispose();
   });

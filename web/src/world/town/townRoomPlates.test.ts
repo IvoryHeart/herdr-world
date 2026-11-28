@@ -43,6 +43,14 @@ test("plate checks wait for a committed overview card without another renderer f
           workspaceId: "synthetic-room",
         },
         () => 0,
+        {
+          frame: async () => {
+            throw new Error("Unexpected frame before card activation");
+          },
+          advance: async () => {
+            throw new Error("Unexpected time before card activation");
+          },
+        },
       ),
     ).rejects.toBe(activated);
     expect(mounted).toBe(true);

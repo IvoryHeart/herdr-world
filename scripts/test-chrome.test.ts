@@ -13,10 +13,61 @@ import pin from "../tools/chrome/test-chrome.json";
 import {
   appArmorProfile,
   installTestChrome,
+  localTestChrome,
+  chromeProfileLauncher,
   smokeTestChrome,
   userNamespacesRestricted,
   verifyArchive,
 } from "./test-chrome";
+
+test("local Linux browser gates use CI's pin unless a browser is explicitly selected", async () => {
+  const installs: string[] = [];
+  const install = async (directory: string) => {
+    installs.push(directory);
+    return "/synthetic/pinned-chrome";
+  };
+  expect(
+    await localTestChrome(
+      { XDG_CACHE_HOME: "/synthetic/cache" },
+      "linux",
+      "x64",
+      install,
+      (chrome) => chrome,
+    ),
+  ).toBe("/synthetic/pinned-chrome");
+  expect(installs).toEqual(["/synthetic/cache/herdr-test-chrome"]);
+  expect(
+    await localTestChrome(
+      { CHROME_BIN: "/synthetic/override" },
+      "linux",
+      "x64",
+      install,
+    ),
+  ).toBe("/synthetic/override");
+  expect(await localTestChrome({}, "darwin", "arm64", install)).toBeUndefined();
+  expect(installs).toHaveLength(1);
+});
+
+test("the existing-profile launcher quotes executable paths and keeps every Chrome argument", () => {
+  const directory = mkdtempSync(join(tmpdir(), "chrome-launcher-"));
+  try {
+    const aaExec = join(directory, "aa exec' fixture");
+    const launcher = join(directory, "launcher");
+    writeFileSync(aaExec, '#!/bin/sh\nprintf "%s\\n" "$@"\n', { mode: 0o755 });
+    writeFileSync(
+      launcher,
+      chromeProfileLauncher("/fixture/chrome's binary", aaExec),
+      { mode: 0o755 },
+    );
+    const result = Bun.spawnSync([launcher, "--headless=new", "two words"]);
+    expect(result.exitCode).toBe(0);
+    expect(result.stdout.toString()).toBe(
+      "-p\nchrome\n--\n/fixture/chrome's binary\n--headless=new\ntwo words\n",
+    );
+  } finally {
+    rmSync(directory, { recursive: true, force: true });
+  }
+});
 
 test("the pin names one Chrome for Testing build and its checksum", () => {
   expect(pin.url).toBe(

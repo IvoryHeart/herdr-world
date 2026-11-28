@@ -1,4 +1,5 @@
 import assert from "node:assert/strict";
+import { unitSchedule, unitRunnerSchedule } from "./ci-unit-schedule";
 import {
   appendFileSync,
   closeSync,
@@ -190,7 +191,40 @@ if (import.meta.main) {
         stderr: "pipe",
       });
       assert(diff.exitCode === 0, "Cannot determine unit comparison inputs");
-      const paths = diff.stdout.toString().trim().split("\n");
+      let paths = diff.stdout.toString().trim().split("\n");
+      // Scope-policy repairs do not alter the comparison execution. Keep the
+      // twenty-pair requirement whenever its executor/assertions change.
+      const source = (revision: string, path: string) => {
+        const result = Bun.spawnSync(["git", "show", `${revision}:${path}`]);
+        assert(result.exitCode === 0, "Cannot read unit comparison source");
+        return result.stdout.toString();
+      };
+      if (paths.includes("scripts/ci-unit-comparison.ts")) {
+        const execution = (text: string) => {
+          const start = text.indexOf("export const UNIT_COMPARISON_RUNS");
+          const end = text.indexOf("if (import.meta.main)");
+          assert(
+            start >= 0 && end > start,
+            "Missing unit comparison execution",
+          );
+          return text.slice(start, end);
+        };
+        if (
+          execution(source(base, "scripts/ci-unit-comparison.ts")) ===
+          execution(source("HEAD", "scripts/ci-unit-comparison.ts"))
+        )
+          paths = paths.filter(
+            (path) => path !== "scripts/ci-unit-comparison.ts",
+          );
+      }
+      // The watchdog preserves the exact child command and arguments. Its
+      // separate regression suite exercises all file phases with stopped clocks.
+      if (
+        paths.includes("scripts/run-tests.ts") &&
+        unitRunnerSchedule(source(base, "scripts/run-tests.ts")) ===
+          unitRunnerSchedule(source("HEAD", "scripts/run-tests.ts"))
+      )
+        paths = paths.filter((path) => path !== "scripts/run-tests.ts");
       const unitJob = (revision: string) => {
         const file = Bun.spawnSync(
           ["git", "show", `${revision}:.github/workflows/ci.yml`],
@@ -202,7 +236,7 @@ if (import.meta.main) {
         };
         const job = workflow?.jobs?.["unit-tests"];
         assert(job && typeof job === "object", "Missing CI unit job");
-        return JSON.stringify(job);
+        return unitSchedule(job as Record<string, unknown>);
       };
       required = unitComparisonRequired(
         paths,

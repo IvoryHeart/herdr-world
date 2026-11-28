@@ -1,3 +1,4 @@
+import { toolBrowserSession } from "./testing/browser-session";
 /**
  * Render the website film to video files.
  *
@@ -20,12 +21,12 @@
  */
 
 import { existsSync } from "node:fs";
-import { mkdir, mkdtemp, readFile, rm, stat } from "node:fs/promises";
+import { mkdir, mkdtemp, rm, stat } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { parseArgs } from "node:util";
-import { stopChrome } from "../web/src/browserChrome";
+import { connectCapture } from "../web/src/world/testing/connectCapture";
 import { filmBuildConfig } from "./site-bundles";
 
 const root = dirname(dirname(fileURLToPath(import.meta.url)));
@@ -98,7 +99,6 @@ if (kept) await mkdir(kept, { recursive: true });
 const frames = join(kept ?? work, "frames.mkv");
 const audio = join(kept ?? work, "audio.wav");
 const captionFile = join(kept ?? work, "captions.json");
-let browser: ReturnType<typeof Bun.spawn> | undefined;
 const began = performance.now();
 
 /** Play the film in Chrome and keep each frame, its score and captions. */
@@ -173,34 +173,33 @@ async function capture() {
       return new Response("Not found", { status: 404 });
     },
   });
+  let session: Awaited<ReturnType<typeof toolBrowserSession>> | undefined;
+  let page: Awaited<ReturnType<typeof connectCapture>> | undefined;
   try {
-    browser = Bun.spawn(
-      [
-        chrome!,
-        "--headless",
-        "--disable-gpu",
-        "--no-first-run",
-        "--no-default-browser-check",
-        "--mute-audio",
-        "--window-size=1920,1080",
-        `--user-data-dir=${join(work, "profile")}`,
-        server.url.href,
-      ],
-      { stdout: "ignore", stderr: Bun.file(join(work, "chrome.log")) },
-    );
+    session = await toolBrowserSession(chrome!, { url: server.url.href });
+    const browser = session.browser;
+    page = await connectCapture(browser.devtoolsPort);
+    await page.command("Emulation.setDeviceMetricsOverride", {
+      width: 1920,
+      height: 1080,
+      deviceScaleFactor: 1,
+      mobile: false,
+    });
+    await browser.start();
     await Promise.race([
       finished.promise,
       browser.exited.then(async (code) => {
         throw new Error(
-          `Chrome exited (${code}): ${await readFile(join(work, "chrome.log"), "utf8")}`,
+          `Managed Chrome context exited (${code}); inspect browser-errors.jsonl`,
         );
       }),
     ]);
   } finally {
     server.stop(true);
-    await stopChrome(browser);
+    page?.close();
+    await session?.close();
+    encoder.stdin.end();
   }
-  encoder.stdin.end();
   if ((await encoder.exited) !== 0) throw new Error("frame capture failed");
   await Bun.write(captionFile, JSON.stringify(captions));
   process.stdout.write(

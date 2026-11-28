@@ -1,6 +1,7 @@
 import { expect, test } from "bun:test";
 import {
   compare,
+  shortPolls,
   formatAllowlist,
   lowered,
   parseAllowlist,
@@ -8,9 +9,68 @@ import {
   scanSource,
   TEST_FILE,
   timingSwitchesOutsideTests,
+  browserLaunchProblems,
 } from "./check-test-waits";
 
 const lines = (text: string) => scanSource("a.test.ts", text).pauses;
+
+test("nested test helpers and spec files stay inside the wait guard", () => {
+  for (const path of [
+    "web/src/a.spec.ts",
+    "web/src/world/testing/nested/helper.ts",
+    "server/src/__tests__/nested/helper.ts",
+  ])
+    expect(TEST_FILE.test(path)).toBe(true);
+});
+
+test("only the shared helper launches a real Chrome process", () => {
+  const source = 'Bun.spawn([chrome, "--headless=new", "about:blank"]);';
+  expect(
+    browserLaunchProblems(new Map([["web/src/a.test.ts", source]]))[0],
+  ).toContain("shared browser-session");
+  expect(
+    browserLaunchProblems(
+      new Map([
+        ["web/src/a.test.ts", `test('browser', async () => { ${source} });`],
+      ]),
+    ),
+  ).toHaveLength(1);
+  expect(
+    browserLaunchProblems(
+      new Map([["scripts/testing/browser-session.ts", source]]),
+    ),
+  ).toEqual([]);
+  expect(
+    browserLaunchProblems(
+      new Map([
+        [
+          "scripts/a.test.ts",
+          "const source = 'Bun.spawn([chrome, \"--headless\"])';",
+        ],
+      ]),
+    ),
+  ).toEqual([]);
+});
+
+test("browser suites reject short polling sleeps and explicit timeout waits", () => {
+  const text = `while (!ready()) await Bun.sleep(5); await page.waitForTimeout(10);`;
+  expect(scanSource("a.browser.test.ts", text).pauses).toEqual([1, 1]);
+  const strict = new Set(["web/src/Browser.test.ts"]);
+  const files = new Map([
+    [
+      "web/src/Browser.test.ts",
+      'import { ready } from "./testing/helper"; ready();',
+    ],
+    [
+      "web/src/testing/helper.ts",
+      "export async function ready() { while (!done) await Bun.sleep(2); }",
+    ],
+  ]);
+  expect(scanFiles(files, strict).get("web/src/testing/helper.ts")).toEqual([
+    1,
+  ]);
+  expect(strict.has("web/src/testing/helper.ts")).toBe(true);
+});
 
 test("fixed sleeps count: Bun.sleep, resolving timers and timers/promises", () => {
   expect(
@@ -115,6 +175,14 @@ await sleep(0);
 await waitFor(() => true);
 while (!done()) await sleep(3);`;
   expect(lines(text)).toEqual([1, 2, 7, 8, 9]);
+});
+
+test("a frame callback does not hide the fixed dwell before presentation", () => {
+  expect(
+    lines(`const present = (ms = 0) => new Promise(resolve => setTimeout(() => requestAnimationFrame(() => resolve()), ms));
+await present(700);
+await present(0);`),
+  ).toEqual([2]);
 });
 
 test("a new sleep inside a helper that already pauses still counts", () => {
@@ -278,4 +346,40 @@ test("only test code may import the test-timing switch", () => {
   expect(timingSwitchesOutsideTests(files)).toEqual([
     "web/src/store.ts:1: only test code and the test service launcher may switch product timings (setTimingsForTests).",
   ]);
+});
+
+test("new short unit polling waits fail while an existing allowance only shrinks", () => {
+  const files = new Map([
+    ["a.test.ts", "while (!ready) await Bun.sleep(5); await Bun.sleep(50);"],
+  ]);
+  const polls = shortPolls(files, scanFiles(files));
+  expect(polls.get("a.test.ts")).toEqual([1]);
+  expect(compare(polls, {})).toHaveLength(1);
+  const allowed = {
+    "a.test.ts": {
+      pauses: 1,
+      reason: "Legacy subscription fixture; replace with its update event.",
+    },
+  };
+  expect(compare(polls, allowed, allowed)).toEqual([]);
+  expect(compare(polls, allowed, {})).toHaveLength(1);
+  expect(compare(new Map([["a.test.ts", []]]), allowed, allowed)).toHaveLength(
+    1,
+  );
+});
+
+test("CDP evaluate literals cannot conceal fixed browser waits", async () => {
+  const { inlineBrowserScripts } = await import(
+    "./testing/inline-browser-scripts"
+  );
+  const source = [
+    'await evaluate("new Promise((r) => setTimeout(r, 2000))");',
+    "await page.evaluate(`Bun.sleep(${delay})`);",
+    'await command("Runtime.evaluate", {expression: "new Promise((resolve) => setTimeout(resolve, 100))"});',
+    'const data = "Bun.sleep(1000)";',
+  ].join("\n");
+  const scripts = inlineBrowserScripts("browser.test.ts", source);
+  expect(scripts).toHaveLength(3);
+  for (const script of scripts)
+    expect(scanSource("inline.browser.ts", script).pauses).toHaveLength(1);
 });

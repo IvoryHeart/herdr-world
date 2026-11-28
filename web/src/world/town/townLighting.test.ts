@@ -38,7 +38,7 @@ function arrived(
   return actors;
 }
 
-const settle = (actors: TownActors) => {
+const finishActorMotion = (actors: TownActors) => {
   for (let i = 0; i < 4000 && actors.busy; i += 1) actors.step(1 / 30);
   expect(actors.busy).toBe(false);
 };
@@ -235,7 +235,7 @@ test("light changes with the walk: a working agent lights its desk and room as i
     bar: false,
     desk: null,
   });
-  settle(actors);
+  finishActorMotion(actors);
   expect(lit(after.model, actors)).toEqual({
     room: true,
     bar: false,
@@ -250,7 +250,7 @@ test("light changes with the walk: a working agent lights its desk and room as i
     bar: false,
     desk: null,
   });
-  settle(actors);
+  finishActorMotion(actors);
   expect(lit(before.model, actors)).toEqual({
     room: false,
     bar: true,

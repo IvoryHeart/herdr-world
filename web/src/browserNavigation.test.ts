@@ -1,4 +1,4 @@
-import { describe, expect, spyOn, test } from "bun:test";
+import { afterEach, describe, expect, jest, spyOn, test } from "bun:test";
 import * as React from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 import {
@@ -12,6 +12,14 @@ import { TerminalView } from "./components/TerminalView";
 import type { EndpointAvailability } from "./endpointAvailability";
 import { terminalThemeFor } from "./terminalThemes";
 import type { Pane, PaneLayout, Tab, Workspace } from "./types";
+
+// Queued store work (promise chains) finishes within these turns.
+const flushMicrotasks = async () => {
+  for (let i = 0; i < 20; i++) await Promise.resolve();
+};
+afterEach(() => {
+  jest.useRealTimers();
+});
 
 function navigationTopology() {
   const workspaces: Workspace[] = ["a", "b"].map((id, i) => ({
@@ -839,6 +847,7 @@ describe("store browser-local navigation", () => {
 
   test("event/resync snapshots and reconnect preserve selection; connection switches restore it", async () => {
     await withBrowserStore(async (_calls, topology) => {
+      jest.useFakeTimers();
       await store.focusTab("a2");
       topology.workspaces[0].focused = false;
       topology.workspaces[1].focused = true;
@@ -848,7 +857,8 @@ describe("store browser-local navigation", () => {
         event: "session.resync_required",
         data: {},
       });
-      await Bun.sleep(120);
+      jest.advanceTimersByTime(120);
+      await flushMicrotasks();
       expect(store.get().selectedPaneId).toBe("a2p");
       const before = store.get();
       __storeTesting.markTerminalReattachPending();
@@ -870,13 +880,13 @@ describe("store browser-local navigation", () => {
         resolve = r;
       });
       const refresh = store.refresh();
-      await Bun.sleep(1);
+      await flushMicrotasks();
       await store.focusTab("b1");
       expect(store.get().layout?.tab_id).toBe("b1");
       expect(terminalNavigationLoading(store.get())).toBe(false);
       resolve();
       await refresh;
-      await Bun.sleep(5);
+      await flushMicrotasks();
       expect(store.get().selectedPaneId).toBe("b1p");
       expect(store.get().layout?.tab_id).toBe("b1");
       expect(terminalNavigationLoading(store.get())).toBe(false);
@@ -931,7 +941,7 @@ describe("store browser-local navigation", () => {
         resolve = r;
       });
       const refresh = store.refresh();
-      await Bun.sleep(1);
+      await flushMicrotasks();
       Object.assign(topology.panes[0], { workspace_id: "b", tab_id: "b1" });
       const publishedTabs: Array<string | undefined> = [];
       const recovered = Promise.withResolvers<void>();

@@ -1,3 +1,4 @@
+import { clock } from "../../clock";
 import { useEffect, useRef, useState } from "react";
 import { helpAnchor } from "../../help/helpEntry";
 import type { OfficeRoom } from "../herdrOfficeProjection";
@@ -70,10 +71,10 @@ export function TownRuntimeIcon({
   className?: string;
 }) {
   const [tapped, setTapped] = useState(false);
-  const timer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const timer = useRef<ReturnType<typeof clock.setTimeout> | null>(null);
   useEffect(
     () => () => {
-      if (timer.current) clearTimeout(timer.current);
+      if (timer.current) clock.clearTimeout(timer.current);
     },
     [],
   );
@@ -89,9 +90,10 @@ export function TownRuntimeIcon({
         event.stopPropagation();
         // A tap shows the name for a moment; touch screens have no hover,
         // and some never focus a tapped button.
-        if (timer.current) clearTimeout(timer.current);
+        if (timer.current) clock.clearTimeout(timer.current);
         setTapped(!tapped);
-        if (!tapped) timer.current = setTimeout(() => setTapped(false), 2500);
+        if (!tapped)
+          timer.current = clock.setTimeout(() => setTapped(false), 2500);
       }}
       onBlur={() => setTapped(false)}
     >

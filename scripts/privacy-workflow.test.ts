@@ -2,6 +2,7 @@ import { expect, test } from "bun:test";
 import { execFileSync, spawnSync } from "node:child_process";
 import {
   mkdirSync,
+  existsSync,
   mkdtempSync,
   readFileSync,
   rmSync,
@@ -18,56 +19,56 @@ type Step = {
   "continue-on-error"?: boolean;
   with?: Record<string, unknown>;
 };
-type Workflow = {
-  on: { push: unknown; pull_request: unknown; workflow_dispatch: unknown };
-  permissions: unknown;
-  concurrency?: unknown;
-  jobs: {
-    privacy: {
-      if?: string;
-      needs?: unknown;
-      "continue-on-error"?: boolean;
-      steps: Step[];
-    };
-  };
-};
-
-test("privacy CI scans every PR change once without scope or metadata bypasses", () => {
+test("privacy scans every PR change and metadata edit inside the existing scope job", () => {
   const workflow = Bun.YAML.parse(
-    readFileSync(join(root, ".github/workflows/privacy.yml"), "utf8"),
-  ) as Workflow;
-  expect(workflow.on.push).toBeUndefined();
-  expect(workflow.on.pull_request).toEqual({
-    types: ["opened", "synchronize", "reopened", "edited"],
-  });
-  expect(workflow.permissions).toEqual({ contents: "read" });
-  expect(workflow.concurrency).toBeUndefined();
-  const job = workflow.jobs.privacy;
-  expect(job.if).toBeUndefined();
-  expect(job.needs).toBeUndefined();
-  expect(job["continue-on-error"]).toBeUndefined();
-  const checkout = job.steps.find((step: { uses?: string }) =>
+    readFileSync(join(root, ".github/workflows/ci.yml"), "utf8"),
+  ) as {
+    on: { pull_request: { types: string[] }; workflow_dispatch: unknown };
+    permissions: { contents: string };
+    jobs: Record<
+      string,
+      { steps: Step[]; if?: string; "continue-on-error"?: boolean }
+    >;
+  };
+  expect(existsSync(join(root, ".github/workflows/privacy.yml"))).toBe(false);
+  expect(workflow.on.pull_request.types).toEqual(
+    expect.arrayContaining(["opened", "synchronize", "reopened", "edited"]),
+  );
+  expect(workflow.on).toHaveProperty("workflow_dispatch");
+  expect(workflow.permissions.contents).toBe("read");
+  expect(workflow.jobs["validation-scope"]!.if).toContain(
+    "github.event.pull_request.state == 'open'",
+  );
+  expect(
+    workflow.jobs["validation-scope"]!["continue-on-error"],
+  ).toBeUndefined();
+  const steps = workflow.jobs["validation-scope"]!.steps;
+  const checkout = steps.find((step) =>
     step.uses?.startsWith("actions/checkout@"),
   );
-  expect(checkout?.with).toEqual({
-    ref: "${{ github.event.pull_request.head.sha || github.sha }}",
+  expect(checkout?.with).toMatchObject({
     "fetch-depth": 0,
     "persist-credentials": false,
   });
-  const scan = job.steps.find((step: { run?: string }) =>
-    step.run?.includes("check-privacy.ts"),
+  const scan = steps.find((step) => step.run?.includes("check-privacy.ts"))!;
+  expect(scan).toBeDefined();
+  expect(scan.if).toBeUndefined();
+  expect(scan["continue-on-error"]).toBeUndefined();
+  expect(steps.indexOf(scan)).toBeLessThan(
+    steps.findIndex((step) => step.run?.includes("ci-reuse-full-check.ts")),
   );
-  // No step may stand the scan down once the job runs.
-  for (const step of job.steps as Array<Step & { if?: string }>)
-    expect(step.if).toBeUndefined();
-  expect(workflow.on).toHaveProperty("workflow_dispatch");
-  for (const event of ["pull_request", "workflow_dispatch"]) {
+  for (const event of [
+    "pull_request",
+    "workflow_dispatch",
+    "merge_group",
+    "push",
+  ]) {
     const directory = mkdtempSync(join(tmpdir(), "privacy-dispatch-"));
     try {
       writeFileSync(join(directory, "bun"), '#!/bin/sh\nprintf "%s" "$*"\n', {
         mode: 0o755,
       });
-      const result = spawnSync("bash", ["-e", "-c", scan!.run!], {
+      const result = spawnSync("bash", ["-e", "-c", scan.run!], {
         env: {
           ...process.env,
           PATH: `${directory}:${process.env.PATH}`,
@@ -78,15 +79,14 @@ test("privacy CI scans every PR change once without scope or metadata bypasses",
       });
       expect(result.status).toBe(0);
       expect(result.stdout).toBe(
-        event === "workflow_dispatch"
-          ? "run check:privacy"
-          : "scripts/check-privacy.ts --event event.json",
+        event === "pull_request"
+          ? "scripts/check-privacy.ts --event event.json"
+          : "run check:privacy",
       );
     } finally {
       rmSync(directory, { recursive: true, force: true });
     }
   }
-  expect(scan?.["continue-on-error"]).toBeUndefined();
 });
 
 test("ignore rules cover nested credentials, databases, runtimes and owner research", () => {

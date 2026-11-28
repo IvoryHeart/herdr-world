@@ -1,3 +1,8 @@
+import { sharedBrowserBuild } from "../testing/sharedBrowserBuild";
+import {
+  launchTestBrowser,
+  type TestBrowser,
+} from "../../../../scripts/testing/browser-session";
 import { expect, test } from "bun:test";
 import { existsSync } from "node:fs";
 import { mkdtemp, readFile, rm } from "node:fs/promises";
@@ -44,10 +49,10 @@ test.skipIf(!chrome)(
         return new Response("Not found", { status: 404 });
       },
     });
-    let child: ReturnType<typeof Bun.spawn> | undefined;
+    let child: TestBrowser | undefined;
     let timer: ReturnType<typeof setTimeout> | undefined;
     try {
-      const build = await Bun.build({
+      const build = await sharedBrowserBuild(import.meta.path, {
         entrypoints: [
           join(import.meta.dir, "MemoryLibraryLifecycle.browser.tsx"),
         ],
@@ -61,7 +66,7 @@ test.skipIf(!chrome)(
       for (const asset of build.outputs)
         assets.set(`/${basename(asset.path)}`, asset);
       const errorOutput = join(dir, "browser.log");
-      child = Bun.spawn(
+      child = await launchTestBrowser(
         [
           chrome!,
           "--headless",
@@ -74,6 +79,7 @@ test.skipIf(!chrome)(
         ],
         { stdout: "ignore", stderr: Bun.file(errorOutput) },
       );
+      await child.start();
       const failures = await Promise.race([
         promise,
         child.exited.then(async (code) => {

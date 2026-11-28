@@ -83,7 +83,7 @@ async function concurrentSecrets(
       if (performance.now() >= deadline) {
         throw new Error("Session secret subprocesses did not become ready");
       }
-      await Bun.sleep(5);
+      await new Promise<void>((resolve) => setImmediate(resolve));
     }
     writeFileSync(gate, "start");
     return await Promise.all(
@@ -440,7 +440,7 @@ describe("session signing secret", () => {
       while (!existsSync(ready)) {
         if (performance.now() >= deadline)
           throw new Error("Lock holder did not start");
-        await Bun.sleep(5);
+        await new Promise<void>((resolve) => setImmediate(resolve));
       }
       const child = Bun.spawn(
         [process.execPath, "-e", childScript, path, JSON.stringify([password])],

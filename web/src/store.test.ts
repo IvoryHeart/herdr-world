@@ -1,4 +1,4 @@
-import { describe, expect, test } from "bun:test";
+import { describe, expect, jest, test } from "bun:test";
 import { bridge, type ConnectionClient, UncertainRequestError } from "./api";
 import {
   __storeTesting,
@@ -3921,6 +3921,7 @@ describe("basic Herdr 0.9 compatibility", () => {
 
   for (const event of ["layout_updated", "session.resync_required"]) {
     test(`${event} uses generic refresh and queues reconciliation during an in-flight snapshot`, async () => {
+      jest.useFakeTimers();
       const previousState = store.get();
       const originalConnection = bridge.connection;
       const snapshot = partitionState();
@@ -3975,7 +3976,7 @@ describe("basic Herdr 0.9 compatibility", () => {
           connection_generation: 1,
           data: {},
         });
-        await Bun.sleep(100); // The production 80ms event debounce fires while busy.
+        jest.advanceTimersByTime(100); // The production 80ms event debounce fires while busy.
         expect(lists).toBe(1);
         release();
         await refreshing;
@@ -3983,6 +3984,7 @@ describe("basic Herdr 0.9 compatibility", () => {
         expect(lists).toBe(2); // No five-second metadata poll needed.
       } finally {
         clearTimeout(publicationTimer);
+        jest.useRealTimers();
         unsubscribe();
         release();
         bridge.connection = originalConnection;

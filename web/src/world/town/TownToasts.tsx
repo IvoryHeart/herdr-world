@@ -1,3 +1,4 @@
+import { clock } from "../../clock";
 /**
  * Town's toasts: short notes at the top of the town, at most three at once.
  * A note may offer one action (Tidy rooms' Undo), and then stays a little
@@ -35,7 +36,7 @@ export function useTownToasts(trace: ViewTrace) {
       if (DEVTOOLS) trace.record("toast", { kind, text });
       const id = ++lastId.current;
       setNotes((current) => [...current.slice(-2), { id, kind, text, action }]);
-      window.setTimeout(
+      clock.setTimeout(
         () => dismiss(id),
         action ? 5_000 : kind === "error" ? 6_000 : 2_600,
       );

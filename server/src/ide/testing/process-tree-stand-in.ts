@@ -115,14 +115,17 @@ export function processTreeStandIn(
   return {
     launcher,
     async started() {
-      for (let i = 0; i < 500; i++) {
+      for (
+        const iterationDeadline = Date.now() + 5000;
+        Date.now() < iterationDeadline;
+      ) {
         if (names.every((name) => existsSync(record(name)))) {
           const [l, s, sh] = names.map((name) =>
             Number(readFileSync(record(name), "utf8").trim()),
           );
           if (l && s && sh) return { launcher: l, server: s, shell: sh };
         }
-        await Bun.sleep(10);
+        await new Promise<void>((resolve) => setImmediate(resolve));
       }
       throw new Error("the stand-in didn't start");
     },

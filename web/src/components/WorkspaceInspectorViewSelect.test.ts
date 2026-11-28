@@ -107,9 +107,10 @@ if (process.env.INSPECTOR_VIEW_DOM !== "1") {
         chat.focus();
         chat.click();
       });
-      await act(async () => {
-        await new Promise((resolve) => setTimeout(resolve, 30));
-      });
+      while (document.activeElement !== host.querySelector("textarea"))
+        await act(async () => {
+          await new Promise((resolve) => setImmediate(resolve));
+        });
       expect(document.activeElement === host.querySelector("textarea")).toBe(
         true,
       );

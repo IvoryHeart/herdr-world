@@ -343,12 +343,14 @@ async function replayShared(split: Split) {
     (await runtime.operations.listTerminals()).panes!.find(
       (row) => row.pane_id === address,
     )!;
-  const settle = () => Bun.sleep(2);
+  /** The in-memory streams deliver on microtasks: a macrotask turn runs them all. */
+  const flushTasks = () =>
+    new Promise<void>((resolve) => setImmediate(resolve));
   return {
     calls,
     alerts,
     pane,
-    settle,
+    flushTasks,
     through,
     rest: () => release(bytes.byteLength),
     share: (
@@ -371,7 +373,7 @@ describe("recorded: seen and favourite with herdr-core 0.1.20", () => {
       try {
         // The agent works, then finishes turn 1 while nobody looks: done.
         r.through((f) => f.seq === 4);
-        await r.settle();
+        await r.flushTasks();
         expect((await r.pane("t1")).agent_status).toBe("done");
         expect(r.alerts).toEqual([{ address: "t1", kind: "completed" }]);
         r.through((f) => f.seq === 5);
@@ -381,7 +383,7 @@ describe("recorded: seen and favourite with herdr-core 0.1.20", () => {
           await r.share("t1", (record) => seenToShare(record, 1, null)),
         ).toBe("written");
         r.through((f) => f.seq === 6);
-        await r.settle();
+        await r.flushTasks();
         expect(await r.pane("t1")).toMatchObject({
           agent_status: "idle",
           turn: 1,
@@ -394,13 +396,13 @@ describe("recorded: seen and favourite with herdr-core 0.1.20", () => {
 
         // The other client marks it unread, then pins it: World follows.
         r.through((f) => f.seq === 7);
-        await r.settle();
+        await r.flushTasks();
         expect(await r.pane("t1")).toMatchObject({
           agent_status: "done",
           seen_turn: 0,
         });
         r.through((f) => f.seq === 8);
-        await r.settle();
+        await r.flushTasks();
         expect((await r.pane("t1")).favourite).toBe(true);
 
         // World unpins it: the label goes, the other labels stay.
@@ -408,13 +410,13 @@ describe("recorded: seen and favourite with herdr-core 0.1.20", () => {
           await r.share("t1", (record) => favouriteToShare(record, false)),
         ).toBe("written");
         r.through((f) => f.seq === 9);
-        await r.settle();
+        await r.flushTasks();
         expect((await r.pane("t1")).favourite).toBeUndefined();
         expect((await r.pane("t1")).agent_status).toBe("done");
 
         // A second agent stops to ask: one push, as needing you.
         r.rest();
-        await r.settle();
+        await r.flushTasks();
         expect(r.alerts).toEqual([
           { address: "t1", kind: "completed" },
           { address: "t2", kind: "blocked" },

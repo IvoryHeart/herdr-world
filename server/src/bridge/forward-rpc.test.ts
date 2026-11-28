@@ -203,9 +203,12 @@ describe("forward.open against a real ssh process", () => {
     const listener = join(dir, "listen.js");
     writeFileSync(
       listener,
-      `const port = Number(process.argv[2]);
+      `const { writeFileSync } = require("node:fs");
+const port = Number(process.argv[2]);
+// Publish the bind-point witness before the TCP port becomes observable.
+// An asynchronous write after listen can lose the race to the parent's probe.
+writeFileSync(${JSON.stringify(marker)}, "");
 Bun.listen({ hostname: "127.0.0.1", port, socket: { data() {} } });
-await Bun.write(${JSON.stringify(marker)}, "");
 setInterval(() => {}, 1000);
 `,
     );

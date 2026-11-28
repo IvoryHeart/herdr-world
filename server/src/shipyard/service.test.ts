@@ -203,7 +203,7 @@ test("a burst past the bound admits no pipeline while every held one is reading"
     index < 200 && asked.some((repo) => service.current(repo).refreshing);
     index++
   )
-    await new Promise((resolve) => setTimeout(resolve, 5));
+    await new Promise((resolve) => setImmediate(resolve));
   expect(repos.size).toBe(L.pipelines);
   expect(repos.has(asked.at(-1)!)).toBe(false);
   expect(service.current(asked.at(-1)!).data).toBeNull();

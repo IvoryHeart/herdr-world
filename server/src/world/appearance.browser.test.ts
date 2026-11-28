@@ -1,3 +1,8 @@
+import { sharedBrowserBuild } from "../../../web/src/world/testing/sharedBrowserBuild";
+import {
+  launchTestBrowser,
+  type TestBrowser,
+} from "../../../scripts/testing/browser-session";
 import { herdrRuntimeFixture } from "../adapters/testing/runtime";
 import { expect, test } from "bun:test";
 import { mkdir, mkdtemp, readFile, rm } from "node:fs/promises";
@@ -203,7 +208,7 @@ test.skipIf(!chrome)(
         return new Response("not found", { status: 404 });
       },
     });
-    const children: ReturnType<typeof Bun.spawn>[] = [],
+    const children: TestBrowser[] = [],
       sockets: WebSocket[] = [];
     async function start(
       name: string,
@@ -214,7 +219,7 @@ test.skipIf(!chrome)(
     ) {
       const profile = join(dir, name),
         log = join(dir, `${name}.log`);
-      const child = Bun.spawn(
+      const child = await launchTestBrowser(
         [
           chrome!,
           "--headless=new",
@@ -226,6 +231,7 @@ test.skipIf(!chrome)(
         ],
         { stdout: "ignore", stderr: Bun.file(log) },
       );
+      await child.start();
       children.push(child);
       const port = await waitForChromePort(child, profile, log);
       const targets = (await fetch(`http://127.0.0.1:${port}/json/list`).then(
@@ -279,7 +285,7 @@ test.skipIf(!chrome)(
       return cdp;
     }
     try {
-      const build = await Bun.build({
+      const build = await sharedBrowserBuild(import.meta.path, {
         entrypoints: [
           join(process.cwd(), "web/src/world/TerminalAppearance.browser.tsx"),
         ],

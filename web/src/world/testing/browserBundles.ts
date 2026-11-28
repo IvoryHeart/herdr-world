@@ -1,6 +1,7 @@
 import { readdir } from "node:fs/promises";
 import { basename, dirname, join } from "node:path";
 import { assetUrlImports, rawSvgImports } from "./assetUrlImports";
+import { sharedBrowserBuild } from "./sharedBrowserBuild";
 
 // Entry names are checked against the source files at runtime.
 export type WorldBrowserEntry = string;
@@ -42,7 +43,7 @@ export async function buildWorldBrowserBundle(
   source = join(import.meta.dir, ".."),
 ): Promise<WorldBrowserBundle> {
   const directory = await entryDirectory(entry, root, source);
-  const build = await Bun.build({
+  const build = await sharedBrowserBuild(import.meta.path, {
     entrypoints: [join(source, `${entry}.browser.tsx`)],
     outdir: directory,
     target: "browser",

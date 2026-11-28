@@ -74,7 +74,7 @@ async function setup(
     status: { state: status, app: kind },
     foreground: { pid, name: kind, argv, cwd: root },
   });
-  await w.settle();
+  await w.synchronize();
   const host = createCoreHostRuntime({
     lease: w.lease(),
     host: null,
@@ -229,7 +229,7 @@ describe("one Chat for both runtimes", () => {
       call("agent_conversation.send", { text: "Hello" }),
     ).resolves.toMatchObject({ status: "refused" });
     w.fake.replaceWithShell(t);
-    await w.settle();
+    await w.synchronize();
     await expect(
       call("agent_conversation.send", { text: "Hello", recipient }),
     ).resolves.toMatchObject({ status: "refused" });
@@ -282,10 +282,16 @@ describe("one Chat for both runtimes", () => {
       { pane_id: t },
       { owner, conversationChanged: (pane) => changed.push(pane) },
     );
-    await Bun.sleep(300);
-    changed.length = 0;
-    w.fake.status(t, "working");
-    await until(() => changed.length > 0);
+    // The watcher's first check only records a baseline and says nothing,
+    // and nothing shows when it has: change the status until a change is told.
+    let working = false;
+    await until(() => {
+      if (changed.length === 0) {
+        working = !working;
+        w.fake.status(t, working ? "working" : "idle");
+      }
+      return changed.includes(t);
+    });
     expect(changed).toContain(t);
     await callCoreHost(
       host,
@@ -370,7 +376,7 @@ describe("one Chat for both runtimes", () => {
       }),
     ).resolves.toMatchObject({ status: "refused" });
     w.fake.replaceWithShell(t);
-    await w.settle();
+    await w.synchronize();
     await expect(press("esc")).resolves.toMatchObject({ status: "refused" });
     expect(sends(w)).toHaveLength(3);
   });
@@ -511,7 +517,7 @@ describe("one Chat for both runtimes", () => {
     expect(sends(w)).toEqual([]);
     // Another program in the terminal does not inherit the link.
     w.fake.replaceWithShell(t);
-    await w.settle();
+    await w.synchronize();
     const after = await host.agentSessions().knownSession(t, "codex");
     expect(after?.id).toBeNull();
     expect(after?.holder).not.toBe(known?.holder);
@@ -574,7 +580,7 @@ describe("finding a core agent's conversation", () => {
   ) {
     const chat = await setup("claude", "idle", false, access);
     chat.w.fake.foreground(chat.t, { pid: PID, name: "claude", argv });
-    await chat.w.settle();
+    await chat.w.synchronize();
     return chat;
   }
 
@@ -635,7 +641,7 @@ describe("finding a core agent's conversation", () => {
     // which has none yet.
     w.fake.replaceWithShell(t);
     w.fake.foreground(t, { pid: PID + 1, name: "claude", argv: ["claude"] });
-    await w.settle();
+    await w.synchronize();
     const shown = (await call("agent_conversation.get")) as Shown;
     expect(lookups).toEqual([PID, PID + 1]);
     expect(shown.status).not.toBe("ok");
@@ -652,7 +658,7 @@ describe("finding a core agent's conversation", () => {
     w.fake.foreground(t, { pid: PID, name: "claude", argv: ["claude"] });
     // The new process has no record of its own yet.
     records.delete(PID);
-    await w.settle();
+    await w.synchronize();
     const shown = (await call("agent_conversation.get")) as Shown;
     expect(lookups).toEqual([PID, PID]);
     expect(shown.status).not.toBe("ok");
@@ -677,7 +683,7 @@ describe("finding a core agent's conversation", () => {
       name: "pi",
       argv: ["pi", "--session-id", LAUNCHED],
     });
-    await w.settle();
+    await w.synchronize();
     const shown = (await call("agent_conversation.get")) as Shown;
     expect(shown.status).toBe("ok");
     expect(shown.messages!.map((m) => m.text)).toEqual(
@@ -706,7 +712,7 @@ describe("finding a core agent's conversation", () => {
         name: agent,
         argv: [agent, flag, path],
       });
-      await w.settle();
+      await w.synchronize();
       const history = (await call("agent_history.get", {
         history_version: 2,
       })) as { entries: unknown[] };

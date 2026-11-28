@@ -1,3 +1,4 @@
+import { clock } from "../../clock";
 /**
  * Town's edge arrows and Next (townEdgeArrows.ts, townNext.ts) for the
  * canvas: the marked agents, the arrows each drawn frame, the camera trips
@@ -149,7 +150,7 @@ export function useTownEdgeNav(
   const edgeMarked = () => {
     const { model: m, marked: own, needsYouOrder: order } = latest.current;
     const state = sharedDeskStore().get();
-    const bucket = Math.floor(Date.now() / 5000);
+    const bucket = Math.floor(clock.now() / 5000);
     const cache = reviewCache.current;
     if (
       cache.state === state &&
@@ -199,7 +200,7 @@ export function useTownEdgeNav(
         });
     }
     const changed = JSON.stringify(rects) !== JSON.stringify(cache.rects);
-    cache.at = performance.now();
+    cache.at = clock.monotonic();
     cache.rects = rects;
     if (changed && arrowsShown.current)
       rendererRef.current?.invalidate("edge-arrows");
@@ -208,7 +209,7 @@ export function useTownEdgeNav(
     measureKeepOut();
     return () => {
       const { timer } = keepOut.current;
-      if (timer !== null) window.clearTimeout(timer);
+      if (timer !== null) clock.clearTimeout(timer);
       keepOut.current.timer = null;
     };
     // The measurement reads refs only.
@@ -221,8 +222,8 @@ export function useTownEdgeNav(
    */
   const edgeKeepOut = () => {
     const cache = keepOut.current;
-    if (performance.now() - cache.at >= 500 && cache.timer === null)
-      cache.timer = window.setTimeout(measureKeepOut, 0);
+    if (clock.monotonic() - cache.at >= 500 && cache.timer === null)
+      cache.timer = clock.setTimeout(measureKeepOut, 0);
     return cache.rects;
   };
   const [pulse, setPulse] = useState<TownPulse | null>(null);
@@ -255,8 +256,8 @@ export function useTownEdgeNav(
   };
   useEffect(() => {
     if (!pulse) return;
-    const timer = window.setTimeout(() => setPulse(null), 1700);
-    return () => window.clearTimeout(timer);
+    const timer = clock.setTimeout(() => setPulse(null), 1700);
+    return () => clock.clearTimeout(timer);
   }, [pulse]);
   /**
    * Move the camera to an agent and pulse its mark: a glide, or a jump with
@@ -295,11 +296,11 @@ export function useTownEdgeNav(
   const nextCursor = useRef<TownNextCursor>(null);
   const [nextText, setNextText] = useState("");
   const nextTimer = useRef(0);
-  useEffect(() => () => window.clearTimeout(nextTimer.current), []);
+  useEffect(() => () => clock.clearTimeout(nextTimer.current), []);
   const showNext = (text: string) => {
     setNextText(text);
-    window.clearTimeout(nextTimer.current);
-    nextTimer.current = window.setTimeout(() => setNextText(""), 2200);
+    clock.clearTimeout(nextTimer.current);
+    nextTimer.current = clock.setTimeout(() => setNextText(""), 2200);
   };
   /**
    * N: the camera to the next thing that needs you, in Needs you's order,

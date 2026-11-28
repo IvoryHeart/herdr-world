@@ -178,13 +178,15 @@ test("retained-artifact reruns continue every publisher despite the skipped cand
 
 test("Linux test jobs delegate scoped recovery; models never retry and main runs no heavy jobs", () => {
   const ci = workflow("ci");
-  for (const name of ["static", "unit-tests", "dependency-security"])
-    expect(ci.jobs[name].if).toContain("'hold'");
+  expect(ci.jobs["unit-tests"].if).toContain("'hold'");
+  expect(ci.jobs.static.if).toBe(
+    "needs.validation-scope.outputs.mode == 'docs'",
+  );
   for (const [file, name, needle] of [
     ["ci", "unit-tests", "ci-tests.ts unit"],
-    ["world-browser", "world-browser", "ci-tests.ts world"],
-    ["world-browser", "web-shards", "ci-tests.ts web"],
-    ["behavioral-verification", "shards", "verification:resources"],
+    ["world-browser", "world-browser", "ci-world-tests.ts"],
+    ["ci", "unit-tests", "run-browser-tests.ts --ci-web="],
+    ["behavioral-verification", "shards", "ci-model-groups.ts run"],
   ]) {
     const job = workflow(file).jobs[name];
     expect(job["runs-on"]).toMatch(/^ubuntu-/);

@@ -1,3 +1,4 @@
+import { clock } from "../../clock";
 import { useId, useState } from "react";
 import type { OfficeAgent, OfficeRosterEntry } from "../herdrOfficeProjection";
 import { askDeliveryMessage, askerName, type WorldAsk } from "../worldAsks";
@@ -163,7 +164,7 @@ export function townCalls(
   unseenCompletions: readonly OfficeAgent[],
   entryOf: (agentKey: string) => OfficeRosterEntry | undefined,
   /** When this list is made: newly waiting agents start waiting now. */
-  now: number = Date.now(),
+  now: number = clock.now(),
 ): TownCall[] {
   const live = new Set<string>();
   const blocked: TownCall[] = [];

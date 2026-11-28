@@ -251,9 +251,11 @@ if (process.env.WORLD_RESOURCE_RESUME_DOM_TEST !== "1") {
       onResourceFocus() {},
       onTerminalPortalChange() {},
     };
-    const settle = async () => {
+    // Let what the fakes resolved, and React's work on it, run: a few macrotask turns.
+    const flushTasks = async () => {
       await act(async () => {
-        await new Promise((resolve) => setTimeout(resolve, 20));
+        for (let turn = 0; turn < 4; turn++)
+          await new Promise((resolve) => setImmediate(resolve));
       });
     };
     const rows = () =>
@@ -264,12 +266,12 @@ if (process.env.WORLD_RESOURCE_RESUME_DOM_TEST !== "1") {
       );
     const renderState = async () => {
       await act(async () => root.render(createElement(View, { ...props })));
-      await settle();
+      await flushTasks();
     };
     try {
       await renderState();
       for (let turn = 0; turn < 30 && rows().length !== 3; turn++)
-        await settle();
+        await flushTasks();
       expect(rows().length).toBe(3);
       expect(target.querySelector(".diff-tree-file")?.textContent).toContain(
         "CHANGE.md",
@@ -319,7 +321,7 @@ if (process.env.WORLD_RESOURCE_RESUME_DOM_TEST !== "1") {
         returning!.resolve(observation());
         returning = null;
       });
-      await settle();
+      await flushTasks();
       expect(rows()).toEqual(originalRows);
       expect(worktreeViewsHeld()).toEqual([false, false]);
       candidate = "replacement";
@@ -333,14 +335,14 @@ if (process.env.WORLD_RESOURCE_RESUME_DOM_TEST !== "1") {
             pane_id: "pane",
           });
       });
-      await settle();
+      await flushTasks();
       expect(rows().length).toBe(1);
       expect(rows()[0]).toContain("NEW.md");
       expect(target.querySelector(".diff-tree-file")?.textContent).toContain(
         "NEW-CHANGE.md",
       );
       await act(async () => returningList!.resolve(list(["LATE.md"])));
-      await settle();
+      await flushTasks();
       expect(rows()[0]).toContain("NEW.md");
       expect(target.textContent).not.toContain("LATE.md");
     } finally {

@@ -44,7 +44,7 @@ const agents = [{ pane_id: "p-t1", agent: "claude", name: "ada" }];
 
 async function until(check: () => boolean) {
   for (let i = 0; i < 100 && !check(); i++)
-    await new Promise((resolve) => setTimeout(resolve, 1));
+    await new Promise((resolve) => setImmediate(resolve));
   expect(check()).toBe(true);
 }
 

@@ -277,7 +277,7 @@ test("core moves and resumed runtime claims record the current location without 
       tab_id: String(target.tab_id),
     }),
   ).toMatchObject({ status: "moved" });
-  await core.settle();
+  await core.synchronize();
   await record(runCore, {
     ...actor,
     tab_id: String(target.tab_id),

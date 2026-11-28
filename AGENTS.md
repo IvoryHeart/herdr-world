@@ -35,6 +35,8 @@ Example: a room's name is owned by the Herdr TUI (or by `core_topology` for a he
 
 ## Hard rules
 
+- Production code reads time and schedules work only through an injected clock or scheduler. Server code uses the existing clock/scheduler ports; browser code uses `web/src/clock.ts`, including its animation-frame seam. Tests drive a fake clock or await an observable event or frame; never add fixed-time sleeps. `check:test-waits` records legacy direct-clock uses and unit waits in shrinking allowlists; browser fixed waits and polling sleeps must reach zero.
+
 - Never commit or push to `main`. For PR delivery, open a ready PR and stop; merge only when a maintainer explicitly asks.
 - Independent review is required unless explicitly waived by a maintainer; never bypass protection or hooks.
 - Create worktrees under `.agents/worktrees/` with `bun run agent:worktree -- create <slug> <parent-ref>` after resolving the parent.

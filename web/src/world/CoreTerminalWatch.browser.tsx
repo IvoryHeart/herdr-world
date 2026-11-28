@@ -1,3 +1,5 @@
+import { clock as fixtureTime } from "./testing/installLightTownRenderer";
+import { presentTestFrame } from "./testing/testClock";
 import { createRoot } from "react-dom/client";
 import { flushSync } from "react-dom";
 import { bridge } from "../api";
@@ -31,11 +33,11 @@ const failures: string[] = [];
 const check = (condition: boolean, message: string) => {
   if (!condition) failures.push(message);
 };
-const frame = () => new Promise((resolve) => requestAnimationFrame(resolve));
+const frame = () => fixtureTime.frame();
 const frames = async (n: number) => {
   for (let i = 0; i < n; i++) await frame();
 };
-const pause = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
+const pause = (ms: number) => fixtureTime.advance(ms);
 window.addEventListener("error", (event) => failures.push(String(event.error)));
 const capture = new URL(location.href).searchParams.get("capture");
 const until = async (condition: () => boolean, ms = 2000) => {
@@ -81,6 +83,7 @@ const screenText = () =>
 const viewport = async (width: number, height: number) => {
   await fetch(`/viewport?width=${width}&height=${height}`);
   await frames(4);
+  await presentTestFrame(fixtureTime);
 };
 /** A real key press (CDP), into whatever has focus. */
 const press = (key: string, ctrl = false) =>

@@ -48,7 +48,8 @@ function recorder() {
   };
 }
 
-const settle = () => new Promise((resolve) => setTimeout(resolve, 5));
+/** The in-memory streams deliver on microtasks: a macrotask turn runs them all. */
+const flushTasks = () => new Promise<void>((resolve) => setImmediate(resolve));
 
 describe("watching a core terminal", () => {
   test("adopts the desktop pane's grid before the first paint and never sizes it", async () => {
@@ -58,7 +59,7 @@ describe("watching a core terminal", () => {
     fake.desktopAttach(t, 120, 40);
     const { seen, sink } = recorder();
     const watch = await client.watch(t, { cols: 120, rows: 40 }, sink);
-    await settle();
+    await flushTasks();
     expect(watch.terminal).toMatchObject({ cols: 120, rows: 40 });
     expect(seen[0]).toEqual({ grid: [120, 40] });
     const paint = seen[1] as { data: string };
@@ -67,7 +68,7 @@ describe("watching a core terminal", () => {
     // The desktop pane resizes: the new grid arrives before its repaint.
     fake.desktopResize(t, 90, 25);
     fake.output(t, "after\r\n");
-    await settle();
+    await flushTasks();
     const tail = seen.slice(2);
     expect(tail[0]).toEqual({ grid: [90, 25] });
     expect((tail[1] as { data: string }).data.startsWith("\x18")).toBe(true);
@@ -75,7 +76,7 @@ describe("watching a core terminal", () => {
     expect(fake.terminal(t)).toMatchObject({ cols: 90, rows: 25 });
     watch.credit(4096);
     watch.detach();
-    await settle();
+    await flushTasks();
     // World sent core nothing on this stream but CREDIT and CLOSE.
     const own = outbound.filter((f) => f.channel === watch.channel);
     expect(new Set(own.map((f) => f.kind))).toEqual(
@@ -112,21 +113,21 @@ describe("watching a core terminal", () => {
     const t = fake.create({ name: "quiet", cols: 100, rows: 30 });
     const { seen, sink } = recorder();
     const watch = await client.watch(t, { cols: 100, rows: 30 }, sink);
-    await settle();
+    await flushTasks();
     expect(watch.terminal).toMatchObject({ cols: 100, rows: 30 });
     expect(seen[0]).toEqual({ grid: [100, 30] });
     // A desktop pane still takes the size, and closing it goes headless.
     fake.desktopAttach(t, 80, 24);
-    await settle();
+    await flushTasks();
     expect(seen.at(-2)).toEqual({ grid: [80, 24] });
     fake.desktopDetach(t);
-    await settle();
+    await flushTasks();
     expect(seen.at(-2)).toEqual({ grid: [200, 120] });
     // Leaving changes nothing either.
     const quiet = fake.create({ name: "quieter", cols: 90, rows: 20 });
     const second = await client.watch(quiet, { cols: 90, rows: 20 }, sink);
     second.detach();
-    await settle();
+    await flushTasks();
     expect(fake.terminal(quiet)).toMatchObject({ cols: 90, rows: 20 });
     watch.detach();
     // World sent core no size, focus or input on either watch.
@@ -145,16 +146,16 @@ describe("watching a core terminal", () => {
     const t = fake.create({ name: "quiet", cols: 100, rows: 30 });
     const { seen, sink } = recorder();
     const watch = await client.watch(t, { cols: 100, rows: 30 }, sink);
-    await settle();
+    await flushTasks();
     expect(watch.terminal).toMatchObject({ cols: 200, rows: 120 });
     expect(seen[0]).toEqual({ grid: [200, 120] });
     // A desktop pane opening later takes the size; the watch follows it.
     fake.desktopAttach(t, 80, 24);
-    await settle();
+    await flushTasks();
     expect(seen.at(-2)).toEqual({ grid: [80, 24] });
     // And closing it goes headless again, announced first.
     fake.desktopDetach(t);
-    await settle();
+    await flushTasks();
     expect(seen.at(-2)).toEqual({ grid: [200, 120] });
     watch.detach();
   });
@@ -169,7 +170,7 @@ describe("watching a core terminal", () => {
     await expect(
       client.watch(t, { cols: 120, rows: 40 }, sink),
     ).rejects.toBeInstanceOf(CoreWatchRefusedError);
-    await settle();
+    await flushTasks();
     expect(seen).toEqual([]);
     expect(fake.viewersOf(t)).toEqual([]);
     expect(
@@ -187,7 +188,7 @@ describe("watching a core terminal", () => {
     fake.desktopAttach(t, 70, 20);
     const { seen, sink } = recorder();
     await client.watch(t, { cols: 70, rows: 20 }, sink);
-    await settle();
+    await flushTasks();
     expect(seen[0]).toEqual({ grid: [70, 20] });
     expect((seen[1] as { data: string }).data).toContain("screen");
   });
@@ -198,11 +199,11 @@ describe("watching a core terminal", () => {
     fake.desktopAttach(t, 120, 40);
     const { seen, sink } = recorder();
     const watch = await client.watch(t, { cols: 120, rows: 40 }, sink);
-    await settle();
+    await flushTasks();
     // No credit is paid: core stops at the 256 KiB window.
     const line = `${"x".repeat(1023)}\n`;
     for (let i = 0; i < 400; i++) fake.output(t, line);
-    await settle();
+    await flushTasks();
     const received = () =>
       seen.reduce(
         (n, s) =>
@@ -211,12 +212,12 @@ describe("watching a core terminal", () => {
       );
     expect(received()).toBeLessThanOrEqual(STREAM_WINDOW);
     fake.desktopResize(t, 100, 30);
-    await settle();
+    await flushTasks();
     // Stalled: the RESIZE waits for credit with its paint.
     expect(seen.some((s) => "grid" in s && s.grid[0] === 100)).toBe(false);
     const before = seen.length;
     watch.credit(received());
-    await settle();
+    await flushTasks();
     const after = seen.slice(before);
     expect(after[0]).toEqual({ grid: [100, 30] });
     expect((after[1] as { data: string }).data.startsWith("\x18")).toBe(true);
@@ -234,7 +235,7 @@ describe("watching a core terminal", () => {
     const { seen, sink } = recorder();
     await client.watch(t, { cols: 200, rows: 120 }, sink);
     fake.replaceWithShell(t);
-    await settle();
+    await flushTasks();
     expect(seen.at(-1)).toEqual({
       closed: '{"reason":"signaled","exit_code":null}',
     });
@@ -242,7 +243,7 @@ describe("watching a core terminal", () => {
     const second = recorder();
     await client.watch(t, { cols: 200, rows: 120 }, second.sink);
     fake.kill();
-    await settle();
+    await flushTasks();
     expect(client.closed).toBe(true);
     expect(second.seen.at(-1)).toMatchObject({ closed: expect.any(String) });
   });
@@ -252,18 +253,18 @@ describe("watching a core terminal", () => {
     const t = fake.create({ name: "agent" });
     const { seen, sink } = recorder();
     const watch = await client.watch(t, { cols: 200, rows: 120 }, sink);
-    await settle();
+    await flushTasks();
     const count = seen.length;
     watch.detach();
     // Output written before core processes the CLOSE.
     fake.output(t, "late");
-    await settle();
+    await flushTasks();
     expect(seen.length).toBe(count);
     expect(client.closed).toBe(false);
     // The connection stays healthy for the next watch.
     const again = recorder();
     await client.watch(t, { cols: 200, rows: 120 }, again.sink);
-    await settle();
+    await flushTasks();
     expect(again.seen[0]).toEqual({ grid: [200, 120] });
   });
 

@@ -17,7 +17,7 @@ function deferred() {
 
 const file = (name: string) =>
   new File([name], name, { type: "text/plain", lastModified: 1 });
-const settle = () => new Promise((resolve) => setTimeout(resolve, 0));
+const flushTasks = () => new Promise((resolve) => setTimeout(resolve, 0));
 
 test("a failed file picked again behind a running upload is queued once", async () => {
   const scope = "test\u0000queued-retry";
@@ -40,18 +40,18 @@ test("a failed file picked again behind a running upload is queued once", async 
     [file("b.txt"), file("a.txt")],
     task,
   );
-  await settle();
+  await flushTasks();
   expect(calls.map((call) => call.name)).toEqual(["a.txt", "b.txt"]);
   // The waiting file is queued, not failed: Retry is not offered for it,
   // and neither Retry nor picking it again starts another upload.
   expect(chip("a.txt").status).toBe("uploading");
   retryAttachmentUpload(scope, chip("a.txt").id);
   void startAttachmentUploads(scope, [file("a.txt")], task);
-  await settle();
+  await flushTasks();
   expect(calls.length).toBe(2);
 
   calls[1]!.result.resolve("/uploads/b.txt ");
-  await settle();
+  await flushTasks();
   expect(calls.map((call) => call.name)).toEqual(["a.txt", "b.txt", "a.txt"]);
   calls[2]!.result.resolve("/uploads/a.txt ");
   await batch;
@@ -74,7 +74,7 @@ test("a second Retry while the first runs is refused", async () => {
   const id = attachmentUploads(scope)[0]!.id;
   retryAttachmentUpload(scope, id);
   retryAttachmentUpload(scope, id);
-  await settle();
+  await flushTasks();
   expect(calls.length).toBe(2);
   calls[1]!.resolve("/uploads/c.txt ");
 });

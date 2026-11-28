@@ -217,7 +217,7 @@ test("Town boards share one observation across windows, refreshes, prices and a 
     "today",
     week,
   );
-  const settle = async () => {
+  const flushTasks = async () => {
     await new Promise((resolve) => setImmediate(resolve));
   };
   for (const next of ["busy", "unpriced", "no-table"]) {
@@ -225,7 +225,7 @@ test("Town boards share one observation across windows, refreshes, prices and a 
     now += 30_000;
     today.request();
     week.request();
-    await settle();
+    await flushTasks();
     const city = townCityExpenses(today.get());
     const seven = townCityExpenses(week.get());
     const studio = townHostExpenses(today.get(), "studio");
@@ -286,7 +286,7 @@ test("Town boards share one observation across windows, refreshes, prices and a 
   mode = "midnight";
   now += 30_000;
   week.request();
-  await settle();
+  await flushTasks();
   now += 1;
   expect(townUsageCurrent(today.get(), now).status).toBe("stale");
   expect(townUsageCurrent(week.get(), now).status).toBe("stale");

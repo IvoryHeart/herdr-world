@@ -1,3 +1,8 @@
+import { sharedBrowserBuild } from "./testing/sharedBrowserBuild";
+import {
+  launchTestBrowser,
+  type TestBrowser,
+} from "../../../scripts/testing/browser-session";
 import { expect, test } from "bun:test";
 import { existsSync } from "node:fs";
 import { mkdtemp, rm } from "node:fs/promises";
@@ -45,7 +50,7 @@ async function allStyles(dir: string) {
     .map((path) => `@import ${JSON.stringify(join(source, path))};`);
   const entry = join(dir, "all-styles.css");
   await Bun.write(entry, imports.join("\n"));
-  const build = await Bun.build({
+  const build = await sharedBrowserBuild(import.meta.path, {
     entrypoints: [entry],
     outdir: join(dir, "all-styles"),
   });
@@ -123,12 +128,12 @@ test.skipIf(!chrome)(
           : new Response("Not found", { status: 404 });
       },
     });
-    let child: ReturnType<typeof Bun.spawn> | undefined;
+    let child: TestBrowser | undefined;
     let connection: Awaited<ReturnType<typeof connectCapture>> | undefined;
     try {
       const profile = join(dir, "profile"),
         log = join(dir, "chrome.log");
-      child = Bun.spawn(
+      child = await launchTestBrowser(
         [
           chrome!,
           "--headless=new",
@@ -141,7 +146,9 @@ test.skipIf(!chrome)(
           server.url.href,
         ],
         { stdout: "ignore", stderr: Bun.file(log) },
+        { exclusive: true },
       );
+      await child.start();
       const ready = await waitForBrowserFixture(
         requested.promise,
         result.promise,

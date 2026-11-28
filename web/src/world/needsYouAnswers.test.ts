@@ -121,7 +121,7 @@ async function registerDomTest() {
         connection_id: "local",
         pane_id: pane,
       });
-    await settle();
+    await flushTasks();
   };
   const client = {
     connectionId: "local",
@@ -223,7 +223,7 @@ async function registerDomTest() {
   const container = document.createElement("div");
   document.body.append(container);
   const root = createRoot(container);
-  const settle = async () => {
+  const flushTasks = async () => {
     for (let index = 0; index < 5; index++)
       await act(async () => {
         await new Promise((resolve) => setTimeout(resolve, 0));
@@ -242,7 +242,7 @@ async function registerDomTest() {
       }),
     ),
   );
-  await settle();
+  await flushTasks();
   const item = (id: string) =>
     container.querySelector<HTMLElement>(`[data-needs-you-item="leaf:${id}"]`)!;
   const button = (scope: HTMLElement, text: string) =>
@@ -262,7 +262,7 @@ async function registerDomTest() {
   test("an unconfirmed answer says so and offers the Terminal", async () => {
     terminals.length = 0;
     await act(async () => button(item("picky"), "Red").click());
-    await settle();
+    await flushTasks();
     expect(answers).toEqual([
       { pane_id: "w1:picky", key: "1", prompt_fingerprint: "picky-1" },
     ]);
@@ -281,18 +281,18 @@ async function registerDomTest() {
     held = Promise.withResolvers<void>();
     stopId = "s2";
     await act(async () => deskChanged!());
-    await settle();
+    await flushTasks();
     expect(item("done").textContent).toContain("Report for stop one");
     expect(mark().disabled).toBe(true);
     reports.set("w1:done", { latest: { text: "Report for stop two" } });
     held.resolve();
     held = null;
-    await settle();
+    await flushTasks();
     expect(item("done").textContent).toContain("Report for stop two");
     expect(mark().disabled).toBe(false);
     // A save that fails is not shown as reviewed.
     await act(async () => mark().click());
-    await settle();
+    await flushTasks();
     expect(item("done").querySelector('[role="alert"]')?.textContent).toContain(
       "Could not save the review mark",
     );
@@ -304,7 +304,7 @@ async function registerDomTest() {
     });
     failMark = false;
     await act(async () => mark().click());
-    await settle();
+    await flushTasks();
     expect(item("done").querySelector('[role="alert"]')).toBeNull();
   });
 
@@ -332,7 +332,7 @@ async function registerDomTest() {
     failRead = true;
     stopId = "s3";
     await act(async () => deskChanged!());
-    await settle();
+    await flushTasks();
     expect(mark().disabled).toBe(true);
     expect(item("done").querySelector('[role="alert"]')?.textContent).toBe(
       "Could not read the latest report.",
@@ -341,7 +341,7 @@ async function registerDomTest() {
     failRead = false;
     reports.set("w1:done", { latest: { text: "Report for stop three" } });
     await act(async () => button(item("done"), "Retry").click());
-    await settle();
+    await flushTasks();
     expect(item("done").textContent).toContain("Report for stop three");
     expect(mark().disabled).toBe(false);
     expect(item("done").querySelector('[role="alert"]')).toBeNull();
@@ -370,10 +370,10 @@ async function registerDomTest() {
         }),
       ),
     );
-    await settle();
+    await flushTasks();
     const turn = async (text: string) => {
       await act(async () => button(host, text).click());
-      await settle();
+      await flushTasks();
     };
     const first = new Set(watched);
     expect(first.size).toBe(30);
@@ -414,14 +414,14 @@ async function registerDomTest() {
     const shown = () =>
       host.querySelector('[data-needs-you-item="leaf:r45"]')?.className ?? "";
     await render(1);
-    await settle();
+    await flushTasks();
     expect(shown()).toContain("is-focused");
     await act(async () => button(host, "Show the 30 before").click());
-    await settle();
+    await flushTasks();
     expect(shown()).toBe("");
     // Desk's Answer (or Board, or reception) for the same agent again.
     await render(2);
-    await settle();
+    await flushTasks();
     expect(shown()).toContain("is-focused");
     expect(watched.size).toBe(30);
     await act(async () => pages.unmount());
@@ -477,20 +477,20 @@ async function registerDomTest() {
         }),
       ),
     );
-    await settle();
+    await flushTasks();
     const quietItem = () =>
       host.querySelector<HTMLElement>('[data-needs-you-item="leaf:quiet"]');
     await act(async () => button(quietItem()!, "Mark reviewed").click());
-    await settle();
+    await flushTasks();
     expect(quietMarks).toEqual([]);
     expect(quietItem()).not.toBeNull();
     available = true;
     await act(async () => button(quietItem()!, "Mark reviewed").click());
-    await settle();
+    await flushTasks();
     expect(quietMarks).toEqual([]);
     expect(quietItem()).not.toBeNull();
     await act(async () => button(quietItem()!, "Mark reviewed").click());
-    await settle();
+    await flushTasks();
     expect(quietMarks[quietMarks.length - 1]?.stop_id).toBe(
       'stop:["quiet-stop",null]',
     );
@@ -525,12 +525,12 @@ async function registerDomTest() {
     };
     const probeRoot = createRoot(document.createElement("div"));
     await act(async () => probeRoot.render(createElement(Probe)));
-    await settle();
+    await flushTasks();
     // A change notice reads again before the first read answers.
     await changed("w1:town");
     expect(text).toBe("First");
     release!();
-    await settle();
+    await flushTasks();
     expect(text).toBe("First");
     client.call = realCall;
     await act(async () => probeRoot.unmount());
@@ -556,7 +556,7 @@ async function registerDomTest() {
         ),
       );
     await render(leaves);
-    await settle();
+    await flushTasks();
     const of = (id: string) =>
       host.querySelector<HTMLElement>(`[data-needs-you-item="leaf:${id}"]`)!;
     return { host, of, render, unmount: () => act(async () => list.unmount()) };
@@ -580,13 +580,13 @@ async function registerDomTest() {
       },
     });
     await act(async () => deskChanged!());
-    await settle();
+    await flushTasks();
     expect(mark().disabled).toBe(true);
     expect(view.of("done").textContent).toContain("Report for stop four");
     expect(view.of("done").textContent).toContain("Retry");
     reports.set("w1:done", { latest: { text: "Report for stop five" } });
     await act(async () => button(view.of("done"), "Retry").click());
-    await settle();
+    await flushTasks();
     expect(mark().disabled).toBe(false);
     expect(view.of("done").textContent).toContain("Report for stop five");
     await view.unmount();
@@ -600,7 +600,7 @@ async function registerDomTest() {
     const picky = leaf("picky", "blocked");
     const view = await listFor([picky]);
     await act(async () => button(view.of("picky"), "Red").click());
-    await settle();
+    await flushTasks();
     expect(view.of("picky").textContent).toContain("Sent");
     const replaced = (fingerprint: string) =>
       ({ ...picky, agentSessionFingerprint: fingerprint }) as Leaf;
@@ -609,7 +609,7 @@ async function registerDomTest() {
       pending_prompt: null,
     });
     await view.render([replaced("b".repeat(64))]);
-    await settle();
+    await flushTasks();
     expect(view.of("picky").textContent).toContain("New session");
     expect(view.of("picky").textContent).not.toContain("Sent");
     // An answer still in flight when the session changes never lands.
@@ -631,9 +631,9 @@ async function registerDomTest() {
       pending_prompt: null,
     });
     await view.render([replaced("c".repeat(64))]);
-    await settle();
+    await flushTasks();
     release!();
-    await settle();
+    await flushTasks();
     client.call = realCall;
     expect(view.of("picky").textContent).toContain("Third session");
     expect(view.of("picky").textContent).not.toContain("Sent");
@@ -665,14 +665,14 @@ async function registerDomTest() {
     };
     const probe = createRoot(document.createElement("div"));
     await act(async () => probe.render(createElement(Probe)));
-    await settle();
+    await flushTasks();
     const stopSix = reviewStop(done, deskState().records[0]);
     expect(shown).toEqual({ stop: stopSix, text: "Report six", failed: false });
     // The service sees stop seven while its report is still being read.
     held = Promise.withResolvers<void>();
     stopId = "s7";
     await act(async () => deskChanged!());
-    await settle();
+    await flushTasks();
     expect(shown).toEqual({ stop: null, text: "Report six", failed: false });
     // Town's Mark reviewed marks nothing while the new report is read.
     expect(await markShown!(townMark, "builder", () => {})).toBe(false);
@@ -680,7 +680,7 @@ async function registerDomTest() {
     reports.set("w1:done", { latest: { text: "Report seven" } });
     held.resolve();
     held = null;
-    await settle();
+    await flushTasks();
     expect(shown.stop).toBe(reviewStop(done, deskState().records[0]));
     expect(shown.stop).not.toBe(stopSix);
     expect(shown.text).toBe("Report seven");
@@ -720,7 +720,7 @@ async function registerDomTest() {
     const opener = app.querySelector<HTMLButtonElement>("#opener")!;
     opener.focus();
     await act(async () => opener.click());
-    await settle();
+    await flushTasks();
     const sheet = () =>
       document.querySelector<HTMLElement>(
         '.needs-you-tab.is-sheet[aria-modal="true"]',
@@ -740,15 +740,15 @@ async function registerDomTest() {
     const chat = document.createElement("div");
     chat.className = "world-managed-window";
     app.append(chat);
-    await settle();
+    await flushTasks();
     expect(app.hasAttribute("inert")).toBe(false);
     chat.remove();
-    await settle();
+    await flushTasks();
     expect(app.hasAttribute("inert")).toBe(true);
     expect(document.activeElement).toBe(back);
     // Back closes the list and returns focus to its opener.
     await act(async () => closeNeedsYou());
-    await settle();
+    await flushTasks();
     expect(sheet()).toBeNull();
     expect(app.hasAttribute("inert")).toBe(false);
     expect(document.activeElement).toBe(opener);
@@ -759,10 +759,10 @@ async function registerDomTest() {
     app.append(counter);
     opener.focus();
     await act(async () => opener.click());
-    await settle();
+    await flushTasks();
     opener.remove();
     await act(async () => closeNeedsYou());
-    await settle();
+    await flushTasks();
     expect(document.activeElement).toBe(counter);
     await act(async () => shell.unmount());
     app.remove();
@@ -793,14 +793,14 @@ async function registerDomTest() {
     };
     const probeRoot = createRoot(document.createElement("div"));
     await act(async () => probeRoot.render(createElement(Probe)));
-    await settle();
+    await flushTasks();
     const settled = renders;
     state = {
       revision: 2,
       records: [{ ...state.records[0]!, stopped_at: 950 }],
     };
     await act(async () => changed!());
-    await settle();
+    await flushTasks();
     expect(renders).toBe(settled);
     const record = state.records[0]!;
     state = {
@@ -808,7 +808,7 @@ async function registerDomTest() {
       records: [{ ...record, reviewed_stop: reviewStop(done, record) }],
     };
     await act(async () => changed!());
-    await settle();
+    await flushTasks();
     expect(renders).toBeGreaterThan(settled);
     expect(reviewedNow).toBe(true);
     await act(async () => probeRoot.unmount());

@@ -1,4 +1,8 @@
+import { observeCondition } from "./testing/browserEvents";
 import { Profiler } from "react";
+import { setTownDaylightMode } from "./town/townDaylight";
+// Transport/readiness work must have the same lighting on every runner.
+setTownDaylightMode("day");
 import { Application } from "pixi.js";
 import { createRoot } from "react-dom/client";
 import { bridge, type ConnectionClient } from "../api";
@@ -279,7 +283,9 @@ bridge.connection = (...args) => {
         pendingInputs.add(admitted);
         void admitted
           .finally(() => pendingInputs.delete(admitted))
-          .catch(() => {});
+          .catch((error) =>
+            failures.push(`Admitted input RPC: ${String(error)}`),
+          );
       }
       return promise;
     },
@@ -715,9 +721,19 @@ async function run() {
             ),
           `${view} did not finish progressive controls`,
         );
-      // Keep input and real pushes running throughout layout, canvas paints and
-      // a bounded settling window, rather than stopping at first DOM.
-      await new Promise((resolve) => setTimeout(resolve, 1000));
+      // Keep native input and pushes running until both have made observable
+      // progress through the mounted application, including the actual paints.
+      await observeCondition(
+        () =>
+          acknowledgements.some((ack) => ack.phase === stage) &&
+          receivedFrames > 0 &&
+          presentedFrames > 0 &&
+          // The fast scale fixture can finish before the output workload has
+          // exercised its existing minimum. Admit that work before stopping it.
+          (stage !== "refresh" ||
+            (receivedFrames > 500 && presentedFrames > 10)),
+        "Mounted input and terminal frames did not complete",
+      );
       await frames(4);
       if (view === "town") {
         const renderer = window.__HERDR_TOWN_RENDERER__;
@@ -744,6 +760,15 @@ async function run() {
       const { count } = await (
         await fetch("/input-complete?phase=" + stage)
       ).json();
+      // CDP can acknowledge a key dispatch before the page receives its
+      // keydown task. A snapshot of pendingInputs misses that admitted key
+      // under concurrent rendering. Drain the actual acknowledgements before
+      // retiring the phase; keep the exact count assertion below.
+      await observeCondition(
+        () =>
+          acknowledgements.filter((ack) => ack.phase === stage).length >= count,
+        "Admitted native input did not receive its acknowledgement",
+      );
       await Promise.all([...pendingInputs]);
       check(
         acknowledgements.filter((ack) => ack.phase === stage).length === count,

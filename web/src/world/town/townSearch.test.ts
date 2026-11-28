@@ -163,7 +163,7 @@ test("matches outside the view, or not drawn, count as off-screen", () => {
   ).toBe(1);
 });
 
-function settle(camera: TownCamera) {
+function finishCameraMotion(camera: TownCamera) {
   for (let frame = 0; frame < 600 && camera.moving; frame += 1)
     camera.update(1 / 60);
   camera.update(1 / 60);
@@ -190,7 +190,7 @@ test("choosing a match flies there once per seq; ending the search flies back", 
   const rect = townSearchRect(desk.deskKey!, model, layout, noActors)!;
   view.searchFocus({ key: desk.deskKey!, seq: 1 }, rect, layout, false);
   expect(camera.flying).toBe(true);
-  settle(camera);
+  finishCameraMotion(camera);
   // Readable: at least desk level, with the table on screen.
   expect(camera.z).toBeGreaterThanOrEqual(camera.limits!.desk);
   expect(townRectOnScreen(rect, camera)).toBe(true);
@@ -198,7 +198,7 @@ test("choosing a match flies there once per seq; ending the search flies back", 
   view.searchFocus({ key: desk.deskKey!, seq: 1 }, rect, layout, false);
   expect(camera.flying).toBe(false);
   view.searchEnd(false);
-  settle(camera);
+  finishCameraMotion(camera);
   expect(camera.x).toBeCloseTo(home.x, 3);
   expect(camera.y).toBeCloseTo(home.y, 3);
   expect(camera.z).toBeCloseTo(home.z, 5);

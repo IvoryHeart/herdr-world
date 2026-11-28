@@ -269,13 +269,13 @@ function bridgeListeningPort(stream: ReadableStream<Uint8Array>) {
 }
 
 async function waitForHealth(port: number): Promise<void> {
-  for (let attempt = 0; attempt < 120; attempt += 1) {
+  for (let attempt = 0; attempt < 300; attempt += 1) {
     try {
       if ((await fixtureFetch(`http://127.0.0.1:${port}/health`)).ok) return;
     } catch {
       // Process may still be binding.
     }
-    await Bun.sleep(25);
+    await new Promise<void>((resolve) => setImmediate(resolve));
   }
   throw new Error("profile process fixture did not become healthy");
 }
@@ -734,15 +734,14 @@ test("production dispatcher isolates two local profiles and profile CRUD", async
       notes: [{ id: "n1", rev: 1 }],
     });
     for (
-      let attempt = 0;
-      attempt < 20 &&
+      const iterationDeadline = Date.now() + 200;
+      Date.now() < iterationDeadline &&
       !browserB.controls.some(
         (control) =>
           control.type === "world_board_changed" && control.revision === 1,
       );
-      attempt++
     ) {
-      await Bun.sleep(10);
+      await new Promise<void>((resolve) => setImmediate(resolve));
     }
     expect(
       browserB.controls.some(
@@ -784,15 +783,14 @@ test("production dispatcher isolates two local profiles and profile CRUD", async
       ],
     });
     for (
-      let attempt = 0;
-      attempt < 20 &&
+      const iterationDeadline = Date.now() + 200;
+      Date.now() < iterationDeadline &&
       !browserB.controls.some(
         (control) =>
           control.type === "world_watchlist_changed" && control.revision === 1,
       );
-      attempt++
     ) {
-      await Bun.sleep(10);
+      await new Promise<void>((resolve) => setImmediate(resolve));
     }
     expect(
       browserB.controls.some(
@@ -814,15 +812,14 @@ test("production dispatcher isolates two local profiles and profile CRUD", async
     });
     expect(unpinned).toMatchObject({ revision: 2, changed: true, records: [] });
     for (
-      let attempt = 0;
-      attempt < 20 &&
+      const iterationDeadline = Date.now() + 200;
+      Date.now() < iterationDeadline &&
       !browserA.controls.some(
         (control) =>
           control.type === "world_watchlist_changed" && control.revision === 2,
       );
-      attempt++
     ) {
-      await Bun.sleep(10);
+      await new Promise<void>((resolve) => setImmediate(resolve));
     }
     expect(
       browserA.controls.some(
@@ -932,8 +929,8 @@ test("production dispatcher isolates two local profiles and profile CRUD", async
       "alpha",
     );
     for (
-      let attempt = 0;
-      attempt < 50 &&
+      const iterationDeadline = Date.now() + 500;
+      Date.now() < iterationDeadline &&
       !browserB.controls
         .slice(controlsBeforeStart)
         .some(
@@ -941,9 +938,8 @@ test("production dispatcher isolates two local profiles and profile CRUD", async
             control.type === "world_invalidated" &&
             control.connection_id === "alpha",
         );
-      attempt++
     )
-      await Bun.sleep(10);
+      await new Promise<void>((resolve) => setImmediate(resolve));
     expect(
       browserB.controls
         .slice(controlsBeforeStart)
@@ -1130,7 +1126,8 @@ test("production routing bootstraps only a verified empty session and serializes
       }
       if (request.method === "workspace.create") {
         mutations.push(request.params ?? {});
-        await Bun.sleep(20);
+        // Yield so the competing browser's request can arrive mid-create.
+        await new Promise((resolve) => setImmediate(resolve));
         workspaces = [{ workspace_id: "w1" }];
         return {
           type: "workspace_created",

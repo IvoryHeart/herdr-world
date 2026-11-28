@@ -4,6 +4,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import {
   collectRunTiming,
+  collectHeadTiming,
   renderRunTiming,
   type TimingJob,
 } from "./ci-run-timing";
@@ -46,6 +47,43 @@ const jobs = [
   job("Preview", 470, 470, 469, "skipped"),
 ];
 
+test("head snapshot includes advisory jobs and excludes skipped jobs without starting or waiting on a run", async () => {
+  const paths: string[] = [];
+  const report = await collectHeadTiming(
+    "example/world",
+    "a".repeat(40),
+    async (path) => {
+      paths.push(path);
+      if (path.includes("head_sha="))
+        return {
+          workflow_runs: [
+            {
+              id: 42,
+              run_attempt: 1,
+              name: "CI",
+              html_url: run.html_url,
+              status: "in_progress",
+            },
+            {
+              id: 43,
+              run_attempt: 2,
+              name: "Town golden images",
+              html_url: run.html_url,
+              status: "completed",
+            },
+          ],
+        };
+      if (!path.includes("/jobs?")) return run;
+      return { jobs: path.includes("/42/") ? jobs : [job("Golden", 0, 0, 10)] };
+    },
+  );
+  expect(report).toContain("across all 2 workflows: **7**");
+  expect(report).toContain("| Town golden images |");
+  expect(report).toContain("observed lower bound");
+  expect(paths).toHaveLength(5);
+  expect(new Set(paths).size).toBe(5);
+});
+
 test("timings distinguish the critical dependency from the longest execution and exclude skipped jobs", () => {
   const report = renderRunTiming(run, jobs, workflow, at(470));
   expect(report).toContain(
@@ -59,6 +97,10 @@ test("timings distinguish the critical dependency from the longest execution and
     "Runner waits: **6m 41s** across 6 jobs; longest **Units (1/2)** — 6m 20s",
   );
   expect(report).toContain("| Units (1/2) | failure | 50s | 6m 20s |");
+  expect(report).toContain(
+    "| Units (1/2) | failure | 50s | 6m 20s | 6m 40s | 7m 30s |",
+  );
+  expect(report).toContain("Executed jobs: **6**");
   expect(report).toContain("in progress");
   expect(report).not.toContain("| Preview |");
   expect(report).toContain(

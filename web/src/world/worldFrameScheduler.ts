@@ -1,3 +1,4 @@
+import { clock } from "../clock";
 type FrameKind = "state" | "motion";
 type FrameClient = {
   element: Element;
@@ -19,9 +20,9 @@ const TERMINAL_INPUT = ".xterm, .terminal-composer-input";
 class WorldFrameScheduler {
   readonly clients = new Set<FrameClient>();
   readonly quietListeners = new Set<(quiet: boolean) => void>();
-  timer: ReturnType<typeof setTimeout> | null = null;
+  timer: ReturnType<typeof clock.setTimeout> | null = null;
   frame: number | null = null;
-  quietTimer: ReturnType<typeof setTimeout> | null = null;
+  quietTimer: ReturnType<typeof clock.setTimeout> | null = null;
   quiet = true;
   motion: MediaQueryList | null = null;
   intersection: IntersectionObserver | null = null;
@@ -96,15 +97,15 @@ class WorldFrameScheduler {
     // One ordinary task turn before each frame, so socket replies and input
     // still run between canvas frames. Not a 16 ms delay: that added to the
     // frame's own time and held canvases near 30 fps (#1248).
-    this.timer = setTimeout(() => {
+    this.timer = clock.setTimeout(() => {
       this.timer = null;
-      this.frame = requestAnimationFrame(this.flush);
+      this.frame = clock.requestAnimationFrame(this.flush);
     }, 0);
   };
 
   flush = (now: number) => {
     this.frame = null;
-    const began = performance.now();
+    const began = clock.monotonic();
     const clients = [...this.clients].filter((client) => this.eligible(client));
     clients.sort(
       (a, b) => Number(a.pending === "motion") - Number(b.pending === "motion"),
@@ -115,14 +116,14 @@ class WorldFrameScheduler {
       client.draw(now);
       this.clients.delete(client);
       if (!client.disposed) this.clients.add(client);
-      if (performance.now() - began >= 8) break;
+      if (clock.monotonic() - began >= 8) break;
     }
     this.schedule();
   };
 
   cancelFrame() {
-    if (this.timer !== null) clearTimeout(this.timer);
-    if (this.frame !== null) cancelAnimationFrame(this.frame);
+    if (this.timer !== null) clock.clearTimeout(this.timer);
+    if (this.frame !== null) clock.cancelAnimationFrame(this.frame);
     this.timer = this.frame = null;
   }
 
@@ -152,9 +153,9 @@ class WorldFrameScheduler {
       !event.target.closest(TERMINAL_INPUT)
     )
       return;
-    if (this.quietTimer !== null) clearTimeout(this.quietTimer);
+    if (this.quietTimer !== null) clock.clearTimeout(this.quietTimer);
     this.setQuiet(false);
-    this.quietTimer = setTimeout(() => {
+    this.quietTimer = clock.setTimeout(() => {
       this.quietTimer = null;
       this.setQuiet(true);
     }, 180);
@@ -179,7 +180,7 @@ class WorldFrameScheduler {
 
   stop() {
     this.cancelFrame();
-    if (this.quietTimer !== null) clearTimeout(this.quietTimer);
+    if (this.quietTimer !== null) clock.clearTimeout(this.quietTimer);
     this.quietTimer = null;
     this.quiet = true;
     this.motion?.removeEventListener("change", this.preferencesChanged);

@@ -215,7 +215,7 @@ if (process.env.BOARD_HERDR_DOM_TEST !== "1") {
         herdr.dialogs,
       );
     }
-    const settle = () =>
+    const flushTasks = () =>
       act(async () => {
         for (let i = 0; i < 5; i += 1) await Promise.resolve();
       });
@@ -236,7 +236,7 @@ if (process.env.BOARD_HERDR_DOM_TEST !== "1") {
         ),
       ].find((candidate) => candidate.textContent === label)!;
       await act(async () => button.click());
-      await settle();
+      await flushTasks();
     };
 
     const alpha = boardKey("local", "w1");
@@ -246,7 +246,7 @@ if (process.env.BOARD_HERDR_DOM_TEST !== "1") {
     await act(async () =>
       root.render(h(Harness, { keys: [alpha, build, fixed, rested] })),
     );
-    await settle();
+    await flushTasks();
 
     // A room: Town's rename and close, and its place in Herdr's order.
     expect(buttons(alpha)).toEqual([

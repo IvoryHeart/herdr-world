@@ -1,7 +1,8 @@
 import { existsSync, readFileSync, realpathSync } from "node:fs";
-import { balanceShards } from "./balance-shards";
+import { planWorldBrowserCases } from "./world-browser-cases";
 import timings from "./world-browser-timings.json";
 import { join, relative, resolve, sep } from "node:path";
+import { CHROME } from "./affected";
 
 /**
  * Suites whose input delays the non-blocking World latency trend reports.
@@ -33,39 +34,32 @@ export const worldRuntimeSuites = [
   "web/src/world/WorldTerminalHandoff.test.ts",
 ];
 
-// Six runners, longest-first by measured CI seconds. Unmeasured suites use
-// ten seconds until measured; stale timing entries never introduce suites.
-// Weights estimate future work, not test deadlines or runner-speed assertions.
-export function discoverWorldBrowserShards(
+/** Discover tests from source; timing entries never add or remove suites. @internal */
+export function discoverWorldBrowserSuites(
   root = join(import.meta.dir, ".."),
-  seconds: Record<string, number> = timings.seconds,
-): string[][] {
+): string[] {
   const directory = join(root, "web/src/world");
-  const paths = [
-    ...new Bun.Glob("**/*.test.{ts,tsx}").scanSync({ cwd: directory }),
-  ]
+  return [...new Bun.Glob("**/*.test.{ts,tsx}").scanSync({ cwd: directory })]
     .sort()
     .filter((path) =>
       browserSource(readFileSync(join(directory, path), "utf8")),
-    );
-  const weights = Object.fromEntries(
-    paths.map((path) => [
-      path,
-      seconds[path.replace(/\.test\.tsx?$/, "")] ?? 10,
-    ]),
-  );
-  return balanceShards(paths, weights, 6).map((shard) =>
-    shard.map((path) => `web/src/world/${path}`),
-  );
+    )
+    .map((path) => `web/src/world/${path}`);
 }
 
-export const worldBrowserShards = discoverWorldBrowserShards();
+export const worldBrowserSuites = discoverWorldBrowserSuites();
+export const worldBrowserCasePlan = planWorldBrowserCases(
+  worldBrowserSuites,
+  timings.cases,
+);
+// A file can occur on multiple shards; its cases are disjoint. One task also
+// catches every name missing from JUnit, so discovery never depends on timings.
+export const worldBrowserShards = worldBrowserCasePlan.map((workers) => [
+  ...new Set(workers.flatMap((tasks) => tasks.map((task) => task.file))),
+]);
 
-export const worldBrowserSuites = worldBrowserShards.flat();
-
-// Full scenes compete for the same software-rendering CPUs on hosted runners.
-// Only these bounded DOM/transport suites are admitted to parallel file workers;
-// new suites default to isolation until their resource use is understood.
+// Preserve lightweight batches and their artifact namespace. Sharded batches
+// both use isolated case workers; unsharded runs retain file parallelism.
 export const worldBrowserParallelSuites = [
   "AnswerDeliveries.browser",
   "CoreControl.browser",
@@ -88,6 +82,7 @@ export const worldBrowserIgnorePattern = ignorePattern(worldBrowserSuites);
  * validation, where they took about half of the unit-test time.
  */
 export const webBrowserSuites = [
+  "scripts/pages-film.test.ts",
   "web/src/features/index.browser.test.ts",
   "web/src/appStartup.browser.test.ts",
   "web/src/productionBoot.browser.test.ts",
@@ -123,10 +118,7 @@ function ignorePattern(paths: string[]) {
 }
 
 function browserSource(source: string) {
-  return (
-    /^\/\/ @world-browser-suite\b/m.test(source) ||
-    /CHROME_BIN|--headless/.test(source)
-  );
+  return /^\/\/ @world-browser-suite\b/m.test(source) || CHROME.test(source);
 }
 
 export function selectWorldBrowserShard(shard?: string): string[] {
@@ -175,6 +167,18 @@ export async function assertWebBrowserInventory(root = process.cwd()) {
         actual.push(file);
     }
   }
+  // Script suites opt in explicitly: diagnostic unit controls also mention Chrome.
+  if (existsSync(join(root, "scripts")))
+    for await (const path of new Bun.Glob("**/*.test.{ts,tsx}").scan({
+      cwd: join(root, "scripts"),
+    })) {
+      if (
+        /^\/\/ @web-browser-suite\b/m.test(
+          await Bun.file(join(root, "scripts", path)).text(),
+        )
+      )
+        actual.push(`scripts/${path}`);
+    }
   const missing = actual.filter((path) => !webBrowserSuites.includes(path));
   const nonexistent = webBrowserSuites.filter((path) => !actual.includes(path));
   if (missing.length || nonexistent.length) {

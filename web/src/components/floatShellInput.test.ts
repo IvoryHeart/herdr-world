@@ -28,14 +28,14 @@ function shell(options: { failAt?: number } = {}) {
   };
 }
 
-const settle = () => new Promise((done) => setTimeout(done, 0));
+const flushTasks = () => new Promise((done) => setTimeout(done, 0));
 
 test("a paste larger than one call is sent whole, in order, in bounded calls", async () => {
   const s = shell();
   // xterm hands a 60 KiB paste over as one onData event.
   const paste = new Uint8Array(60 * 1024).map((_, i) => i % 251);
   await s.input.push(paste);
-  await settle();
+  await flushTasks();
   expect(s.calls.map((c) => c.byteLength)).toEqual([
     MAX_FLOAT_INPUT_BYTES,
     paste.byteLength - MAX_FLOAT_INPUT_BYTES,
@@ -51,7 +51,7 @@ test("keys typed during a call join the next one, after the paste's remainder", 
   void s.input.push(new TextEncoder().encode("\r"));
   void s.input.push(new TextEncoder().encode("ls\r"));
   await first;
-  await settle();
+  await flushTasks();
   expect(s.calls.map((c) => c.byteLength)).toEqual([
     MAX_FLOAT_INPUT_BYTES,
     10 + 1 + 3,
@@ -62,11 +62,11 @@ test("keys typed during a call join the next one, after the paste's remainder", 
 test("a refused call stops the rest and says so; nothing is replayed", async () => {
   const s = shell({ failAt: 1 });
   await s.input.push(new Uint8Array(3 * MAX_FLOAT_INPUT_BYTES).fill(1));
-  await settle();
+  await flushTasks();
   expect(s.calls.map((c) => c.byteLength)).toEqual([MAX_FLOAT_INPUT_BYTES]);
   expect(s.errors).toHaveLength(1);
   await s.input.push(new TextEncoder().encode("x"));
-  await settle();
+  await flushTasks();
   expect(s.calls[s.calls.length - 1]?.byteLength).toBe(1);
 });
 
@@ -75,6 +75,6 @@ test("a closed stream sends nothing more, and cleared keys are never sent", asyn
   s.close();
   await s.input.push(new TextEncoder().encode("lost"));
   s.input.clear();
-  await settle();
+  await flushTasks();
   expect(s.calls).toEqual([]);
 });

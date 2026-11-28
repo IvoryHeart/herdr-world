@@ -1,3 +1,4 @@
+import { clock } from "../../clock";
 /**
  * Out of fuel: an agent that stopped because its harness hit a usage limit
  * (the service reads the stop from the agent's own session records, see
@@ -60,18 +61,18 @@ export function nextUsageStopReset(
 export function useCurrentUsageStops(
   stops: ReadonlyMap<string, AgentUsageStop>,
 ): ReadonlyMap<string, AgentUsageStop> {
-  const [now, setNow] = useState(() => Date.now());
+  const [now, setNow] = useState(() => clock.now());
   // The same map until a stop ends, so Town's projection is not rebuilt.
   const current = useMemo(() => currentUsageStops(stops, now), [stops, now]);
   const reset = nextUsageStopReset(current);
   useEffect(() => {
     if (reset === null) return;
     // Long timers fire early on some browsers; the next render re-arms.
-    const timer = window.setTimeout(
-      () => setNow(Date.now()),
-      Math.min(2 ** 31 - 1, Math.max(0, reset - Date.now()) + 50),
+    const timer = clock.setTimeout(
+      () => setNow(clock.now()),
+      Math.min(2 ** 31 - 1, Math.max(0, reset - clock.now()) + 50),
     );
-    return () => window.clearTimeout(timer);
+    return () => clock.clearTimeout(timer);
   }, [reset]);
   return current;
 }

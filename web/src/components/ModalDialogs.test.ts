@@ -105,6 +105,12 @@ async function registerDomTests() {
   );
   const { worldLocalStorage } = await import("../browserStorage");
   let listCalls = 0;
+  let pathAnswers = 0;
+  const pathChecked = async (from: number) => {
+    while (pathAnswers <= from)
+      await act(() => new Promise((resolve) => setImmediate(resolve)));
+    await act(async () => {});
+  };
   const client: ConnectionClient = {
     connectionId: "dialog-test",
     generation: 1,
@@ -115,6 +121,7 @@ async function registerDomTests() {
       // The new-room folder defaults to home and is checked on the host.
       if (method === "workspace.path") {
         const path = (params as { path: string }).path;
+        pathAnswers += 1;
         return {
           path: path === "~" ? "/home/example" : path,
           error: null,
@@ -249,7 +256,7 @@ async function registerDomTests() {
       return { workspace_id: "core-room", label: "Plans" };
     }) as typeof bridge.call);
     // The core's host resolves the folder (#1006).
-    const paths: unknown[] = [];
+    const paths: [string, string][] = [];
     connection.mockImplementation(((
       connectionId: string,
       generation: number,
@@ -303,7 +310,8 @@ async function registerDomTests() {
         container.querySelector<HTMLInputElement>("input[placeholder^='e.g.']")
           ?.value,
       ).toBe("/srv/example");
-      await act(() => new Promise((resolve) => setTimeout(resolve, 300)));
+      while (!paths.some(([, path]) => path === "/srv/example"))
+        await act(() => new Promise((resolve) => setImmediate(resolve)));
       expect(paths).toContainEqual(["workspace.path", "/srv/example"]);
       await act(async () =>
         container
@@ -429,6 +437,7 @@ async function registerDomTests() {
         )!.set!.call(input(), value);
         input().dispatchEvent(new Event("input", { bubbles: true }));
       };
+      const answersAtStart = pathAnswers;
       try {
         await act(async () => render(true));
         expect(input().value).toBe("");
@@ -453,7 +462,7 @@ async function registerDomTests() {
         expect(input().selectionEnd).toBe("calm-otter".length);
         if (create) {
           // The folder defaults to home, checked on the host first.
-          await act(() => new Promise((resolve) => setTimeout(resolve, 250)));
+          await pathChecked(answersAtStart);
           expect(
             container.querySelector<HTMLButtonElement>('[type="submit"]')!
               .disabled,
@@ -473,11 +482,11 @@ async function registerDomTests() {
           );
         }
 
+        const answersBefore = pathAnswers;
         await act(async () => render(false));
         await act(async () => render(true));
         await act(async () => edit("my-branch"));
-        if (create)
-          await act(() => new Promise((resolve) => setTimeout(resolve, 250)));
+        if (create) await pathChecked(answersBefore);
         expect(
           container.querySelector<HTMLButtonElement>('[type="submit"]')!
             .disabled,
@@ -784,7 +793,7 @@ async function registerDomTests() {
       act(async () =>
         root!.render(h(Reviews, { workspaces: [workspace], client })),
       );
-    const settle = () =>
+    const flushTasks = () =>
       act(async () => {
         const replies = pending;
         pending = [];
@@ -796,7 +805,7 @@ async function registerDomTests() {
       expect(calls).toBe(1);
       await act(async () => jest.advanceTimersByTime(120_000));
       expect(calls).toBe(1);
-      await settle();
+      await flushTasks();
       expect(container.textContent).toContain("merged");
       await render({
         ...sidebarWorkspace,
@@ -824,10 +833,10 @@ async function registerDomTests() {
       };
       await render(changedBranch);
       expect(container.textContent).toBe("{}");
-      await settle();
+      await flushTasks();
       expect(container.textContent).toBe("{}");
       expect(calls).toBe(3);
-      await settle();
+      await flushTasks();
       expect(container.textContent).toContain("merged");
       await render({
         ...changedBranch,
@@ -835,10 +844,10 @@ async function registerDomTests() {
       });
       expect(container.textContent).toBe("{}");
       await render(sidebarWorkspace, { ...reviewClient, generation: 2 });
-      await settle();
+      await flushTasks();
       expect(container.textContent).toBe("{}");
       await render({ ...sidebarWorkspace, worktree: undefined });
-      await settle();
+      await flushTasks();
       expect(container.textContent).toBe("{}");
       const lastCalls = calls;
       await act(async () => jest.advanceTimersByTime(120_000));
@@ -898,7 +907,7 @@ async function registerDomTests() {
       root = createRoot(container);
       const render = (client: ConnectionClient) =>
         act(async () => root!.render(h(Reviews, { client })));
-      const settle = () => act(async () => replies.shift()!(mergedStatus));
+      const flushTasks = () => act(async () => replies.shift()!(mergedStatus));
       jest.useFakeTimers();
       try {
         __storeTesting.replaceState({
@@ -909,7 +918,7 @@ async function registerDomTests() {
           connections: [],
         });
         await render(reviewClient(generation));
-        await settle();
+        await flushTasks();
         expect(container.textContent).toContain("merged");
 
         generation++;
@@ -932,12 +941,12 @@ async function registerDomTests() {
           __storeTesting.rearmTerminalAttachmentsAfterCatalog(true);
         });
         expect(calls).toBe(2);
-        await settle();
+        await flushTasks();
         expect(container.textContent).toContain("merged");
 
         await act(async () => jest.advanceTimersByTime(60_000));
         expect(calls).toBe(kind === "workspace" ? 3 : 2);
-        if (kind === "workspace") await settle();
+        if (kind === "workspace") await flushTasks();
       } finally {
         await act(async () => root!.unmount());
         root = null;
@@ -996,7 +1005,7 @@ async function registerDomTests() {
       let mount = 0;
       const render = () =>
         act(async () => root!.render(h(Reviews, { key: mount, refresh })));
-      const settle = (status = mergedStatus) =>
+      const flushTasks = (status = mergedStatus) =>
         act(async () => replies.shift()!(status));
       const shown = () =>
         Object.values(
@@ -1033,7 +1042,7 @@ async function registerDomTests() {
           ],
         });
         await render();
-        await settle();
+        await flushTasks();
         expect(readPullRequestCache().size).toBe(1);
         mount++;
         await render();
@@ -1046,7 +1055,7 @@ async function registerDomTests() {
         const unmountedReply = replies.shift()!;
         mount++;
         await render();
-        await settle();
+        await flushTasks();
         await act(async () =>
           unmountedReply({
             ...mergedStatus,
@@ -1102,7 +1111,7 @@ async function registerDomTests() {
         expect(shown().stale?.message).toContain("connection");
         expect(calls).toBe(beforeReconnect);
         // An old connection must not overwrite either the screen or disk.
-        await settle({
+        await flushTasks({
           ...mergedStatus,
           request: { ...mergedStatus.request!, state: "closed" },
         });
@@ -1120,7 +1129,7 @@ async function registerDomTests() {
           "unsupported",
           "error",
         ] as const) {
-          await settle({
+          await flushTasks({
             ...mergedStatus,
             state,
             request: undefined,
@@ -1132,14 +1141,14 @@ async function registerDomTests() {
           expect(readPullRequestCache().size).toBe(1);
           await requestRefresh();
         }
-        await settle({
+        await flushTasks({
           ...mergedStatus,
           request: { ...mergedStatus.request!, state: "open" },
         });
         expect(shown().request?.state).toBe("open");
         expect(shown().stale).toBeUndefined();
         await requestRefresh();
-        await settle({
+        await flushTasks({
           ...mergedStatus,
           state: "no_match",
           request: undefined,
@@ -1197,7 +1206,7 @@ async function registerDomTests() {
         act(async () =>
           root!.render(h(Reviews, { key: mount, branch, error })),
         );
-      const settle = (status: PullRequestStatus) =>
+      const flushTasks = (status: PullRequestStatus) =>
         act(async () => replies.shift()!(status));
       try {
         __storeTesting.replaceState({
@@ -1214,12 +1223,12 @@ async function registerDomTests() {
           ],
         });
         await render("topic-0");
-        await settle(mergedStatus);
+        await flushTasks(mergedStatus);
         expect(readPullRequestCache().size).toBe(1);
         await render("other");
         expect(container.textContent).toBe("{}");
         if (phase === "failed")
-          await settle({
+          await flushTasks({
             ...mergedStatus,
             state: "error",
             retryable: true,
@@ -1228,7 +1237,7 @@ async function registerDomTests() {
         await render(undefined, "Git temporarily unavailable");
         expect(container.textContent).not.toContain('"request"');
         // A late reply for B must not be mistaken for a verified current branch.
-        if (phase === "pending") await settle(mergedStatus);
+        if (phase === "pending") await flushTasks(mergedStatus);
         expect(container.textContent).not.toContain('"request"');
         // A fresh mount with no branch information cannot identify disk's A cache.
         mount++;
@@ -1236,7 +1245,7 @@ async function registerDomTests() {
         expect(container.textContent).toBe("{}");
         await render("other");
         expect(replies).toHaveLength(1);
-        await settle({
+        await flushTasks({
           ...mergedStatus,
           request: { ...mergedStatus.request!, number: 2, source: "other" },
         });
@@ -1370,7 +1379,7 @@ async function registerDomTests() {
       root = createRoot(container);
       const render = (client: ConnectionClient) =>
         act(async () => root!.render(h(Reviews, { client })));
-      const settle = (status: PullRequestStatus) =>
+      const flushTasks = (status: PullRequestStatus) =>
         act(async () => replies.shift()!(status));
       try {
         __storeTesting.replaceState({
@@ -1389,7 +1398,7 @@ async function registerDomTests() {
           ],
         });
         await render(makeClient(generation));
-        await settle({ ...mergedStatus, rebasing: true });
+        await flushTasks({ ...mergedStatus, rebasing: true });
         expect(container.textContent).toContain('"request"');
         expect(readPullRequestCache().size).toBe(0);
         generation++;
@@ -1402,7 +1411,7 @@ async function registerDomTests() {
           __storeTesting.rearmTerminalAttachmentsAfterCatalog(true);
         });
         expect(container.textContent).toBe("{}");
-        await settle({
+        await flushTasks({
           ...mergedStatus,
           state: "error",
           retryable: true,
@@ -1411,7 +1420,7 @@ async function registerDomTests() {
         expect(container.textContent).not.toContain('"request"');
         generation++;
         await render(makeClient(generation));
-        await settle({ ...mergedStatus, rebasing: true });
+        await flushTasks({ ...mergedStatus, rebasing: true });
         expect(container.textContent).toContain('"request"');
       } finally {
         await act(async () => root!.unmount());
@@ -1531,7 +1540,7 @@ async function registerDomTests() {
       act(async () => root!.render(h(Reviews, { workspaces })));
     const shown = () =>
       JSON.parse(container.textContent!) as Record<string, PullRequestSummary>;
-    const settle = (
+    const flushTasks = (
       status: (params: Record<string, unknown>) => PullRequestStatus | Error,
     ) =>
       act(async () => {
@@ -1544,7 +1553,7 @@ async function registerDomTests() {
     jest.useFakeTimers();
     try {
       await render([sidebarWorkspace, other]);
-      await settle(() => mergedStatus);
+      await flushTasks(() => mergedStatus);
       expect(Object.keys(shown())).toEqual([
         "other-workspace",
         "review-workspace",
@@ -1558,7 +1567,7 @@ async function registerDomTests() {
       ]);
       // An obsolete reply for the old branch never reappears.
       await render([sidebarWorkspace, other]);
-      await settle(() => ({
+      await flushTasks(() => ({
         ...mergedStatus,
         request: { ...mergedStatus.request!, state: "open" },
       }));
@@ -1566,7 +1575,7 @@ async function registerDomTests() {
       expect(requests.map((request) => request.params.branch)).toEqual([
         "topic-0",
       ]);
-      await settle(() => mergedStatus);
+      await flushTasks(() => mergedStatus);
 
       // A transient Git status error keeps the last success marked stale.
       await render([
@@ -1579,13 +1588,13 @@ async function registerDomTests() {
       );
       await render([sidebarWorkspace, other]);
       expect(Object.keys(shown())).toHaveLength(2);
-      await settle(() => mergedStatus);
+      await flushTasks(() => mergedStatus);
 
       // A poll keeps summaries while pending; failures keep the last success.
       await act(async () => jest.advanceTimersByTime(60_000));
       expect(requests).toHaveLength(2);
       expect(Object.keys(shown())).toHaveLength(2);
-      await settle((params) =>
+      await flushTasks((params) =>
         params.workspace_id === "review-workspace"
           ? new Error("Connection failed")
           : {
@@ -1610,7 +1619,7 @@ async function registerDomTests() {
 
       // Authoritative results and recoveries replace the stale fallback.
       await act(async () => jest.advanceTimersByTime(60_000));
-      await settle((params) =>
+      await flushTasks((params) =>
         params.workspace_id === "review-workspace"
           ? { ...mergedStatus, refreshedAt: "2026-10-03T00:00:00Z" }
           : { ...mergedStatus, state: "detached", request: undefined },
@@ -1621,7 +1630,7 @@ async function registerDomTests() {
       );
       expect(shown()["other-workspace"]).toMatchObject({ state: "detached" });
       await act(async () => jest.advanceTimersByTime(60_000));
-      await settle(() => ({
+      await flushTasks(() => ({
         ...mergedStatus,
         state: "error",
         retryable: true,
@@ -1681,14 +1690,14 @@ async function registerDomTests() {
           }),
         ),
       );
-    const settle = () =>
+    const flushTasks = () =>
       act(async () =>
         requests.splice(0).forEach(({ resolve }) => resolve(mergedStatus)),
       );
     jest.useFakeTimers();
     try {
       await render("b0");
-      await settle();
+      await flushTasks();
       // A branch change 30s in requests only that workspace and must not
       // push back the 60s round for both.
       await act(async () => jest.advanceTimersByTime(30_000));
@@ -1696,7 +1705,7 @@ async function registerDomTests() {
       expect(requests.map(({ params }) => params.workspace_id)).toEqual([
         "other-workspace",
       ]);
-      await settle();
+      await flushTasks();
       await act(async () => jest.advanceTimersByTime(30_000));
       expect(requests.map(({ params }) => params.workspace_id).sort()).toEqual([
         "other-workspace",
@@ -2443,6 +2452,7 @@ async function registerDomTests() {
     );
     const container = document.createElement("div");
     document.body.append(container);
+    const answersAtStart = pathAnswers;
     root = createRoot(container);
     const render = () => root!.render(h(WorkspaceTree));
     try {
@@ -2491,7 +2501,7 @@ async function registerDomTests() {
         form.querySelector<HTMLButtonElement>('button[type="submit"]')!
           .disabled,
       ).toBe(true);
-      await act(() => new Promise((resolve) => setTimeout(resolve, 250)));
+      await pathChecked(answersAtStart);
       await act(async () => submit());
       expect(create).toHaveBeenCalledTimes(1);
       await act(async () => finish({ type: "workspace_created" }));

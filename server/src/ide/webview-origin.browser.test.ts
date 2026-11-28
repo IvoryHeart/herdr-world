@@ -1,3 +1,11 @@
+import {
+  launchTestBrowser,
+  type TestBrowser,
+} from "../../../scripts/testing/browser-session";
+import {
+  sharedBrowserTLS,
+  browserOriginProxy,
+} from "../../../scripts/testing/browser-tls";
 import { expect, test } from "bun:test";
 import { existsSync } from "node:fs";
 import { mkdtemp, readFile, rm } from "node:fs/promises";
@@ -55,11 +63,11 @@ try {
   const response = await fetch(world + '/rpc', { method: 'POST', credentials: 'include', body: '{}' });
   out.fetch = 'status ' + response.status;
 } catch (e) { out.fetch = e.name; }
-out.socket = await new Promise((resolve) => {
+out.socket = await new Promise((resolve, reject) => {
   const socket = new WebSocket(world.replace('https:', 'wss:') + '/ws');
-  socket.onopen = () => resolve('open');
-  socket.onerror = () => resolve('error');
-  setTimeout(() => resolve('timeout'), 5000);
+  const timer = setTimeout(() => { socket.close(); reject(new Error('World socket sent no open/error event')); }, 5000);
+  socket.onopen = () => { clearTimeout(timer); resolve('open'); };
+  socket.onerror = () => { clearTimeout(timer); resolve('error'); };
 });
 try {
   await navigator.serviceWorker.register(world + '${BASE}/sw.js', { scope: world + '/' });
@@ -101,31 +109,7 @@ test.skipIf(!chrome || !openssl)(
   "IDE pages frame VS Code's webview origin, which can't reach World",
   async () => {
     const dir = await mkdtemp(join(tmpdir(), "ide-webview-origin-"));
-    const key = join(dir, "key.pem");
-    const cert = join(dir, "cert.pem");
-    const made = Bun.spawnSync(
-      [
-        openssl!,
-        "req",
-        "-x509",
-        "-newkey",
-        "rsa:2048",
-        "-nodes",
-        "-days",
-        "1",
-        "-subj",
-        "/CN=127.0.0.1",
-        "-addext",
-        `subjectAltName=IP:127.0.0.1,DNS:${WEBVIEW_HOST}`,
-        "-keyout",
-        key,
-        "-out",
-        cert,
-      ],
-      { stdout: "ignore", stderr: "pipe" },
-    );
-    if (made.exitCode !== 0) throw new Error(made.stderr.toString());
-    const tls = { key: Bun.file(key), cert: Bun.file(cert) };
+    const tls = await sharedBrowserTLS();
     const html = { "content-type": "text/html" };
 
     const socketPath = join(dir, "ide.sock");
@@ -217,10 +201,15 @@ test.skipIf(!chrome || !openssl)(
       },
     });
 
-    let child: ReturnType<typeof Bun.spawn> | undefined;
+    let child: TestBrowser | undefined;
+    let originProxy: Awaited<ReturnType<typeof browserOriginProxy>> | undefined;
     try {
+      originProxy = await browserOriginProxy(
+        `${WEBVIEW_HOST}:443`,
+        webviews.port!,
+      );
       const errorOutput = join(dir, "browser.log");
-      child = Bun.spawn(
+      child = await launchTestBrowser(
         [
           chrome!,
           "--headless",
@@ -228,13 +217,16 @@ test.skipIf(!chrome || !openssl)(
           "--window-size=1000,700",
           "--no-first-run",
           "--no-default-browser-check",
-          "--ignore-certificate-errors",
-          `--host-resolver-rules=MAP ${WEBVIEW_HOST}:443 127.0.0.1:${webviews.port}, EXCLUDE 127.0.0.1, MAP * ~NOTFOUND`,
           `--user-data-dir=${join(dir, "profile")}`,
           `${worldOrigin}/start`,
         ],
         { stdout: "ignore", stderr: Bun.file(errorOutput) },
+        {
+          proxyServer: originProxy.url,
+          proxyBypassList: "127.0.0.1;localhost",
+        },
       );
+      await child.start();
       const exited = child.exited.then(async (code) => {
         throw new Error(
           `Browser exited (${code}): ${await readFile(errorOutput, "utf8")}`,
@@ -278,6 +270,7 @@ test.skipIf(!chrome || !openssl)(
       webviews.stop(true);
       ide.stop(true);
       await stopChrome(child);
+      await originProxy?.close();
       await rm(dir, { recursive: true, force: true });
     }
   },

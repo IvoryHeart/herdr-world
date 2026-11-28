@@ -3,9 +3,14 @@ export async function connectCapture(port: string) {
   const targets = (await (
     await fetch(`http://127.0.0.1:${port}/json/list`)
   ).json()) as { type: string; webSocketDebuggerUrl: string }[];
-  const socket = new WebSocket(
+  return connectDevtools(
     targets.find((target) => target.type === "page")!.webSocketDebuggerUrl,
   );
+}
+
+/** Connect to an explicitly owned page or browser endpoint. */
+export async function connectDevtools(endpoint: string) {
+  const socket = new WebSocket(endpoint);
   await new Promise<void>((resolve, reject) => {
     socket.onopen = () => resolve();
     socket.onerror = () => reject(new Error("Capture connection failed"));

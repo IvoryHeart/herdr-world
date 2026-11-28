@@ -1122,6 +1122,54 @@ const descriptionLeafFailure = () => [
   },
 ];
 
+test("a packed Delivery description failure permits fresh validation without hiding other failures", async () => {
+  const jobs = descriptionLeafFailure()
+    .filter((job) => job.name !== "PR description")
+    .map((job) =>
+      job.name === "Delivery checks"
+        ? {
+            ...job,
+            steps: [
+              { name: "Check PR description", conclusion: "failure" },
+              {
+                name: "Require complete model evidence",
+                conclusion: "success",
+              },
+              { name: "Run full repository check", conclusion: "skipped" },
+            ],
+          }
+        : job,
+    );
+  const runs = [run(4), run(3, base, "failure")];
+  expect(await red(runs, { 3: jobs })).toBeUndefined();
+  expect(
+    await verify([...runs, run(2)], { 3: jobs, 2: [job("success")] }),
+  ).toBe(false);
+  for (const conclusion of ["failure", "cancelled", "in_progress"])
+    expect(
+      await red(runs, {
+        3: jobs.map((job) =>
+          job.name === "Delivery checks"
+            ? {
+                ...job,
+                steps: [
+                  ...job.steps,
+                  { name: "Aggregate source-bound evidence", conclusion },
+                ],
+              }
+            : job,
+        ),
+      }),
+    ).toBe(3);
+  expect(
+    await red(runs, {
+      3: jobs.map((job) =>
+        job.name === "Static checks" ? { ...job, conclusion: "failure" } : job,
+      ),
+    }),
+  ).toBe(3);
+});
+
 test("a corrected description can validate after only the description leaf failed", async () => {
   const runs = [run(4), run(3, base, "failure")];
   const jobs = { 3: descriptionLeafFailure() };

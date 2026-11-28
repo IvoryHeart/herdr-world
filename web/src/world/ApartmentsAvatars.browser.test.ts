@@ -1,3 +1,7 @@
+import {
+  launchTestBrowser,
+  type TestBrowser,
+} from "../../../scripts/testing/browser-session";
 import { expect, test } from "bun:test";
 import { existsSync } from "node:fs";
 import { mkdir, mkdtemp, rm, writeFile } from "node:fs/promises";
@@ -58,12 +62,12 @@ test.skipIf(!chrome)(
     // Evidence captures for the PR, only when asked for.
     const captures = Bun.env.APARTMENTS_CAPTURES;
     if (captures) await mkdir(captures, { recursive: true });
-    let child: ReturnType<typeof Bun.spawn> | undefined;
+    let child: TestBrowser | undefined;
     let connection: Awaited<ReturnType<typeof connectCapture>> | undefined;
     try {
       const log = join(dir, "chrome.log");
       const profile = join(dir, "profile");
-      child = Bun.spawn(
+      child = await launchTestBrowser(
         [
           chrome!,
           "--headless=new",
@@ -77,6 +81,7 @@ test.skipIf(!chrome)(
         ],
         { stdout: "ignore", stderr: Bun.file(log) },
       );
+      await child.start();
       const exited = child.exited.then(async (code) => {
         throw new Error(`Chrome exited ${code}: ${await Bun.file(log).text()}`);
       });

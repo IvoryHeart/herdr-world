@@ -7,7 +7,7 @@ required. The native launchd shim reports have been removed.
 | --- | --- |
 | Pre-commit | Read-only formatting/lint and staged agent-file guard |
 | Pre-push | Read-only formatting and privacy scan of every pushed ref, including tags |
-| Privacy | One scan for each PR open/synchronize/reopen, plus explicit bot dispatches |
+| Privacy | Mandatory step in Validation scope, including PR metadata edits; no separate workflow |
 | PR CI | Linux static, affected units, browser shards and behavioral verification; description policy remains in CI |
 | Merge queue | Fresh Linux validation of the queue's combined commit; the same required Delivery checks aggregate |
 | Native checks | Tags and nightly only, including packaging changes |
@@ -27,17 +27,60 @@ alongside non-browser shards. Its independent commands run concurrently, each
 with a separate `static-*.log` in `.agents/delivery/lanes/`; any failure fails the
 lane after all commands finish. The terminal names the first completed failure,
 and CI's Static checks summary lists every command, outcome, duration and log.
-CI splits the same commands across three Static checks matrix runners: `build`
-runs the production build, `types` runs both type commands, and `repository` runs
-the other ten checks. This avoids CPU contention on a single hosted runner;
-local `check:static` still runs all thirteen concurrently. Each runner publishes
-its own summary and `static-check-logs-<group>` artifact, including failed checks.
-Every matrix runner must pass; failure never cancels another group. Documentation
-changes retain their existing `check:docs` command on one repository runner.
-Checkout retains full Git history for ratchets, filtering historical file blobs.
+Full CI fits sixteen runner jobs: Validation scope, four combined unit/static/web
+runners, six World browser runners, four model groups, and Delivery checks. The
+three static groups remain separate: `types` follows unit shard 2, `build` follows
+unit shard 3, and `repository` plus shipped dependency security follows unit shard
+4. Web browser partitions 1 and 2 follow unit shards 1 and 2. These steps run
+sequentially on each runner, preserving the unit and Chrome concurrency limits;
+static and browser checks still run after a unit failure but stop on cancellation.
+Evidence uploads remain unconditional. Each static group
+publishes its own summary and `static-check-logs-<group>` artifact. Documentation
+changes run `check:docs` and dependency security on one repository runner.
+Combined jobs fetch full Git history for static ratchets after units, filtering
+historical file blobs; unit execution inputs remain unchanged.
+`scripts/ci-workflow.test.ts` counts runner leaves recursively through reusable
+workflows and matrix expansions for default full PR, merge-queue and manual runs;
+more than sixteen fails. Optional release previews and browser diagnostics are
+outside that default graph. Browser repartitioning must satisfy the same total
+job budget; a `max-parallel` limit alone does not reduce the count.
+Model groups retain all 27 immutable parts on four runners, with three disjoint
+core-control partitions and every fault retained. Packing uses peak memory ×
+recorded time and simulates each runner's longest-first queue. Parts refill free
+workers only when their padded reservations fit: each reservation rounds 125% of
+the recorded peak up to 64 MiB, with 256 MiB reserved for group overhead. Cache
+misses use the same admission rule. Failure or cancellation stops admission and
+drains started work. The hard 4 GiB, zero-swap cgroup and four-CPU quota remain
+authoritative; estimates cannot establish hosted fit. Packing uses complete part
+durations from hosted run 46147624726, including replay and evidence publication,
+and includes group 1's diagnostic overhead during initial placement and refinement.
+World's six runners balance individual case times across three logical queues,
+admitting at most two isolated browser contexts in one Chrome per runner. Cases over 50 seconds
+are split into independent fixtures with their assertions retained.
+A fallback selector owns all new/renamed cases, so stale timing names cannot drop
+coverage. `scripts/ci-world-tests.ts` owns this browser scheduling separately from
+the existing unit scheduler. Local `check:delivery` uses the pinned Linux Chrome
+and starts verification after both browser lanes to avoid CPU contention.
+Browser launch and bundle-build phases are recorded once, while each case records
+queue admission, context creation, page load, first document frame, real-event waits and synchronous
+assertion work. Job summaries and local `test:timings` retain those measurements.
+The IDE security fixture uses a generated job-only certificate trusted by its
+public-key pin and an isolated CONNECT proxy for its synthetic webview origin;
+HTTPS, cookies, CORS and service-worker checks still execute in Chrome.
+Browser ownership lives in `scripts/run-browser-tests.ts` around the unchanged
+unit/retry executors; pure unit selections never start Chrome. The model tooling
+negative control runs once on group 1 in full mode or when its tooling changes.
 Static checks never retry. `check:changed` remains an explicit local affected
 check and `check:delivery` an explicit complete local gate. Neither is a push hook.
 `check:source` is a local compatibility command, not a release gate.
+
+Each combined runner records separate unit, static, security and web outcomes in
+its summary and `unit-evidence-*` artifact, even after another lane fails. Delivery
+requires all four receipts, checks the actual lane verdicts and also requires the
+combined runners themselves to succeed. Setup or artifact failures cannot pass.
+The large `uiScale` browser table runs in five disjoint groups under the unchanged
+120-second file deadline, each retaining its JUnit/retry report. The last group
+also owns future case names. This browser-only schedule leaves units unchanged.
 `check:pr-body <file> <base-ref>` validates the exact committed PR description in
 CI and before handoff. `check:dead` is read-only unless given `--prune`.
 `check:privacy --range <base-ref> <head-ref>` scans committed additions; the hook
@@ -51,11 +94,17 @@ with the existing maximum of two concurrent cases. The longest files start first
 new files always run with a one-second scheduling estimate. The four partitions
 are disjoint and cover the complete selection.
 
+The comparison selector normalizes matrix rows to their unit inputs and compares
+steps through the unit executor. Appending static/web/reporting work preserves
+the existing unit schedule; changing unit environment, setup, runner, matrix or
+commands still requires twenty serial/parallel pairs. Policy-only edits to the
+selector preserve the exact comparison executor, assertions and pair count.
+
 The build consumers listed in `scripts/ci-unit-shards.ts` stay on the first shard.
 Only a shard selecting those files runs `bun run build`; ordinary scoped units
 need no build. Packing includes a 25-second build allowance. The other shards run
 from clean checkouts without generated assets, so a new undeclared consumer fails
-instead of silently acquiring a second build. Static checks retain their own build.
+instead of silently acquiring a second build. The static build remains a separate step on shard 3.
 
 The timing table was bootstrapped from Bun 1.4.4 Linux x64 serial JUnit. It records
 the outer file-suite time, including setup, without counting nested describe
@@ -65,8 +114,8 @@ their serial JUnit reports to
 `bun scripts/ci-unit-timings.ts <serial-junit.xml> ... > scripts/ci-unit-timings.json`.
 Multiple observations use the median per file. Timing changes select full validation.
 
-Changes to the CI unit job, CI test entry, test runner, unit packing, timing or
-comparison implementation require **twenty serial/parallel pairs on every unit
+Changes to the CI unit execution inputs, CI test entry, test runner, unit packing,
+timing or comparison executor require **twenty serial/parallel pairs on every unit
 shard** before Delivery passes. The order alternates between serial first and
 parallel first. Each pair uses the same selected files and existing retry policy;
 first-attempt JUnit must retain every case and skip, with zero new parallel
@@ -74,13 +123,25 @@ failures even if retry recovers them. Normal PRs execute the unit lane once.
 Comparison jobs have a separate 120-minute allowance; individual test deadlines
 and the normal 20-minute job limit are unchanged. `unit-evidence-*` retains JUnit,
 command logs, case/file inventories and elapsed times; the job summary records the
-twenty completed pairs. `flaky-tests-*` evidence and its Delivery gate remain required.
+twenty completed pairs. Retry-once verdicts remain required; `flaky-tests-*` accounting evidence is informational.
 
 ## Scope and scheduling
 
-CI listens to PR open/synchronize/reopen. It does not listen to `edited`.
-`labeled` starts jobs only for release previews, browser stability and latency
-opt-ins on open PRs. Unrelated labels and closed PRs start no runners.
+CI listens to PR open/synchronize/reopen and metadata edits. Privacy scans the
+introduced commits and current metadata before scope/reuse admission. Each PR has
+one concurrency group with cancellation enabled, so a newer event cancels the
+superseded run. A `closed` event runs only a small cancellation job: it snapshots
+that PR's active workflow runs and cancels them without starting any test lane.
+`labeled` starts validation only for release previews, browser stability and
+latency opt-ins on open PRs; unrelated labels skip all validation runners.
+
+The default full CI graph has sixteen jobs. A web-rendering PR can additionally
+start one Town golden report and one asset-headroom report (eighteen total);
+`latency-trend` explicitly adds two measurement jobs and its report (twenty-one
+total). PR opening/reopening also runs the single release-note label job;
+synchronize pushes do not. Their path filters cover render inputs and web build inputs respectively.
+Privacy adds no jobs, and the daily flaky reporter adds no per-push run. Optional
+release previews and diagnostic comparisons are reported separately.
 PR CI validates the proposed merge and uses one selection from
 `scripts/validation-scope.ts`. Scope includes both sides of renames and the
 complete PR, even if incremental unit scope narrows. Unknown/configuration
@@ -97,12 +158,22 @@ journeys. Missing consumers and unknown assets keep the full-mode fallback;
 deletions and both sides of renames retain their consumers. Golden comparisons
 remain advisory and help picture generation remains an explicit capture command.
 
-Scope checks out the complete Git history with `filter: blob:none`. The PR
-description policy runs as its own leaf after scope, alongside static checks,
-units, dependency security, World and web browser shards, and model shards.
-**Delivery checks** depends directly on those leaves and requires each selected
-lane to succeed; unselected lanes must be skipped. There are no intervening
+Scope and Delivery check out the complete Git history with `filter: blob:none`. The PR
+description policy runs in Delivery after the code and model evidence steps.
+Units carry the existing static, dependency security and web browser checks;
+World browser and model groups remain separate runners.
+**Delivery checks** depends directly on the combined leaves and requires each
+selected lane to succeed; unselected lanes must be skipped. There are no intervening
 repository, web-browser or behavioral aggregate runners in the PR graph.
+Each World runner admits its three existing case workers; browser-wide native
+tracing drains the shared browser and remains exclusive. Local World runs bound
+workers and contexts by the available CPU count, capped at eight. Larger local
+batches can queue behind native tracing beyond existing case deadlines.
+Raw fixture/context phase records
+are retained beside JUnit so admission wait can be separated from execution.
+Capture/probe tools join the runner's managed Chrome and dispose only their own
+context; standalone tools own a queued session, including one owner for repeated
+golden runs. Smoke, warm-up and GPU probes launch only from the shared helper.
 Delivery downloads the model manifests and resource receipts, applies the same
 complete source/tool/model/resource checks, and retains the canonical evidence
 artifact. This aggregation needs Bun and Git, without Node, Java, dependency
@@ -119,23 +190,37 @@ proof establishes an identical tree. A newer red/cancelled verdict is never
 skipped; absent proof or API errors keep a red metadata result without starting
 another suite in that aggregate. An independent **Main model evidence** job runs
 the model lane fresh and saves successful per-model evidence in main's cache scope.
-Model shards restore exact keys before dependency/checker installation; only a
-validated receipt skips model execution. A separate unconditional job installs
-the locked development tooling and runs `verification:typecheck` and
-`verification:notices:check` once on the current tree, including Quint tests
-that do not invalidate model keys. Its failure blocks Delivery even when every
-model reuses evidence; it needs no Java or checker installation. Merge groups, manual runs and nightly/release checks
+IDE lifecycle retains replay plus three check groups; core runtime retains replay
+plus three control groups, so their longest controls can overlap other parts.
+The 27 immutable model/part identities are packed longest-first by recorded
+resource-step times from main run 46077711273 into four balanced groups
+(`scripts/ci-model-plan.ts`). Whole-part timing estimates now use run 46155401222;
+the padded memory peaks retain the earlier isolated measurements.
+Each group admits at most four concurrent parts inside one existing
+400% CPU / 4 GiB cgroup. Every part keeps its scope, controls, cache validation and
+resource receipt; the complete aggregate still requires all 27 parts. A group
+cache restores the latest bundle set, and each part independently validates its
+current content/tool key before dependency/checker installation. Invalid or
+missing parts run fresh. Only main saves successful bundles. Group 1 always
+installs locked development tooling and runs `verification:typecheck` and
+`verification:notices:check` on the current tree, including complete cache hits.
+Its failure blocks Delivery even when every model reuses evidence. Merge groups, manual runs and nightly/release checks
 stay fresh. Nightly catches integration/platform failures as one advisory issue.
 PR reuse still requires the same scope and checkout/base/head identities.
 The stability opt-in explicitly requests fresh repeated browser passes.
 
-If only **PR description** and **Delivery checks** fail, with scope successful
-and all code leaves successful or skipped in the same run, correcting the
-body and adding an eligible label permits fresh validation. This also works after
+If only Delivery's **Check PR description** step fails, with scope successful,
+all other Delivery steps successful or skipped and all code leaves successful or
+skipped, correcting the body and adding an eligible label permits fresh
+validation. Evidence and code failures still hold the head red. Older separate
+**PR description** jobs retain their existing recovery behavior. This also works after
 **Re-run failed jobs**: successful/skipped leaves may carry earlier attempts,
-while the failed description and Delivery must belong to the current attempt.
+while the failed description check and Delivery must belong to the current attempt.
+Combined-runner receipts are downloaded across all attempts, with one newest whole
+receipt selected per shard. A newer failed or missing lane cannot borrow an older
+passing lane; duplicate shard/attempt pairs and missing shards fail closed.
 Failed Delivery evidence is still not reusable, and an earlier code failure still holds the head
-red. Rerunning the description job alone replays its original event body.
+red. Rerunning an older description job alone replays its original event body.
 
 After the owner approves a PR, it joins the merge queue for `main`. GitHub
 combines it with current main and any preceding queued PRs, then sends
@@ -157,43 +242,57 @@ failure, missing recovery evidence, crash or isolation-tripwire violation stays 
 Models, static checks, privacy and PR-description checks never retry. Local test
 commands do not enable recovery by default.
 
-The trusted tracker accepts only runs whose head repository is this repository.
-It skips fork runs before downloading artifacts and independently checks the
-Actions API source identity before accessing issue history or writing issues or
-statuses; a missing identity is rejected. Fork tests still run and report their
-local retry results, but cannot add repository-wide flaky history.
+Each test job writes **Flaky tests** in its own summary and uploads a small
+`flaky.json` in a `flaky-tests-*` artifact. It lists every test that needed a retry,
+including a test that fails twice. The existing **Delivery checks** job combines
+these into `flaky-tests-delivery-<attempt>` and a summary. Reporting, artifact
+upload and download failures are informational: each step uses `continue-on-error`.
+No issue-history lookup or frequency limit can fail Delivery. A test that fails
+its retry still fails its test job.
 
-Every test shard retains `flaky-tests-*` JSON artifacts, including failed jobs and
-previous attempts of a rerun. **Delivery checks** lists every recovered file and
-case under **Flaky tests**, and checks the open issue history with a read-only
-token. A test that flakes on more than three distinct CI runs in seven days
-blocks runs selecting its file, including a later first-pass success. Attempts
-of the same run count once; occurrences exactly seven days old still count.
-Once breached, the open cause stays blocked until explicit fix or quarantine;
-waiting for the original window to expire does not clear it.
+**Daily flaky tests** runs once a day at **04:17 UTC**, or through **Actions → Daily
+flaky tests → Run workflow** on the default branch. It uses default-branch code
+with issue-write permission and reads the consolidated `flaky.json` artifacts as
+validated data. It starts no workflow in response to CI requests or completions;
+cancelled and skipped CI runs are excluded, as are fork or unidentified source
+repositories. Fork jobs still show their own retry summaries. Concurrent daily or
+manual requests coalesce to one active run and at most one pending run.
 
-The trusted **Flaky test tracking** workflow uses default-branch code, reads the
-source run's artifacts as data, and serializes updates across branches. It creates
-one open issue labelled `flaky` per file/case, preserving the run links and owner
-notes. Close the issue after fixing the cause; another flake after closure starts
-a new issue. To quarantine explicitly, the owner adds `flaky-quarantined` to its
-open issue (create that label if needed). Quarantine exempts only the frequency
-limit: tests still run and a second failure still fails CI. No automatic skip,
-quarantine or issue closure occurs.
+The daily report updates one issue titled **Flaky tests**, labelled `flaky`, with
+each test, its retry count and a link to its latest run attempt. The window covers
+completed CI runs **created in the last 24 hours** on this repository's branches.
+Each test counts once per run attempt across duplicate shard evidence; different
+attempts count separately. Run discovery continues through short pages until an
+empty page. The managed section is a fresh snapshot; text outside it is preserved.
+The same issue is reused even if closed, without reopening it. Previous per-cause
+issues and accounting receipts remain historical and have no gating effect.
 
-While accounting is pending, the trusted workflow holds a `Delivery checks`
-commit status, then records success or failure after updating history. GitHub
-[requires both a same-named status and check to pass](https://docs.github.com/en/pull-requests/how-tos/merge-and-close-pull-requests/troubleshooting-required-status-checks),
-so concurrently finishing runs cannot erase a fourth occurrence. History/API
-errors keep accounting red or pending. The tracker becomes active when its
-workflow reaches the default branch; a stacked preview still exercises the
-read-only gate and complete synthetic runner/policy regressions.
+A source artifact/API error is shown under **Incomplete evidence** while other
+runs remain listed; only the daily job fails. Fix the artifact/API problem and
+use **Run workflow** to refresh the current window. Artifacts remain available for
+seven days, but a delayed report does not reconstruct days outside its 24-hour
+window. Reused/docs-only runs have no retry evidence; rollout's old inventory
+artifacts are ignored. Scheduled runs can be delayed by GitHub.
 
-To inspect it in GitHub, open a PR's **Checks**, select **Delivery checks**, then
-read **Flaky tests** in its summary. Open **Actions → Flaky test tracking** for
-issue-update evidence, or **Issues → Labels → flaky** for causes and run links.
-The focused `scripts/test-retry.test.ts` fixtures deliberately fail once and pass,
-fail twice, crash and trip the isolation guard without creating real flaky issues.
+**Ruleset notes:** the main ruleset requires only the **Delivery checks check
+run**. There are no flaky accounting commit statuses or additional required
+checks. Daily reporting never delays a PR or a merge, regardless of retry counts,
+reporting failures or runner queues.
+
+During rollout, old tracker statuses already attached to a PR's head SHA remain.
+If Delivery checks is green but an old Delivery checks commit status is pending
+or failed, push a new commit to the PR branch. Rerunning CI keeps that SHA and
+cannot clear its legacy status. New heads receive no accounting commit status
+once this workflow change reaches the default branch.
+
+After merge, inspect two real PRs: **Conversation → Show all checks** should show
+merge readiness as soon as Delivery checks succeeds, with no pending Delivery
+checks commit status. **Actions** should show no new **Flaky test tracking** runs
+for either PR, including cancelled CI runs. Read the test-job summaries or download
+`flaky-tests-delivery-<attempt>` for `flaky.json`; use **Daily flaky tests → Run
+workflow**, then inspect **Issues → Flaky tests** for counts and latest run links.
+The `scripts/test-retry.test.ts` fixtures exercise transient and persistent
+failures locally without creating repository issues. No World preview is needed.
 
 Release/nightly infrastructure failures retain their separate one-time automatic
 failed-job retry. Main's issue remains visible through its infrastructure retry.
@@ -536,3 +635,42 @@ The native installer matrix also runs the auto-sync runtime-status crash suite.
 It repeats source and standalone embedded-worker import, commit, acknowledgement
 and drain schedules against each target's actual SQLite. These process-crash
 checks do not establish physical power-loss durability.
+
+Validation scope scans all introduced commit messages and additions against every
+parent, batching Git reads per parent (including intermediate leaks removed before
+HEAD). Unconditional full validation enumerates the tracked test inventory without
+building the dependency graph; scoped selection still follows imports. PR code and
+closure events cancel obsolete runs; description/label events retain active proof.
+Town side workflows include the shared store/API/layout inputs as render inputs.
+
+## Test file deadlines and fixture time
+
+Every test file has a 120-second real-time deadline starting in the module loader,
+covering imported dependency evaluation, setup, cases and teardown. Only the loader
+publishes a start marker; an injected footer removes it after teardown without
+shifting source line numbers. Filesystem events wake the parent, but expiry
+rechecks the marker and its unique start token: a missed removal cannot time out a
+completed file, and a replacement keeps its own original start time. The parent
+runner owns the timer and kills a hung
+batch with exit 124, naming the file. Worker file markers use the existing
+run-owned temporary folder and are removed with it; they are not application
+storage. A stopped Jest/page clock cannot stop this deadline. The optional
+`HERDR_TEST_FILE_TIMEOUT_MS` can only lower the limit for watchdog regression
+fixtures. Test commands, selection, concurrency and retry admission are unchanged.
+Timed World invocations select one known case per process; the final invocation
+also owns unknown cases, so neither a long file nor stale timings hide coverage.
+The scheduling comparison projects this failure wrapper away, while changes to
+commands, arguments or parallelism still require all twenty serial/parallel pairs.
+
+Browser cases share one Chrome and each owns an isolated context. World summaries
+retain setup, context/Chrome, load, scene and teardown phases; the shared browser
+also reports first-frame, wait and assertion work for each context. Behaviour
+fixtures use the injected frame scheduler and light `TownRendererHandle`;
+raster, animation and native performance checks keep the production renderer.
+
+Short polling dwells are zero; native condition checks yield task turns.
+The fixed-wait allowance is four unit absence checks: two SSH retry checks against
+an isolated real-clock child, and two opt-in live core checks without a held-send
+signal. Browser allowances are zero. The allowance may only shrink. Task-turn
+condition checks are distinct from fixed dwells; native core I/O without a fixture
+notification yields to the event loop and rechecks the actual condition.

@@ -53,6 +53,7 @@ function fakeHerdr(options: {
   paths.push(path);
   const subscribeCalls: SubscribeCall[] = [];
   const deferredLists: Array<() => void> = [];
+  const lists = { count: 0 };
   const server = net.createServer((socket) => {
     sockets.add(socket);
     socket.on("close", () => sockets.delete(socket));
@@ -64,6 +65,7 @@ function fakeHerdr(options: {
       const request = JSON.parse(input.slice(0, newline));
       input = input.slice(newline + 1);
       if (request.method === "pane.list") {
+        lists.count += 1;
         const respond = () => {
           socket.write(
             `${JSON.stringify({ id: request.id, result: { panes: options.panes() } })}\n`,
@@ -100,7 +102,7 @@ function fakeHerdr(options: {
     server.once("error", reject);
     server.listen(path, resolve);
   });
-  return { path, ready, subscribeCalls, deferredLists };
+  return { path, ready, subscribeCalls, deferredLists, lists };
 }
 
 function pushStatusEvent(call: SubscribeCall, paneId: string, status: string) {
@@ -125,6 +127,38 @@ function plainPane(paneId: string) {
   return { pane_id: paneId, agent_status: "unknown" };
 }
 
+/** Timers the test fires by hand, so "nothing happens" is checked after they ran. */
+function manualScheduler() {
+  const pending: Array<{ callback: () => void; delayMs: number }> = [];
+  return {
+    schedule(callback: () => void, delayMs: number) {
+      const entry = { callback, delayMs };
+      pending.push(entry);
+      return {
+        cancel() {
+          const index = pending.indexOf(entry);
+          if (index >= 0) pending.splice(index, 1);
+        },
+      };
+    },
+    /** Fires the pending timers of this delay; all of them without one. */
+    fire(delayMs?: number) {
+      for (const entry of pending.slice()) {
+        if (delayMs !== undefined && entry.delayMs !== delayMs) continue;
+        const index = pending.indexOf(entry);
+        if (index < 0) continue;
+        pending.splice(index, 1);
+        entry.callback();
+      }
+    },
+  };
+}
+
+/** Event-loop turns, each polling the sockets, for "nothing more happens" checks. */
+async function turns(count = 50) {
+  for (let i = 0; i < count; i++) await new Promise((r) => setImmediate(r));
+}
+
 async function waitFor(
   condition: () => boolean,
   timeoutMs = 2000,
@@ -132,7 +166,7 @@ async function waitFor(
   const deadline = Date.now() + timeoutMs;
   while (Date.now() < deadline) {
     if (condition()) return;
-    await Bun.sleep(5);
+    await new Promise<void>((resolve) => setImmediate(resolve));
   }
   throw new Error("condition was not met before the timeout");
 }
@@ -276,6 +310,7 @@ test("rebuilds immediately when a pane move replaces the subscribed pane id", as
 test("ignores unrelated events and membership events that do not change the set", async () => {
   const herdr = fakeHerdr({ panes: () => [agentPane("w1:p1")] });
   await herdr.ready;
+  const scheduler = manualScheduler();
   const client = new HerdrClient(herdr.path);
   const loop = createAgentStatusSubscriptionLoop({
     ...herdrRuntimeFixture(client),
@@ -283,10 +318,12 @@ test("ignores unrelated events and membership events that do not change the set"
     retryDelayMs: 10,
     rebuildDebounceMs: 5,
     membershipPollMs: 10_000,
+    scheduler,
   });
 
   loop.start();
   await waitFor(() => herdr.subscribeCalls.length === 1);
+  const listed = herdr.lists.count;
 
   loop.handleHerdrEvent({
     event: "pane_focused",
@@ -300,7 +337,11 @@ test("ignores unrelated events and membership events that do not change the set"
     event: "pane_closed",
     data: { type: "pane_closed", pane_id: "w1:p9" },
   });
-  await Bun.sleep(100);
+  // The closed pane is a membership event: it re-lists once its debounce
+  // fires, finds the same set, and keeps the subscription.
+  scheduler.fire(5);
+  await waitFor(() => herdr.lists.count > listed);
+  await turns();
   expect(herdr.subscribeCalls.length).toBe(1);
 
   await loop.stop();
@@ -343,16 +384,19 @@ test("waits for an agent pane before subscribing", async () => {
   const herdr = fakeHerdr({ panes: () => panes });
   await herdr.ready;
   const client = new HerdrClient(herdr.path);
+  const scheduler = manualScheduler();
   const loop = createAgentStatusSubscriptionLoop({
     ...herdrRuntimeFixture(client),
     connectionId: "test",
     retryDelayMs: 10,
     rebuildDebounceMs: 5,
     membershipPollMs: 10_000,
+    scheduler,
   });
 
   loop.start();
-  await Bun.sleep(50);
+  await waitFor(() => herdr.lists.count === 1);
+  await turns();
   expect(herdr.subscribeCalls.length).toBe(0);
 
   panes = [agentPane("w1:p1")];
@@ -360,6 +404,7 @@ test("waits for an agent pane before subscribing", async () => {
     event: "pane_agent_detected",
     data: { type: "pane_agent_detected" },
   });
+  scheduler.fire(5);
   await waitFor(() => herdr.subscribeCalls.length === 1);
 
   await loop.stop();
@@ -391,12 +436,14 @@ test("honors a rebuild requested while a listing was in flight", async () => {
   const herdr = fakeHerdr({ panes: () => panes, deferLists: () => defer });
   await herdr.ready;
   const client = new HerdrClient(herdr.path);
+  const scheduler = manualScheduler();
   const loop = createAgentStatusSubscriptionLoop({
     ...herdrRuntimeFixture(client),
     connectionId: "test",
     retryDelayMs: 10,
-    rebuildDebounceMs: 0,
+    rebuildDebounceMs: 5,
     membershipPollMs: 10_000,
+    scheduler,
   });
 
   loop.start();
@@ -407,7 +454,7 @@ test("honors a rebuild requested while a listing was in flight", async () => {
     event: "pane_agent_detected",
     data: { type: "pane_agent_detected" },
   });
-  await Bun.sleep(20);
+  scheduler.fire(5);
   // The listing snapshot predates the agent, but the rebuild request must not
   // stall until the fallback poll: the loop must re-list immediately.
   defer = false;
@@ -462,12 +509,14 @@ test("stop is idempotent and closes the active subscription", async () => {
   const herdr = fakeHerdr({ panes: () => [agentPane("w1:p1")] });
   await herdr.ready;
   const client = new HerdrClient(herdr.path);
+  const scheduler = manualScheduler();
   const loop = createAgentStatusSubscriptionLoop({
     ...herdrRuntimeFixture(client),
     connectionId: "test",
     retryDelayMs: 10,
     rebuildDebounceMs: 5,
     membershipPollMs: 10_000,
+    scheduler,
   });
 
   loop.start();
@@ -482,6 +531,8 @@ test("stop is idempotent and closes the active subscription", async () => {
   await waitFor(() => activeClosed);
 
   const calls = herdr.subscribeCalls.length;
-  await Bun.sleep(50);
+  // A retry or poll that outlived the stop would act when its timer fires.
+  scheduler.fire();
+  await turns();
   expect(herdr.subscribeCalls.length).toBe(calls);
 });

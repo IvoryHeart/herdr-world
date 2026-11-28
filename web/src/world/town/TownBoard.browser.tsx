@@ -1,3 +1,4 @@
+import { clock as fixtureTime } from "../testing/installTestClock";
 import { createRoot } from "react-dom/client";
 import { bridge } from "../../api";
 import type { UsageLimit, WorldUsageSnapshot } from "../../../../shared/usage";
@@ -129,7 +130,7 @@ async function waitFor(condition: () => boolean, message: string) {
   const until = performance.now() + 10_000;
   while (!condition()) {
     if (performance.now() > until) throw new Error(message);
-    await new Promise((resolve) => setTimeout(resolve, 20));
+    await fixtureTime.advance(20);
   }
 }
 
@@ -232,7 +233,7 @@ async function checkPopover() {
       relatedTarget: document.body,
     }),
   );
-  await new Promise((done) => setTimeout(done, 400));
+  await fixtureTime.advance(400);
   await expect(true, "a click after hovering closed the board");
 }
 

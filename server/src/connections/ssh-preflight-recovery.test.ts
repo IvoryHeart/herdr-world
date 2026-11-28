@@ -32,7 +32,7 @@ async function waitUntil(condition: () => boolean) {
   const deadline = Date.now() + 2_000;
   while (!condition()) {
     if (Date.now() >= deadline) throw new Error("preflight fixture deadline");
-    await Bun.sleep(1);
+    await new Promise<void>((resolve) => setImmediate(resolve));
   }
 }
 

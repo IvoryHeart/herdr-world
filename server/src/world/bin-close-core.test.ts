@@ -5,6 +5,7 @@ import { join } from "node:path";
 import type { BinEntry, BinOutcome } from "../../../shared/bin";
 import { planCoreKill } from "../herdr-core/operations";
 import { coreWorld, until } from "../herdr-core/testing/core-world";
+import { notifyCoreFixtureChange } from "../herdr-core/testing/events";
 import {
   openWorldLedger,
   type WorldLedgerStorage,
@@ -59,7 +60,7 @@ async function setup() {
     die_with_parent: false,
     name: "server",
   });
-  await w.settle();
+  await w.synchronize();
   const root = mkdtempSync(join(tmpdir(), "world-bin-core-"));
   roots.push(root);
   const storage = await openWorldLedger(
@@ -82,7 +83,10 @@ async function setup() {
     hasCoreConnection: (id) => id === "box",
     coreLease: (id) =>
       id === "box" ? w.core.manager.readyRuntimeLease(id) : null,
-    settle: (id, outcome) => outcomes.push({ id, ...outcome }),
+    settle: (id, outcome) => {
+      outcomes.push({ id, ...outcome });
+      notifyCoreFixtureChange();
+    },
     log: () => {},
     retryDelay: () => 20,
   });
@@ -163,7 +167,7 @@ describe("the bin closes core agents by a confirmed native kill", () => {
     const { w, closer, outcomes, entry, lead, storage } = await setup();
     const one = entry();
     w.fake.create({ parent: lead, die_with_parent: true, name: "late" });
-    await w.settle();
+    await w.synchronize();
     await closer.commit([one]);
     await until(() => outcomes.length === 1);
     expect(outcomes[0]).toMatchObject({ id: one.id, result: "refused" });
@@ -184,11 +188,11 @@ describe("the bin closes core agents by a confirmed native kill", () => {
       name: "shell",
       argv: ["/bin/sh"],
     });
-    await w.settle();
+    await w.synchronize();
     const one = entry(await planCoreKill(w.lease(), [lead]));
     // Its kept replacement is a shell with the same pid: a new occupant.
     w.fake.replaceWithShell(shell, { reusePid: true });
-    await w.settle();
+    await w.synchronize();
     await closer.commit([one]);
     await until(() => outcomes.length === 1);
     expect(outcomes[0]).toMatchObject({ id: one.id, result: "refused" });
@@ -201,7 +205,7 @@ describe("the bin closes core agents by a confirmed native kill", () => {
     const { w, closer, outcomes, entry, lead } = await setup();
     const one = entry();
     w.fake.finish(lead);
-    await w.settle();
+    await w.synchronize();
     await closer.commit([one]);
     await until(() => outcomes.length === 1);
     expect(outcomes[0]).toMatchObject({ id: one.id, result: "gone" });

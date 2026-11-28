@@ -23,7 +23,7 @@ const layout = (width: number, height: number): PaneLayout => ({
   ],
 });
 const xterm = { cols: 13, rows: 1 };
-const settle = () => new Promise((resolve) => setTimeout(resolve, 0));
+const flushTasks = () => new Promise((resolve) => setTimeout(resolve, 0));
 
 /** A client whose pane.layout answers come from `answers`, in order. */
 let connections = 0;
@@ -70,7 +70,7 @@ test("a hidden terminal attaches at the pane's size from one read", async () => 
   const one = client([Promise.resolve({ layout: layout(120, 40) })]);
   const view = hiddenView(one.value);
   expect(view.resolve()).toBeNull();
-  await settle();
+  await flushTasks();
   expect(view.retries()).toBe(1);
   expect(view.resolve()).toMatchObject({ cols: 119, rows: 40 });
   expect(one.reads).toHaveLength(1);
@@ -80,7 +80,7 @@ test("a failed read falls back to the xterm size, or the default for a squeeze",
   const one = client([Promise.reject(new Error("pane.layout failed"))]);
   const view = hiddenView(one.value);
   view.resolve();
-  await settle();
+  await flushTasks();
   // The unfitted xterm (13×1) is itself a squeeze.
   expect(view.resolve()).toMatchObject(TERMINAL_DEFAULT_SIZE);
 });
@@ -90,12 +90,12 @@ test("after a reconnect the new client reads; the old failure is no fallback", a
   const view = hiddenView(old.value);
   view.resolve();
   old.retire();
-  await settle();
+  await flushTasks();
   expect(view.retries()).toBe(0);
   const replacement = client([Promise.resolve({ layout: layout(160, 45) })]);
   view.refs.currentClientRef.current = replacement.value;
   expect(view.resolve()).toBeNull();
-  await settle();
+  await flushTasks();
   expect(view.resolve()).toMatchObject({ cols: 159, rows: 45 });
   expect(replacement.reads).toHaveLength(1);
 });
@@ -110,7 +110,7 @@ test("a new client does not wait on the old client's pending read", async () => 
   expect(view.resolve()).toBeNull();
   expect(replacement.reads).toHaveLength(1);
   held.resolve({ layout: layout(80, 24) });
-  await settle();
+  await flushTasks();
   // Only the replacement's read retries, and only its layout is used.
   expect(view.retries()).toBe(1);
   expect(view.resolve()).toMatchObject({ cols: 159, rows: 45 });
@@ -124,11 +124,11 @@ test("a read that settles while another terminal is wanted is not reused", async
   const view = hiddenView(one.value);
   view.resolve();
   view.refs.desiredTerminalRef.current = "other";
-  await settle();
+  await flushTasks();
   expect(view.retries()).toBe(0);
   view.refs.desiredTerminalRef.current = "terminal";
   expect(view.resolve()).toBeNull();
-  await settle();
+  await flushTasks();
   expect(view.resolve()).toMatchObject({ cols: 119, rows: 40 });
   expect(one.reads).toHaveLength(2);
 });
@@ -174,7 +174,7 @@ test("a squeezed read also falls back to the good size", async () => {
   const one = client([Promise.resolve({ layout: layout(13, 1) })]);
   const view = hiddenView(one.value);
   view.resolve();
-  await settle();
+  await flushTasks();
   expect(view.resolve()).toMatchObject(TERMINAL_DEFAULT_SIZE);
 });
 
@@ -289,7 +289,7 @@ test("a tiny shown fit is never the fallback for a failed read", async () => {
   });
   view.size.hide();
   view.resolve();
-  await settle();
+  await flushTasks();
   expect(view.resolve()).toMatchObject(TERMINAL_DEFAULT_SIZE);
 });
 
@@ -301,7 +301,7 @@ test("a read that settles after the view is gone neither retries nor stays", asy
   view.resolve();
   view.refs.desiredTerminalRef.current = null; // unmounted
   held.resolve({ layout: layout(120, 40) });
-  await settle();
+  await flushTasks();
   expect(view.retries()).toBe(0);
   view.refs.desiredTerminalRef.current = "terminal";
   expect(view.resolve()).toBeNull(); // a fresh read, not the settled one
@@ -319,7 +319,7 @@ test("after a failed read, a shown split pane's real size is reused", async () =
   view.size.hide();
   view.refs.paneLayoutRef.current = null;
   expect(view.resolve()).toBeNull();
-  await settle();
+  await flushTasks();
   expect(view.resolve()).toMatchObject({ cols: 25, rows: 38 });
 });
 
@@ -338,7 +338,7 @@ test("a valid layout read wins over the remembered pane size", async () => {
   const one = client([Promise.resolve({ layout: layout(120, 40) })]);
   const view = seenSplitPane(one.value);
   view.resolve();
-  await settle();
+  await flushTasks();
   expect(view.resolve()).toMatchObject({ cols: 119, rows: 40 });
 });
 
@@ -348,7 +348,7 @@ test("a remembered pane size is never reused by a replacement runtime", async ()
   const after = client([Promise.reject(new Error("pane.layout failed"))], 2);
   const view = hiddenView(after.value);
   view.resolve();
-  await settle();
+  await flushTasks();
   // No sample for this runtime: the existing behaviour (a squeezed xterm).
   expect(view.resolve()).toMatchObject(TERMINAL_DEFAULT_SIZE);
 });
@@ -359,7 +359,7 @@ test("a remembered pane size is never reused for another pane", async () => {
   view.refs.paneIdRef.current = "pane-2";
   view.refs.desiredTerminalRef.current = "terminal-2";
   expect(view.size.resolve("terminal-2", null, xterm)).toBeNull();
-  await settle();
+  await flushTasks();
   expect(view.size.resolve("terminal-2", null, xterm)).toMatchObject(
     TERMINAL_DEFAULT_SIZE,
   );
@@ -374,7 +374,7 @@ test("remembered pane sizes are bounded: the oldest closed panes are forgotten",
     other.size.fitted({ cols: 96, rows: 27 });
   }
   first.resolve();
-  await settle();
+  await flushTasks();
   // The attach is never withheld: with no sample left, the existing default.
   expect(first.resolve()).toMatchObject(TERMINAL_DEFAULT_SIZE);
 });

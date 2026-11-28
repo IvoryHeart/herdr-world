@@ -1,3 +1,4 @@
+import { clock } from "../testing/installTestClock";
 import { openLayerCount } from "../../layerStack";
 import type { TownPlaceKey } from "./townPlaces";
 
@@ -231,7 +232,7 @@ export async function checkTownPlaces(
         );
       pointer("pointerup", to);
       // A pan clamped at the town's edge draws nothing new.
-      await new Promise((resolve) => setTimeout(resolve, 250));
+      await clock.advance(250);
       await waitFor(() => !town().flying, "the camera kept flying");
     }
   };
@@ -341,7 +342,7 @@ export async function checkTownPlaces(
     "the warehouse sign did not show GitHub signed out",
   );
   // A second press on the same spot this soon would be a double tap (zoom).
-  await new Promise((resolve) => setTimeout(resolve, 400));
+  await clock.advance(400);
   await press("warehouse", "integrations");
   const [first] = frames;
   for (const { key, box } of frames)

@@ -1,3 +1,4 @@
+import { clock } from "../../clock";
 /**
  * Agents Town has shown walking in at Apartments' door (TownBusLayer), so its
  * sign counts each as it goes in. The service makes it a resident when the
@@ -13,7 +14,7 @@ export type TownArrival = {
   id: string;
   connection_id: string;
   terminal_id: string;
-  /** When it went in (performance.now()). */
+  /** When it went in (clock.monotonic()). */
   at: number;
   /** A ?townBusDemo rider: never a resident, so it counts until reload. */
   demo?: boolean;
@@ -95,15 +96,15 @@ export function townArrivalNextExpiry(
  */
 export function useTownApartmentsArrivals() {
   const pending = useSyncExternalStore(subscribe, read, read);
-  const [now, setNow] = useState(() => performance.now());
+  const [now, setNow] = useState(() => clock.monotonic());
   useEffect(() => {
     const next = townArrivalNextExpiry(pending, now);
     if (next === undefined) return;
-    const timer = setTimeout(
-      () => setNow(performance.now()),
-      Math.max(0, next - performance.now() + 20),
+    const timer = clock.setTimeout(
+      () => setNow(clock.monotonic()),
+      Math.max(0, next - clock.monotonic() + 20),
     );
-    return () => clearTimeout(timer);
+    return () => clock.clearTimeout(timer);
   }, [pending, now]);
   return { pending, now };
 }

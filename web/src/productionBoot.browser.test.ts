@@ -1,3 +1,8 @@
+import { sharedBrowserBuild } from "./world/testing/sharedBrowserBuild";
+import {
+  launchTestBrowser,
+  type TestBrowser,
+} from "../../scripts/testing/browser-session";
 import { expect, test } from "bun:test";
 import { mkdtemp, readFile, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
@@ -21,7 +26,7 @@ test.skipIf(!chrome)(
   async () => {
     const directory = await mkdtemp(join(tmpdir(), "production-boot-"));
     const assets = join(directory, "public");
-    let browser: ReturnType<typeof Bun.spawn> | undefined;
+    let browser: TestBrowser | undefined;
     let driver: InputDriver | undefined;
     let suffix = "Before resume";
     let servedNewBuild = false;
@@ -96,7 +101,7 @@ test.skipIf(!chrome)(
       });
       // A browser driver calls the real worker preparation function. It does not
       // replace the application entry or mock serviceWorker/visibility APIs.
-      const helper = await Bun.build({
+      const helper = await sharedBrowserBuild(import.meta.path, {
         entrypoints: [join(root, "web/src/taskNotifications.ts")],
         target: "browser",
       });
@@ -106,7 +111,7 @@ test.skipIf(!chrome)(
         await helper.outputs[0]!.text(),
       );
       const log = join(directory, "chrome.log");
-      browser = Bun.spawn(
+      browser = await launchTestBrowser(
         [
           chrome!,
           "--headless=new",
@@ -122,7 +127,9 @@ test.skipIf(!chrome)(
           "about:blank",
         ],
         { stdout: "ignore", stderr: Bun.file(log) },
+        { focusEmulation: false },
       );
+      await browser.start();
       const port = await waitForChromePort(
         browser,
         join(directory, "profile"),
@@ -186,6 +193,7 @@ test.skipIf(!chrome)(
       );
       const background = (await driver.call("Target.createTarget", {
         url: "about:blank",
+        browserContextId: browser.contextId,
       })) as { targetId: string };
       await driver.call("Target.activateTarget", {
         targetId: background.targetId,

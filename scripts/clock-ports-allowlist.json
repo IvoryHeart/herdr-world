@@ -1,0 +1,1784 @@
+{
+  "version": 1,
+  "files": {
+    "server/src/agent/agent-activity.ts": {
+      "counts": {
+        "setTimeout": 1
+      },
+      "reason": "Legacy native time; migrate this owner to the injected clock/scheduler port."
+    },
+    "server/src/agent/agent-claims.ts": {
+      "counts": {
+        "Date.now": 1
+      },
+      "reason": "Legacy native time; migrate this owner to the injected clock/scheduler port."
+    },
+    "server/src/agent/codex-app-server.ts": {
+      "counts": {
+        "setTimeout": 1
+      },
+      "reason": "Legacy native time; migrate this owner to the injected clock/scheduler port."
+    },
+    "server/src/agent/codex-daemon-binding.ts": {
+      "counts": {
+        "Date.now": 1
+      },
+      "reason": "Legacy native time; migrate this owner to the injected clock/scheduler port."
+    },
+    "server/src/agent/codex-discovery-cache.ts": {
+      "counts": {
+        "Date.now": 1
+      },
+      "reason": "Legacy native time; migrate this owner to the injected clock/scheduler port."
+    },
+    "server/src/agent/codex-session-link.ts": {
+      "counts": {
+        "Date.now": 3
+      },
+      "reason": "Legacy native time; migrate this owner to the injected clock/scheduler port."
+    },
+    "server/src/agent/conversation-binding.ts": {
+      "counts": {
+        "Date.now": 2
+      },
+      "reason": "Legacy native time; migrate this owner to the injected clock/scheduler port."
+    },
+    "server/src/agent/conversation-delivery.ts": {
+      "counts": {
+        "Date.now": 4
+      },
+      "reason": "Legacy native time; migrate this owner to the injected clock/scheduler port."
+    },
+    "server/src/agent/conversation-watch.ts": {
+      "counts": {
+        "setTimeout": 1
+      },
+      "reason": "Legacy native time; migrate this owner to the injected clock/scheduler port."
+    },
+    "server/src/agent/harness-readiness.ts": {
+      "counts": {
+        "Date.now": 2
+      },
+      "reason": "Legacy native time; migrate this owner to the injected clock/scheduler port."
+    },
+    "server/src/agent/herdr-conversation.ts": {
+      "counts": {
+        "Date.now": 6,
+        "setTimeout": 1
+      },
+      "reason": "Legacy native time; migrate this owner to the injected clock/scheduler port."
+    },
+    "server/src/agent/launch.ts": {
+      "counts": {
+        "Date.now": 1,
+        "setTimeout": 1
+      },
+      "reason": "Legacy native time; migrate this owner to the injected clock/scheduler port."
+    },
+    "server/src/agent/menu-keys.ts": {
+      "counts": {
+        "setTimeout": 1
+      },
+      "reason": "Legacy native time; migrate this owner to the injected clock/scheduler port."
+    },
+    "server/src/agent/profile-store.ts": {
+      "counts": {
+        "Date.now": 1
+      },
+      "reason": "Legacy native time; migrate this owner to the injected clock/scheduler port."
+    },
+    "server/src/agent/session-file-access.ts": {
+      "counts": {
+        "Date.now": 2
+      },
+      "reason": "Legacy native time; migrate this owner to the injected clock/scheduler port."
+    },
+    "server/src/agent/session-projection-cache.ts": {
+      "counts": {
+        "Date.now": 1
+      },
+      "reason": "Legacy native time; migrate this owner to the injected clock/scheduler port."
+    },
+    "server/src/agent/session-resolver.ts": {
+      "counts": {
+        "Date.now": 2
+      },
+      "reason": "Legacy native time; migrate this owner to the injected clock/scheduler port."
+    },
+    "server/src/agent/terminal-settings.ts": {
+      "counts": {
+        "Date.now": 1
+      },
+      "reason": "Legacy native time; migrate this owner to the injected clock/scheduler port."
+    },
+    "server/src/agent/trust-prompt.ts": {
+      "counts": {
+        "setTimeout": 1
+      },
+      "reason": "Legacy native time; migrate this owner to the injected clock/scheduler port."
+    },
+    "server/src/agent/worktree.ts": {
+      "counts": {
+        "new Date": 1
+      },
+      "reason": "Legacy native time; migrate this owner to the injected clock/scheduler port."
+    },
+    "server/src/assistant/actions.ts": {
+      "counts": {
+        "Date.now": 2,
+        "setTimeout": 1
+      },
+      "reason": "Legacy native time; migrate this owner to the injected clock/scheduler port."
+    },
+    "server/src/assistant/assistant-state.ts": {
+      "counts": {
+        "new Date": 1
+      },
+      "reason": "Legacy native time; migrate this owner to the injected clock/scheduler port."
+    },
+    "server/src/assistant/context.ts": {
+      "counts": {
+        "new Date": 1
+      },
+      "reason": "Legacy native time; migrate this owner to the injected clock/scheduler port."
+    },
+    "server/src/assistant/durable-storage.ts": {
+      "counts": {
+        "Date.now": 2,
+        "setTimeout": 1
+      },
+      "reason": "Legacy native time; migrate this owner to the injected clock/scheduler port."
+    },
+    "server/src/assistant/service.ts": {
+      "counts": {
+        "setTimeout": 1,
+        "new Date": 4
+      },
+      "reason": "Legacy native time; migrate this owner to the injected clock/scheduler port."
+    },
+    "server/src/assistant/tasks.ts": {
+      "counts": {
+        "new Date": 1,
+        "Date.now": 11,
+        "setTimeout": 1
+      },
+      "reason": "Legacy native time; migrate this owner to the injected clock/scheduler port."
+    },
+    "server/src/bridge/endpoint-client.ts": {
+      "counts": {
+        "setTimeout": 2
+      },
+      "reason": "Legacy native time; migrate this owner to the injected clock/scheduler port."
+    },
+    "server/src/bridge/endpoint-creation.ts": {
+      "counts": {
+        "Date.now": 3,
+        "setTimeout": 1
+      },
+      "reason": "Legacy native time; migrate this owner to the injected clock/scheduler port."
+    },
+    "server/src/bridge/endpoint-terminal-session.ts": {
+      "counts": {
+        "setTimeout": 4
+      },
+      "reason": "Legacy native time; migrate this owner to the injected clock/scheduler port."
+    },
+    "server/src/bridge/herdr-client.ts": {
+      "counts": {
+        "Date.now": 1,
+        "performance.now": 4,
+        "setTimeout": 2
+      },
+      "reason": "Legacy native time; migrate this owner to the injected clock/scheduler port."
+    },
+    "server/src/bridge/ssh-forward.ts": {
+      "counts": {
+        "setTimeout": 3
+      },
+      "reason": "Legacy native time; migrate this owner to the injected clock/scheduler port."
+    },
+    "server/src/bridge/ssh-master.ts": {
+      "counts": {
+        "setTimeout": 4
+      },
+      "reason": "Legacy native time; migrate this owner to the injected clock/scheduler port."
+    },
+    "server/src/bridge/ssh-metrics.ts": {
+      "counts": {
+        "performance.now": 1
+      },
+      "reason": "Legacy native time; migrate this owner to the injected clock/scheduler port."
+    },
+    "server/src/bridge/ssh-sessions.ts": {
+      "counts": {
+        "setTimeout": 2,
+        "Date.now": 4
+      },
+      "reason": "Legacy native time; migrate this owner to the injected clock/scheduler port."
+    },
+    "server/src/bridge/ssh-tunnel.ts": {
+      "counts": {
+        "setTimeout": 2,
+        "Date.now": 1
+      },
+      "reason": "Legacy native time; migrate this owner to the injected clock/scheduler port."
+    },
+    "server/src/bridge/ssh-windows.ts": {
+      "counts": {
+        "setTimeout": 2
+      },
+      "reason": "Legacy native time; migrate this owner to the injected clock/scheduler port."
+    },
+    "server/src/bridge/terminal-bridge.ts": {
+      "counts": {
+        "setTimeout": 4,
+        "Date.now": 2
+      },
+      "reason": "Legacy native time; migrate this owner to the injected clock/scheduler port."
+    },
+    "server/src/bridge/terminal-echo.ts": {
+      "counts": {
+        "performance.now": 3
+      },
+      "reason": "Legacy native time; migrate this owner to the injected clock/scheduler port."
+    },
+    "server/src/bridge/terminal-sessions.ts": {
+      "counts": {
+        "setTimeout": 1,
+        "Date.now": 2
+      },
+      "reason": "Legacy native time; migrate this owner to the injected clock/scheduler port."
+    },
+    "server/src/bridge/thin-client.ts": {
+      "counts": {
+        "setTimeout": 1
+      },
+      "reason": "Legacy native time; migrate this owner to the injected clock/scheduler port."
+    },
+    "server/src/bridge/world-snapshot-admission.ts": {
+      "counts": {
+        "setTimeout": 1
+      },
+      "reason": "Legacy native time; migrate this owner to the injected clock/scheduler port."
+    },
+    "server/src/bridge/world-snapshot-reply.ts": {
+      "counts": {
+        "setTimeout": 1
+      },
+      "reason": "Legacy native time; migrate this owner to the injected clock/scheduler port."
+    },
+    "server/src/cli/doctor.ts": {
+      "counts": {
+        "new Date": 1
+      },
+      "reason": "Legacy native time; migrate this owner to the injected clock/scheduler port."
+    },
+    "server/src/cli/world.ts": {
+      "counts": {
+        "Date.now": 3
+      },
+      "reason": "Legacy native time; migrate this owner to the injected clock/scheduler port."
+    },
+    "server/src/config/homebrew-handoff.ts": {
+      "counts": {
+        "setTimeout": 1,
+        "Date.now": 1
+      },
+      "reason": "Legacy native time; migrate this owner to the injected clock/scheduler port."
+    },
+    "server/src/config/instance-lock.ts": {
+      "counts": {
+        "performance.now": 2
+      },
+      "reason": "Legacy native time; migrate this owner to the injected clock/scheduler port."
+    },
+    "server/src/config/service-manager.ts": {
+      "counts": {
+        "Date.now": 2
+      },
+      "reason": "Legacy native time; migrate this owner to the injected clock/scheduler port."
+    },
+    "server/src/config/session-secret.ts": {
+      "counts": {
+        "performance.now": 2
+      },
+      "reason": "Legacy native time; migrate this owner to the injected clock/scheduler port."
+    },
+    "server/src/connections/shutdown.ts": {
+      "counts": {
+        "setTimeout": 1
+      },
+      "reason": "Legacy native time; migrate this owner to the injected clock/scheduler port."
+    },
+    "server/src/connections/subscription-loop.ts": {
+      "counts": {
+        "setTimeout": 1
+      },
+      "reason": "Legacy native time; migrate this owner to the injected clock/scheduler port."
+    },
+    "server/src/features/desk/rpc.ts": {
+      "counts": {
+        "Date.now": 3
+      },
+      "reason": "Legacy native time; migrate this owner to the injected clock/scheduler port."
+    },
+    "server/src/features/presence/clock.ts": {
+      "counts": {
+        "Date.now": 1
+      },
+      "reason": "Legacy native time; migrate this owner to the injected clock/scheduler port."
+    },
+    "server/src/herdr-core/agent-sessions.ts": {
+      "counts": {
+        "Date.now": 6,
+        "setTimeout": 1,
+        "new Date": 1
+      },
+      "reason": "Legacy native time; migrate this owner to the injected clock/scheduler port."
+    },
+    "server/src/herdr-core/client.ts": {
+      "counts": {
+        "setTimeout": 2
+      },
+      "reason": "Legacy native time; migrate this owner to the injected clock/scheduler port."
+    },
+    "server/src/herdr-core/fixture.ts": {
+      "counts": {
+        "setTimeout": 1,
+        "setInterval": 1,
+        "new Date": 1
+      },
+      "reason": "Legacy native time; migrate this owner to the injected clock/scheduler port."
+    },
+    "server/src/herdr-core/float-shell.ts": {
+      "counts": {
+        "setTimeout": 2,
+        "Date.now": 1
+      },
+      "reason": "Legacy native time; migrate this owner to the injected clock/scheduler port."
+    },
+    "server/src/herdr-core/install.ts": {
+      "counts": {
+        "setTimeout": 2
+      },
+      "reason": "Legacy native time; migrate this owner to the injected clock/scheduler port."
+    },
+    "server/src/herdr-core/launch-brief.ts": {
+      "counts": {
+        "setTimeout": 1
+      },
+      "reason": "Legacy native time; migrate this owner to the injected clock/scheduler port."
+    },
+    "server/src/herdr-core/runtime.ts": {
+      "counts": {
+        "Date.now": 1,
+        "setTimeout": 3,
+        "setInterval": 1
+      },
+      "reason": "Legacy native time; migrate this owner to the injected clock/scheduler port."
+    },
+    "server/src/herdr-core/topology.ts": {
+      "counts": {
+        "Date.now": 1
+      },
+      "reason": "Legacy native time; migrate this owner to the injected clock/scheduler port."
+    },
+    "server/src/herdr-core/windows.ts": {
+      "counts": {
+        "setTimeout": 2
+      },
+      "reason": "Legacy native time; migrate this owner to the injected clock/scheduler port."
+    },
+    "server/src/herdr/task-summary.ts": {
+      "counts": {
+        "Date.now": 1
+      },
+      "reason": "Legacy native time; migrate this owner to the injected clock/scheduler port."
+    },
+    "server/src/herdr/upgrade.ts": {
+      "counts": {
+        "setTimeout": 1,
+        "Date.now": 2
+      },
+      "reason": "Legacy native time; migrate this owner to the injected clock/scheduler port."
+    },
+    "server/src/http/auth.ts": {
+      "counts": {
+        "Date.now": 12
+      },
+      "reason": "Legacy native time; migrate this owner to the injected clock/scheduler port."
+    },
+    "server/src/http/herdr-info.ts": {
+      "counts": {
+        "Date.now": 1
+      },
+      "reason": "Legacy native time; migrate this owner to the injected clock/scheduler port."
+    },
+    "server/src/http/image-upload.ts": {
+      "counts": {
+        "Date.now": 1
+      },
+      "reason": "Legacy native time; migrate this owner to the injected clock/scheduler port."
+    },
+    "server/src/http/terminal-upload.ts": {
+      "counts": {
+        "Date.now": 1,
+        "setInterval": 1
+      },
+      "reason": "Legacy native time; migrate this owner to the injected clock/scheduler port."
+    },
+    "server/src/http/update.ts": {
+      "counts": {
+        "setTimeout": 1,
+        "Date.now": 2
+      },
+      "reason": "Legacy native time; migrate this owner to the injected clock/scheduler port."
+    },
+    "server/src/ide/hosts.ts": {
+      "counts": {
+        "setTimeout": 1
+      },
+      "reason": "Legacy native time; migrate this owner to the injected clock/scheduler port."
+    },
+    "server/src/ide/instances.ts": {
+      "counts": {
+        "new Date": 1
+      },
+      "reason": "Legacy native time; migrate this owner to the injected clock/scheduler port."
+    },
+    "server/src/ide/providers.ts": {
+      "counts": {
+        "setTimeout": 1
+      },
+      "reason": "Legacy native time; migrate this owner to the injected clock/scheduler port."
+    },
+    "server/src/ide/service.ts": {
+      "counts": {
+        "new Date": 1
+      },
+      "reason": "Legacy native time; migrate this owner to the injected clock/scheduler port."
+    },
+    "server/src/index.ts": {
+      "counts": {
+        "setTimeout": 1
+      },
+      "reason": "Legacy native time; migrate this owner to the injected clock/scheduler port."
+    },
+    "server/src/memory/service.ts": {
+      "counts": {
+        "Date.now": 1
+      },
+      "reason": "Legacy native time; migrate this owner to the injected clock/scheduler port."
+    },
+    "server/src/notifications/herdr-notification-listener.ts": {
+      "counts": {
+        "setTimeout": 1
+      },
+      "reason": "Legacy native time; migrate this owner to the injected clock/scheduler port."
+    },
+    "server/src/probe-endpoint.ts": {
+      "counts": {
+        "setTimeout": 1
+      },
+      "reason": "Legacy native time; migrate this owner to the injected clock/scheduler port."
+    },
+    "server/src/probe-thin.ts": {
+      "counts": {
+        "setTimeout": 2
+      },
+      "reason": "Legacy native time; migrate this owner to the injected clock/scheduler port."
+    },
+    "server/src/rpc/agent-move.ts": {
+      "counts": {
+        "Date.now": 1
+      },
+      "reason": "Legacy native time; migrate this owner to the injected clock/scheduler port."
+    },
+    "server/src/service/world-commands.ts": {
+      "counts": {
+        "setTimeout": 1
+      },
+      "reason": "Legacy native time; migrate this owner to the injected clock/scheduler port."
+    },
+    "server/src/shipyard/github.ts": {
+      "counts": {
+        "Date.now": 1
+      },
+      "reason": "Legacy native time; migrate this owner to the injected clock/scheduler port."
+    },
+    "server/src/shipyard/projects.ts": {
+      "counts": {
+        "Date.now": 1,
+        "setTimeout": 1
+      },
+      "reason": "Legacy native time; migrate this owner to the injected clock/scheduler port."
+    },
+    "server/src/shipyard/service.ts": {
+      "counts": {
+        "Date.now": 1,
+        "setTimeout": 1
+      },
+      "reason": "Legacy native time; migrate this owner to the injected clock/scheduler port."
+    },
+    "server/src/sources/github.ts": {
+      "counts": {
+        "Date.now": 1
+      },
+      "reason": "Legacy native time; migrate this owner to the injected clock/scheduler port."
+    },
+    "server/src/sources/links.ts": {
+      "counts": {
+        "Date.now": 1
+      },
+      "reason": "Legacy native time; migrate this owner to the injected clock/scheduler port."
+    },
+    "server/src/sources/service.ts": {
+      "counts": {
+        "Date.now": 2,
+        "setTimeout": 1
+      },
+      "reason": "Legacy native time; migrate this owner to the injected clock/scheduler port."
+    },
+    "server/src/usage/collector.ts": {
+      "counts": {
+        "performance.now": 1
+      },
+      "reason": "Legacy native time; migrate this owner to the injected clock/scheduler port."
+    },
+    "server/src/usage/lifetime.ts": {
+      "counts": {
+        "setTimeout": 1
+      },
+      "reason": "Legacy native time; migrate this owner to the injected clock/scheduler port."
+    },
+    "server/src/utils/cpu-profile.ts": {
+      "counts": {
+        "new Date": 1,
+        "performance.now": 2,
+        "setTimeout": 1
+      },
+      "reason": "Legacy native time; migrate this owner to the injected clock/scheduler port."
+    },
+    "server/src/utils/logger.ts": {
+      "counts": {
+        "new Date": 2,
+        "Date.now": 1
+      },
+      "reason": "Legacy native time; migrate this owner to the injected clock/scheduler port."
+    },
+    "server/src/utils/process-utils.ts": {
+      "counts": {
+        "setTimeout": 1
+      },
+      "reason": "Legacy native time; migrate this owner to the injected clock/scheduler port."
+    },
+    "server/src/weather/service.ts": {
+      "counts": {
+        "Date.now": 1,
+        "setTimeout": 1
+      },
+      "reason": "Legacy native time; migrate this owner to the injected clock/scheduler port."
+    },
+    "server/src/workspace/files.ts": {
+      "counts": {
+        "new Date": 2
+      },
+      "reason": "Legacy native time; migrate this owner to the injected clock/scheduler port."
+    },
+    "server/src/workspace/git-ignore.ts": {
+      "counts": {
+        "Date.now": 2
+      },
+      "reason": "Legacy native time; migrate this owner to the injected clock/scheduler port."
+    },
+    "server/src/workspace/last-step-turns.ts": {
+      "counts": {
+        "setTimeout": 1
+      },
+      "reason": "Legacy native time; migrate this owner to the injected clock/scheduler port."
+    },
+    "server/src/workspace/process.ts": {
+      "counts": {
+        "setTimeout": 2
+      },
+      "reason": "Legacy native time; migrate this owner to the injected clock/scheduler port."
+    },
+    "server/src/workspace/pull-request.ts": {
+      "counts": {
+        "new Date": 2,
+        "Date.now": 2
+      },
+      "reason": "Legacy native time; migrate this owner to the injected clock/scheduler port."
+    },
+    "server/src/workspace/search.ts": {
+      "counts": {
+        "Date.now": 3,
+        "setTimeout": 1
+      },
+      "reason": "Legacy native time; migrate this owner to the injected clock/scheduler port."
+    },
+    "server/src/workspace/status.ts": {
+      "counts": {
+        "Date.now": 2,
+        "setTimeout": 1
+      },
+      "reason": "Legacy native time; migrate this owner to the injected clock/scheduler port."
+    },
+    "server/src/workspace/windows-focus.ts": {
+      "counts": {
+        "performance.now": 2
+      },
+      "reason": "Legacy native time; migrate this owner to the injected clock/scheduler port."
+    },
+    "server/src/worktree/remove.ts": {
+      "counts": {
+        "setTimeout": 2,
+        "new Date": 1
+      },
+      "reason": "Legacy native time; migrate this owner to the injected clock/scheduler port."
+    },
+    "server/src/world/agent-move-sides.ts": {
+      "counts": {
+        "setTimeout": 1
+      },
+      "reason": "Legacy native time; migrate this owner to the injected clock/scheduler port."
+    },
+    "server/src/world/agent-move.ts": {
+      "counts": {
+        "Date.now": 1
+      },
+      "reason": "Legacy native time; migrate this owner to the injected clock/scheduler port."
+    },
+    "server/src/world/apartments.ts": {
+      "counts": {
+        "setTimeout": 2
+      },
+      "reason": "Legacy native time; migrate this owner to the injected clock/scheduler port."
+    },
+    "server/src/world/board-store.ts": {
+      "counts": {
+        "Date.now": 2
+      },
+      "reason": "Legacy native time; migrate this owner to the injected clock/scheduler port."
+    },
+    "server/src/world/move-settle.ts": {
+      "counts": {
+        "Date.now": 1
+      },
+      "reason": "Legacy native time; migrate this owner to the injected clock/scheduler port."
+    },
+    "server/src/world/observability.ts": {
+      "counts": {
+        "Date.now": 1
+      },
+      "reason": "Legacy native time; migrate this owner to the injected clock/scheduler port."
+    },
+    "server/src/world/relations.ts": {
+      "counts": {
+        "Date.now": 1
+      },
+      "reason": "Legacy native time; migrate this owner to the injected clock/scheduler port."
+    },
+    "server/src/world/world-cli-asks.ts": {
+      "counts": {
+        "setTimeout": 1
+      },
+      "reason": "Legacy native time; migrate this owner to the injected clock/scheduler port."
+    },
+    "server/src/world/world-cli-service.ts": {
+      "counts": {
+        "performance.now": 3
+      },
+      "reason": "Legacy native time; migrate this owner to the injected clock/scheduler port."
+    },
+    "server/src/world/world-cli.ts": {
+      "counts": {
+        "Date.now": 1
+      },
+      "reason": "Legacy native time; migrate this owner to the injected clock/scheduler port."
+    },
+    "server/src/world/world-ledger.ts": {
+      "counts": {
+        "Date.now": 1
+      },
+      "reason": "Legacy native time; migrate this owner to the injected clock/scheduler port."
+    },
+    "shared/pullRequestFreshness.ts": {
+      "counts": {
+        "Date.now": 1
+      },
+      "reason": "Legacy native time; migrate this owner to the injected clock/scheduler port."
+    },
+    "shared/pullRequests.ts": {
+      "counts": {
+        "Date.now": 2
+      },
+      "reason": "Legacy native time; migrate this owner to the injected clock/scheduler port."
+    },
+    "web/public/task-notifications-sw.js": {
+      "counts": {
+        "Date.now": 2
+      },
+      "reason": "Legacy native time; migrate this owner to the injected clock/scheduler port."
+    },
+    "web/src/activeTerminalInput.ts": {
+      "counts": {
+        "setTimeout": 1
+      },
+      "reason": "Legacy native time; migrate this owner to the injected clock/scheduler port."
+    },
+    "web/src/annotations.ts": {
+      "counts": {
+        "Date.now": 2
+      },
+      "reason": "Legacy native time; migrate this owner to the injected clock/scheduler port."
+    },
+    "web/src/api.ts": {
+      "counts": {
+        "setTimeout": 3,
+        "Date.now": 3,
+        "setInterval": 1
+      },
+      "reason": "Legacy native time; migrate this owner to the injected clock/scheduler port."
+    },
+    "web/src/App.tsx": {
+      "counts": {
+        "setInterval": 1,
+        "setTimeout": 3,
+        "requestAnimationFrame": 8
+      },
+      "reason": "Legacy native time; migrate this owner to the injected clock/scheduler port."
+    },
+    "web/src/attachmentUploads.ts": {
+      "counts": {
+        "setTimeout": 1
+      },
+      "reason": "Legacy native time; migrate this owner to the injected clock/scheduler port."
+    },
+    "web/src/browserChrome.ts": {
+      "counts": {
+        "setTimeout": 2
+      },
+      "reason": "Legacy native time; migrate this owner to the injected clock/scheduler port."
+    },
+    "web/src/buildFreshness.ts": {
+      "counts": {
+        "setTimeout": 1,
+        "Date.now": 1,
+        "setInterval": 1
+      },
+      "reason": "Legacy native time; migrate this owner to the injected clock/scheduler port."
+    },
+    "web/src/chimes/chimeCenter.ts": {
+      "counts": {
+        "Date.now": 1,
+        "setTimeout": 1
+      },
+      "reason": "Legacy native time; migrate this owner to the injected clock/scheduler port."
+    },
+    "web/src/chimes/chimeHost.ts": {
+      "counts": {
+        "Date.now": 1,
+        "setInterval": 1
+      },
+      "reason": "Legacy native time; migrate this owner to the injected clock/scheduler port."
+    },
+    "web/src/chimes/player.ts": {
+      "counts": {
+        "setTimeout": 1
+      },
+      "reason": "Legacy native time; migrate this owner to the injected clock/scheduler port."
+    },
+    "web/src/components/ActionsMenu.tsx": {
+      "counts": {
+        "setTimeout": 1
+      },
+      "reason": "Legacy native time; migrate this owner to the injected clock/scheduler port."
+    },
+    "web/src/components/AgentHistoryComposer.tsx": {
+      "counts": {
+        "setTimeout": 1
+      },
+      "reason": "Legacy native time; migrate this owner to the injected clock/scheduler port."
+    },
+    "web/src/components/AgentHistoryDrawer.tsx": {
+      "counts": {
+        "Date.now": 1,
+        "setInterval": 1,
+        "setTimeout": 1
+      },
+      "reason": "Legacy native time; migrate this owner to the injected clock/scheduler port."
+    },
+    "web/src/components/AgentIntegrationsSettings.tsx": {
+      "counts": {
+        "requestAnimationFrame": 1
+      },
+      "reason": "Legacy native time; migrate this owner to the injected clock/scheduler port."
+    },
+    "web/src/components/AnnotationComposerPopover.tsx": {
+      "counts": {
+        "requestAnimationFrame": 1
+      },
+      "reason": "Legacy native time; migrate this owner to the injected clock/scheduler port."
+    },
+    "web/src/components/AnnotationPanel.tsx": {
+      "counts": {
+        "requestAnimationFrame": 2
+      },
+      "reason": "Legacy native time; migrate this owner to the injected clock/scheduler port."
+    },
+    "web/src/components/AssistantPanel.tsx": {
+      "counts": {
+        "new Date": 1
+      },
+      "reason": "Legacy native time; migrate this owner to the injected clock/scheduler port."
+    },
+    "web/src/components/AssistantTaskForm.tsx": {
+      "counts": {
+        "Date.now": 1
+      },
+      "reason": "Legacy native time; migrate this owner to the injected clock/scheduler port."
+    },
+    "web/src/components/AssistantTasks.tsx": {
+      "counts": {
+        "setTimeout": 1
+      },
+      "reason": "Legacy native time; migrate this owner to the injected clock/scheduler port."
+    },
+    "web/src/components/AutoSyncRepositoriesDialog.tsx": {
+      "counts": {
+        "setInterval": 1
+      },
+      "reason": "Legacy native time; migrate this owner to the injected clock/scheduler port."
+    },
+    "web/src/components/chat/useChatKeys.ts": {
+      "counts": {
+        "setTimeout": 1
+      },
+      "reason": "Legacy native time; migrate this owner to the injected clock/scheduler port."
+    },
+    "web/src/components/ConfigMenu.tsx": {
+      "counts": {
+        "requestAnimationFrame": 2
+      },
+      "reason": "Legacy native time; migrate this owner to the injected clock/scheduler port."
+    },
+    "web/src/components/ConnectionHerdrInfo.tsx": {
+      "counts": {
+        "setTimeout": 2,
+        "Date.now": 3
+      },
+      "reason": "Legacy native time; migrate this owner to the injected clock/scheduler port."
+    },
+    "web/src/components/ConnectionSwitcher.tsx": {
+      "counts": {
+        "requestAnimationFrame": 4
+      },
+      "reason": "Legacy native time; migrate this owner to the injected clock/scheduler port."
+    },
+    "web/src/components/ContextMenu.tsx": {
+      "counts": {
+        "setTimeout": 1
+      },
+      "reason": "Legacy native time; migrate this owner to the injected clock/scheduler port."
+    },
+    "web/src/components/ConversationMinimap.tsx": {
+      "counts": {
+        "requestAnimationFrame": 3
+      },
+      "reason": "Legacy native time; migrate this owner to the injected clock/scheduler port."
+    },
+    "web/src/components/CoreInstall.tsx": {
+      "counts": {
+        "setTimeout": 1
+      },
+      "reason": "Legacy native time; migrate this owner to the injected clock/scheduler port."
+    },
+    "web/src/components/CreateWorkspaceDialog.tsx": {
+      "counts": {
+        "setTimeout": 1
+      },
+      "reason": "Legacy native time; migrate this owner to the injected clock/scheduler port."
+    },
+    "web/src/components/dialogFocus.ts": {
+      "counts": {
+        "requestAnimationFrame": 2,
+        "setTimeout": 3
+      },
+      "reason": "Legacy native time; migrate this owner to the injected clock/scheduler port."
+    },
+    "web/src/components/DiffContentView.tsx": {
+      "counts": {
+        "performance.now": 8,
+        "requestAnimationFrame": 6
+      },
+      "reason": "Legacy native time; migrate this owner to the injected clock/scheduler port."
+    },
+    "web/src/components/diffLoadQueue.ts": {
+      "counts": {
+        "performance.now": 2
+      },
+      "reason": "Legacy native time; migrate this owner to the injected clock/scheduler port."
+    },
+    "web/src/components/DiffViewerPanel.tsx": {
+      "counts": {
+        "setTimeout": 1
+      },
+      "reason": "Legacy native time; migrate this owner to the injected clock/scheduler port."
+    },
+    "web/src/components/FileExplorerDialog.tsx": {
+      "counts": {
+        "setTimeout": 3
+      },
+      "reason": "Legacy native time; migrate this owner to the injected clock/scheduler port."
+    },
+    "web/src/components/FilePreviewTabs.tsx": {
+      "counts": {
+        "requestAnimationFrame": 1
+      },
+      "reason": "Legacy native time; migrate this owner to the injected clock/scheduler port."
+    },
+    "web/src/components/FloatShellOverlay.tsx": {
+      "counts": {
+        "setTimeout": 1
+      },
+      "reason": "Legacy native time; migrate this owner to the injected clock/scheduler port."
+    },
+    "web/src/components/GlobalTooltip.tsx": {
+      "counts": {
+        "setTimeout": 1
+      },
+      "reason": "Legacy native time; migrate this owner to the injected clock/scheduler port."
+    },
+    "web/src/components/HerdrSetupCard.tsx": {
+      "counts": {
+        "requestAnimationFrame": 2
+      },
+      "reason": "Legacy native time; migrate this owner to the injected clock/scheduler port."
+    },
+    "web/src/components/HistoryTerminalComposer.tsx": {
+      "counts": {
+        "setTimeout": 1
+      },
+      "reason": "Legacy native time; migrate this owner to the injected clock/scheduler port."
+    },
+    "web/src/components/markdown.tsx": {
+      "counts": {
+        "requestAnimationFrame": 2
+      },
+      "reason": "Legacy native time; migrate this owner to the injected clock/scheduler port."
+    },
+    "web/src/components/MobileTerminalShortcutsDialog.tsx": {
+      "counts": {
+        "Date.now": 1,
+        "requestAnimationFrame": 1
+      },
+      "reason": "Legacy native time; migrate this owner to the injected clock/scheduler port."
+    },
+    "web/src/components/OverlayScrollbarLayer.tsx": {
+      "counts": {
+        "setTimeout": 2,
+        "requestAnimationFrame": 1
+      },
+      "reason": "Legacy native time; migrate this owner to the injected clock/scheduler port."
+    },
+    "web/src/components/PaneMoveMenu.tsx": {
+      "counts": {
+        "setTimeout": 1
+      },
+      "reason": "Legacy native time; migrate this owner to the injected clock/scheduler port."
+    },
+    "web/src/components/PopupOverlay.tsx": {
+      "counts": {
+        "Date.now": 1,
+        "setTimeout": 1
+      },
+      "reason": "Legacy native time; migrate this owner to the injected clock/scheduler port."
+    },
+    "web/src/components/PullRequestCard.tsx": {
+      "counts": {
+        "new Date": 2
+      },
+      "reason": "Legacy native time; migrate this owner to the injected clock/scheduler port."
+    },
+    "web/src/components/ShortcutLookupDialog.tsx": {
+      "counts": {
+        "setTimeout": 1
+      },
+      "reason": "Legacy native time; migrate this owner to the injected clock/scheduler port."
+    },
+    "web/src/components/TabBar.tsx": {
+      "counts": {
+        "setTimeout": 2
+      },
+      "reason": "Legacy native time; migrate this owner to the injected clock/scheduler port."
+    },
+    "web/src/components/TerminalComposer.tsx": {
+      "counts": {
+        "setTimeout": 1,
+        "requestAnimationFrame": 2
+      },
+      "reason": "Legacy native time; migrate this owner to the injected clock/scheduler port."
+    },
+    "web/src/components/TerminalThemeDialog.tsx": {
+      "counts": {
+        "Date.now": 1
+      },
+      "reason": "Legacy native time; migrate this owner to the injected clock/scheduler port."
+    },
+    "web/src/components/TerminalView.tsx": {
+      "counts": {
+        "setTimeout": 6,
+        "requestAnimationFrame": 2,
+        "performance.now": 7,
+        "Date.now": 1
+      },
+      "reason": "Legacy native time; migrate this owner to the injected clock/scheduler port."
+    },
+    "web/src/components/Toast.tsx": {
+      "counts": {
+        "performance.now": 2,
+        "setTimeout": 3
+      },
+      "reason": "Legacy native time; migrate this owner to the injected clock/scheduler port."
+    },
+    "web/src/components/useAgentHistoryWindow.ts": {
+      "counts": {
+        "setInterval": 1
+      },
+      "reason": "Legacy native time; migrate this owner to the injected clock/scheduler port."
+    },
+    "web/src/components/useSuggestedName.ts": {
+      "counts": {
+        "requestAnimationFrame": 1
+      },
+      "reason": "Legacy native time; migrate this owner to the injected clock/scheduler port."
+    },
+    "web/src/components/useTabReorderDrag.ts": {
+      "counts": {
+        "setTimeout": 1,
+        "requestAnimationFrame": 1
+      },
+      "reason": "Legacy native time; migrate this owner to the injected clock/scheduler port."
+    },
+    "web/src/components/ViewportDebugOverlay.tsx": {
+      "counts": {
+        "setInterval": 1
+      },
+      "reason": "Legacy native time; migrate this owner to the injected clock/scheduler port."
+    },
+    "web/src/components/WorkspaceAgentRows.tsx": {
+      "counts": {
+        "setTimeout": 2
+      },
+      "reason": "Legacy native time; migrate this owner to the injected clock/scheduler port."
+    },
+    "web/src/components/WorkspaceAutoSyncDialog.tsx": {
+      "counts": {
+        "setInterval": 1
+      },
+      "reason": "Legacy native time; migrate this owner to the injected clock/scheduler port."
+    },
+    "web/src/components/WorkspaceRows.tsx": {
+      "counts": {
+        "setTimeout": 1
+      },
+      "reason": "Legacy native time; migrate this owner to the injected clock/scheduler port."
+    },
+    "web/src/components/WorktreeLifecycleDialog.tsx": {
+      "counts": {
+        "setInterval": 1
+      },
+      "reason": "Legacy native time; migrate this owner to the injected clock/scheduler port."
+    },
+    "web/src/coreTyping.ts": {
+      "counts": {
+        "setTimeout": 1
+      },
+      "reason": "Legacy native time; migrate this owner to the injected clock/scheduler port."
+    },
+    "web/src/help/HelpPanelHost.tsx": {
+      "counts": {
+        "requestAnimationFrame": 1
+      },
+      "reason": "Legacy native time; migrate this owner to the injected clock/scheduler port."
+    },
+    "web/src/help/helpTry.ts": {
+      "counts": {
+        "setInterval": 1,
+        "setTimeout": 2
+      },
+      "reason": "Legacy native time; migrate this owner to the injected clock/scheduler port."
+    },
+    "web/src/instanceName.ts": {
+      "counts": {
+        "setTimeout": 1
+      },
+      "reason": "Legacy native time; migrate this owner to the injected clock/scheduler port."
+    },
+    "web/src/latencyDebug.ts": {
+      "counts": {
+        "performance.now": 2
+      },
+      "reason": "Legacy native time; migrate this owner to the injected clock/scheduler port."
+    },
+    "web/src/layerStack.ts": {
+      "counts": {
+        "performance.now": 2
+      },
+      "reason": "Legacy native time; migrate this owner to the injected clock/scheduler port."
+    },
+    "web/src/promiseTimeout.ts": {
+      "counts": {
+        "setTimeout": 1
+      },
+      "reason": "Legacy native time; migrate this owner to the injected clock/scheduler port."
+    },
+    "web/src/settings/SettingsHome.tsx": {
+      "counts": {
+        "setTimeout": 2
+      },
+      "reason": "Legacy native time; migrate this owner to the injected clock/scheduler port."
+    },
+    "web/src/settings/useSettingsHome.ts": {
+      "counts": {
+        "requestAnimationFrame": 1
+      },
+      "reason": "Legacy native time; migrate this owner to the injected clock/scheduler port."
+    },
+    "web/src/settings/viewControls.ts": {
+      "counts": {
+        "Date.now": 2
+      },
+      "reason": "Legacy native time; migrate this owner to the injected clock/scheduler port."
+    },
+    "web/src/shortcutPreferences.ts": {
+      "counts": {
+        "Date.now": 1
+      },
+      "reason": "Legacy native time; migrate this owner to the injected clock/scheduler port."
+    },
+    "web/src/store.ts": {
+      "counts": {
+        "setTimeout": 2,
+        "Date.now": 4
+      },
+      "reason": "Legacy native time; migrate this owner to the injected clock/scheduler port."
+    },
+    "web/src/store/catalogue.ts": {
+      "counts": {
+        "setTimeout": 1
+      },
+      "reason": "Legacy native time; migrate this owner to the injected clock/scheduler port."
+    },
+    "web/src/store/creation.ts": {
+      "counts": {
+        "setTimeout": 1
+      },
+      "reason": "Legacy native time; migrate this owner to the injected clock/scheduler port."
+    },
+    "web/src/store/focusedInterest.ts": {
+      "counts": {
+        "setTimeout": 2
+      },
+      "reason": "Legacy native time; migrate this owner to the injected clock/scheduler port."
+    },
+    "web/src/store/refresh.ts": {
+      "counts": {
+        "Date.now": 2,
+        "performance.now": 1,
+        "setTimeout": 1
+      },
+      "reason": "Legacy native time; migrate this owner to the injected clock/scheduler port."
+    },
+    "web/src/store/sessions.ts": {
+      "counts": {
+        "Date.now": 1
+      },
+      "reason": "Legacy native time; migrate this owner to the injected clock/scheduler port."
+    },
+    "web/src/store/updates.ts": {
+      "counts": {
+        "Date.now": 3,
+        "setInterval": 2
+      },
+      "reason": "Legacy native time; migrate this owner to the injected clock/scheduler port."
+    },
+    "web/src/TabTerminalPaneLayout.tsx": {
+      "counts": {
+        "setTimeout": 1
+      },
+      "reason": "Legacy native time; migrate this owner to the injected clock/scheduler port."
+    },
+    "web/src/taskNotifications.ts": {
+      "counts": {
+        "setTimeout": 1
+      },
+      "reason": "Legacy native time; migrate this owner to the injected clock/scheduler port."
+    },
+    "web/src/terminalComposer.ts": {
+      "counts": {
+        "setTimeout": 1
+      },
+      "reason": "Legacy native time; migrate this owner to the injected clock/scheduler port."
+    },
+    "web/src/terminalComposition.ts": {
+      "counts": {
+        "setTimeout": 1
+      },
+      "reason": "Legacy native time; migrate this owner to the injected clock/scheduler port."
+    },
+    "web/src/terminalFileLinks.ts": {
+      "counts": {
+        "Date.now": 2
+      },
+      "reason": "Legacy native time; migrate this owner to the injected clock/scheduler port."
+    },
+    "web/src/terminalHistorySelection.ts": {
+      "counts": {
+        "setTimeout": 2
+      },
+      "reason": "Legacy native time; migrate this owner to the injected clock/scheduler port."
+    },
+    "web/src/terminalInput.ts": {
+      "counts": {
+        "Date.now": 1
+      },
+      "reason": "Legacy native time; migrate this owner to the injected clock/scheduler port."
+    },
+    "web/src/terminalPaste.ts": {
+      "counts": {
+        "setTimeout": 1
+      },
+      "reason": "Legacy native time; migrate this owner to the injected clock/scheduler port."
+    },
+    "web/src/terminalResize.ts": {
+      "counts": {
+        "setTimeout": 2
+      },
+      "reason": "Legacy native time; migrate this owner to the injected clock/scheduler port."
+    },
+    "web/src/terminalTouchSelection.ts": {
+      "counts": {
+        "setTimeout": 1
+      },
+      "reason": "Legacy native time; migrate this owner to the injected clock/scheduler port."
+    },
+    "web/src/uiLocale.ts": {
+      "counts": {
+        "new Date": 1
+      },
+      "reason": "Legacy native time; migrate this owner to the injected clock/scheduler port."
+    },
+    "web/src/updateNotifications.ts": {
+      "counts": {
+        "setTimeout": 1
+      },
+      "reason": "Legacy native time; migrate this owner to the injected clock/scheduler port."
+    },
+    "web/src/useWorktreePullRequests.ts": {
+      "counts": {
+        "Date.now": 2,
+        "new Date": 1,
+        "setTimeout": 1
+      },
+      "reason": "Legacy native time; migrate this owner to the injected clock/scheduler port."
+    },
+    "web/src/withTimeout.ts": {
+      "counts": {
+        "setTimeout": 1
+      },
+      "reason": "Legacy native time; migrate this owner to the injected clock/scheduler port."
+    },
+    "web/src/workspaceResource.ts": {
+      "counts": {
+        "setTimeout": 1
+      },
+      "reason": "Legacy native time; migrate this owner to the injected clock/scheduler port."
+    },
+    "web/src/world/agentContextFill.ts": {
+      "counts": {
+        "setInterval": 1
+      },
+      "reason": "Legacy native time; migrate this owner to the injected clock/scheduler port."
+    },
+    "web/src/world/AgentLauncherDialog.tsx": {
+      "counts": {
+        "Date.now": 2
+      },
+      "reason": "Legacy native time; migrate this owner to the injected clock/scheduler port."
+    },
+    "web/src/world/agentQuests.ts": {
+      "counts": {
+        "Date.now": 2,
+        "setTimeout": 2
+      },
+      "reason": "Legacy native time; migrate this owner to the injected clock/scheduler port."
+    },
+    "web/src/world/agentStarts.ts": {
+      "counts": {
+        "performance.now": 1
+      },
+      "reason": "Legacy native time; migrate this owner to the injected clock/scheduler port."
+    },
+    "web/src/world/apartments/apartmentsPreview.ts": {
+      "counts": {
+        "Date.now": 1
+      },
+      "reason": "Legacy native time; migrate this owner to the injected clock/scheduler port."
+    },
+    "web/src/world/artefactOpen.ts": {
+      "counts": {
+        "Date.now": 2
+      },
+      "reason": "Legacy native time; migrate this owner to the injected clock/scheduler port."
+    },
+    "web/src/world/bin/binSecondClock.ts": {
+      "counts": {
+        "performance.now": 3,
+        "setInterval": 1
+      },
+      "reason": "Legacy native time; migrate this owner to the injected clock/scheduler port."
+    },
+    "web/src/world/bin/binStore.ts": {
+      "counts": {
+        "performance.now": 1
+      },
+      "reason": "Legacy native time; migrate this owner to the injected clock/scheduler port."
+    },
+    "web/src/world/board/boardClock.ts": {
+      "counts": {
+        "Date.now": 4,
+        "setInterval": 1
+      },
+      "reason": "Legacy native time; migrate this owner to the injected clock/scheduler port."
+    },
+    "web/src/world/board/boardDrafts.ts": {
+      "counts": {
+        "Date.now": 1
+      },
+      "reason": "Legacy native time; migrate this owner to the injected clock/scheduler port."
+    },
+    "web/src/world/board/BoardLenses.tsx": {
+      "counts": {
+        "Date.now": 1
+      },
+      "reason": "Legacy native time; migrate this owner to the injected clock/scheduler port."
+    },
+    "web/src/world/board/boardModel.ts": {
+      "counts": {
+        "performance.now": 3
+      },
+      "reason": "Legacy native time; migrate this owner to the injected clock/scheduler port."
+    },
+    "web/src/world/board/BoardPeek.tsx": {
+      "counts": {
+        "Date.now": 1
+      },
+      "reason": "Legacy native time; migrate this owner to the injected clock/scheduler port."
+    },
+    "web/src/world/board/BoardSketch.tsx": {
+      "counts": {
+        "Date.now": 1
+      },
+      "reason": "Legacy native time; migrate this owner to the injected clock/scheduler port."
+    },
+    "web/src/world/board/useBoardFacts.ts": {
+      "counts": {
+        "Date.now": 1
+      },
+      "reason": "Legacy native time; migrate this owner to the injected clock/scheduler port."
+    },
+    "web/src/world/board/useBoardHerdrActions.tsx": {
+      "counts": {
+        "Date.now": 1,
+        "setTimeout": 3
+      },
+      "reason": "Legacy native time; migrate this owner to the injected clock/scheduler port."
+    },
+    "web/src/world/board/workLensModel.ts": {
+      "counts": {
+        "Date.now": 1
+      },
+      "reason": "Legacy native time; migrate this owner to the injected clock/scheduler port."
+    },
+    "web/src/world/BoardView.tsx": {
+      "counts": {
+        "setTimeout": 5,
+        "performance.now": 4
+      },
+      "reason": "Legacy native time; migrate this owner to the injected clock/scheduler port."
+    },
+    "web/src/world/browserInput.worker.ts": {
+      "counts": {
+        "Date.now": 2
+      },
+      "reason": "Legacy native time; migrate this owner to the injected clock/scheduler port."
+    },
+    "web/src/world/code/ideClient.ts": {
+      "counts": {
+        "new Date": 1,
+        "Date.now": 1
+      },
+      "reason": "Legacy native time; migrate this owner to the injected clock/scheduler port."
+    },
+    "web/src/world/code/IdeServers.tsx": {
+      "counts": {
+        "new Date": 1
+      },
+      "reason": "Legacy native time; migrate this owner to the injected clock/scheduler port."
+    },
+    "web/src/world/corePins.ts": {
+      "counts": {
+        "setTimeout": 1
+      },
+      "reason": "Legacy native time; migrate this owner to the injected clock/scheduler port."
+    },
+    "web/src/world/coreSeen.ts": {
+      "counts": {
+        "setTimeout": 1
+      },
+      "reason": "Legacy native time; migrate this owner to the injected clock/scheduler port."
+    },
+    "web/src/world/CoreTerminalWatch.tsx": {
+      "counts": {
+        "requestAnimationFrame": 2
+      },
+      "reason": "Legacy native time; migrate this owner to the injected clock/scheduler port."
+    },
+    "web/src/world/createdTerminalAdmission.ts": {
+      "counts": {
+        "setTimeout": 1
+      },
+      "reason": "Legacy native time; migrate this owner to the injected clock/scheduler port."
+    },
+    "web/src/world/DeskView.tsx": {
+      "counts": {
+        "requestAnimationFrame": 2,
+        "setTimeout": 2
+      },
+      "reason": "Legacy native time; migrate this owner to the injected clock/scheduler port."
+    },
+    "web/src/world/devtools/trace.ts": {
+      "counts": {
+        "performance.now": 1
+      },
+      "reason": "Legacy native time; migrate this owner to the injected clock/scheduler port."
+    },
+    "web/src/world/focus.ts": {
+      "counts": {
+        "Date.now": 2,
+        "setTimeout": 2
+      },
+      "reason": "Legacy native time; migrate this owner to the injected clock/scheduler port."
+    },
+    "web/src/world/handoffs.ts": {
+      "counts": {
+        "Date.now": 2,
+        "setInterval": 2
+      },
+      "reason": "Legacy native time; migrate this owner to the injected clock/scheduler port."
+    },
+    "web/src/world/herdrOfficeProjection.ts": {
+      "counts": {
+        "performance.now": 5
+      },
+      "reason": "Legacy native time; migrate this owner to the injected clock/scheduler port."
+    },
+    "web/src/world/independentInputSchedule.ts": {
+      "counts": {
+        "Date.now": 1,
+        "setTimeout": 1
+      },
+      "reason": "Legacy native time; migrate this owner to the injected clock/scheduler port."
+    },
+    "web/src/world/inspectorPreload.ts": {
+      "counts": {
+        "setTimeout": 1
+      },
+      "reason": "Legacy native time; migrate this owner to the injected clock/scheduler port."
+    },
+    "web/src/world/inspectorTerminalFocus.ts": {
+      "counts": {
+        "setTimeout": 1,
+        "requestAnimationFrame": 1
+      },
+      "reason": "Legacy native time; migrate this owner to the injected clock/scheduler port."
+    },
+    "web/src/world/memory/artefactShelfClient.ts": {
+      "counts": {
+        "Date.now": 4,
+        "setTimeout": 1
+      },
+      "reason": "Legacy native time; migrate this owner to the injected clock/scheduler port."
+    },
+    "web/src/world/memory/LibraryArtefacts.tsx": {
+      "counts": {
+        "Date.now": 1
+      },
+      "reason": "Legacy native time; migrate this owner to the injected clock/scheduler port."
+    },
+    "web/src/world/memory/memoryClient.ts": {
+      "counts": {
+        "Date.now": 3
+      },
+      "reason": "Legacy native time; migrate this owner to the injected clock/scheduler port."
+    },
+    "web/src/world/memory/memoryFixture.ts": {
+      "counts": {
+        "Date.now": 5,
+        "setTimeout": 1
+      },
+      "reason": "Legacy native time; migrate this owner to the injected clock/scheduler port."
+    },
+    "web/src/world/memory/MemoryLibrary.tsx": {
+      "counts": {
+        "Date.now": 1
+      },
+      "reason": "Legacy native time; migrate this owner to the injected clock/scheduler port."
+    },
+    "web/src/world/NeedsYouTab.tsx": {
+      "counts": {
+        "requestAnimationFrame": 1
+      },
+      "reason": "Legacy native time; migrate this owner to the injected clock/scheduler port."
+    },
+    "web/src/world/officeSelection.ts": {
+      "counts": {
+        "Date.now": 1
+      },
+      "reason": "Legacy native time; migrate this owner to the injected clock/scheduler port."
+    },
+    "web/src/world/paneScreen.ts": {
+      "counts": {
+        "setTimeout": 2
+      },
+      "reason": "Legacy native time; migrate this owner to the injected clock/scheduler port."
+    },
+    "web/src/world/presence.ts": {
+      "counts": {
+        "Date.now": 2
+      },
+      "reason": "Legacy native time; migrate this owner to the injected clock/scheduler port."
+    },
+    "web/src/world/ProfileSprite.tsx": {
+      "counts": {
+        "setInterval": 1
+      },
+      "reason": "Legacy native time; migrate this owner to the injected clock/scheduler port."
+    },
+    "web/src/world/pullRequestAttention.ts": {
+      "counts": {
+        "Date.now": 1
+      },
+      "reason": "Legacy native time; migrate this owner to the injected clock/scheduler port."
+    },
+    "web/src/world/PullRequestCard.tsx": {
+      "counts": {
+        "Date.now": 2,
+        "setTimeout": 1
+      },
+      "reason": "Legacy native time; migrate this owner to the injected clock/scheduler port."
+    },
+    "web/src/world/relations.ts": {
+      "counts": {
+        "Date.now": 1
+      },
+      "reason": "Legacy native time; migrate this owner to the injected clock/scheduler port."
+    },
+    "web/src/world/runtimeStore.ts": {
+      "counts": {
+        "setTimeout": 1,
+        "setInterval": 1
+      },
+      "reason": "Legacy native time; migrate this owner to the injected clock/scheduler port."
+    },
+    "web/src/world/shipyard/shipyardFixture.ts": {
+      "counts": {
+        "Date.now": 1
+      },
+      "reason": "Legacy native time; migrate this owner to the injected clock/scheduler port."
+    },
+    "web/src/world/shipyard/shipyardModel.ts": {
+      "counts": {
+        "Date.now": 1
+      },
+      "reason": "Legacy native time; migrate this owner to the injected clock/scheduler port."
+    },
+    "web/src/world/shipyard/ShipyardPipeline.tsx": {
+      "counts": {
+        "Date.now": 2,
+        "setInterval": 1
+      },
+      "reason": "Legacy native time; migrate this owner to the injected clock/scheduler port."
+    },
+    "web/src/world/shipyard/shipyardStore.ts": {
+      "counts": {
+        "Date.now": 1,
+        "setTimeout": 1
+      },
+      "reason": "Legacy native time; migrate this owner to the injected clock/scheduler port."
+    },
+    "web/src/world/terminalComposerRequest.ts": {
+      "counts": {
+        "Date.now": 2
+      },
+      "reason": "Legacy native time; migrate this owner to the injected clock/scheduler port."
+    },
+    "web/src/world/town/TownBusLayer.tsx": {
+      "counts": {
+        "performance.now": 8,
+        "setTimeout": 2,
+        "requestAnimationFrame": 1
+      },
+      "reason": "Legacy native time; migrate this owner to the injected clock/scheduler port."
+    },
+    "web/src/world/town/TownLenses.tsx": {
+      "counts": {
+        "setInterval": 2
+      },
+      "reason": "Legacy native time; migrate this owner to the injected clock/scheduler port."
+    },
+    "web/src/world/town/townPlaceUsage.ts": {
+      "counts": {
+        "Date.now": 2,
+        "setInterval": 1
+      },
+      "reason": "Legacy native time; migrate this owner to the injected clock/scheduler port."
+    },
+    "web/src/world/town/townScaleUsage.ts": {
+      "counts": {
+        "Date.now": 1
+      },
+      "reason": "Legacy native time; migrate this owner to the injected clock/scheduler port."
+    },
+    "web/src/world/town/TownSkyControl.tsx": {
+      "counts": {
+        "Date.now": 1
+      },
+      "reason": "Legacy native time; migrate this owner to the injected clock/scheduler port."
+    },
+    "web/src/world/town/townWeather.ts": {
+      "counts": {
+        "Date.now": 3
+      },
+      "reason": "Legacy native time; migrate this owner to the injected clock/scheduler port."
+    },
+    "web/src/world/townMasterGreeting.ts": {
+      "counts": {
+        "Date.now": 3,
+        "performance.now": 1
+      },
+      "reason": "Legacy native time; migrate this owner to the injected clock/scheduler port."
+    },
+    "web/src/world/TownView.tsx": {
+      "counts": {
+        "Date.now": 1,
+        "setInterval": 1,
+        "setTimeout": 1
+      },
+      "reason": "Legacy native time; migrate this owner to the injected clock/scheduler port."
+    },
+    "web/src/world/usage/usageFixture.ts": {
+      "counts": {
+        "Date.now": 1
+      },
+      "reason": "Legacy native time; migrate this owner to the injected clock/scheduler port."
+    },
+    "web/src/world/usage/UsageLens.tsx": {
+      "counts": {
+        "Date.now": 2,
+        "setInterval": 1
+      },
+      "reason": "Legacy native time; migrate this owner to the injected clock/scheduler port."
+    },
+    "web/src/world/usage/usageStore.ts": {
+      "counts": {
+        "Date.now": 1,
+        "setInterval": 1
+      },
+      "reason": "Legacy native time; migrate this owner to the injected clock/scheduler port."
+    },
+    "web/src/world/useDeskWatch.ts": {
+      "counts": {
+        "setTimeout": 1
+      },
+      "reason": "Legacy native time; migrate this owner to the injected clock/scheduler port."
+    },
+    "web/src/world/useDrawReadiness.ts": {
+      "counts": {
+        "requestAnimationFrame": 1,
+        "setTimeout": 1
+      },
+      "reason": "Legacy native time; migrate this owner to the injected clock/scheduler port."
+    },
+    "web/src/world/useReviewedWork.ts": {
+      "counts": {
+        "Date.now": 1
+      },
+      "reason": "Legacy native time; migrate this owner to the injected clock/scheduler port."
+    },
+    "web/src/world/useWorldInspectorController.ts": {
+      "counts": {
+        "performance.now": 2
+      },
+      "reason": "Legacy native time; migrate this owner to the injected clock/scheduler port."
+    },
+    "web/src/world/windows/WindowSwitcher.tsx": {
+      "counts": {
+        "requestAnimationFrame": 1
+      },
+      "reason": "Legacy native time; migrate this owner to the injected clock/scheduler port."
+    },
+    "web/src/world/worldCommands.ts": {
+      "counts": {
+        "Date.now": 1
+      },
+      "reason": "Legacy native time; migrate this owner to the injected clock/scheduler port."
+    },
+    "web/src/world/WorldFoundationApp.tsx": {
+      "counts": {
+        "requestAnimationFrame": 1
+      },
+      "reason": "Legacy native time; migrate this owner to the injected clock/scheduler port."
+    },
+    "web/src/world/WorldInspectorConversation.tsx": {
+      "counts": {
+        "Date.now": 1
+      },
+      "reason": "Legacy native time; migrate this owner to the injected clock/scheduler port."
+    },
+    "web/src/world/WorldLoader.tsx": {
+      "counts": {
+        "Date.now": 3,
+        "setTimeout": 1
+      },
+      "reason": "Legacy native time; migrate this owner to the injected clock/scheduler port."
+    },
+    "web/src/world/worldObject.ts": {
+      "counts": {
+        "setTimeout": 2,
+        "performance.now": 11
+      },
+      "reason": "Legacy native time; migrate this owner to the injected clock/scheduler port."
+    },
+    "web/src/world/worldSources.ts": {
+      "counts": {
+        "setTimeout": 1
+      },
+      "reason": "Legacy native time; migrate this owner to the injected clock/scheduler port."
+    },
+    "web/src/world/WorldViewPicker.tsx": {
+      "counts": {
+        "setTimeout": 1
+      },
+      "reason": "Legacy native time; migrate this owner to the injected clock/scheduler port."
+    },
+    "web/src/worldSnapshotDecode.ts": {
+      "counts": {
+        "performance.now": 2
+      },
+      "reason": "Legacy native time; migrate this owner to the injected clock/scheduler port."
+    }
+  }
+}

@@ -1,3 +1,7 @@
+import {
+  launchTestBrowser,
+  type TestBrowser,
+} from "../../../../scripts/testing/browser-session";
 import { afterAll, beforeAll, expect, test } from "bun:test";
 import { type TownCanvasCase, townCanvasCases } from "../town/TownCanvas.cases";
 import { existsSync } from "node:fs";
@@ -9,6 +13,7 @@ import {
   waitForBrowserFixture,
   waitForChromePort,
 } from "../../browserChrome";
+import { casePhases } from "./casePhases";
 import { chromeRenderingFlags } from "./chromeRendering";
 import { connectCapture } from "./connectCapture";
 import {
@@ -61,6 +66,9 @@ export function registerTownCanvasCases(group: keyof typeof townCanvasCases) {
   test.skipIf(!chrome).each(townCanvasCases[group] as TownCanvasCase[])(
     "the Office town renders, queues blocked agents and zooms into rooms at %ipx by %ipx (%s, %ims zoom frames)",
     async (width, height, scale, flightFrameDelay) => {
+      const phases = casePhases(
+        `TownCanvas ${width}x${height} ${scale} ${flightFrameDelay}ms`,
+      );
       const dir = await mkdtemp(join(tmpdir(), "office-town-test-"));
       const assets = new Map<string, Blob>();
       const result = Promise.withResolvers<unknown>();
@@ -87,7 +95,7 @@ export function registerTownCanvasCases(group: keyof typeof townCanvasCases) {
           return new Response("Not found", { status: 404 });
         },
       });
-      let browser: ReturnType<typeof Bun.spawn> | undefined;
+      let browser: TestBrowser | undefined;
       let devtools: Awaited<ReturnType<typeof connectCapture>> | undefined;
       try {
         for (const [path, output] of bundle.assets) assets.set(path, output);
@@ -95,8 +103,8 @@ export function registerTownCanvasCases(group: keyof typeof townCanvasCases) {
         // Every case pins its CSS viewport over CDP: `--window-size` alone
         // gives headless Chrome a wider viewport than a 390px phone (#643),
         // and the fixture fails when the size it measures differs.
-        const fixtureUrl = `${server.url.href}?mode=test&scale=${scale}&flightFrameDelay=${flightFrameDelay}&edgeFrameDelay=${width === 390 && height === 844 && scale === "extended" ? 300 : 0}&viewport=${width}x${height}`;
-        browser = Bun.spawn(
+        const fixtureUrl = `${server.url.href}?mode=test&scale=${scale}&flightFrameDelay=${flightFrameDelay}&edgeFrameDelay=${width === 390 && height === 844 && (scale === "extended" || scale.startsWith("extended-")) ? 300 : 0}&viewport=${width}x${height}`;
+        browser = await launchTestBrowser(
           [
             chrome!,
             "--headless=new",
@@ -112,12 +120,15 @@ export function registerTownCanvasCases(group: keyof typeof townCanvasCases) {
           ],
           { stdout: "ignore", stderr: Bun.file(browserLog) },
         );
-        devtools = await openAtExactViewport(
-          await waitForChromePort(browser, join(dir, "profile"), browserLog),
-          fixtureUrl,
-          width,
-          height,
+        await browser.start();
+        const port = await waitForChromePort(
+          browser,
+          join(dir, "profile"),
+          browserLog,
         );
+        phases.mark("chrome");
+        void pageRequested.promise.then(() => phases.mark("load"));
+        devtools = await openAtExactViewport(port, fixtureUrl, width, height);
         const failures = await waitForBrowserFixture(
           pageRequested.promise,
           result.promise,
@@ -137,7 +148,7 @@ export function registerTownCanvasCases(group: keyof typeof townCanvasCases) {
           // frames at every sampled second, it took 109 s locally on two
           // cores and exceeded this guard on CI. It now samples without
           // drawn frames (#1183).
-          scale === "extended" ||
+          scale.startsWith("extended") ||
             scale === "protected" ||
             scale === "max" ||
             ((scale === "typical" || scale === "bus") && width >= 1440)
@@ -155,6 +166,7 @@ export function registerTownCanvasCases(group: keyof typeof townCanvasCases) {
             `${error.message}: ${state?.result.value ?? "browser unavailable"}`,
           );
         });
+        phases.mark("scene");
         expect(failures).toEqual([]);
       } finally {
         devtools?.close();
@@ -164,6 +176,7 @@ export function registerTownCanvasCases(group: keyof typeof townCanvasCases) {
         }
         server.stop(true);
         await rm(dir, { recursive: true, force: true });
+        phases.done();
       }
     },
     LARGE_TOWN_FIXTURE_MS + 15_000 + BROWSER_STARTUP_TIMEOUT_MS,

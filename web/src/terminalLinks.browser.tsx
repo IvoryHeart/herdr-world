@@ -1,3 +1,5 @@
+import { nativeTouchDriver } from "./testing/nativeTouch";
+import { clock as fixtureTime } from "./world/testing/installTestClock";
 import { TerminalLinkInspector } from "./testing/TerminalLinkInspector";
 import { Terminal, type ILink, type ILinkProvider } from "@xterm/xterm";
 import { createRoot } from "react-dom/client";
@@ -29,18 +31,12 @@ const check = (value: unknown, expected: unknown, label: string) => {
     failures.push(`${label}: ${JSON.stringify(value)}`);
 };
 // Let React effects and xterm's queued render complete before observing the UI.
-const settle = () =>
-  new Promise<void>((resolve) =>
-    requestAnimationFrame(() => requestAnimationFrame(() => resolve())),
-  );
+const advance = () => fixtureTime.frame();
 const until = async (ready: () => boolean, label = "startup") => {
-  const deadline = performance.now() + 6_000;
-  while (performance.now() < deadline) {
-    if (ready()) return;
-    await settle();
-  }
-  throw new Error(
-    `Terminal links fixture did not settle: ${label}; ${JSON.stringify(calls.slice(-6))}; menu=${document.querySelector("[role=menu]")?.textContent}`,
+  await fixtureTime.until(
+    ready,
+    `Terminal links fixture did not advance: ${label}; ${JSON.stringify(calls.slice(-6))}; menu=${document.querySelector("[role=menu]")?.textContent}`,
+    6000,
   );
 };
 const input = async (method: string, params: Record<string, unknown>) => {
@@ -270,7 +266,7 @@ const pushFrame = (rows: string[], token?: string, cursor = "") => {
 const frame = async (rows: string[], linkFrame = true) => {
   term.clearSelection();
   pushFrame(rows, linkFrame ? `frame-${++frameNumber}` : undefined);
-  await settle();
+  await advance();
 };
 const links = (row: number) =>
   new Promise<ILink[]>((done) =>
@@ -306,7 +302,7 @@ const hover = async (row: number, col: number) => {
     ...point(row, col),
     modifiers: 2,
   });
-  await settle();
+  await advance();
 };
 const click = async (row: number, col: number, rehover = true) => {
   if (rehover) await hover(row, col);
@@ -318,7 +314,7 @@ const click = async (row: number, col: number, rehover = true) => {
       clickCount: 1,
       modifiers: 2,
     });
-  await settle();
+  await advance();
 };
 
 const incremental = async (text: string) => {
@@ -332,36 +328,41 @@ const incremental = async (text: string) => {
       full: false,
       bytes: btoa(text),
     });
-  await settle();
+  await advance();
 };
 const previewMenu = async (label: string) => {
   await until(() => !!document.querySelector("[role=menu]"), label);
   document.querySelector<HTMLButtonElement>("[role=menuitem]")!.click();
-  await settle();
+  await advance();
 };
 
 const action = (label: string) =>
   [...document.querySelectorAll<HTMLButtonElement>("button")].find(
     (el) => el.textContent?.trim() === label,
   );
-const touch = (type: string, points: { x: number; y: number }[] = []) =>
-  input("Input.dispatchTouchEvent", {
-    type,
-    touchPoints: points.map((p, id) => ({ ...p, id })),
-  });
+const touchDriver = nativeTouchDriver(
+  window,
+  (type, points) =>
+    input("Input.dispatchTouchEvent", {
+      type,
+      touchPoints: points.map((p, id) => ({ ...p, id })),
+    }),
+  () => new Promise<void>((resolve) => fixtureTime.real.setTimeout(resolve, 0)),
+);
+const touch = touchDriver.send;
 const tap = async (element: Element) => {
   const rect = element.getBoundingClientRect();
   await touch("touchStart", [
     { x: rect.left + rect.width / 2, y: rect.top + rect.height / 2 },
   ]);
   await touch("touchEnd");
-  await settle();
+  await advance();
 };
 let realLongPresses = 0;
 const press = async (row: number, col: number) => {
   if (realLongPresses++ === 0) {
     await touch("touchStart", [point(row, col)]);
-    await new Promise((done) => setTimeout(done, TERMINAL_LONG_PRESS_MS + 50));
+    await fixtureTime.advance(TERMINAL_LONG_PRESS_MS + 50);
   } else {
     const originalSetTimeout = window.setTimeout;
     const schedule = originalSetTimeout.bind(window);
@@ -380,14 +381,14 @@ const press = async (row: number, col: number) => {
     try {
       await touch("touchStart", [point(row, col)]);
       await until(() => activate !== null, "long-press timer registered");
-      await settle();
+      await advance();
       activate!();
     } finally {
       window.setTimeout = originalSetTimeout;
     }
   }
   await touch("touchEnd");
-  await settle();
+  await advance();
 };
 const done = async () => {
   if (action("Done")) await tap(action("Done")!);
@@ -415,7 +416,7 @@ async function runTouch() {
   ).length;
   for (const scale of [100, 125]) {
     render(scale);
-    await settle();
+    await advance();
     const url = "https://x.test/a?b=c";
     target = null;
     await frame(["", `界e\u0301 ${url}`]);
@@ -475,7 +476,7 @@ async function runTouch() {
   }
   if (viewportSmoke) return;
   render(100);
-  await settle();
+  await advance();
 
   // An agent repaints its spinner several times a second. A URL shown in the
   // text keeps Open link while its own row is unchanged (#227).
@@ -487,7 +488,7 @@ async function runTouch() {
     await press(1, 8);
     for (let tick = 1; tick <= 4; tick++) {
       pushFrame(rows(tick), `spinner-${tick}`);
-      await settle();
+      await advance();
     }
     await until(() => !!action("Open link"), "Open link survives repaints");
     await tap(action("Open link")!);
@@ -505,7 +506,7 @@ async function runTouch() {
     await press(1, 10);
     await until(() => !!action("Open link"), "labelled link offered");
     pushFrame(labelled(1), "spinner-labelled");
-    await settle();
+    await advance();
     await until(
       () => !action("Open link"),
       "a new frame withdraws a labelled link",
@@ -519,6 +520,9 @@ async function runTouch() {
   {
     const url = "https://example.com/composer";
     const state = store.get();
+    const resizeCount = calls.filter(
+      (call) => call.method === "terminal.resize",
+    ).length;
     requestTerminalComposer({
       connectionId: state.activeConnectionId!,
       generation: state.connectionGeneration,
@@ -529,7 +533,12 @@ async function runTouch() {
       "the Composer opens",
     );
     // Opening it resizes the terminal; Herdr then repaints, as here.
-    await settle();
+    await until(
+      () =>
+        calls.filter((call) => call.method === "terminal.resize").length >
+        resizeCount,
+      "Composer terminal resize acknowledged",
+    );
     await frame(["", `see ${url} now`]);
     await done();
     await until(
@@ -548,7 +557,7 @@ async function runTouch() {
     );
     await done();
     render(100);
-    await settle();
+    await advance();
   }
   // Explicit frame targets work even without the optional plain-link resolver.
   endpoint.methods.splice(endpoint.methods.indexOf("pane.link.resolve"), 1);
@@ -644,7 +653,7 @@ async function runTouch() {
     if (kind === "multi") await touch("touchStart", [point(1, 3), point(2, 3)]);
     if (kind === "cancel") await touch("touchCancel");
     else await touch("touchEnd");
-    await new Promise((resolve) => setTimeout(resolve, 500));
+    await fixtureTime.advance(500);
     check(
       !!action("Open link") || !!action("Done"),
       false,
@@ -721,7 +730,7 @@ async function runTouch() {
       url: "https://example.org/test",
       regions: [{ row: 1, start_col: 0, end_col: 23 }],
     });
-    await settle();
+    await advance();
     // A touch selection holds the displayed frame. A URL found in the text
     // stays valid while its row still shows it (#227), so after a frame the
     // late answer is offered only if the held screen still shows that URL,
@@ -768,7 +777,7 @@ async function runTouch() {
         "replacement terminal mounted",
       );
       term = terminals[terminals.length - 1]!;
-      await settle();
+      await advance();
     }
   }
   check(
@@ -886,7 +895,7 @@ async function run() {
       "URL starts current beside a hard status row",
     );
     pushFrame(["working 1", `see ${url} now`], "adjacent-status-repaint");
-    await settle();
+    await advance();
     check(
       link?.target.displayed?.(),
       true,
@@ -903,7 +912,7 @@ async function run() {
   }
   for (const scale of [100, 125]) {
     render(scale);
-    await settle();
+    await advance();
     const url = `https://example.com/${"a".repeat(term.cols * 2)}/guide`;
     const rows = [
       "",
@@ -957,7 +966,7 @@ async function run() {
       check(opened[opened.length - 1], url, `wrapped target at scale ${scale}`);
     }
     await move(term.rows - 1, term.cols - 1);
-    await settle();
+    await advance();
     check(underlined().some(Boolean), false, "leaving clears every link row");
     check(
       (await links(2))[0]?.range.start.x,
@@ -982,7 +991,7 @@ async function run() {
           regions: [{ row: 1, start_col: 0, end_col: url.length - 1 }],
         };
     pushFrame(rows, token);
-    await settle();
+    await advance();
     for (const cursorOnly of [false, true]) {
       const cursor = cursorOnly ? "\x1b[0m\x1b[2;3H\x1b[1 q\x1b[?25h" : "";
       rpcRepaint = (focus) => pushFrame(rows, token, focus ? cursor : "");
@@ -991,7 +1000,7 @@ async function run() {
       ).length;
       await hover(1, 2);
       // Observe a full repaint-storm window, not just the first resolved frame.
-      await new Promise((resolve) => setTimeout(resolve, 200));
+      await fixtureTime.advance(200);
       check(
         calls.filter((c) => c.method === "terminal.link.resolve").length -
           probes <=
@@ -1008,7 +1017,7 @@ async function run() {
         modifiers: 2,
       });
       // Wait for focus's real RPC side effect between down and up.
-      await settle();
+      await advance();
       await input("Input.dispatchMouseEvent", {
         type: "mouseReleased",
         ...point(1, 2),
@@ -1016,7 +1025,7 @@ async function run() {
         clickCount: 1,
         modifiers: 2,
       });
-      await settle();
+      await advance();
       check(
         opened.length,
         count + 1,
@@ -1091,7 +1100,7 @@ async function run() {
       );
     }
     flushSync(() => store.selectPane("other-pane"));
-    await settle();
+    await advance();
     await hover(1, 2);
     const count = opened.length;
     // Emit a real store subscription update during mouse-down, not just RPC output.
@@ -1186,7 +1195,7 @@ async function run() {
     "output preserves captured file menu",
   );
   preview.click();
-  await settle();
+  await advance();
   check(
     previews[previews.length - 1],
     "/tmp/docs/guide.md",
@@ -1222,7 +1231,7 @@ async function run() {
       "keyboard menu navigation",
     );
     (document.activeElement as HTMLButtonElement).click();
-    await settle();
+    await advance();
     const dialog = document.querySelector('[aria-label="Create workspace"]')!;
     check(
       [...dialog.querySelectorAll("input")].map((e) => e.value),
@@ -1234,7 +1243,7 @@ async function run() {
       key: "Escape",
       windowsVirtualKeyCode: 27,
     });
-    await settle();
+    await advance();
   }
 
   await frame(
@@ -1244,7 +1253,7 @@ async function run() {
   await click(1, 1);
   await until(() => !!document.querySelector("[role=menu]"), "OSC8 file menu");
   document.querySelector<HTMLButtonElement>("[role=menuitem]")!.click();
-  await settle();
+  await advance();
   check(
     previews[previews.length - 1],
     "/tmp/docs/guide one.md",
@@ -1279,7 +1288,7 @@ async function run() {
     await move(1, 20);
     await incremental(`\x1b[2;1H\x1b[2K${replacement}`);
     await move(1, 2);
-    await settle();
+    await advance();
     await click(1, 2, false);
     await previewMenu(`${native ? "native" : "custom"} same-row repaint menu`);
     check(
@@ -1305,7 +1314,7 @@ async function run() {
         term.element!.dispatchEvent(
           new WheelEvent("wheel", { bubbles: true, deltaY: 0 }),
         );
-        await settle();
+        await advance();
       }
       const count = opened.length;
       await click(1, 2, false);
@@ -1341,21 +1350,21 @@ async function run() {
   );
   await hover(1, 2);
   await move(2, 2);
-  await settle();
+  await advance();
   finishB({
     url: "https://b.example",
     regions: [{ row: 2, start_col: 0, end_col: 16 }],
   });
-  await settle();
+  await advance();
   finishA({
     url: "https://a.example",
     regions: [{ row: 1, start_col: 0, end_col: 16 }],
   });
-  await settle();
+  await advance();
   heldRows.clear();
   await move(2, 20);
   await move(2, 2);
-  await settle();
+  await advance();
   const beforeOutOfOrderClick = opened.length;
   await click(2, 2, false);
   check(

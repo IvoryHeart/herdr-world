@@ -11,6 +11,7 @@ import { tmpdir, cpus, platform, arch } from "node:os";
 import { join, resolve } from "node:path";
 import { createHash } from "node:crypto";
 import { acquireAllCheckSlots } from "../check-lock";
+import { browserSession } from "../testing/browser-session";
 import { shapes } from "./fixture";
 import { syntheticSources } from "./source";
 import { startService, snapshotCounts } from "./service";
@@ -55,6 +56,7 @@ const selected = shapes.filter(
   (s) => requestedShape === "all" || s.id === requestedShape,
 );
 const rows: any[] = [];
+let sharedBrowser: Awaited<ReturnType<typeof browserSession>> | undefined;
 let ownsOutput = false;
 const save = (row: any) => {
   rows.push(row);
@@ -109,6 +111,11 @@ try {
   const chromeVersion = chrome
     ? Bun.spawnSync([chrome, "--version"]).stdout.toString().trim()
     : "unavailable";
+  const browserConnection = async () => {
+    if (!chrome) throw new Error("Chrome is required for the scale matrix");
+    sharedBrowser ??= await browserSession(chrome, { gpu: false });
+    return sharedBrowser.env;
+  };
   const harnessHashes = Object.fromEntries(
     readdirSync("scripts/scale")
       .filter((p) => p.endsWith(".ts"))
@@ -149,7 +156,7 @@ try {
           shapes: selected,
           devices: thin ? [devices[1]] : devices,
           profileControl:
-            "all timed rounds unprofiled; extra diagnostic process per cell",
+            "all timed rounds unprofiled; extra isolated diagnostic context per cell",
           boardSizes: thin ? [] : [100, 500],
           boardRefusal: 1000,
           townInteraction:
@@ -197,7 +204,7 @@ try {
       }
       continue;
     }
-    // Independent fresh service/Chrome processes; a discarded process warmup precedes fixed measured rounds.
+    // Fresh services and isolated contexts; a discarded context warmup precedes measured rounds.
     for (let round = thin ? 0 : -1; round < rounds; round++) {
       const scratch = mkdtempSync(join(tmpdir(), "hws-"));
       const source = await syntheticSources(shape, scratch);
@@ -328,6 +335,8 @@ try {
               join(out, `${shape.id}-${round}-${view}-${device.id}`),
               false,
               seconds,
+              false,
+              await browserConnection(),
             );
             save({ kind: "browser", shape, round, warmup: round < 0, browser });
           }
@@ -347,6 +356,7 @@ try {
                 false,
                 seconds,
                 true,
+                await browserConnection(),
               ),
             });
       } finally {
@@ -409,6 +419,8 @@ try {
                 join(out, `${shape.id}-profile-${view}-${device.id}`),
                 true,
                 seconds,
+                false,
+                await browserConnection(),
               ),
             });
         if (shape.id === "room-1440")
@@ -425,6 +437,7 @@ try {
                 true,
                 seconds,
                 true,
+                await browserConnection(),
               ),
             });
       } finally {
@@ -448,5 +461,9 @@ try {
     );
   throw error;
 } finally {
-  release();
+  try {
+    await sharedBrowser?.close();
+  } finally {
+    release();
+  }
 }

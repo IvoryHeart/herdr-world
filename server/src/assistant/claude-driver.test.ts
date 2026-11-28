@@ -320,7 +320,7 @@ describe("the Claude Code driver", () => {
       signal: new AbortController().signal,
       read,
     });
-    while (!runs.length) await new Promise((resolve) => setTimeout(resolve, 1));
+    while (!runs.length) await new Promise((resolve) => setImmediate(resolve));
     await driver.stop();
     const entries = await running;
     expect(runs[0]!.killed).toBe(true);

@@ -42,7 +42,7 @@ function agent(w: World, kind = "claude", status = "idle") {
 
 /** The recipient token the browser holds: the read model's, not a recompute. */
 async function recipientOf(w: World, address: string): Promise<string> {
-  await w.settle();
+  await w.synchronize();
   const { panes } = await w.rows();
   const pane = panes.find((p) => p.pane_id === address);
   const token = pane?.core_recipient;
@@ -189,7 +189,7 @@ describe("World sends only to the program the person addressed", () => {
     const t = agent(w);
     const recipient = await recipientOf(w, t);
     w.fake.foreground(t, null);
-    await w.settle();
+    await w.synchronize();
     expect(
       await deliverCore(w.lease(), t, recipient, message("x")),
     ).toMatchObject({ status: "refused" });
@@ -205,9 +205,9 @@ describe("World sends only to the program the person addressed", () => {
     const record = w.fake.terminal(t)!;
     record.reported = false;
     w.fake.status(t, null);
-    await w.settle();
+    await w.synchronize();
     w.fake.report(t, { state: "idle", app: "claude" });
-    await w.settle();
+    await w.synchronize();
     await until(() => w.changes.length > published);
     expect(
       await deliverCore(w.lease(), t, recipient, message("x")),
@@ -223,7 +223,7 @@ describe("World sends only to the program the person addressed", () => {
   test("even a freshly forged shell token cannot admit agent sends", async () => {
     const w = await world();
     const t = w.fake.create({ argv: ["/bin/sh"] });
-    await w.settle();
+    await w.synchronize();
     const v = w.lease().runtime.core;
     const token = coreRecipientToken(
       v.epoch!.coreId,
@@ -242,7 +242,7 @@ describe("World sends only to the program the person addressed", () => {
     const t = agent(w);
     const recipient = await recipientOf(w, t);
     w.fake.replaceWithShell(t);
-    await w.settle();
+    await w.synchronize();
     const outcome = await deliverCore(
       w.lease(),
       t,
@@ -264,7 +264,7 @@ describe("World sends only to the program the person addressed", () => {
     const t = agent(w);
     const recipient = await recipientOf(w, t);
     w.fake.replaceWithShell(t, { reusePid: true });
-    await w.settle();
+    await w.synchronize();
     expect(
       await deliverCore(w.lease(), t, recipient, message("x")),
     ).toMatchObject({ status: "refused", reason: "changed" });
@@ -284,7 +284,7 @@ describe("World sends only to the program the person addressed", () => {
     });
     const recipient = await recipientOf(w, t);
     w.fake.foreground(t, { pid: 4242, name: "zsh", argv: ["zsh"], cwd: "/" });
-    await w.settle();
+    await w.synchronize();
     expect(
       await deliverCore(w.lease(), t, recipient, message("ls")),
     ).toMatchObject({
@@ -300,7 +300,7 @@ describe("World sends only to the program the person addressed", () => {
     const t = agent(w);
     const bound = await recipientOf(w, t);
     w.fake.foreground(t, null);
-    await w.settle();
+    await w.synchronize();
     const missing = await recipientOf(w, t);
     for (const token of [bound, missing])
       expect(
@@ -314,7 +314,7 @@ describe("World sends only to the program the person addressed", () => {
     const t = agent(w);
     const recipient = await recipientOf(w, t);
     w.fake.finish(t);
-    await w.settle();
+    await w.synchronize();
     expect(
       await deliverCore(w.lease(), t, recipient, message("x")),
     ).toMatchObject({ status: "refused", reason: "ended" });
@@ -377,7 +377,7 @@ describe("while core holds a send for a person typing there", () => {
     const t = agent(w);
     w.fake.holdSends = true;
     // The same send through the runtime, with nobody watching the occupant.
-    await w.settle();
+    await w.synchronize();
     const lease = w.lease();
     const fence = CoreOperationFence.admit(lease, t);
     const never = new AbortController();
@@ -388,7 +388,7 @@ describe("while core holds a send for a person typing there", () => {
     );
     await until(() => w.fake.heldSendCount === 1);
     w.fake.replaceWithShell(t);
-    await w.settle();
+    await w.synchronize();
     w.fake.releaseSends();
     await pending;
     expect(w.fake.deliveredInput).toEqual([
@@ -473,7 +473,7 @@ describe("answers to a waiting agent", () => {
       force: true,
     });
     w.fake.status(t, "working");
-    await w.settle();
+    await w.synchronize();
     expect(
       await deliverCore(w.lease(), t, recipient, {
         kind: "answer",
@@ -526,7 +526,7 @@ describe("answers to a waiting agent", () => {
     const t = agent(w, "claude", "blocked");
     const recipient = await recipientOf(w, t);
     w.fake.replaceWithShell(t);
-    await w.settle();
+    await w.synchronize();
     expect(
       await deliverCore(w.lease(), t, recipient, { kind: "keys", keys: ["1"] }),
     ).toMatchObject({ status: "refused", reason: "changed" });

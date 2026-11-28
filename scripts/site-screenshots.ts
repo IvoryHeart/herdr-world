@@ -1,3 +1,4 @@
+import { toolBrowserSession } from "./testing/browser-session";
 /**
  * herdr.world's Town screenshots: captures the production TownCanvas with the
  * website's synthetic scene (web/src/world/testing/site-shots/scene.ts) and
@@ -16,12 +17,12 @@
 import { mkdir, mkdtemp, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { basename, join, resolve } from "node:path";
-import { Cdp, endpoint } from "./town-golden";
-import { socialCardHtml, socialCards } from "./site-social-card";
+import { Cdp } from "./town-golden";
 import {
-  GPU_FLAGS,
-  SWIFTSHADER_FLAGS,
-} from "../web/src/world/testing/chromeRendering";
+  assetUrlImports,
+  rawSvgImports,
+} from "../web/src/world/testing/assetUrlImports";
+import { socialCardHtml, socialCards } from "./site-social-card";
 
 type ZoomStep = "all" | "in" | "out";
 
@@ -123,25 +124,15 @@ export async function runSiteScreenshots(options: {
         : new Response("Not found", { status: 404 });
     },
   });
-  const browser = Bun.spawn(
-    [
-      options.chrome,
-      "--headless=new",
-      "--remote-debugging-port=0",
-      "--remote-debugging-address=127.0.0.1",
-      "--enable-webgl",
-      ...(options.gpu ? GPU_FLAGS : SWIFTSHADER_FLAGS),
-      "--disable-background-networking",
-      "--no-first-run",
-      "--no-default-browser-check",
-      `--user-data-dir=${join(scratch, "profile")}`,
-      "about:blank",
-    ],
-    { stdout: "ignore", stderr: "pipe" },
-  );
+  let session: Awaited<ReturnType<typeof toolBrowserSession>> | undefined;
   let cdp: Cdp | undefined;
   try {
+    session = await toolBrowserSession(options.chrome, {
+      gpu: options.gpu,
+    });
+    const browser = session.browser;
     const build = await Bun.build({
+      plugins: [rawSvgImports, assetUrlImports],
       entrypoints: [page],
       outdir: join(scratch, "bundle"),
       target: "browser",
@@ -150,10 +141,11 @@ export async function runSiteScreenshots(options: {
       throw new AggregateError(build.logs, "Site scene build failed");
     for (const output of build.outputs)
       assets.set("/" + basename(output.path), output);
-    cdp = await Cdp.connect(await endpoint(browser.stderr));
+    cdp = await Cdp.connect(browser.browserEndpoint);
     const version = (await cdp.command("Browser.getVersion")).product;
     for (const shot of options.shots ?? siteShots) {
       const { targetId } = await cdp.command("Target.createTarget", {
+        browserContextId: browser.contextId,
         url: "about:blank",
       });
       try {
@@ -222,6 +214,7 @@ export async function runSiteScreenshots(options: {
       const social = resolve(options.socialDirectory);
       for (const card of socialCards) {
         const { targetId } = await cdp.command("Target.createTarget", {
+          browserContextId: browser.contextId,
           url: "about:blank",
         });
         try {
@@ -265,8 +258,7 @@ export async function runSiteScreenshots(options: {
     return { browser: version, receipts };
   } finally {
     cdp?.close();
-    browser.kill();
-    await browser.exited;
+    await session?.close();
     server.stop(true);
     await rm(scratch, { recursive: true, force: true });
   }

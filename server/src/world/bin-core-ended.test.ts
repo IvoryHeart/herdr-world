@@ -30,11 +30,14 @@ async function setup() {
     name: "lead",
   });
   const other = w.fake.create({ name: "other" });
-  await w.settle();
+  await w.synchronize();
   const committed: string[] = [];
+  // Test time: a read begun in the same millisecond as the hold witnesses
+  // nothing, so each read moves it on.
+  let time = Date.now();
   const bin = new WorldBinRegistry({
     epoch: "run1",
-    clock: { now: () => Date.now(), monotonic: () => performance.now() },
+    clock: { now: () => time, monotonic: () => time },
     scheduler: {
       schedule: (run, delay) => {
         const timer = setTimeout(run, delay);
@@ -54,7 +57,7 @@ async function setup() {
       ),
       w.core.manager,
     ),
-    Date.now,
+    () => time,
     undefined,
     undefined,
     undefined,
@@ -79,8 +82,7 @@ async function setup() {
   }).entries[0]!.id;
   /** A fresh read of every host, as World's snapshot makes. */
   const read = async () => {
-    // A read begun in the same millisecond as the hold witnesses nothing.
-    await Bun.sleep(2);
+    time += 2;
     snapshots.invalidate("box");
     await snapshots.snapshot();
   };
@@ -97,7 +99,7 @@ test("a held core agent stays while core still has its terminal", async () => {
 test("a held core agent that core removed leaves the bin with nothing closed", async () => {
   const { w, bin, id, lead, read, committed } = await setup();
   w.fake.remove(lead);
-  await w.settle();
+  await w.synchronize();
   await read();
   const state = bin.list();
   expect(state.entries).toEqual([]);

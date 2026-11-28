@@ -12,7 +12,7 @@ const failures: string[] = [];
 const check = (condition: boolean, message: string) => {
   if (!condition) failures.push(message);
 };
-const settle = () =>
+const presentFrame = () =>
   new Promise<void>((resolve) =>
     requestAnimationFrame(() => requestAnimationFrame(() => resolve())),
   );
@@ -49,7 +49,7 @@ const advance = async (ms: number) => {
       timer.fire();
     }
   });
-  await settle();
+  await presentFrame();
 };
 
 const listeners = new Set<(frame: TerminalPush) => void>();
@@ -155,7 +155,7 @@ const mount = async (kind: LoadingKind) => {
   const before = attachCalls;
   mountId++;
   update({ ...initial, layout: kind === "attach" ? layout : null });
-  await settle();
+  await presentFrame();
   check(
     kind === "navigation" || attachCalls > before,
     "attach actually started",
@@ -184,7 +184,7 @@ const finish = async (kind: LoadingKind) => {
         });
     });
   }
-  await settle();
+  await presentFrame();
 };
 const restart = async (kind: LoadingKind) => {
   if (kind === "navigation")
@@ -196,7 +196,7 @@ const restart = async (kind: LoadingKind) => {
     await admitted.promise;
     nextAttach = null;
   }
-  await settle();
+  await presentFrame();
 };
 
 try {

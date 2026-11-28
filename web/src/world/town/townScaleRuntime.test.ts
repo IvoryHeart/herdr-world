@@ -112,7 +112,11 @@ test("an asking scene agent shows answers; an answer finishes its turn for revie
   expect(latest.latest.text).toContain("May I run the migration?");
 
   const pushes: unknown[] = [];
-  scene.deskClient.onControl((control) => pushes.push(control));
+  const pushed = Promise.withResolvers<void>();
+  scene.deskClient.onControl((control) => {
+    pushes.push(control);
+    pushed.resolve();
+  });
   const status = () =>
     scene
       .get()
@@ -125,7 +129,8 @@ test("an asking scene agent shows answers; an answer finishes its turn for revie
   });
   expect(status()).toBe("working");
   now += 4_000;
-  await new Promise((resolve) => setTimeout(resolve, 50));
+  // The scene's turn ends and the desk reports it.
+  await pushed.promise;
   // Herdr reports the finished turn as idle; the service saw its stop.
   expect(status()).toBe("idle");
   expect(pushes).toEqual([{ type: "world_desk_changed" }]);

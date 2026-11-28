@@ -510,7 +510,7 @@ describe("closing a herdr-core original (real kill path)", () => {
         resolveExecutable: async (kind) => `/opt/example/bin/${kind}`,
       },
     );
-    await w.settle();
+    await w.synchronize();
     const services = {
       connectionManager: { has: () => false },
       coreControl: {
@@ -537,7 +537,7 @@ describe("closing a herdr-core original (real kill path)", () => {
       die_with_parent: true,
       name: "late",
     });
-    await w.settle();
+    await w.synchronize();
     await expect(
       side.close({ pane_id: "", terminal_id: "t1" }, admitted),
     ).rejects.toThrow("Nothing was ended.");
@@ -577,7 +577,7 @@ test("a herdr-core original moves to a Herdr TUI room and closes there", async (
       },
     );
     w.fake.status("t1", "idle");
-    await w.settle();
+    await w.synchronize();
     const services = {
       connectionManager: { has: () => false },
       coreControl: {
@@ -614,7 +614,7 @@ test("a herdr-core original moves to a Herdr TUI room and closes there", async (
     });
     expect(outcome).toMatchObject({ status: "moved" });
     expect(log[0]).toStartWith("start tui claude --resume session-1");
-    await w.settle();
+    await w.synchronize();
     expect(w.fake.terminal("t1")!.state).not.toBe("live");
   } finally {
     await w.dispose();
@@ -636,7 +636,7 @@ test("a herdr-core desk moved to another core room keeps running, and its Board 
       },
     );
     w.fake.status("t1", "idle");
-    await w.settle();
+    await w.synchronize();
     const initial = emptyBoardDocument();
     const board = new BoardStore({ read: () => initial, commit: () => {} });
     const services = {
@@ -687,7 +687,7 @@ test("a herdr-core desk moved to another core room keeps running, and its Board 
     expect(target.color_key).not.toBe(key);
     // Native: nothing started or closed; the same terminal keeps running.
     expect(log).toEqual([]);
-    await w.settle();
+    await w.synchronize();
     expect(w.fake.terminal("t1")!.state).toBe("live");
     const { layout } = board.get();
     expect(layout.colors).toEqual({ [target.color_key]: "teal" });
@@ -708,7 +708,7 @@ test("a core terminal is idle only while its own shell is alone in front", async
       name: "sleep",
       argv: ["/bin/sleep", "3600"],
     });
-    await w.settle();
+    await w.synchronize();
     const services = {
       connectionManager: { has: () => false },
       coreControl: {

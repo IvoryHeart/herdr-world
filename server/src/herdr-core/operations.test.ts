@@ -198,7 +198,7 @@ describe("launching in herdr-core (M2, M3)", () => {
     // The app adopts it by those labels: it is live, kept and placed.
     const record = w.fake.terminal("t1")!;
     expect(record).toMatchObject({ keep: true, parent: null, notify: false });
-    await w.settle();
+    await w.synchronize();
     const { workspaces, tabs, panes } = await w.rows();
     expect(workspaces).toEqual([
       { workspace_id: room.workspace_id, label: "Review", focused: false },
@@ -288,7 +288,7 @@ describe("launching in herdr-core (M2, M3)", () => {
       { topology: w.topology, resolveExecutable },
     );
     expect(runs(w)[0]!.params).toMatchObject({ cwd: "/srv/example/site" });
-    await w.settle();
+    await w.synchronize();
     expect((await w.rows()).workspaces).toContainEqual(
       expect.objectContaining({
         workspace_id: room.workspace_id,
@@ -312,7 +312,7 @@ describe("launching in herdr-core (M2, M3)", () => {
       labels: {},
       no_parent: true,
     });
-    await w.settle();
+    await w.synchronize();
     expect((await w.rows()).panes).toEqual([
       expect.objectContaining({
         pane_id: "t1",
@@ -345,7 +345,7 @@ describe("launching in herdr-core (M2, M3)", () => {
   test("a name taken meanwhile is refused by core and the next is used", async () => {
     const w = await world();
     w.fake.create({ name: "reviewer" });
-    await w.settle();
+    await w.synchronize();
     // World's view of taken names is one cut; core is the judge.
     w.fake.create({ name: "reviewer-2" });
     const outcome = await launchCore(
@@ -389,7 +389,7 @@ describe("launching in herdr-core (M2, M3)", () => {
   test("a launch into the main room records it and leads with that room", async () => {
     const w = await world();
     w.fake.create({ argv: ["/bin/sh"] });
-    await w.settle();
+    await w.synchronize();
     const outcome = await launchCore(
       w.lease(),
       {
@@ -404,7 +404,7 @@ describe("launching in herdr-core (M2, M3)", () => {
       labels: { "herdr.space": "world-main" },
     });
     expect(outcome).toMatchObject({ workspace_id: CORE_UNPLACED_WORKSPACE });
-    await w.settle();
+    await w.synchronize();
     const rows = await w.rows();
     expect(rows.workspaces.map((r) => r.workspace_id)).toEqual([
       CORE_UNPLACED_WORKSPACE,
@@ -418,7 +418,7 @@ describe("launching in herdr-core (M2, M3)", () => {
       argv: ["/bin/sh"],
       labels: { "herdr.space": "s1", "herdr.tab": "c1", where: "web / one" },
     });
-    await w.settle();
+    await w.synchronize();
     const outcome = await launchCore(
       w.lease(),
       { workspaceId: "hc:space:s1", kind: "codex", label: "Builder", text: "" },
@@ -430,7 +430,7 @@ describe("launching in herdr-core (M2, M3)", () => {
     });
     // The app's own terminal ends: World's room still reads as the app's.
     w.fake.remove(app);
-    await w.settle();
+    await w.synchronize();
     const rows = await w.rows();
     expect(rows.workspaces).toEqual([
       { workspace_id: "hc:space:s1", label: "web", focused: false },
@@ -444,7 +444,7 @@ describe("launching in herdr-core (M2, M3)", () => {
       cwd: "/srv/example/api",
       labels: { "herdr.space": "s1", "herdr.tab": "c1" },
     });
-    await w.settle();
+    await w.synchronize();
     expect((await w.rows()).workspaces).toMatchObject([
       {
         workspace_id: "hc:space:s1",
@@ -467,7 +467,7 @@ describe("launching in herdr-core (M2, M3)", () => {
     // Its generic caption is no name: the room stays derived after the app's
     // terminal ends.
     w.fake.remove(app);
-    await w.settle();
+    await w.synchronize();
     const [room] = (await w.rows()).workspaces;
     expect(room).toMatchObject({ workspace_id: "hc:space:s1" });
     expect(room).toMatchObject({ label: "api", label_derived_from: "folder" });
@@ -523,7 +523,7 @@ describe("kills name every native descendant (M7)", () => {
       name: "tests",
     });
     await launch(b.workspace_id, "Other");
-    await w.settle();
+    await w.synchronize();
     return { w, a, b, dies, outlives, grandchild };
   }
 
@@ -588,7 +588,7 @@ describe("kills name every native descendant (M7)", () => {
       name: "earlier",
     });
     w.fake.finish(earlier, "killed");
-    await w.settle();
+    await w.synchronize();
     const plan = await planCoreKill(w.lease(), ["t1"]);
     const outcome = await killCore(w.lease(), ["t1"], confirmAll(plan));
     expect(outcome.alsoEnded).toEqual([]);
@@ -603,7 +603,7 @@ describe("kills name every native descendant (M7)", () => {
       die_with_parent: true,
       name: "late",
     });
-    await w.settle();
+    await w.synchronize();
     const refused = await killCore(w.lease(), ["t1"], confirmAll(plan)).catch(
       (error) => error,
     );
@@ -621,7 +621,7 @@ describe("kills name every native descendant (M7)", () => {
     const plan = await planCoreKill(w.lease(), ["t1"]);
     // Kept: its program was lost and core put a shell at the address.
     w.fake.replaceWithShell("t1");
-    await w.settle();
+    await w.synchronize();
     await expect(killCore(w.lease(), ["t1"], confirmAll(plan))).rejects.toThrow(
       "running a different program",
     );
@@ -636,12 +636,12 @@ describe("kills name every native descendant (M7)", () => {
       name: "worker",
       argv: ["/opt/example/bin/codex"],
     });
-    await w.settle();
+    await w.synchronize();
     const plan = await planCoreKill(w.lease(), ["t1"]);
     const pid = w.fake.terminal(worker)!.pid;
     // The sub-agent is lost; its kept shell happens to get the same pid.
     w.fake.replaceWithShell(worker, { reusePid: true });
-    await w.settle();
+    await w.synchronize();
     expect(w.fake.terminal(worker)!.pid).toBe(pid);
     await expect(killCore(w.lease(), ["t1"], confirmAll(plan))).rejects.toThrow(
       "worker is running a different program",
@@ -658,12 +658,12 @@ describe("kills name every native descendant (M7)", () => {
       name: "shell",
       argv: ["/bin/sh"],
     });
-    await w.settle();
+    await w.synchronize();
     const plan = await planCoreKill(w.lease(), ["t1"]);
     const before = w.fake.terminal(shell)!;
     const [pid, argv] = [before.pid, [...before.argv]];
     w.fake.replaceWithShell(shell, { reusePid: true });
-    await w.settle();
+    await w.synchronize();
     expect(w.fake.terminal(shell)!.pid).toBe(pid);
     expect(w.fake.terminal(shell)!.argv).toEqual(argv);
     await expect(killCore(w.lease(), ["t1"], confirmAll(plan))).rejects.toThrow(
@@ -701,7 +701,7 @@ describe("kills name every native descendant (M7)", () => {
     );
     expect(outcome.uncertain).toEqual([]);
     expect(w.fake.terminal(outlives)!.state).toBe("finished");
-    await w.settle();
+    await w.synchronize();
     expect(
       (await w.rows()).workspaces.map((r) => r.workspace_id),
     ).not.toContain(a.workspace_id);
@@ -731,7 +731,7 @@ describe("World's rooms of a core (M1)", () => {
       argv: ["claude"],
       labels: { "herdr.space": "s1", "herdr.tab": "c1", where: "web / a" },
     });
-    await w.settle();
+    await w.synchronize();
     await expect(
       renameCoreRoom(w.lease(), w.topology, "hc:space:s1", "x"),
     ).rejects.toThrow("rename it in the app");
@@ -749,7 +749,7 @@ describe("World's rooms of a core (M1)", () => {
       argv: ["claude"],
       labels: { "herdr.space": "s1", "herdr.tab": "c1", where: "web / a" },
     });
-    await w.settle();
+    await w.synchronize();
     await launchCore(
       w.lease(),
       { workspaceId: "hc:space:s1", kind: "codex", label: "Two", text: "" },
@@ -764,7 +764,7 @@ describe("World's rooms of a core (M1)", () => {
       labels: { "herdr.space": "s1" },
     });
     expect(runs(w)[1]!.params).toMatchObject({ labels: {} });
-    await w.settle();
+    await w.synchronize();
     const rows = await w.rows();
     expect(rows.workspaces).toEqual([
       { workspace_id: "hc:space:s1", label: "web", focused: false },
@@ -785,7 +785,7 @@ describe("World's rooms of a core (M1)", () => {
       { topology: w.topology, resolveExecutable },
     );
     w.fake.finish("t1");
-    await w.settle();
+    await w.synchronize();
     expect((await w.rows()).tabs).toEqual([]);
     await createCoreRoom(w.lease(), w.topology, "S");
     expect(w.topology.get(w.fake.coreId).rooms.flatMap((r) => r.tabs)).toEqual(
