@@ -220,6 +220,46 @@ function addedLines(diff: string): Map<number, string> {
   return lines;
 }
 
+/** One Git read per parent, including binary entries and literal unusual paths. */
+function parentAdditions(cwd: string, parent: string, commit: string) {
+  const diff = git(cwd, [
+    "diff",
+    "--no-color",
+    "--no-ext-diff",
+    "--no-textconv",
+    "--no-renames",
+    "--numstat",
+    "-z",
+    "--patch",
+    "--unified=0",
+    parent,
+    commit,
+    "--",
+  ]);
+  if (!diff) return new Map<string, Map<number, string>>();
+  const boundary = diff.indexOf("\0\0");
+  if (boundary < 0) throw new Error("Privacy diff has no path inventory");
+  // Numstat's NUL-delimited paths are literal, unlike quoted patch headers.
+  const files = diff
+    .slice(0, boundary)
+    .split("\0")
+    .map((entry) => {
+      const name = /^[\d-]+\t[\d-]+\t([\s\S]*)$/.exec(entry)?.[1];
+      if (name === undefined)
+        throw new Error("Privacy diff has an invalid path");
+      return name;
+    });
+  const patches = diff
+    .slice(boundary + 2)
+    .split(/^diff --git /m)
+    .slice(1);
+  if (files.length !== patches.length)
+    throw new Error("Privacy diff path/patch inventory mismatch");
+  return new Map(
+    files.map((file, index) => [file, addedLines(patches[index]!)]),
+  );
+}
+
 /** Scan full messages and additions absent from every parent of each introduced commit.
  * A net tree diff would miss a leak deleted later in the very same push. */
 export function scanPrivacyRange(
@@ -267,37 +307,15 @@ export function scanPrivacyRange(
       .split(" ")
       .slice(1);
     if (!parents.length) parents.push(emptyTree);
-    const diffArgs = [
-      "diff",
-      "--no-color",
-      "--no-ext-diff",
-      "--no-textconv",
-      "--no-renames",
-    ];
-    const files = git(cwd, [
-      ...diffArgs,
-      parents[0],
-      commit,
-      "--name-only",
-      "-z",
-      "--",
-    ])
-      .split("\0")
-      .filter(Boolean);
-    for (const file of files) {
-      let additions: Map<number, string> | undefined;
-      for (const parent of parents) {
-        // Let Git identify binary blobs; never force their bytes into text.
-        const lines = addedLines(
-          git(cwd, [...diffArgs, parent, commit, "--unified=0", "--", file]),
-        );
-        if (!additions) additions = lines;
-        else
-          for (const line of additions.keys())
-            if (!lines.has(line)) additions.delete(line);
-        if (!additions.size) break;
-      }
-      for (const [line, text] of additions ?? [])
+    const [first, ...others] = parents.map((parent) =>
+      parentAdditions(cwd, parent, commit),
+    );
+    for (const [file, additions] of first!) {
+      // Merge additions must be absent from every parent, as before.
+      for (const other of others)
+        for (const line of additions.keys())
+          if (!other.get(file)?.has(line)) additions.delete(line);
+      for (const [line, text] of additions)
         for (const rule of privacyRules(
           text,
           file === publishedAttributionFile ? publishedEmails : undefined,

@@ -529,6 +529,34 @@ test("literal Git pathspec characters cannot hide added content", () =>
     );
   }));
 
+test("batched privacy patches retain literal paths, line numbers and deleted leaks", () =>
+  repository(({ root, base, git, commit }) => {
+    const paths = [
+      "with\ttab.md",
+      "with\nnewline.md",
+      'with"quote.md',
+      "unicode-雪.md",
+    ];
+    for (const path of paths)
+      writeFileSync(join(root, path), `Safe\n${login}\n`);
+    writeFileSync(join(root, "binary.dat"), Buffer.from(`\0${email}`));
+    git("add", "--all");
+    git("commit", "-qm", "Add mixed files");
+    const introduced = git("rev-parse", "HEAD");
+    for (const path of paths) rmSync(join(root, path));
+    git("add", "--all");
+    git("commit", "-qm", "Remove files");
+    const head = commit("Safe final tree\n");
+    expect(scanPrivacyRange(root, base, head)).toEqual(
+      [...paths].sort().map((file) => ({
+        file,
+        line: 2,
+        rule: "login-token",
+        commit: introduced,
+      })),
+    );
+  }));
+
 test("push and PR events scan exact commits; new branches and force pushes stay covered", () =>
   repository(({ root, git, base, commit }) => {
     const bad = commit(`${email}\n`);
