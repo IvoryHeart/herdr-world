@@ -49,7 +49,7 @@ export type TownArrival = {
   id: number;
   agentKey: string;
   from: TownArrivalFrom;
-  /** When it steps out (ms, performance.now()); before then it waits. */
+  /** When it steps out (ms, clock.monotonic()); before then it waits. */
   begin: number;
   /** When it reaches the front door; `begin` when it does not walk. */
   end: number;

@@ -14,6 +14,18 @@
 - `scripts/coverage.test.ts`
 - `quint/models.ts`
 - `scripts/ci-model-plan.ts`, `scripts/ci-model-inputs.ts`, `scripts/ci-model-cache.ts` (independent model input closures and main-only evidence reuse)
+- `scripts/ci-model-groups.ts`, `scripts/ci-model-groups.test.ts` (four time-packed runner groups, memory-bounded waves of up to four parts, shared resource receipts and per-part cache admission)
+- `scripts/ci-world-tests.ts`, `scripts/world-browser-cases.ts`, `scripts/world-browser-cases.test.ts` (six timed case shards, one Chrome with two isolated contexts, complete fallback selection)
+- `scripts/testing/browser-tls.ts` (job-only generated TLS pin and bounded per-context origin tunnel for native security fixtures)
+- `scripts/testing/browser-session.ts`, `scripts/run-browser-tests.ts` (one owned Chrome, isolated context routing/lifecycle, event readiness and phase receipts)
+- `web/src/world/testing/sharedBrowserBuild.ts`, `web/src/world/testing/assertionPhases.ts`, `web/src/world/testing/browserEvents.ts` (immutable prepared bundles, retained assertions and event waits)
+- `web/src/clock.ts`, `web/src/world/testing/testClock.ts`, `web/src/world/testing/installTestClock.ts`, `web/src/world/testing/snapshotClock.ts` (injectable web time and driven test schedulers)
+- `server/src/world/snapshot.ts`, `server/src/world/snapshot-deadline.ts`, `server/src/service/world-service.ts` (existing clock/scheduler ports own snapshot deadlines and transport yields)
+- `scripts/check-test-waits.ts`, `scripts/test-waits-allowlist.ts`, `scripts/check-clock-ports.ts`, `scripts/clock-ports-allowlist.json`, `scripts/test-short-polls-allowlist.json`, `scripts/testing/inline-browser-scripts.ts` (browser wait prohibition and shrinking native production time counts)
+- `scripts/test-timings.ts`, `scripts/local-verification.ts` (queue-excluded lane measurements and conservative complete local model reuse)
+- `scripts/test-chrome.ts`, `scripts/check-delivery.ts` (local/CI Chrome pin and verification after browser lanes)
+- `scripts/ci-unit-schedule.ts`, `scripts/ci-unit-schedule.test.ts` (unit scheduling inputs independent of appended static/web/reporting work)
+- `scripts/ci-run-timing.ts`, `scripts/ci-run-timing.test.ts` (expanded job count and start/end offsets)
 - `scripts/ci-model-parts.ts`, `scripts/ci-verification.ts` (complete split-model evidence and canonical aggregation)
 - `tools/quint/model-resources.json`, `tools/quint/tlc-ci.json` (owner-approved four-CPU model-only CI envelope)
 - `scripts/features.ts`
@@ -57,9 +69,11 @@
 - `scripts/release-channel-upgrade.py`
 - `scripts/release-npm-smoke.ts`
 - `scripts/test-retry.ts` and `scripts/test-retry.test.ts` (CI-only scoped file/case recovery and JUnit proof)
-- `scripts/flaky-test-policy.ts` and `scripts/flaky-test-policy.test.ts` (file/case identity, distinct-run ledger, seven-day limit and explicit quarantine)
-- `scripts/flaky-tests.ts` and `scripts/flaky-tests.test.ts` (Delivery summary/read-only gate; same-repository source admission, trusted serialized issue updates and commit status)
-- `.github/workflows/flaky-tests.yml` (default-branch tracker; skips fork runs before downloading same-repository candidate artifacts as data)
+- `scripts/flaky-test-policy.ts` and `scripts/flaky-test-policy.test.ts` (retry report validation, file/case identity and safe summaries)
+- `scripts/flaky-tests.ts` and `scripts/flaky-tests.test.ts` (non-blocking job summaries and consolidated flaky.json artifacts; 24-hour snapshot, same-repository source admission, ZIP data decoding and one idempotent tracking issue)
+- `scripts/ci-workflow.test.ts` (daily/manual triggers, default-branch authority and informational reporting independent of Delivery)
+- `.github/workflows/ci.yml`, `.github/workflows/world-browser.yml` (retry summaries/artifacts and privacy inside existing jobs; cancellation on superseded heads and PR closure)
+- `.github/workflows/flaky-tests.yml` (one daily/manual default-branch issue reporter; no workflow_run or commit statuses)
 - `scripts/ci-tests.ts`, `scripts/run-tests.ts`, `scripts/run-world-tests.ts` (retry opt-in and shared browser assets)
 - `scripts/ci-unit-shards.ts`, `scripts/ci-unit-timings.json`, `scripts/ci-unit-timings.ts` (four timed unit partitions, build consumers and JUnit timing refresh)
 - `scripts/ci-unit-shards.test.ts`, `scripts/ci-unit-comparison.ts`, `scripts/ci-unit-comparison.test.ts` (complete unit inventory and twenty required serial/parallel controls for scheduler changes)
@@ -71,7 +85,9 @@
 - `server/src/config/service-discovery.ts`
 - `server/src/config/service-uninstall.test.ts`
 - `scripts/`
-- `.github/workflows/behavioral-verification.yml`, `scripts/ci-workflow.test.ts` (unconditional current-tree type/notices checks alongside reusable model shards)
+- `.github/workflows/behavioral-verification.yml`, `scripts/ci-workflow.test.ts` (current-tree type/notices checks on group 1, complete model evidence, and the sixteen-job full graph budget)
+- `scripts/ci-model-plan.ts`, `scripts/ci-model-plan.test.ts`, `scripts/ci-model-groups.ts`, `scripts/ci-model-groups.test.ts` (memory-safe waves distributed by recorded wave wall time, diagnostic allowance on runner 1, complete cache-subset inventory and failure/cancellation admission)
+- `.github/workflows/cancel-closed.yml` (trusted base-only cancellation, no PR checkout or test execution)
 - `.github/workflows/`
 - `.githooks/`
 - `site/`
@@ -111,11 +127,15 @@
   result reuse. GitHub merges after checks and review requirements pass. Only CI
   subscribes directly to merge groups; see [CI ownership](../../../docs/ci-pipelines.md).
 
-- **Flaky tests.** Open a PR's Checks → Delivery checks → Flaky tests for every
-  recovered file/case. Issues labelled `flaky` retain occurrences and run links.
-  More than three runs in seven days blocks the file until the owner closes the
-  fixed cause or explicitly adds `flaky-quarantined`; quarantine never excuses
-  a second failure. See [CI guidance](../../../docs/ci-pipelines.md#flaky-tests).
+- **Flaky tests.** Open a test job's summary → Flaky tests, or download the
+  `flaky-tests-delivery-<attempt>` artifact for its small `flaky.json`. Reporting
+  never gates delivery; a persistent test failure still fails its job. Actions →
+  Daily flaky tests → Run workflow (default branch) refreshes Issues → Flaky tests
+  with the last 24 hours' retry counts and latest run links. Cancelled/skipped and
+  fork runs are excluded. Only the Delivery checks check run is required by the
+  ruleset; there are no accounting statuses or per-run tracker workflows. See
+  [CI guidance](../../../docs/ci-pipelines.md#flaky-tests) for window, recovery and
+  legacy-status rollout details.
 
 - **Unit scheduling.** Open a PR's Checks → Non-browser tests for the four timed
   shards. Scheduling changes must complete twenty serial/parallel pairs in each

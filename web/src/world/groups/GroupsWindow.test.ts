@@ -1,3 +1,7 @@
+import {
+  launchTestBrowser,
+  type TestBrowser,
+} from "../../../../scripts/testing/browser-session";
 // @world-browser-suite
 import { expect, test } from "bun:test";
 import { mkdir, mkdtemp, readFile, rm } from "node:fs/promises";
@@ -28,14 +32,14 @@ test.skipIf(!chrome).each([
   async (width: number, height: number) => {
     const directory = await mkdtemp(join(tmpdir(), "groups-browser-"));
     const fixture = await groupsBrowserServer(directory);
-    let child: ReturnType<typeof Bun.spawn> | undefined;
+    let child: TestBrowser | undefined;
     let socket: WebSocket | undefined;
     let cdp:
       | ((method: string, params?: object) => Promise<Record<string, unknown>>)
       | undefined;
     const log = join(directory, "browser.log");
     try {
-      child = Bun.spawn(
+      child = await launchTestBrowser(
         [
           chrome!,
           "--headless=new",
@@ -49,6 +53,7 @@ test.skipIf(!chrome).each([
         ],
         { stdout: "ignore", stderr: Bun.file(log) },
       );
+      await child.start();
       const requested = (async () => {
         const port = await waitForChromePort(
           child!,

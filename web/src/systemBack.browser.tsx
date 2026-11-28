@@ -1,3 +1,5 @@
+import { clock as fixtureTime } from "./world/testing/installTestClock";
+import { observeCondition } from "./world/testing/browserEvents";
 import type { ReactNode } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { flushSync } from "react-dom";
@@ -10,13 +12,20 @@ import {
   stepBack,
   useSystemBack,
   type SystemBackLevel,
+  isBackPending,
 } from "./systemBack";
 
 const failures: string[] = [];
 const check = (condition: boolean, message: string) => {
   if (!condition) failures.push(message);
 };
-const settle = () => new Promise((resolve) => setTimeout(resolve, 80));
+const advance = async () => {
+  await fixtureTime.advance(80);
+  await observeCondition(
+    () => !isBackPending(),
+    "owned history traversal lands",
+  );
+};
 
 type Name = "terminal" | "composer" | "navigation" | "menu";
 const levels: Record<Name, SystemBackLevel> = {
@@ -65,13 +74,43 @@ const guarded = () =>
   "herdrBack" in history.state;
 const at = () => location.pathname;
 async function userBack() {
+  const popped = new Promise<void>((resolve) =>
+    window.addEventListener("popstate", () => resolve(), { once: true }),
+  );
   history.back();
-  await settle();
+  await popped;
+  await advance();
+}
+async function userForward(guards: number) {
+  const popped = Promise.withResolvers<void>();
+  const changed = () => {
+    if (--guards === 0) {
+      window.removeEventListener("popstate", changed);
+      popped.resolve();
+    }
+  };
+  window.addEventListener("popstate", changed);
+  history.forward();
+  await popped.promise;
+  await advance();
+}
+async function screenBack(message: string) {
+  const popped = Promise.withResolvers<void>();
+  const changed = () => popped.resolve();
+  window.addEventListener("popstate", changed);
+  try {
+    const accepted = stepBack();
+    check(accepted, message);
+    if (accepted) await popped.promise;
+  } finally {
+    window.removeEventListener("popstate", changed);
+  }
+  await advance();
 }
 // Every case starts on /office, reached from /graph, with nothing open.
 async function start() {
   show([]);
-  await settle();
+  await advance();
   history.pushState(null, "", "/graph");
   history.pushState(null, "", "/office");
   closed = [];
@@ -86,7 +125,7 @@ async function run() {
     const label = "Inspector navigation below transient menus";
     await start();
     show(["terminal", "composer", "navigation", "menu"]);
-    await settle();
+    await advance();
     for (const name of [
       "menu",
       "navigation",
@@ -108,10 +147,10 @@ async function run() {
     const label = "layers closed together";
     await start();
     show(["terminal", "composer"]);
-    await settle();
+    await advance();
     check(guarded(), `${label}: no guard while layers are open`);
     show([]);
-    await settle();
+    await advance();
     check(at() === "/office" && !guarded(), `${label}: guard left behind`);
     await userBack();
     check(at() === "/graph", `${label}: Back needed more than one press`);
@@ -121,25 +160,25 @@ async function run() {
     const label = "on-screen and system Back mixed";
     await start();
     show(["terminal"]);
-    await settle();
+    await advance();
     show(["terminal", "composer"]);
-    await settle();
+    await advance();
     await userBack();
     check(
       closed.join() === "composer" && open.has("terminal") && guarded(),
       `${label}: Back did not close only Composer: ${closed.join()}`,
     );
     show([]);
-    await settle();
+    await advance();
     check(at() === "/office" && !guarded(), `${label}: guard left behind`);
     await userBack();
     check(at() === "/graph", `${label}: Back did not reach the prior route`);
 
     await start();
     show(["terminal", "composer"]);
-    await settle();
+    await advance();
     show(["terminal"]);
-    await settle();
+    await advance();
     check(guarded(), `${label}: terminal lost its guard`);
     await userBack();
     check(
@@ -156,9 +195,9 @@ async function run() {
     const label = "Back pushes no history";
     await start();
     show(["terminal"]);
-    await settle();
+    await advance();
     show(["terminal", "composer"]);
-    await settle();
+    await advance();
     const realPush = history.pushState.bind(history);
     let pushes = 0;
     history.pushState = (...args: Parameters<History["pushState"]>) => {
@@ -185,30 +224,30 @@ async function run() {
     const label = "layers registered together";
     await start();
     show(["terminal", "composer"]);
-    await settle();
+    await advance();
     updateLayoutPreferences({ mode: "desktop" });
-    await settle();
+    await advance();
     check(!guarded(), `${label}: desktop kept a guard`);
     updateLayoutPreferences({ mode: "mobile" });
-    await settle();
+    await advance();
     await userBack();
     check(
       closed.join() === "composer" && open.has("terminal"),
       `${label}: Back closed ${closed.join()} instead of Composer`,
     );
     show([]);
-    await settle();
+    await advance();
   }
 
   {
     const label = "layer opened while a Back is pending";
     await start();
     show(["menu"]);
-    await settle();
+    await advance();
     show([]);
     await Promise.resolve();
     show(["terminal"]);
-    await settle();
+    await advance();
     check(
       open.has("terminal") && guarded() && at() === "/office",
       `${label}: terminal closed or unguarded`,
@@ -223,12 +262,12 @@ async function run() {
     const label = "route opened from a layer";
     await start();
     show(["terminal"]);
-    await settle();
+    await advance();
     const url = new URL(location.href);
     url.pathname = "/spaces";
     pushRoute({ herdrFrom: "/office" }, url);
     show([]);
-    await settle();
+    await advance();
     check(at() === "/spaces" && !guarded(), `${label}: route not current`);
     await userBack();
     check(at() === "/office", `${label}: Back from the route went ${at()}`);
@@ -242,17 +281,17 @@ async function run() {
     const label = "route opened from stacked layers";
     await start();
     show(["terminal"]);
-    await settle();
+    await advance();
     show(["terminal", "composer"]);
-    await settle();
+    await advance();
     // Three layers leave two guards below the route.
     show(["terminal", "composer", "menu"]);
-    await settle();
+    await advance();
     const url = new URL(location.href);
     url.pathname = "/spaces";
     pushRoute({ herdrFrom: "/office" }, url);
     show([]);
-    await settle();
+    await advance();
     check(at() === "/spaces", `${label}: route not current`);
     await userBack();
     check(
@@ -260,7 +299,11 @@ async function run() {
       `${label}: Back from the route reached ${at()}`,
     );
     history.forward();
-    await settle();
+    await observeCondition(
+      () => at() === "/spaces",
+      "Forward crosses stacked guards to the route",
+    );
+    await advance();
     check(
       at() === "/spaces",
       `${label}: Forward from Office stayed at ${at()}`,
@@ -277,14 +320,13 @@ async function run() {
     const label = "Forward ends in stacked leftover guards";
     await start();
     show(["terminal"]);
-    await settle();
+    await advance();
     show(["terminal", "composer"]);
-    await settle();
+    await advance();
     show([]);
-    await settle();
+    await advance();
     check(at() === "/office" && !guarded(), `${label}: guards left current`);
-    history.forward();
-    await settle();
+    await userForward(2);
     // Forward has nowhere real to go: it must not leave Office.
     check(at() === "/office", `${label}: Forward left Office for ${at()}`);
     await userBack();
@@ -297,15 +339,14 @@ async function run() {
     const label = "route chosen on a leftover guard";
     await start();
     show(["terminal"]);
-    await settle();
+    await advance();
     show([]);
-    await settle();
-    history.forward();
-    await settle();
+    await advance();
+    await userForward(1);
     const url = new URL(location.href);
     url.pathname = "/spaces";
     pushRoute({ herdrFrom: "/office" }, url);
-    await settle();
+    await advance();
     check(at() === "/spaces", `${label}: route not current`);
     await userBack();
     check(at() === "/office", `${label}: Back from the route reached ${at()}`);
@@ -317,15 +358,13 @@ async function run() {
     const label = "on-screen Back steps like system Back";
     await start();
     show(["terminal", "composer"]);
-    await settle();
-    check(stepBack(), `${label}: nothing to step back from`);
-    await settle();
+    await advance();
+    await screenBack(`${label}: nothing to step back from`);
     check(
       closed.join() === "composer" && open.has("terminal") && guarded(),
       `${label}: closed ${closed.join()} instead of Composer`,
     );
-    check(stepBack(), `${label}: terminal not closable`);
-    await settle();
+    await screenBack(`${label}: terminal not closable`);
     check(
       closed.join() === "composer,terminal" && at() === "/office",
       `${label}: terminal did not close to Office`,
@@ -339,9 +378,9 @@ async function run() {
     const label = "unmount";
     await start();
     show(["terminal"]);
-    await settle();
+    await advance();
     root.unmount();
-    await settle();
+    await advance();
     check(guarded() && at() === "/office", `${label}: history moved`);
   }
 }

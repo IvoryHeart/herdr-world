@@ -2,6 +2,12 @@ import { publishedHostGrouping } from "../../../shared/hostGrouping";
 import { herdrRuntimeFixture } from "../../../server/src/adapters/testing/runtime";
 import { parseObservationBase } from "../../../server/src/world/observation-v1";
 import { WorldSnapshotService } from "../../../server/src/world/snapshot";
+import {
+  systemClock,
+  systemScheduler,
+  type Clock,
+  type Scheduler,
+} from "../../../server/src/service/clock";
 
 export class InputDriver {
   private id = 0;
@@ -35,6 +41,13 @@ export class InputDriver {
 export function createDenseSnapshotFixture({
   workingInitially = false,
   maximumScale = false,
+  clock = systemClock,
+  scheduler = systemScheduler,
+}: {
+  workingInitially?: boolean;
+  maximumScale?: boolean;
+  clock?: Clock;
+  scheduler?: Scheduler;
 } = {}) {
   const ids = maximumScale
     ? ["alpha", "beta", "synthetic-0"]
@@ -73,43 +86,57 @@ export function createDenseSnapshotFixture({
     ReturnType<typeof Promise.withResolvers<void>>
   >();
   let attention = false;
+  let attentionReady = Promise.withResolvers<void>();
   const stalledIds = maximumScale ? ids.slice(1) : ids.slice(-3);
-  const service = new WorldSnapshotService({
-    list: () =>
-      ids.map((id) => ({
-        id,
-        label: id,
-        source: "fixture",
-        is_default: id === ids[0],
-        state: "ready" as const,
+  const service = new WorldSnapshotService(
+    {
+      list: () =>
+        ids.map((id) => ({
+          id,
+          label: id,
+          source: "fixture",
+          is_default: id === ids[0],
+          state: "ready" as const,
+          generation: 7,
+        })),
+      readyRuntimeLease: (connectionId) => ({
+        connectionId,
         generation: 7,
-      })),
-    readyRuntimeLease: (connectionId) => ({
-      connectionId,
-      generation: 7,
-      isCurrent: () => true,
-      runtime: {
-        ...herdrRuntimeFixture({
-          async call(method: string) {
-            await stalls.get(connectionId)?.promise;
-            if (method === "workspace.list") return { workspaces };
-            if (method === "tab.list") return { tabs };
-            if (method === "pane.list")
-              return {
-                panes:
-                  attention && connectionId === "alpha"
-                    ? panes.map((pane) => ({
-                        ...pane,
-                        agent_status: "working",
-                      }))
-                    : panes,
-              };
-            return { agents: [] };
-          },
-        }),
-      },
-    }),
-  });
+        isCurrent: () => true,
+        runtime: {
+          ...herdrRuntimeFixture({
+            async call(method: string) {
+              await stalls.get(connectionId)?.promise;
+              if (method === "workspace.list") return { workspaces };
+              if (method === "tab.list") return { tabs };
+              if (method === "pane.list")
+                return {
+                  panes:
+                    attention && connectionId === "alpha"
+                      ? panes.map((pane) => ({
+                          ...pane,
+                          agent_status: "working",
+                        }))
+                      : panes,
+                };
+              return { agents: [] };
+            },
+          }),
+        },
+      }),
+    },
+    clock.now,
+    undefined,
+    undefined,
+    undefined,
+    (id) => {
+      if (attention && id === "alpha")
+        setImmediate(() => attentionReady.resolve());
+    },
+    undefined,
+    undefined,
+    scheduler,
+  );
   // The service publishes the grouping of the hosts it holds.
   service.publishWith({
     values: () => ({}),
@@ -124,11 +151,14 @@ export function createDenseSnapshotFixture({
   return {
     service,
     hostCount: ids.length,
+    now: clock.now,
+    attentionReady: () => attentionReady.promise,
     async snapshot(params?: unknown) {
       const base = parseObservationBase(params);
       return service.observation.reply(await service.snapshot(params), base);
     },
     startStalledAttentionRefresh() {
+      attentionReady = Promise.withResolvers<void>();
       attention = true;
       service.invalidate("alpha");
       for (const id of stalledIds) {

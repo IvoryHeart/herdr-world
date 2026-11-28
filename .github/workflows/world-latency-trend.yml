@@ -10,7 +10,19 @@ on:
     push:
         branches: [main]
         paths:
-            - web/src/**
+            - "web/src/world/**"
+            - "web/src/clock.ts"
+            - "web/src/api.ts"
+            - "web/src/store.ts"
+            - "web/src/layoutPreferences.ts"
+            - "web/src/browserStorage.ts"
+            - "web/src/types.ts"
+            - "web/src/styles/**"
+            - "web/src/style*.css"
+            - "web/public/**"
+            - "web/src/components/**"
+            - "web/src/icons/**"
+            - "web/src/*.css"
             - web/package.json
             - shared/**
             - package.json
@@ -26,7 +38,19 @@ on:
     pull_request:
         types: [labeled, synchronize]
         paths:
-            - web/src/**
+            - "web/src/world/**"
+            - "web/src/clock.ts"
+            - "web/src/api.ts"
+            - "web/src/store.ts"
+            - "web/src/layoutPreferences.ts"
+            - "web/src/browserStorage.ts"
+            - "web/src/types.ts"
+            - "web/src/styles/**"
+            - "web/src/style*.css"
+            - "web/public/**"
+            - "web/src/components/**"
+            - "web/src/icons/**"
+            - "web/src/*.css"
             - web/package.json
             - shared/**
             - package.json

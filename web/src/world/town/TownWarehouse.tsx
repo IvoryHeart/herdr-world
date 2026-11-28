@@ -1,3 +1,4 @@
+import { clock } from "../../clock";
 import {
   memo,
   useCallback,
@@ -90,7 +91,7 @@ function useLeaving(office: Office, snapshot: WorldSourcesSnapshot) {
       }));
     if (!batch.length) return;
     setLeaving((list) => [...list, ...batch]);
-    const timer = window.setTimeout(() => {
+    const timer = clock.setTimeout(() => {
       timers.current.delete(timer);
       setLeaving((list) => list.filter((entry) => !batch.includes(entry)));
     }, TOWN_WAREHOUSE_LEAVE_MS);
@@ -99,7 +100,7 @@ function useLeaving(office: Office, snapshot: WorldSourcesSnapshot) {
   useEffect(() => {
     const pending = timers.current;
     return () => {
-      for (const timer of pending) window.clearTimeout(timer);
+      for (const timer of pending) clock.clearTimeout(timer);
     };
   }, []);
   return leaving;
@@ -116,7 +117,7 @@ const yardSlots = (count: number) =>
 function useExpiry(snapshot: WorldSourcesSnapshot) {
   const [tick, setTick] = useState(0);
   useEffect(() => {
-    const now = Date.now();
+    const now = clock.now();
     let next = Infinity;
     for (const item of snapshot.items) {
       const expires = item.prObservation?.expiresAt;
@@ -124,11 +125,11 @@ function useExpiry(snapshot: WorldSourcesSnapshot) {
         next = Math.min(next, expires);
     }
     if (!Number.isFinite(next)) return;
-    const timer = window.setTimeout(
+    const timer = clock.setTimeout(
       () => setTick((value) => value + 1),
       Math.min(next - now + 20, 2 ** 31 - 1),
     );
-    return () => window.clearTimeout(timer);
+    return () => clock.clearTimeout(timer);
   }, [snapshot, tick]);
 }
 
@@ -163,7 +164,7 @@ export const TownWarehouse = memo(function TownWarehouse({
   const snapshot = useTownWarehouseSources();
   // Read at every render: an expiring detail re-renders it (useExpiry).
   useExpiry(snapshot);
-  const office = townWarehouse(snapshot, Date.now());
+  const office = townWarehouse(snapshot, clock.now());
   const openWork = useOpenTownWork();
   const leaving = useLeaving(office, snapshot);
   const [cardKey, setCardKey] = useState<string | null>(null);

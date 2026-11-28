@@ -4,463 +4,259 @@
   "files": {
     "scripts/agent/worktree.test.ts": {
       "pauses": 1,
-      "reason": "Not converted yet; its area sweep (#1419) replaces these with waits on the real signal."
+      "reason": "Worktree locking/symlink process fixture waits for cross-process progress; expose a child acknowledgement before converting."
     },
     "scripts/browser-diagnostics.test.ts": {
       "pauses": 1,
-      "reason": "Not converted yet; its area sweep (#1419) replaces these with waits on the real signal."
+      "reason": "Diagnostic launcher fixture checks a child lifecycle after native process scheduling; replace its dwell with lifecycle acknowledgement."
     },
     "scripts/check-lock.test.ts": {
       "pauses": 6,
-      "reason": "Not converted yet; its area sweep (#1419) replaces these with waits on the real signal."
+      "reason": "Machine-wide lock tests coordinate separate processes and stale owners; remaining fixtures need explicit contention/exit signals."
     },
     "scripts/test-temp.test.ts": {
       "pauses": 1,
-      "reason": "Not converted yet; its area sweep (#1419) replaces these with waits on the real signal."
+      "reason": "Cleanup fixture observes a process using a temporary directory; replace its process-start dwell with a child readiness signal."
     },
     "server/src/agent/agent-activity.test.ts": {
       "pauses": 2,
-      "reason": "Not converted yet; its area sweep (#1419) replaces these with waits on the real signal."
+      "reason": "Legacy agent metadata/transcript discovery uses native filesystem/cache scheduling; convert the remaining discovery owner to events or a driven clock."
     },
     "server/src/agent/conversation-matrix.test.ts": {
       "pauses": 1,
-      "reason": "Not converted yet; its area sweep (#1419) replaces these with waits on the real signal."
+      "reason": "Legacy agent metadata/transcript discovery uses native filesystem/cache scheduling; convert the remaining discovery owner to events or a driven clock."
     },
     "server/src/agent/conversation-watch.test.ts": {
       "pauses": 8,
-      "reason": "Not converted yet; its area sweep (#1419) replaces these with waits on the real signal."
+      "reason": "Legacy agent metadata/transcript discovery uses native filesystem/cache scheduling; convert the remaining discovery owner to events or a driven clock."
     },
     "server/src/agent/muse-session.test.ts": {
       "pauses": 1,
-      "reason": "Not converted yet; its area sweep (#1419) replaces these with waits on the real signal."
+      "reason": "Legacy agent metadata/transcript discovery uses native filesystem/cache scheduling; convert the remaining discovery owner to events or a driven clock."
     },
     "server/src/assistant/pi-azure-compat.test.ts": {
       "pauses": 1,
-      "reason": "Not converted yet; its area sweep (#1419) replaces these with waits on the real signal."
+      "reason": "Legacy assistant fixture coordinates child/provider completion on native scheduling; expose the completion signal before removing this wait."
     },
     "server/src/bridge/endpoint-client.test.ts": {
       "pauses": 6,
-      "reason": "Not converted yet; its area sweep (#1419) replaces these with waits on the real signal."
+      "reason": "Legacy bridge protocol/terminal fixtures use native socket, process or output-flush scheduling; await the corresponding protocol/flush completion."
     },
     "server/src/bridge/endpoint-terminal-session.test.ts": {
       "pauses": 44,
-      "reason": "Not converted yet; its area sweep (#1419) replaces these with waits on the real signal."
+      "reason": "Legacy bridge protocol/terminal fixtures use native socket, process or output-flush scheduling; await the corresponding protocol/flush completion."
     },
     "server/src/bridge/ssh-master.test.ts": {
       "pauses": 1,
-      "reason": "Not converted yet; its area sweep (#1419) replaces these with waits on the real signal."
+      "reason": "Legacy bridge protocol/terminal fixtures use native socket, process or output-flush scheduling; await the corresponding protocol/flush completion."
     },
     "server/src/bridge/ssh-openssh.test.ts": {
       "pauses": 1,
-      "reason": "Not converted yet; its area sweep (#1419) replaces these with waits on the real signal."
+      "reason": "Legacy bridge protocol/terminal fixtures use native socket, process or output-flush scheduling; await the corresponding protocol/flush completion."
     },
     "server/src/bridge/terminal-bridge.test.ts": {
       "pauses": 6,
-      "reason": "Not converted yet; its area sweep (#1419) replaces these with waits on the real signal."
+      "reason": "Legacy bridge protocol/terminal fixtures use native socket, process or output-flush scheduling; await the corresponding protocol/flush completion."
     },
     "server/src/bridge/thin-client.test.ts": {
       "pauses": 3,
-      "reason": "Not converted yet; its area sweep (#1419) replaces these with waits on the real signal."
+      "reason": "Legacy bridge protocol/terminal fixtures use native socket, process or output-flush scheduling; await the corresponding protocol/flush completion."
     },
     "server/src/connections/agent-status-subscription.test.ts": {
       "pauses": 4,
-      "reason": "Not converted yet; its area sweep (#1419) replaces these with waits on the real signal."
+      "reason": "Legacy connection handshake/reconnect fixtures still use native process/socket scheduling; expose handshake/progress completion and drive reconnect deadlines."
     },
     "server/src/connections/http-routing.test.ts": {
       "pauses": 1,
-      "reason": "Not converted yet; its area sweep (#1419) replaces these with waits on the real signal."
+      "reason": "Legacy connection handshake/reconnect fixtures still use native process/socket scheduling; expose handshake/progress completion and drive reconnect deadlines."
     },
     "server/src/connections/profile-process.test.ts": {
       "pauses": 2,
-      "reason": "Not converted yet; its area sweep (#1419) replaces these with waits on the real signal."
+      "reason": "Legacy connection handshake/reconnect fixtures still use native process/socket scheduling; expose handshake/progress completion and drive reconnect deadlines."
     },
     "server/src/connections/profile-service.test.ts": {
       "pauses": 5,
-      "reason": "Not converted yet; its area sweep (#1419) replaces these with waits on the real signal."
+      "reason": "Legacy connection handshake/reconnect fixtures still use native process/socket scheduling; expose handshake/progress completion and drive reconnect deadlines."
     },
     "server/src/connections/runtime.test.ts": {
       "pauses": 3,
-      "reason": "Not converted yet; its area sweep (#1419) replaces these with waits on the real signal."
+      "reason": "Legacy connection handshake/reconnect fixtures still use native process/socket scheduling; expose handshake/progress completion and drive reconnect deadlines."
     },
     "server/src/connections/ssh-profile-process.test.ts": {
       "pauses": 7,
-      "reason": "Not converted yet; its area sweep (#1419) replaces these with waits on the real signal."
+      "reason": "Legacy connection handshake/reconnect fixtures still use native process/socket scheduling; expose handshake/progress completion and drive reconnect deadlines."
     },
     "server/src/herdr-core/agent-sessions.test.ts": {
       "pauses": 1,
-      "reason": "Not converted yet; its area sweep (#1419) replaces these with waits on the real signal."
+      "reason": "Legacy core fixtures coordinate native process, watch/event-stream and replay progress; migrate each remaining lifecycle owner to explicit completion or its scheduler."
     },
     "server/src/herdr-core/client.test.ts": {
       "pauses": 11,
-      "reason": "Not converted yet; its area sweep (#1419) replaces these with waits on the real signal."
+      "reason": "Legacy core fixtures coordinate native process, watch/event-stream and replay progress; migrate each remaining lifecycle owner to explicit completion or its scheduler."
     },
     "server/src/herdr-core/connections.test.ts": {
       "pauses": 1,
-      "reason": "Not converted yet; its area sweep (#1419) replaces these with waits on the real signal."
+      "reason": "Legacy core fixtures coordinate native process, watch/event-stream and replay progress; migrate each remaining lifecycle owner to explicit completion or its scheduler."
     },
     "server/src/herdr-core/core.live.test.ts": {
       "pauses": 8,
-      "reason": "Not converted yet; its area sweep (#1419) replaces these with waits on the real signal."
+      "reason": "Legacy core fixtures coordinate native process, watch/event-stream and replay progress; migrate each remaining lifecycle owner to explicit completion or its scheduler."
     },
     "server/src/herdr-core/delivery.live.test.ts": {
       "pauses": 7,
-      "reason": "Not converted yet; its area sweep (#1419) replaces these with waits on the real signal."
+      "reason": "Legacy core fixtures coordinate native process, watch/event-stream and replay progress; migrate each remaining lifecycle owner to explicit completion or its scheduler."
     },
     "server/src/herdr-core/float-shell.test.ts": {
       "pauses": 1,
-      "reason": "Not converted yet; its area sweep (#1419) replaces these with waits on the real signal."
+      "reason": "Legacy core fixtures coordinate native process, watch/event-stream and replay progress; migrate each remaining lifecycle owner to explicit completion or its scheduler."
     },
     "server/src/herdr-core/logout.test.ts": {
       "pauses": 3,
-      "reason": "Not converted yet; its area sweep (#1419) replaces these with waits on the real signal."
+      "reason": "Legacy core fixtures coordinate native process, watch/event-stream and replay progress; migrate each remaining lifecycle owner to explicit completion or its scheduler."
     },
     "server/src/herdr-core/process-group.test.ts": {
       "pauses": 1,
-      "reason": "Not converted yet; its area sweep (#1419) replaces these with waits on the real signal."
+      "reason": "Legacy core fixtures coordinate native process, watch/event-stream and replay progress; migrate each remaining lifecycle owner to explicit completion or its scheduler."
     },
     "server/src/herdr-core/replay.test.ts": {
       "pauses": 5,
-      "reason": "Not converted yet; its area sweep (#1419) replaces these with waits on the real signal."
+      "reason": "Legacy core fixtures coordinate native process, watch/event-stream and replay progress; migrate each remaining lifecycle owner to explicit completion or its scheduler."
     },
     "server/src/herdr-core/shared-state.test.ts": {
       "pauses": 1,
-      "reason": "Not converted yet; its area sweep (#1419) replaces these with waits on the real signal."
+      "reason": "Legacy core fixtures coordinate native process, watch/event-stream and replay progress; migrate each remaining lifecycle owner to explicit completion or its scheduler."
     },
     "server/src/herdr-core/testing/capture-core.ts": {
       "pauses": 16,
-      "reason": "Not converted yet; its area sweep (#1419) replaces these with waits on the real signal."
+      "reason": "Legacy core fixtures coordinate native process, watch/event-stream and replay progress; migrate each remaining lifecycle owner to explicit completion or its scheduler."
     },
     "server/src/herdr-core/testing/capture-harness-start.ts": {
       "pauses": 4,
-      "reason": "Not converted yet; its area sweep (#1419) replaces these with waits on the real signal."
+      "reason": "Legacy core fixtures coordinate native process, watch/event-stream and replay progress; migrate each remaining lifecycle owner to explicit completion or its scheduler."
     },
     "server/src/herdr-core/testing/scratch-core.ts": {
       "pauses": 3,
-      "reason": "Not converted yet; its area sweep (#1419) replaces these with waits on the real signal."
+      "reason": "Legacy core fixtures coordinate native process, watch/event-stream and replay progress; migrate each remaining lifecycle owner to explicit completion or its scheduler."
     },
     "server/src/herdr-core/watch.test.ts": {
       "pauses": 22,
-      "reason": "Not converted yet; its area sweep (#1419) replaces these with waits on the real signal."
+      "reason": "Legacy core fixtures coordinate native process, watch/event-stream and replay progress; migrate each remaining lifecycle owner to explicit completion or its scheduler."
     },
     "server/src/herdr-core/watches.test.ts": {
       "pauses": 8,
-      "reason": "Not converted yet; its area sweep (#1419) replaces these with waits on the real signal."
+      "reason": "Legacy core fixtures coordinate native process, watch/event-stream and replay progress; migrate each remaining lifecycle owner to explicit completion or its scheduler."
     },
     "server/src/ide/host.test.ts": {
       "pauses": 7,
-      "reason": "Not converted yet; its area sweep (#1419) replaces these with waits on the real signal."
+      "reason": "Legacy IDE fixtures coordinate native subprocess/startup and instance liveness; expose readiness/exit signals and drive recovery deadlines."
     },
     "server/src/ide/ide-route.test.ts": {
       "pauses": 1,
-      "reason": "Not converted yet; its area sweep (#1419) replaces these with waits on the real signal."
+      "reason": "Legacy IDE fixtures coordinate native subprocess/startup and instance liveness; expose readiness/exit signals and drive recovery deadlines."
     },
     "server/src/ide/instances.test.ts": {
       "pauses": 4,
-      "reason": "Not converted yet; its area sweep (#1419) replaces these with waits on the real signal."
+      "reason": "Legacy IDE fixtures coordinate native subprocess/startup and instance liveness; expose readiness/exit signals and drive recovery deadlines."
     },
     "server/src/ide/service.test.ts": {
       "pauses": 12,
-      "reason": "Not converted yet; its area sweep (#1419) replaces these with waits on the real signal."
+      "reason": "Legacy IDE fixtures coordinate native subprocess/startup and instance liveness; expose readiness/exit signals and drive recovery deadlines."
     },
     "server/src/notifications/herdr-notification-listener.test.ts": {
       "pauses": 1,
-      "reason": "Not converted yet; its area sweep (#1419) replaces these with waits on the real signal."
+      "reason": "Late availability callback fixture waits after listener stop to prove no shell opens; expose callback drainage instead of a dwell."
     },
     "server/src/rpc/core-shared.test.ts": {
       "pauses": 2,
-      "reason": "Not converted yet; its area sweep (#1419) replaces these with waits on the real signal."
+      "reason": "Legacy shared RPC fixtures wait for remote event/reply delivery; await the owning RPC acknowledgement."
     },
     "server/src/sources/actions.test.ts": {
       "pauses": 1,
-      "reason": "Not converted yet; its area sweep (#1419) replaces these with waits on the real signal."
-    },
-    "server/src/workspace/html-preview.browser.test.ts": {
-      "pauses": 4,
-      "reason": "Not converted yet; its area sweep (#1419) replaces these with waits on the real signal."
+      "reason": "Source-action fixture waits while a native command remains in flight; use an explicit command-admission acknowledgement."
     },
     "server/src/workspace/last-step-turns.test.ts": {
       "pauses": 2,
-      "reason": "Not converted yet; its area sweep (#1419) replaces these with waits on the real signal."
+      "reason": "Legacy workspace fixtures wait on process I/O or idle debounce; use child completion events and the injected debounce scheduler."
     },
     "server/src/workspace/process.test.ts": {
       "pauses": 1,
-      "reason": "Not converted yet; its area sweep (#1419) replaces these with waits on the real signal."
+      "reason": "Legacy workspace fixtures wait on process I/O or idle debounce; use child completion events and the injected debounce scheduler."
     },
     "server/src/world/bin-close.test.ts": {
       "pauses": 1,
-      "reason": "Not converted yet; its area sweep (#1419) replaces these with waits on the real signal."
+      "reason": "Legacy World action fixtures wait for asynchronous close/ask publication; expose action/publication completion at that source owner."
     },
     "server/src/world/bin-core-ended.test.ts": {
       "pauses": 3,
-      "reason": "Not converted yet; its area sweep (#1419) replaces these with waits on the real signal."
+      "reason": "Legacy World action fixtures wait for asynchronous close/ask publication; expose action/publication completion at that source owner."
     },
     "server/src/world/board-closing.test.ts": {
       "pauses": 3,
-      "reason": "Not converted yet; its area sweep (#1419) replaces these with waits on the real signal."
+      "reason": "Legacy World action fixtures wait for asynchronous close/ask publication; expose action/publication completion at that source owner."
     },
     "server/src/world/world-cli.test.ts": {
       "pauses": 1,
-      "reason": "Not converted yet; its area sweep (#1419) replaces these with waits on the real signal."
-    },
-    "web/src/annotations.browser.tsx": {
-      "pauses": 68,
-      "reason": "Not converted yet; its area sweep (#1419) replaces these with waits on the real signal."
+      "reason": "Legacy World action fixtures wait for asynchronous close/ask publication; expose action/publication completion at that source owner."
     },
     "web/src/api.test.ts": {
       "pauses": 31,
-      "reason": "Not converted yet; its area sweep (#1419) replaces these with waits on the real signal."
+      "reason": "Legacy WebSocket hello, reconnect and heartbeat fixtures use native timer scheduling; migrate these transport fixtures to the injected clock."
     },
     "web/src/browserNavigation.test.ts": {
       "pauses": 4,
-      "reason": "Not converted yet; its area sweep (#1419) replaces these with waits on the real signal."
-    },
-    "web/src/chatMenus.browser.tsx": {
-      "pauses": 26,
-      "reason": "Not converted yet; its area sweep (#1419) replaces these with waits on the real signal."
-    },
-    "web/src/components/AgentChat.browser.tsx": {
-      "pauses": 160,
-      "reason": "Not converted yet; its area sweep (#1419) replaces these with waits on the real signal."
-    },
-    "web/src/components/AgentHistoryDrawer.browser.tsx": {
-      "pauses": 42,
-      "reason": "Not converted yet; its area sweep (#1419) replaces these with waits on the real signal."
-    },
-    "web/src/components/AgentLaunch.browser.tsx": {
-      "pauses": 28,
-      "reason": "Not converted yet; its area sweep (#1419) replaces these with waits on the real signal."
-    },
-    "web/src/components/HerdrSetupCard.browser.tsx": {
-      "pauses": 27,
-      "reason": "Not converted yet; its area sweep (#1419) replaces these with waits on the real signal."
-    },
-    "web/src/components/InspectorPaneMap.browser.tsx": {
-      "pauses": 11,
-      "reason": "Not converted yet; its area sweep (#1419) replaces these with waits on the real signal."
+      "reason": "Legacy selection/resync fixtures wait for WebSocket publication and reconnect; expose publication completion or drive the transport clock."
     },
     "web/src/components/ModalDialogs.test.ts": {
       "pauses": 5,
-      "reason": "Not converted yet; its area sweep (#1419) replaces these with waits on the real signal."
-    },
-    "web/src/components/OverlayScrollbarLayer.browser.tsx": {
-      "pauses": 12,
-      "reason": "Not converted yet; its area sweep (#1419) replaces these with waits on the real signal."
-    },
-    "web/src/components/TerminalThemeDialog.browser.tsx": {
-      "pauses": 16,
-      "reason": "Not converted yet; its area sweep (#1419) replaces these with waits on the real signal."
-    },
-    "web/src/components/ThemedSelect.browser.tsx": {
-      "pauses": 12,
-      "reason": "Not converted yet; its area sweep (#1419) replaces these with waits on the real signal."
-    },
-    "web/src/components/VisualPreview.browser.tsx": {
-      "pauses": 6,
-      "reason": "Not converted yet; its area sweep (#1419) replaces these with waits on the real signal."
-    },
-    "web/src/components/WindowArrangementMenu.browser.tsx": {
-      "pauses": 13,
-      "reason": "Not converted yet; its area sweep (#1419) replaces these with waits on the real signal."
+      "reason": "Legacy modal fixtures wait for asynchronous React/bridge completion; replace the remaining delays with rendered-control or reply events."
     },
     "web/src/components/WorkspaceInspectorViewSelect.test.ts": {
       "pauses": 1,
-      "reason": "Not converted yet; its area sweep (#1419) replaces these with waits on the real signal."
-    },
-    "web/src/configuration.browser.tsx": {
-      "pauses": 33,
-      "reason": "Not converted yet; its area sweep (#1419) replaces these with waits on the real signal."
-    },
-    "web/src/diffViewer.browser.tsx": {
-      "pauses": 5,
-      "reason": "Not converted yet; its area sweep (#1419) replaces these with waits on the real signal."
-    },
-    "web/src/filePreviewNavigation.browser.tsx": {
-      "pauses": 30,
-      "reason": "Not converted yet; its area sweep (#1419) replaces these with waits on the real signal."
-    },
-    "web/src/layerStack.browser.tsx": {
-      "pauses": 57,
-      "reason": "Not converted yet; its area sweep (#1419) replaces these with waits on the real signal."
-    },
-    "web/src/mobileTerminal.browser.tsx": {
-      "pauses": 106,
-      "reason": "Not converted yet; its area sweep (#1419) replaces these with waits on the real signal."
-    },
-    "web/src/mobileTerminal.test.ts": {
-      "pauses": 2,
-      "reason": "Not converted yet; its area sweep (#1419) replaces these with waits on the real signal."
-    },
-    "web/src/sourceFileInspector.browser.tsx": {
-      "pauses": 11,
-      "reason": "Not converted yet; its area sweep (#1419) replaces these with waits on the real signal."
+      "reason": "Inspector menu fixture waits for focus restoration before editor handoff; expose the focus-restoration completion event."
     },
     "web/src/store.test.ts": {
       "pauses": 1,
-      "reason": "Not converted yet; its area sweep (#1419) replaces these with waits on the real signal."
-    },
-    "web/src/systemBack.browser.tsx": {
-      "pauses": 75,
-      "reason": "Not converted yet; its area sweep (#1419) replaces these with waits on the real signal."
+      "reason": "Busy remove fixture waits for the production 80 ms event debounce; migrate that store debounce fixture to a driven scheduler."
     },
     "web/src/systemBack.test.ts": {
       "pauses": 2,
-      "reason": "Not converted yet; its area sweep (#1419) replaces these with waits on the real signal."
-    },
-    "web/src/taskPush.browser.tsx": {
-      "pauses": 7,
-      "reason": "Not converted yet; its area sweep (#1419) replaces these with waits on the real signal."
+      "reason": "Back-stack fixtures wait for native traversal and toast expiry; use traversal events and the injected toast clock."
     },
     "web/src/terminalEndpointPresentation.test.ts": {
       "pauses": 5,
-      "reason": "Not converted yet; its area sweep (#1419) replaces these with waits on the real signal."
-    },
-    "web/src/terminalLinks.browser.tsx": {
-      "pauses": 14,
-      "reason": "Not converted yet; its area sweep (#1419) replaces these with waits on the real signal."
+      "reason": "Buffered terminal output/reset fixtures wait on native write scheduling; expose write completion and drive presentation deadlines."
     },
     "web/src/terminalResize.test.ts": {
       "pauses": 10,
-      "reason": "Not converted yet; its area sweep (#1419) replaces these with waits on the real signal."
-    },
-    "web/src/uiScale.browser.tsx": {
-      "pauses": 4,
-      "reason": "Not converted yet; its area sweep (#1419) replaces these with waits on the real signal."
-    },
-    "web/src/uiScale.test.ts": {
-      "pauses": 1,
-      "reason": "Not converted yet; its area sweep (#1419) replaces these with waits on the real signal."
-    },
-    "web/src/world/code/CodeView.browser.tsx": {
-      "pauses": 12,
-      "reason": "Not converted yet; its area sweep (#1419) replaces these with waits on the real signal."
-    },
-    "web/src/world/code/KeptCodeView.browser.tsx": {
-      "pauses": 7,
-      "reason": "Not converted yet; its area sweep (#1419) replaces these with waits on the real signal."
-    },
-    "web/src/world/ConcurrentContexts.browser.tsx": {
-      "pauses": 4,
-      "reason": "Not converted yet; its area sweep (#1419) replaces these with waits on the real signal."
-    },
-    "web/src/world/CoreControl.browser.tsx": {
-      "pauses": 2,
-      "reason": "Not converted yet; its area sweep (#1419) replaces these with waits on the real signal."
-    },
-    "web/src/world/CoreSharedState.browser.tsx": {
-      "pauses": 13,
-      "reason": "Not converted yet; its area sweep (#1419) replaces these with waits on the real signal."
-    },
-    "web/src/world/CoreTerminalWatch.browser.tsx": {
-      "pauses": 9,
-      "reason": "Not converted yet; its area sweep (#1419) replaces these with waits on the real signal."
-    },
-    "web/src/world/DeskView.browser.tsx": {
-      "pauses": 52,
-      "reason": "Not converted yet; its area sweep (#1419) replaces these with waits on the real signal."
-    },
-    "web/src/world/FeatureHosts.browser.tsx": {
-      "pauses": 3,
-      "reason": "Not converted yet; its area sweep (#1419) replaces these with waits on the real signal."
+      "reason": "Legacy terminal resize fixtures use native debounce/size timers; migrate their resize scheduler before removing the remaining waits."
     },
     "web/src/world/memory/artefactShelf.test.ts": {
       "pauses": 3,
-      "reason": "Not converted yet; its area sweep (#1419) replaces these with waits on the real signal."
+      "reason": "Artefact shelf fixture waits for its rate-limit minute; inject the rate-limit clock into this remaining owner."
     },
     "web/src/world/memory/libraryArtefactReader.dom.test.tsx": {
       "pauses": 2,
-      "reason": "Not converted yet; its area sweep (#1419) replaces these with waits on the real signal."
-    },
-    "web/src/world/memory/MemoryLibrary.browser.tsx": {
-      "pauses": 1,
-      "reason": "Not converted yet; its area sweep (#1419) replaces these with waits on the real signal."
-    },
-    "web/src/world/memory/MemoryLibraryLifecycle.browser.tsx": {
-      "pauses": 6,
-      "reason": "Not converted yet; its area sweep (#1419) replaces these with waits on the real signal."
-    },
-    "web/src/world/ProductionContexts.browser.tsx": {
-      "pauses": 2,
-      "reason": "Not converted yet; its area sweep (#1419) replaces these with waits on the real signal."
-    },
-    "web/src/world/SharedViewCreation.browser.tsx": {
-      "pauses": 11,
-      "reason": "Not converted yet; its area sweep (#1419) replaces these with waits on the real signal."
-    },
-    "web/src/world/testing/testClock.ts": {
-      "pauses": 1,
-      "reason": "Not converted yet; its area sweep (#1419) replaces these with waits on the real signal."
-    },
-    "web/src/world/town/TownBoard.browser.tsx": {
-      "pauses": 4,
-      "reason": "Not converted yet; its area sweep (#1419) replaces these with waits on the real signal."
-    },
-    "web/src/world/town/townBusTrip.browser.ts": {
-      "pauses": 1,
-      "reason": "Not converted yet; its area sweep (#1419) replaces these with waits on the real signal."
-    },
-    "web/src/world/town/TownCanvas.browser.tsx": {
-      "pauses": 39,
-      "reason": "Not converted yet; its area sweep (#1419) replaces these with waits on the real signal."
-    },
-    "web/src/world/town/townCenter.browser.ts": {
-      "pauses": 1,
-      "reason": "Not converted yet; its area sweep (#1419) replaces these with waits on the real signal."
-    },
-    "web/src/world/town/townEdgeArrows.browser.ts": {
-      "pauses": 1,
-      "reason": "Not converted yet; its area sweep (#1419) replaces these with waits on the real signal."
+      "reason": "Artefact reader fixture waits for asynchronous file deletion/re-read publication; replace with the reader completion signal."
     },
     "web/src/world/town/townMoves.test.ts": {
       "pauses": 1,
-      "reason": "Not converted yet; its area sweep (#1419) replaces these with waits on the real signal."
-    },
-    "web/src/world/town/townPlaces.browser.ts": {
-      "pauses": 2,
-      "reason": "Not converted yet; its area sweep (#1419) replaces these with waits on the real signal."
-    },
-    "web/src/world/town/townRoomPlates.browser.ts": {
-      "pauses": 3,
-      "reason": "Not converted yet; its area sweep (#1419) replaces these with waits on the real signal."
-    },
-    "web/src/world/town/townRoomPlates.test.ts": {
-      "pauses": 1,
-      "reason": "Not converted yet; its area sweep (#1419) replaces these with waits on the real signal."
+      "reason": "Mixed-runtime move fixture waits for asynchronous TUI ordering acknowledgement; await the recorded move completion."
     },
     "web/src/world/town/townScaleRuntime.test.ts": {
       "pauses": 1,
-      "reason": "Not converted yet; its area sweep (#1419) replaces these with waits on the real signal."
+      "reason": "Scene runtime fixture waits for an answer to publish the completed turn; expose that publication completion."
     },
     "web/src/world/town/townStepReads.test.ts": {
       "pauses": 10,
-      "reason": "Not converted yet; its area sweep (#1419) replaces these with waits on the real signal."
+      "reason": "Step-reader fixtures wait for polled transcript/status replies and cancellation; drive their poll scheduler and await admitted reads."
     },
     "web/src/world/town/TownWarehouse.dom.test.ts": {
       "pauses": 1,
-      "reason": "Not converted yet; its area sweep (#1419) replaces these with waits on the real signal."
-    },
-    "web/src/world/TownOwnerTopology.browser.test.ts": {
-      "pauses": 2,
-      "reason": "Not converted yet; its area sweep (#1419) replaces these with waits on the real signal."
-    },
-    "web/src/world/TownOwnerTopology.browser.tsx": {
-      "pauses": 1,
-      "reason": "Not converted yet; its area sweep (#1419) replaces these with waits on the real signal."
-    },
-    "web/src/world/useSpacesTabWindowArrangement.browser.tsx": {
-      "pauses": 10,
-      "reason": "Not converted yet; its area sweep (#1419) replaces these with waits on the real signal."
-    },
-    "web/src/world/windows/WindowFrame.browser.tsx": {
-      "pauses": 18,
-      "reason": "Not converted yet; its area sweep (#1419) replaces these with waits on the real signal."
+      "reason": "Warehouse fixture waits for asynchronous parcel/card state to render; replace with the parcel publication/render signal."
     },
     "web/src/world/WorldInspectorResourceResume.test.ts": {
       "pauses": 9,
-      "reason": "Not converted yet; its area sweep (#1419) replaces these with waits on the real signal."
-    },
-    "web/src/world/WorldTerminalHandoff.browser.tsx": {
-      "pauses": 94,
-      "reason": "Not converted yet; its area sweep (#1419) replaces these with waits on the real signal."
+      "reason": "Resource resume fixtures wait across Files/Changes authority and presentation transitions; expose those lifecycle completions."
     }
   }
 }

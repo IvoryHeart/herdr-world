@@ -1,3 +1,4 @@
+import { clock } from "../../clock";
 import {
   createContext,
   memo,
@@ -123,7 +124,7 @@ function useFixtureOffice(): Office | null {
   const [office] = useState(() => {
     const fixture = townPostFixtureMode();
     if (!fixture) return null;
-    const made = townPostFixture(fixture, Date.now());
+    const made = townPostFixture(fixture, clock.now());
     return townPostOffice(made.asks, made.outgoing);
   });
   return office;
@@ -579,7 +580,7 @@ function LetterCard({
           aria-hidden="true"
         />
         <b>{townLetterFrom(letter)}</b>
-        <span>{townLetterAge(letter.at, Date.now())}</span>
+        <span>{townLetterAge(letter.at, clock.now())}</span>
       </header>
       <p className="town-post-card-question">{letter.question}</p>
       {letter.options.length ? (

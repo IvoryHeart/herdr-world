@@ -1,3 +1,9 @@
+import { sharedBrowserBuild } from "./world/testing/sharedBrowserBuild";
+import { waitForPage } from "./world/testing/browserEvents";
+import {
+  launchTestBrowser,
+  type TestBrowser,
+} from "../../scripts/testing/browser-session";
 import { expect, test } from "bun:test";
 import { existsSync } from "node:fs";
 import { mkdtemp, readFile } from "node:fs/promises";
@@ -32,10 +38,10 @@ test.skipIf(!chrome).each([390, 320])(
           : new Response("Not found", { status: 404 });
       },
     });
-    let child: ReturnType<typeof Bun.spawn> | undefined;
+    let child: TestBrowser | undefined;
     let socket: WebSocket | undefined;
     try {
-      const build = await Bun.build({
+      const build = await sharedBrowserBuild(import.meta.path, {
         entrypoints: [join(import.meta.dir, "mobileTerminal.browser.tsx")],
         outdir: dir,
         target: "browser",
@@ -61,7 +67,7 @@ test.skipIf(!chrome).each([390, 320])(
       expect(build.success).toBe(true);
       for (const asset of build.outputs)
         assets.set(`/${basename(asset.path)}`, asset);
-      child = Bun.spawn(
+      child = await launchTestBrowser(
         [
           chrome!,
           "--headless",
@@ -75,22 +81,8 @@ test.skipIf(!chrome).each([390, 320])(
         ],
         { stdout: "ignore", stderr: Bun.file(join(dir, "browser.log")) },
       );
-      const portFile = join(dir, "profile", "DevToolsActivePort");
-      const browserLog = join(dir, "browser.log");
-      let port = "";
-      for (let i = 0; i < 200 && !port; i++) {
-        if (existsSync(portFile)) {
-          port = (await readFile(portFile, "utf8")).split("\n")[0];
-        } else if (existsSync(browserLog)) {
-          port =
-            (await readFile(browserLog, "utf8")).match(
-              /DevTools listening on ws:\/\/127\.0\.0\.1:(\d+)/,
-            )?.[1] ?? "";
-        }
-        if (port) break;
-        await Bun.sleep(25);
-      }
-      if (!port) throw new Error("Chromium did not expose a DevTools port");
+      await child.start();
+      const port = child.devtoolsPort;
       const targets = (await (
         await fetch(`http://127.0.0.1:${port}/json/list`)
       ).json()) as { type: string; webSocketDebuggerUrl: string }[];
@@ -159,10 +151,7 @@ test.skipIf(!chrome).each([390, 320])(
         });
       }
       await cdp("Page.navigate", { url: `http://127.0.0.1:${server.port}/` });
-      for (let i = 0; i < 200; i++) {
-        if (await evaluate("!!window.mobileTerminalTest")) break;
-        await Bun.sleep(25);
-      }
+      await waitForPage(cdp, "!!window.mobileTerminalTest");
       const run = (method: string) =>
         evaluate(`mobileTerminalTest.${method}()`);
       await run("ready");
@@ -179,10 +168,10 @@ test.skipIf(!chrome).each([390, 320])(
       const direct = 'button[aria-label="Type directly into the terminal"]';
       const tap = async (selector: string) => {
         if (selector === direct) {
-          await evaluate(`new Promise(resolve => {
+          await evaluate(`(async () => {
             document.querySelector('button[aria-label="Close terminal input"]')?.click();
-            requestAnimationFrame(resolve);
-          })`);
+            await window.__herdrTestStep();
+          })()`);
         }
         const { x, y } = await point(selector);
         await touch("touchStart", x, y);
@@ -229,7 +218,7 @@ test.skipIf(!chrome).each([390, 320])(
         await evaluate(
           `document.documentElement.dataset.theme = ${JSON.stringify(theme)}`,
         );
-        await evaluate("new Promise(resolve => setTimeout(resolve, 180))");
+        await evaluate("window.__herdrTestStep()");
         const screenshot = await cdp("Page.captureScreenshot", {
           format: "png",
         });

@@ -1,3 +1,8 @@
+import { sharedBrowserBuild } from "./world/testing/sharedBrowserBuild";
+import {
+  launchTestBrowser,
+  type TestBrowser,
+} from "../../scripts/testing/browser-session";
 import { expect, test } from "bun:test";
 import { existsSync } from "node:fs";
 import { mkdtemp, readFile, writeFile } from "node:fs/promises";
@@ -55,10 +60,10 @@ for (const narrow of [false, true])
           return new Response("Not found", { status: 404 });
         },
       });
-      let child: ReturnType<typeof Bun.spawn> | undefined;
+      let child: TestBrowser | undefined;
       let timer: ReturnType<typeof setTimeout> | undefined;
       try {
-        const build = await Bun.build({
+        const build = await sharedBrowserBuild(import.meta.path, {
           entrypoints: [
             join(import.meta.dir, "filePreviewNavigation.browser.tsx"),
           ],
@@ -98,7 +103,7 @@ for (const narrow of [false, true])
         });
         events.push(`self-check status=${selfCheck.status}`);
         expect(selfCheck.status).toBe(200);
-        child = Bun.spawn(
+        child = await launchTestBrowser(
           [
             chrome!,
             "--headless=new",
@@ -121,6 +126,7 @@ for (const narrow of [false, true])
           ],
           { stdout: "ignore", stderr: Bun.file(errorOutput) },
         );
+        await child.start();
         const failures = await Promise.race([
           promise,
           child.exited.then(async (code) => {

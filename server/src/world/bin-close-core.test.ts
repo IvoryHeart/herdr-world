@@ -5,6 +5,7 @@ import { join } from "node:path";
 import type { BinEntry, BinOutcome } from "../../../shared/bin";
 import { planCoreKill } from "../herdr-core/operations";
 import { coreWorld, until } from "../herdr-core/testing/core-world";
+import { notifyCoreFixtureChange } from "../herdr-core/testing/events";
 import {
   openWorldLedger,
   type WorldLedgerStorage,
@@ -82,7 +83,10 @@ async function setup() {
     hasCoreConnection: (id) => id === "box",
     coreLease: (id) =>
       id === "box" ? w.core.manager.readyRuntimeLease(id) : null,
-    settle: (id, outcome) => outcomes.push({ id, ...outcome }),
+    settle: (id, outcome) => {
+      outcomes.push({ id, ...outcome });
+      notifyCoreFixtureChange();
+    },
     log: () => {},
     retryDelay: () => 20,
   });

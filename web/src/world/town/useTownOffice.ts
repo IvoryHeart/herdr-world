@@ -1,3 +1,4 @@
+import { clock } from "../../clock";
 import { worldRuntimeStore } from "../runtimeStore";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
@@ -86,7 +87,7 @@ export function useTownOffice(world: WorldObject, selectedId: string | null) {
     if (DEVTOOLS) countWorldWork("office.project");
     const office = projectOffice(
       world,
-      Date.now(),
+      clock.now(),
       selectedId,
       pinnedTabs,
       expandedRooms,

@@ -1,3 +1,4 @@
+import { spawnTestChrome } from "../../../../scripts/testing/browser-session";
 import {
   mkdtempSync,
   readFileSync,
@@ -60,7 +61,7 @@ export type ProbeRun = {
 const PROBE_TIMEOUT_MS = 20_000;
 
 async function runProbeChrome(chrome: string, profile: string) {
-  const child = Bun.spawn(
+  const child = spawnTestChrome(
     [
       chrome,
       "--headless=new",
@@ -144,6 +145,10 @@ export function chromeRenderingFlags(
   } = {},
 ): Promise<string[]> {
   const env = options.env ?? process.env;
+  if (env.CI !== "true" && env.HERDR_TEST_BROWSER_RENDERING === "gpu")
+    return Promise.resolve([...GPU_FLAGS]);
+  if (env.HERDR_TEST_BROWSER_RENDERING === "swiftshader")
+    return Promise.resolve([...SWIFTSHADER_FLAGS]);
   if (env.CI === "true" || env.HERDR_WORLD_TEST_GPU !== "1")
     return Promise.resolve([...SWIFTSHADER_FLAGS]);
   if (probed && !options.probe) return probed;

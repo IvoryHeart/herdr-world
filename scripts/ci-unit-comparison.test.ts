@@ -214,6 +214,10 @@ test("the real comparison command completes all twenty pairs and retains separat
       "ci-unit-timings.json",
     ])
       symlinkSync(join(import.meta.dir, name), join(root, "scripts", name));
+    writeFileSync(
+      join(root, "scripts/pages-film.test.ts"),
+      readFileSync(join(import.meta.dir, "pages-film.test.ts")),
+    );
     for (const name of ["web", "server"])
       symlinkSync(join(import.meta.dir, "..", name), join(root, name));
     writeFileSync(
@@ -277,7 +281,7 @@ test("the real comparison command completes all twenty pairs and retains separat
             "utf8",
           ),
         ),
-      ).toEqual({ files: ["scripts/example.test.ts"], flaky: [] });
+      ).toEqual({ files: ["scripts/example.test.ts"], flaky: [], retried: [] });
     }
     expect(readFileSync(join(root, "summary.md"), "utf8")).toContain(
       "20 paired passes",

@@ -1,3 +1,4 @@
+import { spawnTestChrome } from "./testing/browser-session";
 /**
  * Render the website film to video files.
  *
@@ -174,7 +175,7 @@ async function capture() {
     },
   });
   try {
-    browser = Bun.spawn(
+    browser = spawnTestChrome(
       [
         chrome!,
         "--headless",

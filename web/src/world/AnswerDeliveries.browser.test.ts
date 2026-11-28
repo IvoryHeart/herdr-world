@@ -1,3 +1,7 @@
+import {
+  launchTestBrowser,
+  type TestBrowser,
+} from "../../../scripts/testing/browser-session";
 // @world-browser-suite
 import { expect, test } from "bun:test";
 import { mkdtemp, rm } from "node:fs/promises";
@@ -39,10 +43,10 @@ test.skipIf(!chrome)(
         );
       },
     });
-    let browser: ReturnType<typeof Bun.spawn> | undefined;
+    let browser: TestBrowser | undefined;
     let socket: WebSocket | undefined;
     try {
-      browser = Bun.spawn(
+      browser = await launchTestBrowser(
         [
           chrome!,
           "--headless=new",
@@ -55,6 +59,7 @@ test.skipIf(!chrome)(
         ],
         { stdout: "ignore", stderr: Bun.file(join(root, "chrome.log")) },
       );
+      await browser.start();
       const port = await waitForChromePort(
         browser,
         join(root, "profile"),

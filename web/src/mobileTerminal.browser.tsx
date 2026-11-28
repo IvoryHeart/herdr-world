@@ -1,3 +1,5 @@
+import { clock as fixtureTime } from "./world/testing/installTestClock";
+import { withTestClock } from "./world/testing/testClock";
 import { Terminal } from "@xterm/xterm";
 import { TerminalAttachFrameWatchdog } from "./terminalResize";
 import {
@@ -149,7 +151,13 @@ const render = (showMobileKeys = false, uiScale = 100) =>
   );
 rememberTerminalInputMode("direct");
 render();
-const settle = () => new Promise((resolve) => setTimeout(resolve, 80));
+const advance = async () => {
+  await fixtureTime.advance(80);
+  // This fixture observes actual terminal/ResizeObserver geometry after input.
+  await new Promise<void>((resolve) =>
+    fixtureTime.real.requestAnimationFrame!(() => resolve()),
+  );
+};
 const frame = (text: string, mouse: boolean | null = true) => {
   const encoded = new TextEncoder().encode(text);
   let binary = "";
@@ -318,12 +326,12 @@ const api = {
     check(!!longPress, "long press timer armed by trusted touch");
     longPress?.activate();
     longPress = null;
-    await settle();
+    await advance();
   },
   async ready() {
-    await settle();
+    await advance();
     frame("\x1b[2J\x1b[Hretained through browser disconnect", false);
-    await settle();
+    await advance();
     const retainedXterm = document.querySelector(".xterm");
     const retainedTextarea = textarea();
     const retiredListeners = [...listeners];
@@ -340,7 +348,7 @@ const api = {
         endpointAvailability: {},
       }),
     );
-    await settle();
+    await advance();
     check(
       document.querySelector(".xterm") === retainedXterm,
       "transport disconnect retains the same xterm renderer",
@@ -364,7 +372,7 @@ const api = {
         terminalAttachEpoch: store.get().terminalAttachEpoch + 1,
       }),
     );
-    await settle();
+    await advance();
     check(
       textarea() === retainedTextarea,
       "reconnect retains the same input element",
@@ -384,13 +392,13 @@ const api = {
         height: rows,
         mouse_reporting: false,
       });
-    await settle();
+    await advance();
     check(
       !displayedText().includes("retired frame"),
       "retired push callback stays inert",
     );
     frame("\x1b[2J\x1b[Hfresh resumed frame", false);
-    await settle();
+    await advance();
     check(
       displayedText().includes("fresh resumed frame"),
       "fresh client resumes output",
@@ -410,12 +418,12 @@ const api = {
         reason: "terminal_configuration_changed",
       });
     for (let failure = 0; failure < 3; failure++) {
-      await settle();
+      await advance();
       const timeout = watchdogTimeouts.shift();
       check(!!timeout, `no-frame watchdog attempt ${failure + 1} is armed`);
       timeout?.();
     }
-    await settle();
+    await advance();
     check(
       location.href === recoveryUrl && textarea() === retainedTextarea,
       "three no-frame failures keep the app and renderer running",
@@ -437,13 +445,13 @@ const api = {
       "recovery offers Retry terminal and explicit Reload app",
     );
     retry?.click();
-    await settle();
+    await advance();
     check(
       watchdogTimeouts.length === 1,
       "local retry starts a fresh attach budget",
     );
     frame("\x1b[2J\x1b[Hrecovered locally", false);
-    await settle();
+    await advance();
     check(
       !document.querySelector('[role="alert"]'),
       "fresh frame clears recovery error",
@@ -461,7 +469,7 @@ const api = {
           terminal_id: pane.terminal_id!,
           reason: "terminal_configuration_changed",
         });
-      await settle();
+      await advance();
     }
     check(
       calls.filter((call) => call.method === "terminal.attach").length ===
@@ -485,15 +493,15 @@ const api = {
           });
       };
       close();
-      await settle();
+      await advance();
       pendingAttach = null;
       close();
-      await settle();
+      await advance();
       frame("replacement");
-      await settle();
+      await advance();
       if (lateReply === "failure") reject(new Error("obsolete attach failure"));
       else resolve({ endpoint: { methods: ["obsolete"], capabilities: [] } });
-      await settle();
+      await advance();
       check(
         !document.body.textContent?.includes("obsolete attach failure"),
         "late attach failure replaced the successful display",
@@ -506,7 +514,7 @@ const api = {
     frame(
       "\x1b[2J\x1b[H$ echo output\r\n  error: /repo/界é.ts\r\n\r\n  code();\x1b[?1000h\x1b[?1006h",
     );
-    await settle();
+    await advance();
     original = document.querySelector(".xterm");
     lifecycle = calls.filter((call) =>
       /terminal\.(attach|detach)/.test(call.method),
@@ -523,7 +531,7 @@ const api = {
     }
     for (const mode of ["desktop", "mobile"] as const) {
       updateLayoutPreferences({ mode });
-      await settle();
+      await advance();
       check(
         document.querySelector(keyboard)!.getBoundingClientRect().width >= 44,
         `${mode}: coarse-pointer keyboard button is available`,
@@ -536,7 +544,7 @@ const api = {
     frame(
       "\x1b[2J\x1b[H$ echo output\r\n  error: /repo/界é.ts\r\n\r\n  code();\x1b[?1000h\x1b[?1006h",
     );
-    await settle();
+    await advance();
     const rect = document.querySelector(keyboard)!.getBoundingClientRect();
     check(
       rect.width >= 44 &&
@@ -555,7 +563,7 @@ const api = {
     );
   },
   async reading() {
-    await settle();
+    await advance();
     check(
       document.activeElement !== textarea(),
       "trusted reading tap never focuses xterm",
@@ -566,7 +574,7 @@ const api = {
     );
   },
   async readingWheel() {
-    await settle();
+    await advance();
     const reports = inputCalls();
     readingWheelReports = reports.map((call) => String(call.params.data));
     check(
@@ -582,7 +590,7 @@ const api = {
     calls.length = 0;
     key();
     paste();
-    await settle();
+    await advance();
     check(inputCalls().length === 0, "wheel leaves typing and paste blocked");
   },
   async typing() {
@@ -592,7 +600,7 @@ const api = {
     );
     key();
     paste();
-    await settle();
+    await advance();
     check(
       inputCalls().some(
         (call) =>
@@ -617,11 +625,11 @@ const api = {
     textarea().dispatchEvent(
       new CompositionEvent("compositionupdate", { data: "界", bubbles: true }),
     );
-    await settle();
+    await advance();
     textarea().dispatchEvent(
       new CompositionEvent("compositionend", { data: "界", bubbles: true }),
     );
-    await settle();
+    await advance();
     check(
       inputCalls().filter(
         (call) =>
@@ -667,7 +675,7 @@ const api = {
           bubbles: true,
         }),
       );
-      await settle();
+      await advance();
     };
 
     calls.length = 0;
@@ -699,7 +707,7 @@ const api = {
     calls.length = 0;
   },
   async inputWheel() {
-    await settle();
+    await advance();
     check(
       JSON.stringify(inputCalls().map((call) => String(call.params.data))) ===
         JSON.stringify(readingWheelReports),
@@ -708,7 +716,7 @@ const api = {
     calls.length = 0;
   },
   async scrolled() {
-    await settle();
+    await advance();
     check(
       document.activeElement === textarea(),
       "scroll does not dismiss keyboard input",
@@ -725,9 +733,9 @@ const api = {
     calls.length = 0;
   },
   async dismissed() {
-    await settle();
+    await advance();
     frame("\x1b[H$ stable output\r\n  error: /repo/界é.ts\r\n\r\n  code();");
-    await settle();
+    await advance();
     check(
       document.activeElement !== textarea(),
       "dismiss tap blurs and frame does not refocus",
@@ -752,14 +760,14 @@ const api = {
         bubbles: true,
       }),
     );
-    await settle();
+    await advance();
     check(
       inputCalls().length === 0,
       "dismiss tap and stale key/paste/IME send nothing",
     );
   },
   async selection() {
-    await settle();
+    await advance();
     check(
       !document.querySelector(".terminal-output-selection, pre"),
       "selection is directly in xterm, without snapshot page",
@@ -781,7 +789,7 @@ const api = {
     const text = displayedText();
     frame("\x1b[2J\x1b[Hintermediate output");
     frame("\x1b[2J\x1b[Hreplacement output");
-    await settle();
+    await advance();
     check(
       displayedText() === text && selectedText() === selectedOutput,
       "endpoint streaming freezes the parsed displayed frame",
@@ -811,7 +819,7 @@ const api = {
     );
   },
   async copied() {
-    await settle();
+    await advance();
     check(
       copiedOutput === selectedOutput && selectedText() === selectedOutput,
       "Copy copies exact text and retains terminal selection",
@@ -822,7 +830,7 @@ const api = {
     );
   },
   async dragged(expected: string) {
-    await settle();
+    await advance();
     checkEndHandleAlignment();
     check(
       selectedText() === expected,
@@ -832,7 +840,7 @@ const api = {
   async comment() {
     selectedOutput = selectedText();
     click(".terminal-touch-selection-actions button:nth-child(2)");
-    await settle();
+    await advance();
     check(
       document.activeElement?.getAttribute("aria-label") === "Review comment",
       "Add comment focuses existing quote editor",
@@ -848,7 +856,7 @@ const api = {
       editor.dispatchEvent(new Event("input", { bubbles: true }));
     });
     click('.annotation-composer-popover button[type="submit"]');
-    await settle();
+    await advance();
     check(
       annotationRequest?.annotation.quote === selectedOutput &&
         annotationRequest?.annotation.source === "terminal" &&
@@ -878,14 +886,14 @@ const api = {
       `selection retains attach (initial ${lifecycle})`,
     );
     render(true);
-    await settle();
+    await advance();
     check(
       !!document.querySelector(".terminal-mobile-keys-toggle .lucide-grid-2x2"),
       "shortcut pad uses distinct icon",
     );
     click(keyboard);
     key();
-    await settle();
+    await advance();
     check(
       document.activeElement === textarea(),
       "keyboard can reopen after selection",
@@ -911,11 +919,11 @@ const api = {
       });
       store.clearNotice();
     });
-    await settle();
+    await advance();
     calls.length = 0;
     key();
     paste();
-    await settle();
+    await advance();
     check(
       document.activeElement !== textarea() && inputCalls().length === 0,
       "pane switch closes stale input route",
@@ -923,7 +931,7 @@ const api = {
     click(keyboard);
     key();
     paste();
-    await settle();
+    await advance();
     check(
       inputCalls().every((call) =>
         call.method === "terminal.input"
@@ -939,11 +947,11 @@ const api = {
       });
       store.clearNotice();
     });
-    await settle();
+    await advance();
     calls.length = 0;
     key();
     paste();
-    await settle();
+    await advance();
     check(
       document.activeElement !== textarea() && inputCalls().length === 0,
       "reconnect invalidates active input",
@@ -952,7 +960,7 @@ const api = {
   async regressions() {
     if (document.querySelector(".terminal-composer"))
       click('button[aria-label="Close terminal input"]');
-    await settle();
+    await advance();
     calls.length = 0;
     const screen = () => document.querySelector(".xterm-screen")!;
     const touch = (type: string, col = 2, row = 0, count = 1) => {
@@ -988,12 +996,12 @@ const api = {
       touch("touchstart", col, row);
       await api.activate();
       touch("touchend", col, row);
-      await settle();
+      await advance();
     };
     const done = () =>
       click(".terminal-touch-selection-actions button:last-child");
     frame("\x1b[2J\x1b[Hcancel pending");
-    await settle();
+    await advance();
     for (const cancel of [
       () => touch("touchcancel"),
       () => touch("touchstart", 2, 0, 2),
@@ -1009,7 +1017,7 @@ const api = {
     touch("touchend");
     holdParser = true;
     frame("\x1b[2J\x1b[Hparsed selected frame");
-    await settle();
+    await advance();
     touch("touchstart");
     await api.activate();
     check(
@@ -1018,14 +1026,14 @@ const api = {
     );
     frame("\x1b[2J\x1b[Hpending latest frame");
     releaseParser();
-    await settle();
+    await advance();
     touch("touchend");
     check(
       selectedText() === "parsed",
       "deferred long press selects the parsed frame, not pending output",
     );
     done();
-    await settle();
+    await advance();
     check(
       displayedText().includes("pending latest frame"),
       "Done releases pending endpoint frame",
@@ -1033,7 +1041,7 @@ const api = {
 
     const wrapped = `${"a".repeat(cols - 1)}界é🙂 tail`;
     frame(`\x1b[2J\x1b[H${wrapped}\r\n  code();`);
-    await settle();
+    await advance();
     await selectWord();
     const end = document.querySelector('[aria-label="Selection end"]')!;
     for (let i = 0; i < 2; i++)
@@ -1044,7 +1052,7 @@ const api = {
           cancelable: true,
         }),
       );
-    await settle();
+    await advance();
     check(
       selectedText() === `${wrapped}\n  code();`,
       `selected copy preserves wrap filler, wide glyphs, combining marks, emoji and indentation: ${JSON.stringify(selectedText())}`,
@@ -1057,7 +1065,7 @@ const api = {
         cancelable: true,
       }),
     );
-    await settle();
+    await advance();
     check(
       !document.querySelector(".terminal-selection-handle") &&
         document.activeElement !== textarea(),
@@ -1065,27 +1073,27 @@ const api = {
     );
 
     frame("\x1b[2J\x1b[Hlegacy quote", null);
-    await settle();
+    await advance();
     await selectWord();
     const legacyVisible = displayedText();
     frame("\r\nfirst", null);
     frame(" second", null);
-    await settle();
+    await advance();
     check(
       displayedText() === legacyVisible,
       "incremental output freezes without replacing or dropping chunks",
     );
     done();
-    await settle();
+    await advance();
     check(
       displayedText().includes("first second"),
       "incremental output drains in original order",
     );
     frame("\x1b[2J\x1b[Hretained quote", null);
-    await settle();
+    await advance();
     await selectWord();
     click(".terminal-touch-selection-actions button:nth-child(2)");
-    await settle();
+    await advance();
     const editor = document.querySelector<HTMLTextAreaElement>(
       '[aria-label="Review comment"]',
     )!;
@@ -1098,8 +1106,8 @@ const api = {
     });
     frame("x".repeat(512 * 1024), null);
     frame("\r\nCAP END", null);
-    await settle();
-    await settle();
+    await advance();
+    await advance();
     check(
       document.querySelector('[aria-label="Review comment"]') === editor &&
         editor.value === "Keep this draft",
@@ -1110,34 +1118,34 @@ const api = {
       "legacy cap explains automatic display resume",
     );
     frame("\r\nAFTER CAP", null);
-    await settle();
+    await advance();
     check(
       displayedText().includes("CAP END") &&
         displayedText().includes("AFTER CAP"),
       "cap trigger and subsequent live incremental output are retained",
     );
     click(".annotation-composer-popover button:first-child");
-    await settle();
+    await advance();
 
     frame("\x1b[2J\x1b[Hresize selected");
-    await settle();
+    await advance();
     await selectWord();
     const identity = document.querySelector(".xterm");
     host.style.right = "35px";
-    await settle();
+    await advance();
     check(
       !document.querySelector(".terminal-selection-handle") &&
         document.querySelector(".xterm") === identity,
       "resize clears touch geometry without recreating xterm",
     );
     host.style.right = "0";
-    await settle();
+    await advance();
     for (const scale of [0.8, 1.25, 1.5, 1]) {
       render(false, Math.round(scale * 100));
       document.documentElement.style.zoom = String(scale);
       document.documentElement.style.setProperty("--ui-scale", String(scale));
       frame("\x1b[2J\x1b[Hgeometry selected");
-      await settle();
+      await advance();
       await selectWord();
       checkEndHandleAlignment();
       for (const target of document.querySelectorAll(
@@ -1157,7 +1165,7 @@ const api = {
     }
     for (const pause of [false, true]) {
       frame("\x1b[2J\x1b[Hlifecycle selected");
-      await settle();
+      await advance();
       await selectWord();
       flushSync(() => {
         __storeTesting.replaceState({
@@ -1168,7 +1176,7 @@ const api = {
         });
         store.clearNotice();
       });
-      await settle();
+      await advance();
       check(
         !document.querySelector(
           ".terminal-selection-handle, .terminal-touch-selection-actions, .terminal-annotation-action",
@@ -1182,11 +1190,11 @@ const api = {
         });
         store.clearNotice();
       });
-      await settle();
+      await advance();
     }
     holdParser = true;
     frame("\x1b[2J\x1b[Hstale deferred");
-    await settle();
+    await advance();
     touch("touchstart");
     await api.activate();
     flushSync(() => {
@@ -1197,14 +1205,14 @@ const api = {
       store.clearNotice();
     });
     releaseParser();
-    await settle();
+    await advance();
     touch("touchend");
     check(
       !document.querySelector(".terminal-selection-handle"),
       "reconnect cancels parser-deferred activation",
     );
     frame("\x1b[2J\x1b[Hroute selected", null);
-    await settle();
+    await advance();
     await selectWord();
     frame("OLD ROUTE PENDING", null);
     flushSync(() => {
@@ -1228,13 +1236,13 @@ const api = {
       });
       store.clearNotice();
     });
-    await settle();
+    await advance();
     check(
       !displayedText().includes("OLD ROUTE PENDING"),
       "old pending chunks are discarded before new-route presentation",
     );
     frame("\x1b[2J\x1b[Hnew route");
-    await settle();
+    await advance();
     check(
       !document.querySelector(".terminal-selection-handle") &&
         !displayedText().includes("OLD ROUTE PENDING"),
@@ -1246,7 +1254,7 @@ const api = {
     );
 
     frame("\x1b[2J\x1b[Hgeneration selected");
-    await settle();
+    await advance();
     await selectWord();
     client = {
       ...client,
@@ -1265,7 +1273,7 @@ const api = {
       });
       store.clearNotice();
     });
-    await settle();
+    await advance();
     check(
       !document.querySelector(".terminal-selection-handle") &&
         document.activeElement !== textarea(),
@@ -1326,7 +1334,7 @@ const api = {
         }),
       );
     }
-    await settle();
+    await advance();
     check(
       document.activeElement !== textarea() && inputCalls().length === 0,
       "hybrid touch compatibility mouse cannot focus or send input",
@@ -1339,7 +1347,7 @@ const api = {
     );
     calls.length = 0;
     key();
-    await settle();
+    await advance();
     check(
       inputCalls().length > 0,
       "hybrid fine-mouse physical keyboard input works",
@@ -1349,7 +1357,7 @@ const api = {
       "mouse input authorization activates the keyboard indicator",
     );
     textarea().blur();
-    await settle();
+    await advance();
     check(
       !keyboardInputActive() && textarea().readOnly,
       "blur clears the input indicator and authorization",
@@ -1357,7 +1365,7 @@ const api = {
     textarea().focus();
     calls.length = 0;
     key();
-    await settle();
+    await advance();
     check(
       document.activeElement === textarea() &&
         inputCalls().length > 0 &&
@@ -1382,7 +1390,10 @@ const api = {
       "abcd界é🙂",
     ]) {
       bufferTerm.reset();
-      await new Promise<void>((resolve) => bufferTerm.write(text, resolve));
+      await withTestClock(
+        fixtureTime,
+        new Promise<void>((resolve) => bufferTerm.write(text, resolve)),
+      );
       check(
         (bufferTerm.select(0, 0, 10), terminalSelectedText(bufferTerm)) ===
           text,
@@ -1392,15 +1403,15 @@ const api = {
     bufferTerm.dispose();
     bufferHost.remove();
     updateLayoutPreferences({ mode: "desktop" });
-    await settle();
+    await advance();
     frame("\x1b[2J\x1b[Hdesktop selection text", false);
-    await settle();
+    await advance();
     const returnToApp = async () => {
       // Window deactivation blurs the input but retains document.activeElement.
       document.activeElement?.dispatchEvent(new FocusEvent("blur"));
       window.dispatchEvent(new Event("blur"));
       window.dispatchEvent(new Event("focus"));
-      await settle();
+      await advance();
     };
     textarea().focus();
     calls.length = 0;
@@ -1453,7 +1464,7 @@ const api = {
     mouse(screen, "mousedown", 0.1, 1);
     mouse(document, "mousemove", 7.1, 1);
     mouse(document, "mouseup", 7.1, 0);
-    await settle();
+    await advance();
     const clipboardData = new DataTransfer();
     screen.dispatchEvent(
       new ClipboardEvent("copy", {
@@ -1468,15 +1479,15 @@ const api = {
     );
     calls.length = 0;
     key();
-    await settle();
+    await advance();
     check(inputCalls().length > 0, "desktop typing unchanged");
     if (navigator.platform === "Linux x86_64") {
       frame("\x1b[2J\x1b[Habcdef\r\nghijkl\r\nmnopqr", false);
-      await settle();
+      await advance();
       mouse(screen, "mousedown", 1.1, 1, 0, true);
       mouse(document, "mousemove", 3.1, 1, 1, true);
       mouse(document, "mouseup", 3.1, 0, 1, true);
-      await settle();
+      await advance();
       const rectangleCopy = new DataTransfer();
       screen.dispatchEvent(
         new ClipboardEvent("copy", {
@@ -1490,7 +1501,7 @@ const api = {
         "desktop rectangular Copy contains only selected columns",
       );
       click(".terminal-annotation-action");
-      await settle();
+      await advance();
       const editor = document.querySelector<HTMLTextAreaElement>(
         '[aria-label="Review comment"]',
       )!;
@@ -1502,7 +1513,7 @@ const api = {
         editor.dispatchEvent(new Event("input", { bubbles: true }));
       });
       click('.annotation-composer-popover button[type="submit"]');
-      await settle();
+      await advance();
       check(
         annotationRequest?.annotation.quote === "bc\nhi",
         "desktop rectangular annotation contains only selected columns",

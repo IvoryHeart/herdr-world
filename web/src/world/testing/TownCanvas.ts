@@ -1,3 +1,7 @@
+import {
+  launchTestBrowser,
+  type TestBrowser,
+} from "../../../../scripts/testing/browser-session";
 import { afterAll, beforeAll, expect, test } from "bun:test";
 import { type TownCanvasCase, townCanvasCases } from "../town/TownCanvas.cases";
 import { existsSync } from "node:fs";
@@ -87,7 +91,7 @@ export function registerTownCanvasCases(group: keyof typeof townCanvasCases) {
           return new Response("Not found", { status: 404 });
         },
       });
-      let browser: ReturnType<typeof Bun.spawn> | undefined;
+      let browser: TestBrowser | undefined;
       let devtools: Awaited<ReturnType<typeof connectCapture>> | undefined;
       try {
         for (const [path, output] of bundle.assets) assets.set(path, output);
@@ -95,8 +99,8 @@ export function registerTownCanvasCases(group: keyof typeof townCanvasCases) {
         // Every case pins its CSS viewport over CDP: `--window-size` alone
         // gives headless Chrome a wider viewport than a 390px phone (#643),
         // and the fixture fails when the size it measures differs.
-        const fixtureUrl = `${server.url.href}?mode=test&scale=${scale}&flightFrameDelay=${flightFrameDelay}&edgeFrameDelay=${width === 390 && height === 844 && scale === "extended" ? 300 : 0}&viewport=${width}x${height}`;
-        browser = Bun.spawn(
+        const fixtureUrl = `${server.url.href}?mode=test&scale=${scale}&flightFrameDelay=${flightFrameDelay}&edgeFrameDelay=${width === 390 && height === 844 && (scale === "extended" || scale.startsWith("extended-")) ? 300 : 0}&viewport=${width}x${height}`;
+        browser = await launchTestBrowser(
           [
             chrome!,
             "--headless=new",
@@ -112,6 +116,7 @@ export function registerTownCanvasCases(group: keyof typeof townCanvasCases) {
           ],
           { stdout: "ignore", stderr: Bun.file(browserLog) },
         );
+        await browser.start();
         devtools = await openAtExactViewport(
           await waitForChromePort(browser, join(dir, "profile"), browserLog),
           fixtureUrl,
@@ -137,7 +142,7 @@ export function registerTownCanvasCases(group: keyof typeof townCanvasCases) {
           // frames at every sampled second, it took 109 s locally on two
           // cores and exceeded this guard on CI. It now samples without
           // drawn frames (#1183).
-          scale === "extended" ||
+          scale.startsWith("extended") ||
             scale === "protected" ||
             scale === "max" ||
             ((scale === "typical" || scale === "bus") && width >= 1440)

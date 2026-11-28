@@ -5,7 +5,19 @@ on:
     pull_request:
         types: [opened, synchronize, reopened]
         paths:
-            - "web/**"
+            - "web/src/world/**"
+            - "web/src/clock.ts"
+            - "web/src/api.ts"
+            - "web/src/store.ts"
+            - "web/src/layoutPreferences.ts"
+            - "web/src/browserStorage.ts"
+            - "web/src/types.ts"
+            - "web/src/styles/**"
+            - "web/src/style*.css"
+            - "web/public/**"
+            - "web/src/components/**"
+            - "web/src/icons/**"
+            - "web/src/*.css"
             - "shared/**"
             - "scripts/town-golden*"
             - "scripts/capture-*"
@@ -23,7 +35,19 @@ on:
     push:
         branches: [main]
         paths:
-            - "web/**"
+            - "web/src/world/**"
+            - "web/src/clock.ts"
+            - "web/src/api.ts"
+            - "web/src/store.ts"
+            - "web/src/layoutPreferences.ts"
+            - "web/src/browserStorage.ts"
+            - "web/src/types.ts"
+            - "web/src/styles/**"
+            - "web/src/style*.css"
+            - "web/public/**"
+            - "web/src/components/**"
+            - "web/src/icons/**"
+            - "web/src/*.css"
             - "shared/**"
             - "scripts/town-golden*"
             - "scripts/capture-*"

@@ -1,3 +1,5 @@
+import { sharedBrowserBuild } from "./testing/sharedBrowserBuild";
+import { launchTestBrowser } from "../../../scripts/testing/browser-session";
 import { expect, test } from "bun:test";
 import { existsSync } from "node:fs";
 import { mkdtemp, readFile, rm } from "node:fs/promises";
@@ -40,7 +42,7 @@ test.skipIf(!chrome)(
       },
     });
     try {
-      const build = await Bun.build({
+      const build = await sharedBrowserBuild(import.meta.path, {
         entrypoints: [
           join(import.meta.dir, "WorldNavigatorWorktree.browser.tsx"),
         ],
@@ -78,7 +80,7 @@ test.skipIf(!chrome)(
         ["phone", "390,844"],
       ] as const) {
         const browserLog = join(dir, `${mode}.log`);
-        const browser = Bun.spawn(
+        const browser = await launchTestBrowser(
           [
             chrome!,
             "--headless=new",
@@ -92,6 +94,7 @@ test.skipIf(!chrome)(
           ],
           { stdout: "ignore", stderr: Bun.file(browserLog) },
         );
+        await browser.start();
         try {
           const observed = await Promise.race([
             results.get(mode)!.promise,

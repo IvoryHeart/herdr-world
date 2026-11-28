@@ -1,3 +1,4 @@
+import { clock } from "../../clock";
 import { memo, useMemo } from "react";
 import type { OfficeAgent } from "../officeProjectionTypes";
 import { useUsageAnalytics } from "../usage/usageStore";
@@ -37,7 +38,7 @@ export const TownObservatory = memo(function TownObservatory({
     () => townObservatoryWorking(agents.values()),
     [agents],
   );
-  const observatory = townObservatory(state, working, Date.now());
+  const observatory = townObservatory(state, working, clock.now());
   const open = useOpenTownUsage();
   const lot = townObservatoryLot(layout);
   const at = townCivicSigns(layout, T).observatory;

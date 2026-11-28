@@ -44,7 +44,7 @@ type Run = {
 
 /**
  * Scope identity and legacy description-step identity used when reading older runs.
- * Current CI checks descriptions in a separate leaf and chooses scope independently.
+ * Current CI checks descriptions in Delivery and chooses scope independently.
  * @internal
  */
 export const SCOPE_JOB = "Validation scope";
@@ -135,9 +135,21 @@ function descriptionLeafOnlyFailure(run: Run, jobs: Job[]): boolean {
           conclusion)
     );
   };
+  const delivery = jobs.find((job) => job.name === "Delivery checks");
+  // Packed CI checks the description in Delivery, after code/evidence work.
+  // A body repair may request fresh validation only when no other step failed.
+  const deliveryDescriptionOnly =
+    matches("Delivery checks", "failure", DESCRIPTION_STEP) &&
+    delivery!.steps.every(
+      (step) =>
+        step.name === DESCRIPTION_STEP ||
+        step.conclusion === "success" ||
+        step.conclusion === "skipped",
+    );
   return (
     matches(SCOPE_JOB, "success", SCOPE_STEP) &&
-    matches("PR description", "failure", DESCRIPTION_STEP) &&
+    (matches("PR description", "failure", DESCRIPTION_STEP) ||
+      deliveryDescriptionOnly) &&
     matches("Delivery checks", "failure") &&
     jobs.every(
       ({ name, conclusion }) =>

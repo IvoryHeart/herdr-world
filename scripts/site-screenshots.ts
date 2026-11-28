@@ -1,3 +1,4 @@
+import { spawnTestChrome } from "./testing/browser-session";
 /**
  * herdr.world's Town screenshots: captures the production TownCanvas with the
  * website's synthetic scene (web/src/world/testing/site-shots/scene.ts) and
@@ -123,7 +124,7 @@ export async function runSiteScreenshots(options: {
         : new Response("Not found", { status: 404 });
     },
   });
-  const browser = Bun.spawn(
+  const browser = spawnTestChrome(
     [
       options.chrome,
       "--headless=new",

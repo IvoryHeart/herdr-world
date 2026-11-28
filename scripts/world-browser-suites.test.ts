@@ -14,7 +14,7 @@ import {
   worldLatencyTrendSuites,
   worldRuntimeSuites,
   includesBrowserSuites,
-  discoverWorldBrowserShards,
+  discoverWorldBrowserSuites,
 } from "./world-browser-suites";
 
 test("World selections and unknown selectors take the browser slot", () => {
@@ -33,13 +33,16 @@ test("World selections and unknown selectors take the browser slot", () => {
   ).toBe(true);
 });
 
-test("six shards partition the complete World browser inventory without omissions or duplicates", async () => {
+test("case shards cover the complete World browser file inventory", async () => {
   await assertWorldBrowserInventory();
-  const selected = worldBrowserShards.flatMap((_, index) =>
-    selectWorldBrowserShard(`${index + 1}/6`),
-  );
-  expect(selected).toEqual(worldBrowserSuites);
-  expect(new Set(selected).size).toBe(selected.length);
+  const selected = [
+    ...new Set(
+      worldBrowserShards.flatMap((_, index) =>
+        selectWorldBrowserShard(`${index + 1}/${worldBrowserShards.length}`),
+      ),
+    ),
+  ].sort();
+  expect(selected).toEqual([...worldBrowserSuites].sort());
   expect(selectWorldBrowserShard()).toEqual(worldBrowserSuites);
   const ignore = new Bun.Glob(worldBrowserIgnorePattern);
   for (const path of selected) expect(ignore.match(path)).toBe(true);
@@ -60,7 +63,13 @@ test("trend and runtime suites are ordinary sharded World suites", () => {
 });
 
 test("invalid shard requests fail instead of silently skipping tests", () => {
-  for (const shard of ["0/6", "7/6", "1/8", "bad", "1/6/2"])
+  for (const shard of [
+    `0/${worldBrowserShards.length}`,
+    `${worldBrowserShards.length + 1}/${worldBrowserShards.length}`,
+    "1/8",
+    "bad",
+    "1/18/2",
+  ])
     expect(() => selectWorldBrowserShard(shard)).toThrow();
 });
 
@@ -108,20 +117,14 @@ test("World suites are discovered without timing entries; stale weights add no s
       ["Ignored.browser.tsx", "// @world-browser-suite\n"],
     ])
       await Bun.write(join(root, "web/src/world", path!), source!);
-    const shards = discoverWorldBrowserShards(root, {
-      Measured: 20,
-      Light: 5,
-      Deleted: 100,
-    });
-    expect(shards).toEqual([
-      ["web/src/world/Measured.test.ts"],
-      ["web/src/world/New.browser.test.ts"],
-      ["web/src/world/nested/Legacy.test.tsx"],
-      ["web/src/world/Light.test.ts"],
-      [],
-      [],
+    const suites = discoverWorldBrowserSuites(root);
+    expect(suites).toEqual([
+      "web/src/world/Light.test.ts",
+      "web/src/world/Measured.test.ts",
+      "web/src/world/New.browser.test.ts",
+      "web/src/world/nested/Legacy.test.tsx",
     ]);
-    await assertWorldBrowserInventory(root, shards.flat());
+    await assertWorldBrowserInventory(root, suites);
   } finally {
     await rm(root, { recursive: true, force: true });
   }
@@ -184,7 +187,10 @@ test("an unassigned web browser suite fails inventory validation", async () => {
   const root = await mkdtemp(join(tmpdir(), "web-inventory-"));
   try {
     for (const path of webBrowserSuites)
-      await Bun.write(join(root, path), "const chrome = Bun.env.CHROME_BIN;\n");
+      await Bun.write(
+        join(root, path),
+        `${path.startsWith("scripts/") ? "// @web-browser-suite\n" : ""}const chrome = Bun.env.CHROME_BIN;\n`,
+      );
     await Bun.write(
       join(root, "web/src/world/Sharded.test.ts"),
       "// @world-browser-suite\n",

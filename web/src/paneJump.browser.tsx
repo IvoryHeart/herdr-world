@@ -1,3 +1,4 @@
+import { clock as fixtureTime } from "./world/testing/installTestClock";
 import { createRoot } from "react-dom/client";
 import { flushSync } from "react-dom";
 import App from "./App";
@@ -12,16 +13,13 @@ const failures: string[] = [];
 const check = (condition: boolean, message: string) => {
   if (!condition) failures.push(message);
 };
-const boundary = () =>
-  new Promise<void>((resolve) =>
-    requestAnimationFrame(() => requestAnimationFrame(() => resolve())),
-  );
+const boundary = () => fixtureTime.frame();
 async function until(predicate: () => unknown) {
-  for (let i = 0; i < 120; i++) {
-    if (predicate()) return;
-    await boundary();
-  }
-  throw new Error("Pane switcher did not reach the expected state");
+  await fixtureTime.until(
+    () => !!predicate(),
+    "Pane switcher did not reach the expected state",
+    3840,
+  );
 }
 async function input(method: string, params: Record<string, unknown>) {
   const response = await fetch("/input", {

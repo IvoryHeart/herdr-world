@@ -1,3 +1,7 @@
+import {
+  launchTestBrowser,
+  type TestBrowser,
+} from "../../../scripts/testing/browser-session";
 import { expect, test } from "bun:test";
 import { existsSync } from "node:fs";
 import { mkdtemp, rm } from "node:fs/promises";
@@ -54,12 +58,12 @@ test.skipIf(!chrome)(
           : new Response("Not found", { status: 404 });
       },
     });
-    let child: ReturnType<typeof Bun.spawn> | undefined;
+    let child: TestBrowser | undefined;
     let connection: Awaited<ReturnType<typeof connectCapture>> | undefined;
     try {
       const profile = join(dir, "profile"),
         log = join(dir, "chrome.log");
-      child = Bun.spawn(
+      child = await launchTestBrowser(
         [
           chrome!,
           "--headless=new",
@@ -73,6 +77,7 @@ test.skipIf(!chrome)(
         ],
         { stdout: "ignore", stderr: Bun.file(log) },
       );
+      await child.start();
       expect(
         await waitForBrowserFixture(
           requested.promise,
@@ -229,12 +234,12 @@ for (const width of [1280, 390])
             : new Response("Not found", { status: 404 });
         },
       });
-      let child: ReturnType<typeof Bun.spawn> | undefined;
+      let child: TestBrowser | undefined;
       let connection: Awaited<ReturnType<typeof connectCapture>> | undefined;
       try {
         const log = join(dir, "chrome.log");
         const profile = join(dir, "profile");
-        child = Bun.spawn(
+        child = await launchTestBrowser(
           [
             chrome!,
             "--headless=new",
@@ -248,6 +253,7 @@ for (const width of [1280, 390])
           ],
           { stdout: "ignore", stderr: Bun.file(log) },
         );
+        await child.start();
         connection = await connectCapture(
           await waitForChromePort(child, profile, log),
         );

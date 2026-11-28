@@ -1,4 +1,12 @@
+import {
+  launchTestBrowser,
+  type TestBrowser,
+} from "../../../scripts/testing/browser-session";
 import { expect, test } from "bun:test";
+import {
+  until,
+  notifyCoreFixtureChange,
+} from "../../../server/src/herdr-core/testing/events";
 import { existsSync } from "node:fs";
 import { mkdir, mkdtemp, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
@@ -40,14 +48,6 @@ const VIEWPORTS = [
   { name: "portrait", width: 1440, height: 2560, mobile: false },
 ] as const;
 
-async function until(predicate: () => boolean, ms = 3_000) {
-  const deadline = Date.now() + ms;
-  while (!predicate()) {
-    if (Date.now() > deadline) throw new Error("condition not reached");
-    await Bun.sleep(5);
-  }
-}
-
 /** A World service's core side: production provider, RPC and read model. */
 async function coreWorld(root: string) {
   const fake = new FakeCore({ heartbeatMs: 60_000, name: "fixture-host" });
@@ -55,7 +55,10 @@ async function coreWorld(root: string) {
   const stateDir = join(root, "core", "state");
   const socket = await fake.listen(stateDir, join(root, "core", "run"));
   let invalidate: (id: string) => void = () => {};
-  const manager = new ConnectionManager<CoreConnectionRuntime>("");
+  const manager = new ConnectionManager<CoreConnectionRuntime>(
+    "",
+    notifyCoreFixtureChange,
+  );
   const none = {
     list: () => [],
     has: () => false,
@@ -93,7 +96,10 @@ async function coreWorld(root: string) {
         transport: { open: async () => socket, close: async () => {} },
         observations: new CoreObservationStore(() => {}),
         onFailure: () => {},
-        onReadModel: () => invalidate("core-fixture"),
+        onReadModel: () => {
+          invalidate("core-fixture");
+          notifyCoreFixtureChange();
+        },
       }),
   });
   await manager.start("core-fixture");
@@ -175,12 +181,12 @@ test.skipIf(!chrome)(
           : new Response("Not found", { status: 404 });
       },
     });
-    let child: ReturnType<typeof Bun.spawn> | undefined;
+    let child: TestBrowser | undefined;
     let connection: Awaited<ReturnType<typeof connectCapture>> | undefined;
     try {
       const profile = join(dir, "profile"),
         log = join(dir, "chrome.log");
-      child = Bun.spawn(
+      child = await launchTestBrowser(
         [
           chrome!,
           "--headless=new",
@@ -194,6 +200,7 @@ test.skipIf(!chrome)(
         ],
         { stdout: "ignore", stderr: Bun.file(log) },
       );
+      await child.start();
       const exited = child.exited.then(async (code) => {
         throw new Error(`Chrome exited ${code}: ${await Bun.file(log).text()}`);
       });

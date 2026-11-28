@@ -1,3 +1,4 @@
+import { clock as fixtureTime } from "../world/testing/installTestClock";
 import { StrictMode } from "react";
 import { createRoot } from "react-dom/client";
 import { ImagePreview } from "./ImagePreview";
@@ -11,11 +12,11 @@ const failures: string[] = [];
 const check = (condition: boolean, message: string) => {
   if (!condition) failures.push(message);
 };
-const settle = () => new Promise((resolve) => setTimeout(resolve, 50));
+const advance = () => fixtureTime.advance(50);
 async function waitFor(condition: () => boolean) {
   for (let i = 0; i < 200; i++) {
     if (condition()) return;
-    await settle();
+    await advance();
   }
   throw new Error(
     "Preview did not become ready: " + document.body.innerText.slice(0, 1000),
@@ -50,7 +51,7 @@ async function run() {
     const before = level(first);
     const other = level(second);
     first.querySelector<HTMLButtonElement>('[aria-label="Zoom in"]')!.click();
-    await settle();
+    await advance();
     check(level(first) !== before, "Zoom did not change the selected diagram");
     check(level(second) === other, "Zoom affected another diagram");
     renderMarkdown("# Replacement\n\n```mermaid\nflowchart TD\n X --> Y\n```");
@@ -107,7 +108,7 @@ async function run() {
     container
       .querySelector<HTMLButtonElement>('[title="Actual size"]')!
       .click();
-    await settle();
+    await advance();
     check(
       viewport.scrollWidth > viewport.clientWidth,
       "Actual-size image cannot be panned",
@@ -115,7 +116,7 @@ async function run() {
     container
       .querySelector<HTMLButtonElement>('[title="Fit preview"]')!
       .click();
-    await settle();
+    await advance();
     check(
       viewport.scrollWidth <= viewport.clientWidth + 1,
       "Fit image overflows its viewport",

@@ -1,3 +1,8 @@
+import { sharedBrowserBuild } from "./testing/sharedBrowserBuild";
+import {
+  launchTestBrowser,
+  type TestBrowser,
+} from "../../../scripts/testing/browser-session";
 import { connectCapture } from "./testing/connectCapture";
 import { captureScene, resizeCapture } from "./testing/captureScene";
 import { captureResumeViewports } from "./testing/resumeVisualCapture";
@@ -20,9 +25,19 @@ const chrome =
     ? "/Applications/Google Chrome.app/Contents/MacOS/Google Chrome"
     : Bun.which("google-chrome") || Bun.which("chromium"));
 
-test.skipIf(!chrome)(
-  "rendering, focus, geometry and terminal lifecycle: World navigator and managed windows",
-  async () => {
+test
+  .skipIf(!chrome)
+  .each([
+    "shell",
+    "windows",
+    "admission",
+    "resources",
+    "resume",
+    "authority",
+    "shared-inspector",
+  ])(
+  "rendering, focus, geometry and terminal lifecycle: World navigator and managed windows (%s)",
+  async (scenario) => {
     const dir = await mkdtemp(join(tmpdir(), "world-terminal-handoff-"));
     const assets = new Map<string, Blob>();
     const captureDir = Bun.env.WORLD_WINDOW_CAPTURE_DIR;
@@ -147,9 +162,9 @@ test.skipIf(!chrome)(
         );
       },
     });
-    let browser: ReturnType<typeof Bun.spawn> | undefined;
+    let browser: TestBrowser | undefined;
     try {
-      const build = await Bun.build({
+      const build = await sharedBrowserBuild(import.meta.path, {
         entrypoints: [
           join(import.meta.dir, "WorldTerminalHandoff.browser.tsx"),
         ],
@@ -233,7 +248,7 @@ test.skipIf(!chrome)(
         assets.set(`/${basename(output.path)}`, output);
       }
       const browserLog = join(dir, "browser.log");
-      browser = Bun.spawn(
+      browser = await launchTestBrowser(
         [
           chrome!,
           "--headless=new",
@@ -248,10 +263,11 @@ test.skipIf(!chrome)(
           "--no-first-run",
           "--no-default-browser-check",
           `--user-data-dir=${join(dir, "profile")}`,
-          `${server.url.href}town${resumeCaptureDir ? "?resume-gallery" : ""}`,
+          `${server.url.href}town?scenario=${scenario}${resumeCaptureDir ? "&resume-gallery" : ""}`,
         ],
         { stdout: "ignore", stderr: Bun.file(browserLog) },
       );
+      await browser.start();
       const observed = await waitForBrowserFixture(
         pageRequested.promise,
         result.promise,
@@ -261,10 +277,8 @@ test.skipIf(!chrome)(
           );
         }),
         "World terminal handoff",
-        // The fixture makes about 330 bounded waits and runs ~50 s locally,
-        // but 83-115 s on CI runners (scripts/world-browser-timings.json), so
-        // a 120 s deadline failed on ordinary runner variance. A stalled step
-        // still fails sooner: each wait gives up after 16 s and reports.
+        // Independent phases keep the original per-step bounds and hang guard.
+        // Measured case weights schedule work; they are not runtime deadlines.
         resumeCaptureDir ? 220_000 : 180_000,
       );
       if (Array.isArray(observed) && observed.length)

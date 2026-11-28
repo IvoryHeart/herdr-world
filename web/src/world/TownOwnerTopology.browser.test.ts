@@ -1,3 +1,8 @@
+import { waitForPage } from "./testing/browserEvents";
+import {
+  launchTestBrowser,
+  type TestBrowser,
+} from "../../../scripts/testing/browser-session";
 import { expect, test } from "bun:test";
 import { existsSync } from "node:fs";
 import { mkdir, mkdtemp, rm, writeFile } from "node:fs/promises";
@@ -185,9 +190,15 @@ async function ownerSnapshot(started: boolean) {
 
 type Point = { x: number; y: number };
 
-test.skipIf(!chrome)(
-  "Town on its owner's topology: every room's controls, one TUI, square buildings, a core start",
-  async () => {
+test
+  .skipIf(!chrome)
+  .each(
+    (["machine", "runtime"] as const).flatMap((mode) =>
+      [1, 2].map((part) => [mode, part] as const),
+    ),
+  )(
+  "Town on its owner's topology (%s, rooms %i/2): every room's controls, one TUI, square buildings, a core start",
+  async (mode, part) => {
     const dir = await mkdtemp(join(tmpdir(), "town-owner-topology-"));
     const { assets } = await buildWorldBrowserBundle("TownOwnerTopology", dir);
     const snapshots = new Map([
@@ -227,10 +238,10 @@ test.skipIf(!chrome)(
     });
     const profile = join(dir, "profile"),
       log = join(dir, "chrome.log");
-    let child: ReturnType<typeof Bun.spawn> | undefined;
+    let child: TestBrowser | undefined;
     let connection: Awaited<ReturnType<typeof connectCapture>> | undefined;
     try {
-      child = Bun.spawn(
+      child = await launchTestBrowser(
         [
           chrome!,
           "--headless=new",
@@ -246,6 +257,7 @@ test.skipIf(!chrome)(
         ],
         { stdout: "ignore", stderr: Bun.file(log) },
       );
+      await child.start();
       const exited = child.exited.then(async (code) => {
         throw new Error(`Chrome exited ${code}: ${await Bun.file(log).text()}`);
       });
@@ -276,15 +288,10 @@ test.skipIf(!chrome)(
       };
       const frames = () =>
         evaluate(
-          "new Promise(r => requestAnimationFrame(() => requestAnimationFrame(r)))",
+          "window.__herdrTestStep ? window.__herdrTestStep() : new Promise(r => requestAnimationFrame(() => requestAnimationFrame(r)))",
         );
-      const waitFor = async (expression: string, label: string) => {
-        for (let attempt = 0; attempt < 200; attempt++) {
-          if (await evaluate<boolean>(expression)) return;
-          await Bun.sleep(50);
-        }
-        throw new Error(`timed out: ${label}`);
-      };
+      const waitFor = (expression: string, label: string) =>
+        waitForPage(command, expression, label);
       const settled = () =>
         waitFor(
           "!window.__HERDR_TOWN_RENDERER__.flying && !window.__HERDR_TOWN_RENDERER__.transitioning",
@@ -484,7 +491,7 @@ test.skipIf(!chrome)(
         return `not brought clear: ${JSON.stringify(await roomBox(label))} at ${await level()}`;
       };
 
-      for (const mode of ["machine", "runtime"] as const) {
+      {
         result = Promise.withResolvers<string[]>();
         requested = Promise.withResolvers<void>();
         await command("Page.navigate", {
@@ -575,7 +582,9 @@ test.skipIf(!chrome)(
 
         // Each room, brought into view: a real pointer reaches its controls.
         const misses: string[] = [];
-        for (const room of rooms) {
+        // The two fresh fixtures cover disjoint room sets; all topology and
+        // launch/reorder assertions still run in each fixture.
+        for (const room of rooms.filter((_, index) => index % 2 === part - 1)) {
           const label = room.label.replace(/^Room /, "").replace(/, .*$/, "");
           const core = room.connection === "core-local";
           const unseen = await visit(mode, room.key, label);
@@ -758,7 +767,7 @@ test.skipIf(!chrome)(
             "the TUI's workspace order",
           );
           await settled();
-          await Bun.sleep(300);
+          await frames();
           const after = await evaluate<{
             failures: string[];
             calls: { method: string; params: Record<string, unknown> }[];

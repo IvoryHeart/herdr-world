@@ -57,6 +57,7 @@ test.each(["unit", "browser"] as const)(
           name: "nested [suite] inner.* flaky (case) & quote",
         },
       ]);
+      expect(report.retried).toEqual(report.flaky);
       expect(report.files.sort()).toEqual([
         "scripts/healthy.test.ts",
         "scripts/transient.test.ts",
@@ -92,6 +93,10 @@ test.each(["permanent", "crash", "tripwire"])(
       expect(
         JSON.parse(readFileSync(join(root, "flakes.json"), "utf8")).flaky,
       ).toEqual([]);
+      if (failure === "permanent")
+        expect(
+          JSON.parse(readFileSync(join(root, "flakes.json"), "utf8")).retried,
+        ).toEqual([{ file: "scripts/transient.test.ts", name: "failure" }]);
       expect(
         readFileSync(join(root, "attempts"), "utf8").length,
       ).toBeLessThanOrEqual(2);
@@ -146,7 +151,7 @@ test("a successful platform-only file with no cases stays green and records its 
     const result = await launch(root, "unit", ["./scripts/empty.test.ts"]);
     expect(result.code, result.stderr).toBe(0);
     expect(JSON.parse(readFileSync(join(root, "flakes.json"), "utf8"))).toEqual(
-      { files: ["scripts/empty.test.ts"], flaky: [] },
+      { files: ["scripts/empty.test.ts"], flaky: [], retried: [] },
     );
   } finally {
     rmSync(root, { recursive: true, force: true });

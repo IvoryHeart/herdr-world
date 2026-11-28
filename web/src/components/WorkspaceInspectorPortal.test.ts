@@ -1,3 +1,8 @@
+import { sharedBrowserBuild } from "../world/testing/sharedBrowserBuild";
+import {
+  launchTestBrowser,
+  type TestBrowser,
+} from "../../../scripts/testing/browser-session";
 import { expect, test } from "bun:test";
 import { existsSync } from "node:fs";
 import { mkdtemp, readFile } from "node:fs/promises";
@@ -34,9 +39,9 @@ test.skipIf(!chrome)(
         );
       },
     });
-    let browser: ReturnType<typeof Bun.spawn> | undefined;
+    let browser: TestBrowser | undefined;
     try {
-      const build = await Bun.build({
+      const build = await sharedBrowserBuild(import.meta.path, {
         entrypoints: [
           join(import.meta.dir, "WorkspaceInspectorPortal.browser.tsx"),
         ],
@@ -48,7 +53,7 @@ test.skipIf(!chrome)(
         assets.set(`/${basename(output.path)}`, output);
       }
       const browserLog = join(dir, "browser.log");
-      browser = Bun.spawn(
+      browser = await launchTestBrowser(
         [
           chrome!,
           "--headless=new",
@@ -62,6 +67,7 @@ test.skipIf(!chrome)(
         ],
         { stdout: "ignore", stderr: Bun.file(browserLog) },
       );
+      await browser.start();
       const observed = await Promise.race([
         result.promise,
         browser.exited.then(async (code) => {
