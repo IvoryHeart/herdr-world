@@ -24,11 +24,12 @@ World restart with old/missing recipient authority forbids submission unless
 continuity is proved at each resolve (#1451). Herdr TUI needs the same connection,
 pane and terminal and the same harness-reported session before and after the
 foreground check, plus the captured conversation scheme and session fingerprint.
-herdr-core needs the same core terminal (address, creation time) and the same
-harness session ID on the foreground command line, saved as the recipient's
-session fingerprint; PIDs, names, native IDs or session labels alone are not
-proof, a program naming no session stays refused, and legacy core tokens stay
-refused. An owner duplicate decision cannot bypass this rule. Unsent
+herdr-core needs the same core terminal (address, creation time) and the
+session Claude Code's own live process record names now, saved as the
+recipient's session fingerprint and reread before and after the send is fenced;
+PIDs, names, launch arguments, native IDs or session labels alone are not proof
+(`/clear` keeps the launch command), a harness without that record stays
+refused, and legacy core tokens stay refused. An owner duplicate decision cannot bypass this rule. Unsent
 work without proof resolves not-sent, possible sends remain uncertain, and manual
 close retains the actual history.
 

@@ -45,7 +45,18 @@ Immediately before typing an ask question or answer, World SHALL check only the 
 
 ### Requirement: Saved answers survive a proven World restart
 
-When World restarts with a saved answer waiting or a question still open, it SHALL deliver that answer only after proving that the original harness session still runs at the captured terminal. On Herdr TUI the proof SHALL be the same connection, pane and terminal, the same harness-reported session, and the same conversation scheme and session fingerprint, checked before and after the foreground check. On herdr-core it SHALL be the same core and terminal (address and creation time) and the same harness and harness session ID that the foreground program names on its command line (Claude `--session-id`, `--resume` or `-r`, not `--fork-session`; Codex `resume`), recorded with the question as a session fingerprint; a recycled generation is accepted only with this proof. Process IDs, executable names and per-run occupancy counters SHALL NOT count as proof, and a program that names no session SHALL NOT receive the answer after a restart. The proof SHALL repeat at answer recording, at dispatch and before input.
+When World restarts with a saved answer waiting or a question still open, it SHALL deliver that answer only after proving that the original harness session still runs at the captured terminal. The proof SHALL use the session the harness runs now, never process IDs, executable names, launch arguments or per-run counters, and SHALL repeat at answer recording, at dispatch and before input.
+
+#### Scenario: Herdr TUI proof
+
+- **WHEN** a Herdr TUI recipient is resolved after a World restart
+- **THEN** the proof is the same connection, pane and terminal and the same harness-reported session, checked before and after the foreground check, with the captured conversation scheme and session fingerprint
+
+#### Scenario: herdr-core proof
+
+- **WHEN** a herdr-core recipient is resolved after a World restart
+- **THEN** the proof is the same core and terminal (address and creation time) and the same harness session named now by the harness's own live process record (Claude Code's `sessions/<pid>.json`, rewritten on `/clear` and `/resume`), recorded with the question as a session fingerprint and read again before and after the send is fenced
+- **AND** a recycled connection generation is accepted only with this proof, and a harness without such a record never receives the answer after a restart
 
 #### Scenario: Original session resumes after a World restart
 
@@ -54,7 +65,7 @@ When World restarts with a saved answer waiting or a question still open, it SHA
 
 #### Scenario: Different or unproved session after a World restart
 
-- **WHEN** another session or harness now runs at the captured terminal, even one reusing the original process IDs and executable name, or the runtime cannot supply the proof
+- **WHEN** another session or harness now runs at the captured terminal, even one reusing the original process IDs, executable name and launch command (as after `/clear`), or the runtime cannot supply the proof
 - **THEN** World types nothing and shows Not sent with a plain restart reason, Copy answer and the full `herdr-world ask get <id>` command
 - **AND** a later check or program change never revives that delivery
 

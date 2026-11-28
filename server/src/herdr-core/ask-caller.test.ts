@@ -40,8 +40,14 @@ import { coreWorld, until } from "./testing/core-world";
 
 type World = Awaited<ReturnType<typeof coreWorld>>;
 const worlds: World[] = [];
+/**
+ * Claude's own process records (`sessions/<pid>.json`): the session each
+ * synthetic Claude process runs now, rewritten on `/clear` and `/resume`.
+ */
+const claudeSessions = new Map<number, string>();
 afterEach(async () => {
   for (const w of worlds.splice(0)) await w.dispose();
+  claudeSessions.clear();
 });
 async function world(id = "box") {
   const w = await coreWorld();
@@ -63,6 +69,12 @@ function source(
           value === id ? w.core.manager.readyRuntimeLease(id) : null,
       },
       host: () => (remote ? { destination: "dev@example.test" } : {}),
+      hostRuntime: () => ({
+        agentSessionFiles: {
+          findClaudeSessionForProcess: async (pid: number) =>
+            claudeSessions.get(pid) ?? null,
+        },
+      }),
     })),
   );
   return {
@@ -539,7 +551,7 @@ describe("a core asker's recipient (M5)", () => {
         recipient,
       ),
     ).toMatchObject({ state: "ended" });
-    // A program that names no harness session cannot prove itself later.
+    // A program with no session record cannot prove itself later.
     expect(recipient.session).toBeUndefined();
     expect(
       await recipientsFor(cores).resolve({
@@ -555,10 +567,11 @@ describe("a core asker's recipient (M5)", () => {
     });
   });
 
-  test("after a World restart only the session the program names proves the asker", async () => {
+  test("after a World restart only the session Claude's own record names now proves the asker", async () => {
     const original = "00000000-0000-4000-8000-0000000000a1";
     const different = "00000000-0000-4000-8000-0000000000b2";
     const w = await world();
+    claudeSessions.set(49_001, original);
     const { address, actor, cores } = await asker(w, 49_001, [
       "--session-id",
       original,
@@ -596,6 +609,18 @@ describe("a core asker's recipient (M5)", () => {
       state: "unconfirmed",
       reason: RESTART_UNPROVED,
     });
+    const refused = async () =>
+      expect(await restarted.resolve(earlier)).toEqual({
+        state: "unconfirmed",
+        reason: RESTART_UNPROVED,
+      });
+    // `/clear` (or `/resume <other>`) switches the session in place: the
+    // launch command, PIDs and name stay those of the original asker.
+    claudeSessions.set(49_001, different);
+    await refused();
+    // No readable record is no proof, whatever the launch command names.
+    claudeSessions.delete(49_001);
+    await refused();
     const foreground = (pid: number, ...args: string[]) => {
       w.fake.foreground(address, {
         pid,
@@ -613,30 +638,28 @@ describe("a core asker's recipient (M5)", () => {
       ["--continue"],
       [],
     ]) {
+      claudeSessions.set(49_001, different);
       await foreground(49_001, ...args);
-      expect(await restarted.resolve(earlier)).toEqual({
-        state: "unconfirmed",
-        reason: RESTART_UNPROVED,
-      });
+      await refused();
     }
-    // `claude --resume` of the original session, as a new process, is the asker.
+    // `claude --resume` of the original session, as a new process, is the
+    // asker once its own record names that session.
+    claudeSessions.set(49_777, original);
     await foreground(49_777, "--resume", original);
     expect(await restarted.resolve(earlier)).toMatchObject({
       state: "attached",
       restarted: true,
     });
-    // Another harness naming the same id is not.
+    // Another harness, even one naming the same id, keeps no Claude record.
     w.fake.foreground(address, {
       pid: 49_778,
       name: "codex",
       argv: ["codex", "resume", original],
       cwd: "/tmp/example",
     });
+    claudeSessions.set(49_778, original);
     await w.settle();
-    expect(await restarted.resolve(earlier)).toEqual({
-      state: "unconfirmed",
-      reason: RESTART_UNPROVED,
-    });
+    await refused();
   });
 
   test("a retired runtime captures nothing and resolves as offline", async () => {

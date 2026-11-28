@@ -18,6 +18,7 @@ import {
   paneActor,
   type CoreCallerSource,
   type CoreCliHost,
+  type CoreCliOccupant,
   type CorePreparedDelivery,
 } from "./world-cli-actor";
 import type { CliActor, LedgerAsk } from "./world-ledger";
@@ -134,18 +135,24 @@ export function createAskRecipients(deps: {
     const occupant = host.occupant(address);
     return occupant && host.isCurrent() ? occupant : null;
   }
-  function captureCore(actor: CliActor): CoreAnswerRecipient | undefined {
+  async function captureCore(
+    actor: CliActor,
+  ): Promise<CoreAnswerRecipient | undefined> {
     const host = coreHost(actor.connection_id!);
     if (!host || host.generation !== actor.connection_generation) return;
-    const occupant = coreOccupant(host, actor.pane_id!);
-    if (
-      !occupant ||
-      !occupant.foreground ||
-      foregroundInputRefusal(occupant.foreground) ||
-      actor.terminal_id !== actor.pane_id ||
-      occupant.fingerprint !== actor.agent_session_fingerprint
-    )
-      return;
+    const valid = (value: CoreCliOccupant | null) =>
+      value &&
+      value.foreground &&
+      !foregroundInputRefusal(value.foreground) &&
+      actor.terminal_id === actor.pane_id &&
+      value.fingerprint === actor.agent_session_fingerprint
+        ? value
+        : null;
+    if (!valid(coreOccupant(host, actor.pane_id!))) return;
+    const session = (await host.sessionProof?.(actor.pane_id!)) ?? null;
+    // The asker must still be the program the session record was read for.
+    const occupant = valid(coreOccupant(host, actor.pane_id!));
+    if (!occupant?.foreground) return;
     const recipient: CoreAnswerRecipient = {
       adapter: "herdr-core",
       connection_id: host.connection_id,
@@ -161,11 +168,11 @@ export function createAskRecipients(deps: {
         scheme: "herdr-core-occupant-v1",
         fingerprint: occupant.fingerprint,
       },
-      ...(occupant.session
+      ...(session
         ? {
             session: {
               scheme: "herdr-core-session-v1" as const,
-              fingerprint: occupant.session,
+              fingerprint: session,
             },
           }
         : {}),
@@ -180,10 +187,10 @@ export function createAskRecipients(deps: {
   /**
    * A core asker's current binding and its fenced native-send capability.
    */
-  function resolveCore(
+  async function resolveCore(
     recipient: CoreAnswerRecipient,
     restarted: boolean,
-  ): RecipientResolution {
+  ): Promise<RecipientResolution> {
     if (!coreSource()?.has(recipient.connection_id))
       return {
         state: "ended",
@@ -221,22 +228,29 @@ export function createAskRecipients(deps: {
     const reason = foregroundInputRefusal(occupant.foreground);
     if (reason)
       return { state: "unconfirmed", reason: `Agent not attached. ${reason}` };
-    // The occupant fingerprint holds a per-run counter, and PIDs and names
-    // can be reused by another session. Across a restart only the harness
-    // session id the program was started or resumed with, at the same core
-    // terminal, proves the asker; without one the answer stays with ask get.
+    // The occupant fingerprint holds a per-run counter, and PIDs, names and
+    // launch commands can outlive the session (`/clear` switches in place).
+    // Across a restart only the session the harness's own record names now,
+    // at the same core terminal, proves the asker, read before and after the
+    // send is fenced; without it the answer stays with ask get.
+    const proved = async () =>
+      Boolean(recipient.session) &&
+      (await host.sessionProof?.(recipient.pane_id)) ===
+        recipient.session!.fingerprint;
     if (
       restarted &&
-      (!recipient.session ||
-        occupant.session !== recipient.session.fingerprint ||
-        occupant.foreground.name !== recipient.foreground.name)
+      (occupant.foreground.name !== recipient.foreground.name ||
+        !(await proved()))
     )
       return { state: "unconfirmed", reason: RESTART_UNPROVED };
+    // Delivery re-checks the occupant fingerprint read before the await.
     const delivery = host.delivery?.(
       recipient.pane_id,
       occupant.fingerprint,
       occupant.foreground,
     );
+    if (delivery && restarted && !(await proved()))
+      return { state: "unconfirmed", reason: RESTART_UNPROVED };
     return delivery
       ? {
           state: "attached",

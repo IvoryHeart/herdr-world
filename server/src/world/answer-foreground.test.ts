@@ -13,8 +13,11 @@ import { coreCallerSource } from "../herdr-core/ask-caller";
 import { coreWorld } from "../herdr-core/testing/core-world";
 
 const cleanups: (() => Promise<void>)[] = [];
+/** Claude's own process records: the session each process runs now. */
+const claudeSessions = new Map<number, string>();
 afterEach(async () => {
   for (const close of cleanups.splice(0).reverse()) await close();
+  claudeSessions.clear();
 });
 
 /** A World run before the current one, over the same stores and runtime. */
@@ -61,6 +64,12 @@ async function fixture(
   const source = coreCallerSource(() => ({
     manager: world.core.manager,
     host: () => ({}),
+    hostRuntime: () => ({
+      agentSessionFiles: {
+        findClaudeSessionForProcess: async (pid: number) =>
+          claudeSessions.get(pid) ?? null,
+      },
+    }),
   }));
   const recipientsFor = (incarnation: string) =>
     createAskRecipients({
@@ -209,22 +218,32 @@ async function fixture(
      * the foreground PID and executable name.
      */
     replaceSession() {
-      if (runtime === "core")
+      if (runtime === "core") {
+        claudeSessions.set(6000, OTHER_SESSION);
         world.fake.foreground(terminal, {
           pid: 6000,
           name: "claude",
           argv: ["claude", "--resume", OTHER_SESSION],
         });
-      else f.info.agent_session.value = `${f.info.agent_session.value}-other`;
+      } else f.info.agent_session.value = `${f.info.agent_session.value}-other`;
+    },
+    /**
+     * `/clear` in the same process: Claude's record names a new session
+     * while the launch command, PIDs and name stay the original asker's.
+     */
+    clearSession() {
+      claudeSessions.set(6000, OTHER_SESSION);
     },
     /** `claude --resume` of the original session, as a new process. */
     resumeSession() {
-      if (runtime === "core")
+      if (runtime === "core") {
+        claudeSessions.set(7200, ORIGINAL_SESSION);
         world.fake.foreground(terminal, {
           pid: 7200,
           name: "claude",
           argv: ["claude", "--resume", ORIGINAL_SESSION],
         });
+      }
     },
     async check(kind?: string) {
       const entry = (await f.storage.outbox.forRecord("q-foreground")).find(
@@ -337,7 +356,7 @@ test("TUI without foreground information retains saved-answer delivery", async (
   expect(f.prompts).toHaveLength(1);
 });
 
-test("core: a program that names no session gets no saved answer after a World restart", async () => {
+test("core: a program with no session record gets no saved answer after a World restart", async () => {
   const f = await fixture("core", undefined, true);
   await f.answer(f.recordEarlier);
   await f.world.settle();
@@ -353,10 +372,11 @@ test("core: a program that names no session gets no saved answer after a World r
 for (const runtime of ["core", "tui"] as const)
   for (const when of ["before", "after"] as const)
     for (const session of runtime === "core"
-      ? (["kept", "resumed", "different"] as const)
+      ? (["kept", "resumed", "different", "cleared"] as const)
       : (["kept", "different"] as const))
-      test(`${runtime}: an answer ${when === "before" ? "saved before" : "given after"} a World restart reaches ${session === "different" ? "no replacement" : `only the proven original (${session})`} session`, async () => {
-        const same = session !== "different";
+      test(`${runtime}: an answer ${when === "before" ? "saved before" : "given after"} a World restart reaches ${session === "different" || session === "cleared" ? `no replacement (${session})` : `only the proven original (${session})`} session`, async () => {
+        const same = session !== "different" && session !== "cleared";
+        claudeSessions.set(6000, ORIGINAL_SESSION);
         const f = await fixture(
           runtime,
           {
@@ -369,6 +389,7 @@ for (const runtime of ["core", "tui"] as const)
         // World restarts; the runtime and its generation number carry on.
         if (session === "different") f.replaceSession();
         if (session === "resumed") f.resumeSession();
+        if (session === "cleared") f.clearSession();
         await f.world.settle();
         if (when === "after") await f.answer();
         await f.dispatcher.wake();
