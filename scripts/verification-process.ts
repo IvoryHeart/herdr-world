@@ -16,6 +16,11 @@ export type ProcessOptions = {
   graceMs?: number;
   onStart?(pid: number): void;
   onOutput?(text: string): void;
+  /** The deadline's timer; tests pass a clock they advance. */
+  timers?: {
+    setTimeout(run: () => void, ms: number): unknown;
+    clearTimeout(timer: unknown): void;
+  };
 };
 
 /** Identity probes share the worker's cancellation and report their command. */
@@ -57,6 +62,11 @@ export async function runVerificationProcess(
       "Verification command aborted before spawn",
     );
   const started = performance.now();
+  const timers = options.timers ?? {
+    setTimeout: (run: () => void, ms: number) => setTimeout(run, ms),
+    clearTimeout: (timer: unknown) =>
+      clearTimeout(timer as ReturnType<typeof setTimeout>),
+  };
   const child = Bun.spawn(command, {
     cwd: options.cwd,
     env: options.env,
@@ -103,7 +113,7 @@ export async function runVerificationProcess(
     fail(
       new VerificationProcessError("aborted", "Verification command aborted"),
     );
-  const timer = setTimeout(
+  const timer = timers.setTimeout(
     () =>
       fail(
         new VerificationProcessError(
@@ -170,7 +180,7 @@ export async function runVerificationProcess(
       maxRSSBytes: child.resourceUsage()?.maxRSS,
     };
   } finally {
-    clearTimeout(timer);
+    timers.clearTimeout(timer);
     options.signal?.removeEventListener("abort", abort);
     await stop();
   }
