@@ -42,7 +42,6 @@
     "server/src/config/instance-lock.ts": 2,
     "server/src/config/service-manager.ts": 2,
     "server/src/config/session-secret.ts": 2,
-    "server/src/connections/agent-status-subscription.ts": 2,
     "server/src/connections/shutdown.ts": 1,
     "server/src/connections/subscription-loop.ts": 1,
     "server/src/features/desk/rpc.ts": 3,
