@@ -16,6 +16,7 @@ import {
 } from "./agentProfiles";
 import type { AgentStartFrom } from "./agentStarts";
 import { useDeskReveal } from "./deskReveal";
+import { LazyDeskView } from "./LazyDeskView";
 import { useStableCallback } from "./useStableCallback";
 import { KeptCodeView } from "./code/KeptCodeView";
 import { GroupsWindow } from "./groups/GroupsWindow";
@@ -79,12 +80,7 @@ const TownView = memo(lazyWithReload("world-town", () => import("./TownView")));
 const BoardView = memo(
   lazyWithReload("world-board", () => import("./BoardView")),
 );
-// Desk, like Board, loads when first shown; Town is the default view (#1479).
-const MemoDeskView = memo(
-  lazyWithReload("world-desk", () =>
-    import("./DeskView").then((module) => ({ default: module.DeskView })),
-  ),
-);
+const MemoDeskView = memo(LazyDeskView);
 
 const AgentLauncherDialog = lazyWithReload("world-agent-launcher", () =>
   import("./AgentLauncherDialog").then((module) => ({
