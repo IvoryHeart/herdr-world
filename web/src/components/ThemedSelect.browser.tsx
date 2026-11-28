@@ -1,3 +1,4 @@
+import { clock } from "../testing/installRunningTestClock";
 import { createRoot } from "react-dom/client";
 import { flushSync } from "react-dom";
 import { ArrowDownWideNarrow } from "lucide-react";
@@ -10,7 +11,6 @@ const failures: string[] = [];
 const check = (condition: boolean, message: string) => {
   if (!condition) failures.push(message);
 };
-const settle = () => new Promise((resolve) => setTimeout(resolve, 120));
 
 const options = [
   { value: "attention", label: "Attention first" },
@@ -26,12 +26,12 @@ async function closePopover() {
   document.dispatchEvent(
     new KeyboardEvent("keydown", { key: "Escape", bubbles: true }),
   );
-  await settle();
+  await clock.advance(120);
 }
 
 async function openAndMeasure(trigger: HTMLButtonElement, label: string) {
   trigger.click();
-  await settle();
+  await clock.advance(120);
   const content = contentEl();
   check(!!content, `${label}: popover content did not render`);
   if (!content) return;
@@ -69,7 +69,7 @@ async function run() {
       />,
     ),
   );
-  await settle();
+  await clock.advance(120);
   const iconTrigger = header.querySelector<HTMLButtonElement>(
     ".themed-select-trigger",
   );
@@ -79,11 +79,11 @@ async function run() {
   // Same trigger under UI scaling (document zoom + --ui-scale).
   document.documentElement.style.zoom = "1.25";
   document.documentElement.style.setProperty("--ui-scale", "1.25");
-  await settle();
+  await clock.advance(120);
   if (iconTrigger) await openAndMeasure(iconTrigger, "agents panel @125%");
   document.documentElement.style.zoom = "";
   document.documentElement.style.removeProperty("--ui-scale");
-  await settle();
+  await clock.advance(120);
 
   // Trigger inside a modal dialog (Layout Preferences / shortcuts case).
   const backdrop = document.createElement("div");
@@ -106,14 +106,14 @@ async function run() {
       </div>,
     ),
   );
-  await settle();
+  await clock.advance(120);
   const dialogTrigger = backdrop.querySelector<HTMLButtonElement>(
     ".themed-select-trigger",
   );
   check(!!dialogTrigger, "dialog trigger did not render");
   if (dialogTrigger) {
     dialogTrigger.click();
-    await settle();
+    await clock.advance(120);
     const content = contentEl();
     check(!!content, "dialog: popover content did not render");
     if (content) {

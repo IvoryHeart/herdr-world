@@ -5,6 +5,7 @@ import {
   useLayoutEffect,
   useRef,
 } from "react";
+import { clock } from "../clock";
 import { isMobileLayout } from "../layoutPreferences";
 
 type ToastProps = {
@@ -37,7 +38,7 @@ const REPEAT_DISMISS_MS = 500;
 
 /** A rapid second tap must not activate the control a removed toast exposed. */
 function guardRemovedToastClick(point: { x: number; y: number; at: number }) {
-  const remaining = REPEAT_DISMISS_MS - (performance.now() - point.at);
+  const remaining = REPEAT_DISMISS_MS - (clock.monotonic() - point.at);
   if (remaining <= 0) return;
   const events = [
     "pointerdown",
@@ -53,9 +54,9 @@ function guardRemovedToastClick(point: { x: number; y: number; at: number }) {
   const cleanup = () => {
     for (const type of events) window.removeEventListener(type, guard, true);
     window.removeEventListener("blur", cleanup);
-    window.clearTimeout(timer);
+    clock.clearTimeout(timer);
   };
-  let timer = window.setTimeout(cleanup, remaining);
+  let timer = clock.setTimeout(cleanup, remaining);
   const guard = (event: MouseEvent) => {
     const pointerId = (event as PointerEvent).pointerId;
     if (
@@ -77,7 +78,7 @@ function guardRemovedToastClick(point: { x: number; y: number; at: number }) {
     // the repeat window or moved away from the original close button.
     if (event.type === "pointerdown") {
       held.add(pointerId);
-      window.clearTimeout(timer);
+      clock.clearTimeout(timer);
     } else if (event.type === "pointerup" || event.type === "pointercancel") {
       // The compatibility click follows the release coordinates after a drag.
       if (event.type === "pointerup") {
@@ -85,7 +86,7 @@ function guardRemovedToastClick(point: { x: number; y: number; at: number }) {
         releasePoint.y = event.clientY;
       }
       held.delete(pointerId);
-      if (!held.size) timer = window.setTimeout(cleanup, REPEAT_DISMISS_MS);
+      if (!held.size) timer = clock.setTimeout(cleanup, REPEAT_DISMISS_MS);
     }
     event.preventDefault();
     event.stopImmediatePropagation();
@@ -120,7 +121,7 @@ export function Toast({
       clickRef.current = null;
       swipeRef.current = null;
       if (exitTimerRef.current !== null) {
-        window.clearTimeout(exitTimerRef.current);
+        clock.clearTimeout(exitTimerRef.current);
         exitTimerRef.current = null;
       }
       el?.classList.remove("toast-swiping");
@@ -215,7 +216,7 @@ export function Toast({
     const el = ref.current;
     const exit = -((el?.offsetHeight ?? 120) + (el?.offsetTop ?? 0) + 24);
     setOffset(exit, false);
-    exitTimerRef.current = window.setTimeout(() => {
+    exitTimerRef.current = clock.setTimeout(() => {
       exitTimerRef.current = null;
       onDismiss();
       setOffset(0, false);
@@ -228,7 +229,7 @@ export function Toast({
     clickRef.current = {
       x: event.clientX,
       y: event.clientY,
-      at: performance.now(),
+      at: clock.monotonic(),
     };
   };
 

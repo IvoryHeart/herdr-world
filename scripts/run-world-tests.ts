@@ -1,15 +1,28 @@
+import { appendFileSync, writeFileSync } from "node:fs";
 import { mkdtemp, rm, mkdir } from "node:fs/promises";
 import { availableParallelism, tmpdir } from "node:os";
 import { join } from "node:path";
 import { buildWorldBrowserBundle } from "../web/src/world/testing/browserBundles";
+import {
+  SHARED_CHROME_ENV,
+  startSharedChrome,
+} from "../web/src/testing/chromeBrowser";
 import { acquireCheckSlot, heldEnv } from "./check-lock";
 import {
   assertWorldBrowserInventory,
   selectWorldBrowserShard,
   worldBrowserSuites,
+  worldBrowserCasePlan,
 } from "./world-browser-suites";
+import timings from "./world-browser-timings.json";
+import {
+  executeWorldBrowserCases,
+  worldCaseConcurrency,
+  worldCaseTestArgs,
+} from "./world-browser-cases";
+import { casePhasesTable, readCasePhases } from "./world-case-phases";
 
-// Suites named on the command line replace the shard selection.
+// Named suites narrow the shard, or select whole files without --shard.
 const allArgs = process.argv.slice(2);
 const named = allArgs.filter((arg) => worldBrowserSuites.includes(arg));
 const args = allArgs.filter((arg) => !named.includes(arg));
@@ -19,11 +32,14 @@ if (
   args.some((arg) => arg.startsWith("--shard") && arg !== shardArg) ||
   (shardArg && !shard)
 ) {
-  throw new Error("Use --shard=i/6 to select World browser suites");
+  throw new Error(
+    `Use --shard=i/${worldBrowserCasePlan.length} to select World browser suites`,
+  );
 }
-if (named.length && shard)
-  throw new Error("Name World browser suites or a shard, not both");
-const files = named.length ? named : selectWorldBrowserShard(shard);
+const shardFiles = selectWorldBrowserShard(shard);
+const files = named.length
+  ? named.filter((file) => shardFiles.includes(file))
+  : shardFiles;
 const testArgs = args.filter((arg) => arg !== shardArg);
 await assertWorldBrowserInventory();
 const chrome =
@@ -43,9 +59,23 @@ const label = shard
   ? `shard-${shard.replace("/", "-of-")}`
   : (Bun.env.HERDR_WORLD_TEST_LABEL ?? "local");
 await mkdir(".agents/delivery", { recursive: true });
+// Cases append their phase seconds here (web/src/world/testing/casePhases.ts).
+const phasesFile = join(
+  process.cwd(),
+  `.agents/delivery/world-${label}.phases.jsonl`,
+);
+await rm(phasesFile, { force: true });
 // World runs take the browser slot. A nested runner already holds its
 // parent's slot and skips acquisition.
 const release = await acquireCheckSlot("browser", { lane: `world ${label}` });
+// One Chrome for the whole shard; every case opens its own context in it.
+const sharedChrome = Bun.env[SHARED_CHROME_ENV]
+  ? undefined
+  : await startSharedChrome().catch((error: Error) => {
+      // Each test file then starts its own Chrome.
+      console.warn(`[world-tests] shared Chrome: ${error.message}`);
+      return undefined;
+    });
 try {
   const began = performance.now();
   await buildWorldBrowserBundle("HostsFilter", directory);
@@ -61,49 +91,98 @@ try {
     await buildWorldBrowserBundle("town/TownCanvas", directory);
   if (files.some((path) => path.includes("/SharedViewCreation")))
     await buildWorldBrowserBundle("SharedViewCreation", directory);
-  const child = Bun.spawn(
-    [
-      process.execPath,
-      "scripts/run-tests.ts",
-      ...files,
-      ...(!testArgs.some((arg) => /^--parallel(?:=|$)/.test(arg))
-        ? [
-            `--parallel=${shard ? 1 : Bun.env.HERDR_TEST_PARALLEL || Math.min(availableParallelism(), 4)}`,
-          ]
-        : []),
-      ...(!testArgs.some((arg) => /^--max-concurrency(?:=|$)/.test(arg))
-        ? ["--max-concurrency=1"]
-        : []),
-      `--timings=.agents/delivery/world-${label}.timings.json`,
-      "--update-timings",
-      "--reporter=junit",
-      `--reporter-outfile=.agents/delivery/world-${label}.xml`,
-      ...testArgs,
-    ],
-    {
-      stdin: "inherit",
-      stdout: "inherit",
-      stderr: "inherit",
-      env: {
-        ...process.env,
-        CHROME_BIN: chrome,
-        HERDR_WORLD_TEST_ASSETS: directory,
-        HERDR_TEST_EXCLUDE_WORLD_BROWSER: "0",
-        ...heldEnv("browser"),
+  if (files.some((path) => path.includes("/TownOwnerTopology")))
+    await buildWorldBrowserBundle("TownOwnerTopology", directory);
+  if (files.some((path) => path.includes("/TownFrameBudget")))
+    await buildWorldBrowserBundle("testing/town-scale/TownScale", directory);
+  const run = async (
+    paths: string[],
+    suffix: string,
+    selection: string[] = [],
+  ) => {
+    const child = Bun.spawn(
+      [
+        process.execPath,
+        "scripts/run-tests.ts",
+        ...paths,
+        ...selection,
+        ...(!testArgs.some((arg) => /^--parallel(?:=|$)/.test(arg))
+          ? [
+              `--parallel=${shard ? 1 : Bun.env.HERDR_TEST_PARALLEL || Math.min(availableParallelism(), 4)}`,
+            ]
+          : []),
+        ...(!testArgs.some((arg) => /^--max-concurrency(?:=|$)/.test(arg))
+          ? ["--max-concurrency=1"]
+          : []),
+        `--timings=.agents/delivery/world-${label}${suffix}.timings.json`,
+        "--update-timings",
+        "--reporter=junit",
+        `--reporter-outfile=.agents/delivery/world-${label}${suffix}.xml`,
+        ...testArgs.map((arg) =>
+          arg.startsWith("--flake-report=")
+            ? arg.replace(/\.json$/, `${suffix}.json`)
+            : arg,
+        ),
+      ],
+      {
+        stdin: "inherit",
+        stdout: "inherit",
+        stderr: "inherit",
+        env: {
+          ...process.env,
+          CHROME_BIN: chrome,
+          HERDR_WORLD_TEST_ASSETS: directory,
+          HERDR_WORLD_TEST_PHASES: phasesFile,
+          HERDR_TEST_EXCLUDE_WORLD_BROWSER: "0",
+          ...sharedChrome?.env,
+          ...heldEnv("browser"),
+        },
       },
-    },
-  );
-  const interrupt = () => child.kill("SIGINT");
-  const terminate = () => child.kill("SIGTERM");
-  process.on("SIGINT", interrupt);
-  process.on("SIGTERM", terminate);
-  try {
-    process.exitCode = await child.exited;
-  } finally {
-    process.off("SIGINT", interrupt);
-    process.off("SIGTERM", terminate);
+    );
+    const interrupt = () => child.kill("SIGINT");
+    const terminate = () => child.kill("SIGTERM");
+    process.on("SIGINT", interrupt);
+    process.on("SIGTERM", terminate);
+    try {
+      return await child.exited;
+    } finally {
+      process.off("SIGINT", interrupt);
+      process.off("SIGTERM", terminate);
+    }
+  };
+  if (shard) {
+    if (testArgs.some((arg) => /^(?:-t|--test-name-pattern)(?:=|$)/.test(arg)))
+      throw new Error("A case shard cannot also narrow test names");
+    const workers = worldBrowserCasePlan[Number(shard.split("/")[0]) - 1]!;
+    const concurrency = worldCaseConcurrency(testArgs);
+    console.info(
+      `[world-test-runner] ${label}: ${workers.length} isolated workers, concurrency ${concurrency}; recorded loads ${workers.map((tasks) => Math.round(tasks.filter((task) => files.includes(task.file)).reduce((sum, task) => sum + task.seconds, 0))).join(" / ")} seconds`,
+    );
+    process.exitCode = await executeWorldBrowserCases(
+      workers,
+      files,
+      (task, worker, index) =>
+        run(
+          [`./${task.file}`],
+          `-worker-${worker + 1}-file-${index + 1}`,
+          worldCaseTestArgs(task, timings.cases),
+        ),
+      concurrency,
+    );
+  } else {
+    process.exitCode = await run(files, "");
   }
+  const phases = casePhasesTable(label, readCasePhases(phasesFile));
+  if (phases) {
+    writeFileSync(`.agents/delivery/world-${label}-phases.md`, phases);
+    if (Bun.env.GITHUB_STEP_SUMMARY)
+      appendFileSync(Bun.env.GITHUB_STEP_SUMMARY, `${phases}\n`);
+  }
+  console.info(
+    `[world-test-runner] ${label}: completed in ${((performance.now() - began) / 1000).toFixed(1)} seconds`,
+  );
 } finally {
+  await sharedChrome?.stop();
   release();
   await rm(directory, { recursive: true, force: true });
 }

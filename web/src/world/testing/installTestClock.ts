@@ -6,6 +6,7 @@ import { installTestClock } from "./testClock";
  * time, and checks read the end state.
  */
 export const clock = installTestClock();
+window.__HERDR_TEST_CLOCK__ = clock;
 const style = document.createElement("style");
 style.textContent =
   "*, *::before, *::after { transition: none !important; animation: none !important; }";

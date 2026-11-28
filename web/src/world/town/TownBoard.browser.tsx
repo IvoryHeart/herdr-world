@@ -1,3 +1,4 @@
+import { clock } from "../../testing/installRunningTestClock";
 import { createRoot } from "react-dom/client";
 import { bridge } from "../../api";
 import type { UsageLimit, WorldUsageSnapshot } from "../../../../shared/usage";
@@ -126,11 +127,7 @@ createRoot(signHost).render(
 );
 
 async function waitFor(condition: () => boolean, message: string) {
-  const until = performance.now() + 10_000;
-  while (!condition()) {
-    if (performance.now() > until) throw new Error(message);
-    await new Promise((resolve) => setTimeout(resolve, 20));
-  }
+  await clock.until(condition, message);
 }
 
 /** Every drawn element sits within the board's border box, inside its border. */
@@ -232,7 +229,7 @@ async function checkPopover() {
       relatedTarget: document.body,
     }),
   );
-  await new Promise((done) => setTimeout(done, 400));
+  await clock.advance(400);
   await expect(true, "a click after hovering closed the board");
 }
 

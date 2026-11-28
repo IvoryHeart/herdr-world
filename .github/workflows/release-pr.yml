@@ -47,7 +47,8 @@ jobs:
             --repo-url "$GH_REPO" --token "$GH_TOKEN" --target-branch main \
             --config-file release-please-config.json \
             --manifest-file .release-please-manifest.json "${version_args[@]}"
-      # GITHUB_TOKEN-created PR events do not trigger CI. The action's PR output
+      # GITHUB_TOKEN-created PR events do not trigger CI. Its Delivery checks
+      # also scan the branch's privacy on this dispatch. The action's PR output
       # is unavailable with the CLI; resolve the standard manifest PR branch.
       - name: Dispatch checks for the release-please PR
         env:
@@ -60,5 +61,4 @@ jobs:
             --jq '.[] | select(.isCrossRepository == false) | .headRefName')"
           if [ -n "$branch" ]; then
             gh workflow run ci.yml --ref "$branch"
-            gh workflow run privacy.yml --ref "$branch"
           fi

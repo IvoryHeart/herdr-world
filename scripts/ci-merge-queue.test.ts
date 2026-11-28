@@ -37,13 +37,10 @@ test("merge queue runs the protected Linux delivery graph on the queue commit", 
   expect(ci.jobs.delivery.name).toBe("Delivery checks");
   expect(ci.jobs.delivery.needs).toEqual([
     "validation-scope",
-    "pr-description",
     "static",
     "unit-tests",
     "world-browser",
-    "web-browser",
     "behavioral",
-    "dependency-security",
   ]);
   expect(ci.jobs["validation-scope"].if).toStartWith(
     "github.event_name != 'pull_request' ||",
@@ -64,9 +61,14 @@ test("merge queue runs the protected Linux delivery graph on the queue commit", 
     }
   };
   for (const [name, job] of Object.entries(ci.jobs)) {
-    if (name === "browser-diagnostics" || name.endsWith("-preview")) {
+    // Jobs gated to another event never run on the queue commit.
+    const prOnly =
+      name.endsWith("-preview") ||
+      name === "privacy-metadata" ||
+      name === "cancel-closed";
+    if (name === "browser-diagnostics" || prOnly) {
       expect(job.if).toStartWith(
-        `github.event_name == '${name.endsWith("-preview") ? "pull_request" : "workflow_dispatch"}'`,
+        `github.event_name == '${prOnly ? "pull_request" : "workflow_dispatch"}'`,
       );
     } else visit(job);
   }

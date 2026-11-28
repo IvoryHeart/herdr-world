@@ -7,6 +7,7 @@ import {
 } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
+import { runProbeChrome } from "../../testing/chromeBrowser";
 
 /**
  * How test Chrome renders WebGL. By default (and always in CI) it uses
@@ -40,7 +41,7 @@ export type GpuProbe = {
   at: number;
 };
 
-const PROBE_PAGE = `data:text/html,<body></body><script>const c=document.createElement("canvas");const g=c.getContext("webgl2")||c.getContext("webgl");let r="no-webgl";if(g){const e=g.getExtension("WEBGL_debug_renderer_info");r=e?g.getParameter(e.UNMASKED_RENDERER_WEBGL):g.getParameter(g.RENDERER)}document.body.textContent="RENDERER="+r</script>`;
+export const PROBE_PAGE = `data:text/html,<body></body><script>const c=document.createElement("canvas");const g=c.getContext("webgl2")||c.getContext("webgl");let r="no-webgl";if(g){const e=g.getExtension("WEBGL_debug_renderer_info");r=e?g.getParameter(e.UNMASKED_RENDERER_WEBGL):g.getParameter(g.RENDERER)}document.body.textContent="RENDERER="+r</script>`;
 
 /** A hardware renderer, as opposed to no WebGL or a software one. */
 export function isHardwareRenderer(renderer: string): boolean {
@@ -57,37 +58,7 @@ export type ProbeRun = {
   timedOut: boolean;
 };
 
-const PROBE_TIMEOUT_MS = 20_000;
-
-async function runProbeChrome(chrome: string, profile: string) {
-  const child = Bun.spawn(
-    [
-      chrome,
-      "--headless=new",
-      "--no-first-run",
-      "--no-default-browser-check",
-      `--user-data-dir=${profile}`,
-      ...GPU_FLAGS,
-      "--dump-dom",
-      PROBE_PAGE,
-    ],
-    { stdout: "pipe", stderr: "ignore" },
-  );
-  let timedOut = false;
-  const timer = setTimeout(() => {
-    timedOut = true;
-    child.kill("SIGKILL");
-  }, PROBE_TIMEOUT_MS);
-  try {
-    const [output, exitCode] = await Promise.all([
-      new Response(child.stdout).text(),
-      child.exited,
-    ]);
-    return { output, exitCode, timedOut };
-  } finally {
-    clearTimeout(timer);
-  }
-}
+export const PROBE_TIMEOUT_MS = 20_000;
 
 /**
  * GPU mode only when Chrome ran to completion and reported a hardware
@@ -116,6 +87,7 @@ export function classifyProbe(run: ProbeRun | Error): GpuProbe {
 
 export async function probeGpu(
   chrome: string,
+  // The one Chrome launcher (testing/chromeBrowser.ts) runs the probe.
   run: (chrome: string, profile: string) => Promise<ProbeRun> = runProbeChrome,
 ): Promise<GpuProbe> {
   const profile = mkdtempSync(join(tmpdir(), "herdr-gpu-probe-"));

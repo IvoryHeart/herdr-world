@@ -1,3 +1,4 @@
+import { clock } from "../testing/installRunningTestClock";
 import { useState } from "react";
 import { createRoot } from "react-dom/client";
 import { flushSync } from "react-dom";
@@ -24,12 +25,6 @@ const failures: string[] = [];
 const check = (condition: boolean, message: string) => {
   if (!condition) failures.push(message);
 };
-const settle = () =>
-  new Promise((resolve) =>
-    requestAnimationFrame(() =>
-      requestAnimationFrame(() => setTimeout(resolve, 200)),
-    ),
-  );
 const button = (label: string) => {
   const found = [...document.querySelectorAll("button")].find(
     (element) =>
@@ -76,9 +71,9 @@ async function run() {
   document.body.append(rootElement);
   const root = createRoot(rootElement);
   flushSync(() => root.render(<Harness />));
-  await settle();
+  await clock.advance(200);
   click("Duplicate Herdr World Dark");
-  await settle();
+  await clock.advance(200);
   const input = document.querySelector<HTMLInputElement>(
     ".terminal-theme-name-field input",
   )!;
@@ -95,7 +90,7 @@ async function run() {
       document.activeElement === input,
       `Name input lost focus during ${name}`,
     );
-    await settle();
+    await clock.advance(200);
     check(
       document.activeElement === input,
       `Name input lost focus after ${name}`,
@@ -168,7 +163,7 @@ async function run() {
         bubbles: true,
       }),
     );
-    await settle();
+    await clock.advance(200);
     const composition = termElement.querySelector(".composition-view")!;
     const style = getComputedStyle(composition);
     const expected = document.createElement("span");
@@ -194,7 +189,7 @@ async function run() {
   termElement.remove();
 
   click("Cancel");
-  await settle();
+  await clock.advance(200);
   const radios = document.querySelectorAll<HTMLButtonElement>('[role="radio"]');
   radios[0].focus();
   flushSync(() =>
@@ -202,7 +197,7 @@ async function run() {
       new KeyboardEvent("keydown", { key: "ArrowRight", bubbles: true }),
     ),
   );
-  await settle();
+  await clock.advance(200);
   check(
     document.activeElement === radios[1],
     "Arrow navigation lost focus after selection",
@@ -225,7 +220,7 @@ async function run() {
   );
   flushSync(() => replaceThemes(full.slice(1)));
   click("Duplicate Herdr World Dark");
-  await settle();
+  await clock.advance(200);
   // Another browser tab can fill the final slot while this draft is open.
   flushSync(() => replaceThemes(full));
   check(
@@ -247,7 +242,7 @@ async function run() {
     "Saving dropped a theme from storage",
   );
   if (document.querySelector(".terminal-theme-editor")) click("Cancel");
-  await settle();
+  await clock.advance(200);
   check(
     button("Duplicate Herdr World Dark").disabled,
     "Duplicate remained enabled at the theme limit",
@@ -257,7 +252,7 @@ async function run() {
     "Custom theme duplication bypassed the limit",
   );
   click("Edit Custom 0");
-  await settle();
+  await clock.advance(200);
   check(
     !button("Save theme").disabled,
     "Editing an existing theme was blocked at the limit",
@@ -272,7 +267,7 @@ async function run() {
     "Editing did not select the saved theme",
   );
   click("Delete Custom 0");
-  await settle();
+  await clock.advance(200);
   const confirmation = document.querySelector(
     '[role="dialog"][aria-label="Delete theme"]',
   )!;
@@ -285,7 +280,7 @@ async function run() {
       new KeyboardEvent("keydown", { key: "Escape", bubbles: true }),
     ),
   );
-  await settle();
+  await clock.advance(200);
   check(
     customThemes.length === MAX_CUSTOM_TERMINAL_THEMES,
     "Escape deleted a theme",
@@ -296,7 +291,7 @@ async function run() {
     "Closing confirmation did not restore dialog focus",
   );
   click("Delete Custom 0");
-  await settle();
+  await clock.advance(200);
   click("Delete");
   check(
     selection.dark === "herdr-dark",
@@ -307,7 +302,7 @@ async function run() {
     "Deleting a theme did not free a slot",
   );
   click("Duplicate Herdr World Dark");
-  await settle();
+  await clock.advance(200);
   click("Create theme");
   check(
     customThemes.length === MAX_CUSTOM_TERMINAL_THEMES,
@@ -321,7 +316,7 @@ async function run() {
   );
   const saved = customThemes.find((theme) => theme.id === selection.dark)!;
   click(`Edit ${saved.name}`);
-  await settle();
+  await clock.advance(200);
   const editedInput = document.querySelector<HTMLInputElement>(
     ".terminal-theme-name-field input",
   )!;

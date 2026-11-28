@@ -1,4 +1,15 @@
+import { clock, type WebClock } from "../clock";
 import { CREATED_PANE_ADMISSION_TIMEOUT_MS } from "./officeRoomActions";
+
+/**
+ * The admission deadline's timers, on the shared clock. The World handoff
+ * fixture redirects only these, so its browser frames stay real. @internal
+ */
+export const admissionTimerPort: Pick<WebClock, "setTimeout" | "clearTimeout"> =
+  {
+    setTimeout: (callback, delayMs) => clock.setTimeout(callback, delayMs),
+    clearTimeout: (id) => clock.clearTimeout(id),
+  };
 
 export function createdTerminalIdentity(result: unknown) {
   if (!result || typeof result !== "object") return null;
@@ -55,11 +66,14 @@ export function admitCreatedTerminal({
     let lastFailure =
       "The created terminal was not admitted within the World snapshot window.";
     let unsubscribe = () => {};
-    const timer = setTimeout(() => finish(new Error(lastFailure)), timeoutMs);
+    const timer = admissionTimerPort.setTimeout(
+      () => finish(new Error(lastFailure)),
+      timeoutMs,
+    );
     function finish(error?: Error) {
       if (settled) return;
       settled = true;
-      clearTimeout(timer);
+      admissionTimerPort.clearTimeout(timer);
       unsubscribe();
       signal?.removeEventListener("abort", cancelled);
       abort.abort();

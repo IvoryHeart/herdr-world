@@ -1,12 +1,16 @@
+import { admissionTimerPort } from "../createdTerminalAdmission";
 import { installTestClock, type ClockTarget } from "./testClock";
 
-// Imported before the app/React. The bundle plugin directs only admission's
-// timer port here: real browser frames still prove rendering and focus, while
-// admission deadlines never wait on wall time or change production constants.
+// Imported before the app/React. Only admission's timer port runs on this
+// clock: real browser frames still prove rendering and focus, while admission
+// deadlines never wait on wall time or change production constants.
 export const admissionTimers = {} as ClockTarget;
 export const admissionClock = installTestClock(admissionTimers, {
   now: () => 0,
 });
+admissionTimerPort.setTimeout = (callback, delayMs) =>
+  admissionTimers.setTimeout(callback, delayMs) as unknown as number;
+admissionTimerPort.clearTimeout = (id) => admissionTimers.clearTimeout(id);
 
 const completions = new Map<string, () => void>();
 

@@ -30,21 +30,15 @@ import { worldRuntimeRegistry } from "../world/runtime-registry";
 import { WorldSnapshotService } from "../world/snapshot";
 import {
   BROWSER_STARTUP_TIMEOUT_MS,
-  stopChrome,
   waitForBrowserFixture,
-  waitForChromePort,
 } from "../../../web/src/browserChrome";
+import {
+  chromeBinary as chrome,
+  openChromePage,
+  type ChromePage,
+} from "../../../web/src/testing/sharedChrome";
 import { buildWorldBrowserBundle } from "../../../web/src/world/testing/browserBundles";
-import { connectCapture } from "../../../web/src/world/testing/connectCapture";
 
-const chrome =
-  Bun.env.CHROME_BIN ||
-  Bun.which("google-chrome") ||
-  Bun.which("chromium") ||
-  (process.platform === "darwin" &&
-  existsSync("/Applications/Google Chrome.app/Contents/MacOS/Google Chrome")
-    ? "/Applications/Google Chrome.app/Contents/MacOS/Google Chrome"
-    : undefined);
 const git = Bun.which("git");
 
 /** The repository's standard capture viewports. */
@@ -317,32 +311,19 @@ test.skipIf(!chrome || !git || process.platform === "win32")(
           : new Response("Not found", { status: 404 });
       },
     });
-    let child: ReturnType<typeof Bun.spawn> | undefined;
-    let connection: Awaited<ReturnType<typeof connectCapture>> | undefined;
+    let page: ChromePage | undefined;
     try {
-      const profile = join(dir, "profile"),
-        log = join(dir, "chrome.log");
-      child = Bun.spawn(
-        [
-          chrome!,
-          "--headless=new",
-          "--disable-gpu",
-          "--remote-debugging-port=0",
-          "--window-size=1280,900",
-          "--no-first-run",
-          "--no-default-browser-check",
-          `--user-data-dir=${profile}`,
-          server.url.href,
-        ],
-        { stdout: "ignore", stderr: Bun.file(log) },
-      );
-      const exited = child.exited.then(async (code) => {
-        throw new Error(`Chrome exited ${code}: ${await Bun.file(log).text()}`);
+      const captures = Bun.env.HERDR_WORLD_CORE_CAPTURES;
+      // Pixels only when evidence captures are asked for.
+      page = await openChromePage({
+        viewport: { width: 1280, height: 900 },
+        pixels: Boolean(captures),
       });
+      await page.navigate(server.url.href);
       const outcome = await waitForBrowserFixture(
         requested.promise,
         result.promise,
-        exited,
+        page.exited,
         "Core files",
         BROWSER_STARTUP_TIMEOUT_MS,
       );
@@ -377,12 +358,8 @@ test.skipIf(!chrome || !git || process.platform === "win32")(
         `removed ${created}`,
       ]);
       // Evidence captures for the PR, only when asked for.
-      const captures = Bun.env.HERDR_WORLD_CORE_CAPTURES;
       if (!captures) return;
       await mkdir(captures, { recursive: true });
-      connection = await connectCapture(
-        await waitForChromePort(child, profile, log),
-      );
       let run = 0;
       for (const stage of [
         "files",
@@ -401,29 +378,25 @@ test.skipIf(!chrome || !git || process.platform === "win32")(
             )
               continue;
             run += 1;
-            await resizeCapture(
-              connection.command,
-              viewport.width,
-              viewport.height,
-            );
+            await resizeCapture(page.command, viewport.width, viewport.height);
             result = Promise.withResolvers();
             requested = Promise.withResolvers<void>();
-            await connection.command("Page.navigate", {
+            await page.command("Page.navigate", {
               url: `${server.url.href}?stage=${stage}&branch=capture-${run}`,
             });
             const shot = await waitForBrowserFixture(
               requested.promise,
               result.promise,
-              exited,
+              page.exited,
               "Core files",
               BROWSER_STARTUP_TIMEOUT_MS,
             );
             expect(shot.failures).toEqual([]);
-            await connection.command("Runtime.evaluate", {
+            await page.command("Runtime.evaluate", {
               expression: `document.documentElement.dataset.theme = ${JSON.stringify(theme)}; new Promise(r => requestAnimationFrame(() => requestAnimationFrame(r)))`,
               awaitPromise: true,
             });
-            const capture = await captureScene(connection.command, {
+            const capture = await captureScene(page.command, {
               view: "desk",
               width: viewport.width,
               height: viewport.height,
@@ -452,8 +425,7 @@ test.skipIf(!chrome || !git || process.platform === "win32")(
             );
           }
     } finally {
-      connection?.close();
-      await stopChrome(child);
+      await page?.close();
       server.stop(true);
       await side.world.dispose();
       await rm(dir, { recursive: true, force: true });

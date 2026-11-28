@@ -12,11 +12,17 @@ import {
   assertWebBrowserInventory,
   assertWorldBrowserInventory,
   browserWorkflowIgnorePattern,
+  webBrowserPages,
   webBrowserSuites,
   includesBrowserSuites,
+  includesSharedChromeSuites,
   worldBrowserIgnorePattern,
 } from "./world-browser-suites";
 import { cleanupRunTemp, createRunTemp, sweepStaleRunTemps } from "./test-temp";
+import {
+  SHARED_CHROME_ENV,
+  startSharedChrome,
+} from "../web/src/testing/chromeBrowser";
 
 // Keep browser profiles and Bun WebView files inside one run-owned directory.
 // A failed test can skip its own finally block when the runner exits early.
@@ -51,7 +57,9 @@ const parallelism = configuredParallelism
 const configuredMaxConcurrency = process.env.HERDR_TEST_MAX_CONCURRENCY;
 const maxConcurrency = configuredMaxConcurrency
   ? Number(configuredMaxConcurrency)
-  : 2;
+  : webBrowser
+    ? webBrowserPages()
+    : 2;
 
 if (!Number.isSafeInteger(parallelism) || parallelism < 1) {
   throw new Error("HERDR_TEST_PARALLEL must be a positive integer");
@@ -94,6 +102,20 @@ const warm =
   process.env.CI === "true" &&
   process.env.HERDR_CHROME_WARM !== "1";
 if (warm && chrome) await warmChrome(chrome, { env });
+// One Chrome for the whole run: every browser case opens its own context in
+// it (web/src/testing/chromeBrowser.ts). A nested runner inherits it.
+const sharedChrome =
+  usesBrowser &&
+  chrome &&
+  !env[SHARED_CHROME_ENV] &&
+  includesSharedChromeSuites(args)
+    ? await startSharedChrome(env).catch((error: Error) => {
+        // Each test file then starts its own Chrome.
+        console.warn(`[test-runner] shared Chrome: ${error.message}`);
+        return undefined;
+      })
+    : undefined;
+Object.assign(env, sharedChrome?.env);
 
 try {
   const commands = [
@@ -160,6 +182,7 @@ try {
     if (process.exitCode !== 0) break;
   }
 } finally {
+  await sharedChrome?.stop();
   cleanupRunTemp(directory);
   releaseSlot();
 }

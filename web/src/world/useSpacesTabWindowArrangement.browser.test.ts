@@ -1,20 +1,16 @@
 import { expect, test } from "bun:test";
-import { existsSync } from "node:fs";
-import { mkdtemp, readFile, rm } from "node:fs/promises";
+import { mkdtemp, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { basename, join } from "node:path";
 import {
   BROWSER_STARTUP_TIMEOUT_MS,
-  stopChrome,
   waitForBrowserFixture,
 } from "../browserChrome";
-
-const chrome =
-  Bun.env.CHROME_BIN ||
-  (process.platform === "darwin" &&
-  existsSync("/Applications/Google Chrome.app/Contents/MacOS/Google Chrome")
-    ? "/Applications/Google Chrome.app/Contents/MacOS/Google Chrome"
-    : Bun.which("google-chrome") || Bun.which("chromium"));
+import {
+  chromeBinary as chrome,
+  openChromePage,
+  type ChromePage,
+} from "../testing/sharedChrome";
 
 test.skipIf(!chrome)(
   "Spaces arrangement keeps terminal windows scoped and hands focus to the right owner",
@@ -50,7 +46,7 @@ test.skipIf(!chrome)(
         return new Response("Not found", { status: 404 });
       },
     });
-    let child: ReturnType<typeof Bun.spawn> | undefined;
+    let page: ChromePage | undefined;
     try {
       const build = await Bun.build({
         entrypoints: [
@@ -85,28 +81,12 @@ test.skipIf(!chrome)(
       for (const output of build.outputs) {
         assets.set(`/${basename(output.path)}`, output);
       }
-      const errorOutput = join(dir, "browser.log");
-      child = Bun.spawn(
-        [
-          chrome!,
-          "--headless",
-          "--disable-gpu",
-          "--window-size=1200,900",
-          "--no-first-run",
-          "--no-default-browser-check",
-          `--user-data-dir=${join(dir, "profile")}`,
-          server.url.href,
-        ],
-        { stdout: "ignore", stderr: Bun.file(errorOutput) },
-      );
+      page = await openChromePage({ viewport: { width: 1200, height: 900 } });
+      await page.command("Page.navigate", { url: server.url.href });
       const failures = await waitForBrowserFixture(
         pageRequested.promise,
         result.promise,
-        child.exited.then(async (code) => {
-          throw new Error(
-            `Browser exited (${code}): ${await readFile(errorOutput, "utf8")}`,
-          );
-        }),
+        page.exited,
         "Spaces arrangement browser check",
         30_000,
       );
@@ -117,15 +97,11 @@ test.skipIf(!chrome)(
         error.message.startsWith("Spaces arrangement browser check")
       ) {
         error.message += `; latest progress: ${JSON.stringify(progress)}`;
-        const stderr = await readFile(join(dir, "browser.log"), "utf8").catch(
-          (readError) => `Could not read Chrome stderr: ${String(readError)}`,
-        );
-        error.message += `\n${stderr}`;
       }
       throw error;
     } finally {
       server.stop(true);
-      await stopChrome(child);
+      await page?.close();
       await rm(dir, { recursive: true, force: true });
     }
   },

@@ -105,6 +105,12 @@ async function registerDomTests() {
   );
   const { worldLocalStorage } = await import("../browserStorage");
   let listCalls = 0;
+  let pathAnswers = 0;
+  const pathChecked = async (from: number) => {
+    while (pathAnswers <= from)
+      await act(() => new Promise((resolve) => setTimeout(resolve, 5)));
+    await act(async () => {});
+  };
   const client: ConnectionClient = {
     connectionId: "dialog-test",
     generation: 1,
@@ -115,6 +121,7 @@ async function registerDomTests() {
       // The new-room folder defaults to home and is checked on the host.
       if (method === "workspace.path") {
         const path = (params as { path: string }).path;
+        pathAnswers += 1;
         return {
           path: path === "~" ? "/home/example" : path,
           error: null,
@@ -249,7 +256,7 @@ async function registerDomTests() {
       return { workspace_id: "core-room", label: "Plans" };
     }) as typeof bridge.call);
     // The core's host resolves the folder (#1006).
-    const paths: unknown[] = [];
+    const paths: [string, string][] = [];
     connection.mockImplementation(((
       connectionId: string,
       generation: number,
@@ -303,7 +310,8 @@ async function registerDomTests() {
         container.querySelector<HTMLInputElement>("input[placeholder^='e.g.']")
           ?.value,
       ).toBe("/srv/example");
-      await act(() => new Promise((resolve) => setTimeout(resolve, 300)));
+      while (!paths.some(([, path]) => path === "/srv/example"))
+        await act(() => new Promise((resolve) => setTimeout(resolve, 5)));
       expect(paths).toContainEqual(["workspace.path", "/srv/example"]);
       await act(async () =>
         container
@@ -429,6 +437,7 @@ async function registerDomTests() {
         )!.set!.call(input(), value);
         input().dispatchEvent(new Event("input", { bubbles: true }));
       };
+      const answersAtStart = pathAnswers;
       try {
         await act(async () => render(true));
         expect(input().value).toBe("");
@@ -453,7 +462,7 @@ async function registerDomTests() {
         expect(input().selectionEnd).toBe("calm-otter".length);
         if (create) {
           // The folder defaults to home, checked on the host first.
-          await act(() => new Promise((resolve) => setTimeout(resolve, 250)));
+          await pathChecked(answersAtStart);
           expect(
             container.querySelector<HTMLButtonElement>('[type="submit"]')!
               .disabled,
@@ -473,11 +482,11 @@ async function registerDomTests() {
           );
         }
 
+        const answersBefore = pathAnswers;
         await act(async () => render(false));
         await act(async () => render(true));
         await act(async () => edit("my-branch"));
-        if (create)
-          await act(() => new Promise((resolve) => setTimeout(resolve, 250)));
+        if (create) await pathChecked(answersBefore);
         expect(
           container.querySelector<HTMLButtonElement>('[type="submit"]')!
             .disabled,
@@ -2443,6 +2452,7 @@ async function registerDomTests() {
     );
     const container = document.createElement("div");
     document.body.append(container);
+    const answersAtStart = pathAnswers;
     root = createRoot(container);
     const render = () => root!.render(h(WorkspaceTree));
     try {
@@ -2491,7 +2501,7 @@ async function registerDomTests() {
         form.querySelector<HTMLButtonElement>('button[type="submit"]')!
           .disabled,
       ).toBe(true);
-      await act(() => new Promise((resolve) => setTimeout(resolve, 250)));
+      await pathChecked(answersAtStart);
       await act(async () => submit());
       expect(create).toHaveBeenCalledTimes(1);
       await act(async () => finish({ type: "workspace_created" }));

@@ -43,7 +43,10 @@ test("cleanup kills a process still using the directory, then removes it", async
     ["sh", "-c", "sleep 30", `--user-data-dir=${join(run, "profile")}`],
     { stdout: "ignore", stderr: "ignore" },
   );
-  await Bun.sleep(100);
+  // The process appears in the table once the shell has its working files.
+  const deadline = Date.now() + 5_000;
+  while (!processesUsing(run).includes(orphan.pid) && Date.now() < deadline)
+    await Bun.sleep(10);
   expect(processesUsing(run)).toContain(orphan.pid);
   cleanupRunTemp(run);
   expect(await orphan.exited).not.toBe(0);

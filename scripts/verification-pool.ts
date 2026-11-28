@@ -10,6 +10,9 @@ export async function runVerificationPool<T, R>(
     work: (signal?: AbortSignal) => Promise<void>,
     signal: AbortSignal,
   ) => Promise<void>,
+  /** The next item starts only while the running items' weights plus its own
+   * fit the budget; an item alone always starts. Items still start in order. */
+  admission?: { weight: (item: T) => number; budget: number },
 ) {
   assert(
     Number.isSafeInteger(workers) && workers >= 1 && workers <= 4,
@@ -21,12 +24,35 @@ export async function runVerificationPool<T, R>(
   const results = new Array<R>(items.length);
   let cursor = 0;
   let failure: unknown;
+  let running = 0;
+  let used = 0;
+  const waiting = new Set<() => void>();
+  const fits = (item: T) =>
+    !admission ||
+    running === 0 ||
+    used + admission.weight(item) <= admission.budget;
   await Promise.all(
     Array.from({ length: Math.min(workers, items.length) }, async () => {
       const work = async (workerSignal = combined) => {
         while (!workerSignal.aborted) {
+          if (cursor >= items.length) return;
+          if (!fits(items[cursor]!)) {
+            // Wake when a running item finishes or the pool stops.
+            await new Promise<void>((resolve) => {
+              const wake = () => {
+                waiting.delete(wake);
+                workerSignal.removeEventListener("abort", wake);
+                resolve();
+              };
+              waiting.add(wake);
+              workerSignal.addEventListener("abort", wake, { once: true });
+            });
+            continue;
+          }
           const index = cursor++;
-          if (index >= items.length) return;
+          const weight = admission?.weight(items[index]!) ?? 0;
+          running++;
+          used += weight;
           try {
             results[index] = await execute(items[index]!, workerSignal);
           } catch (error) {
@@ -34,6 +60,10 @@ export async function runVerificationPool<T, R>(
             failure ??= error;
             control.abort(error);
             throw error;
+          } finally {
+            running--;
+            used -= weight;
+            for (const wake of [...waiting]) wake();
           }
         }
         workerSignal.throwIfAborted();

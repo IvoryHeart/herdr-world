@@ -6,9 +6,19 @@ import {
   parseAllowlist,
   scanFiles,
   scanSource,
-  TEST_FILE,
   timingSwitchesOutsideTests,
 } from "./check-test-waits";
+import {
+  CLOCK_MODULES,
+  compareProductionClock,
+  directClockUses,
+  formatClockAllowlist,
+  loweredClock,
+  parseClockAllowlist,
+  productionClockFile,
+  scanProductionClock,
+} from "./production-clock";
+import { TEST_FILE } from "./source-ast";
 
 const lines = (text: string) => scanSource("a.test.ts", text).pauses;
 
@@ -115,6 +125,17 @@ await sleep(0);
 await waitFor(() => true);
 while (!done()) await sleep(3);`;
   expect(lines(text)).toEqual([1, 2, 7, 8, 9]);
+});
+
+test("a timer that settles through a frame callback is a pause", () => {
+  expect(
+    lines(`const settle = (ms = 0) =>
+  new Promise((resolve) =>
+    setTimeout(() => requestAnimationFrame(() => resolve(undefined)), ms),
+  );
+await settle(700);
+await new Promise((r) => setTimeout(() => reject(new Error("late")), 50));`),
+  ).toEqual([5]);
 });
 
 test("a new sleep inside a helper that already pauses still counts", () => {
@@ -278,4 +299,83 @@ test("only test code may import the test-timing switch", () => {
   expect(timingSwitchesOutsideTests(files)).toEqual([
     "web/src/store.ts:1: only test code and the test service launcher may switch product timings (setTimingsForTests).",
   ]);
+});
+
+test("production clock: direct reads and timers count outside the clock modules", () => {
+  expect(
+    directClockUses(
+      "web/src/a.ts",
+      `const at = Date.now();
+const started = performance.now();
+setTimeout(run, 10);
+window.setInterval(run, 100);
+globalThis.setTimeout(run);
+clock.setTimeout(run, 10);
+scheduler.schedule(run, 10);
+const later = new Date(at);
+const name = "setTimeout";`,
+    ),
+  ).toEqual([1, 2, 3, 4, 5]);
+  for (const path of CLOCK_MODULES)
+    expect(productionClockFile(path)).toBe(false);
+  for (const path of [
+    "web/src/a.test.ts",
+    "web/src/world/testing/fixture.ts",
+    "web/src/a.browser.tsx",
+    "scripts/tool.ts",
+    "web/src/types.d.ts",
+  ])
+    expect(productionClockFile(path)).toBe(false);
+  expect(productionClockFile("server/src/world/snapshot.ts")).toBe(true);
+  expect([
+    ...scanProductionClock(
+      new Map([
+        ["web/src/clock.ts", "export const now = () => Date.now();"],
+        ["web/src/a.test.ts", "Date.now();"],
+        ["web/src/b.ts", "Date.now(); performance.now();"],
+      ]),
+    ),
+  ]).toEqual([["web/src/b.ts", [1, 1]]]);
+});
+
+test("production clock allowlist: new uses fail, counts only shrink", () => {
+  const current = new Map([
+    ["web/src/a.ts", [3, 9]],
+    ["web/src/b.ts", [1]],
+  ]);
+  const allowed = { "web/src/a.ts": 2, "web/src/c.ts": 1 };
+  const problems = compareProductionClock(current, allowed, {
+    "web/src/a.ts": 1,
+  });
+  expect(problems.some((p) => p.startsWith("web/src/b.ts: 1 direct"))).toBe(
+    true,
+  );
+  expect(problems.some((p) => p.startsWith("web/src/c.ts: no direct"))).toBe(
+    true,
+  );
+  expect(
+    problems.some((p) => p.includes("may only shrink (base 1, now 2)")),
+  ).toBe(true);
+  expect(
+    compareProductionClock(new Map([["web/src/a.ts", [3]]]), {
+      "web/src/a.ts": 2,
+    }),
+  ).toEqual([
+    "web/src/a.ts: 1 direct clock or timer use(s), allowlist 2: lower it (bun scripts/check-test-waits.ts --update).",
+  ]);
+  expect(
+    compareProductionClock(current, { "web/src/a.ts": 2, "web/src/b.ts": 1 }),
+  ).toEqual([]);
+  expect(loweredClock(new Map([["web/src/a.ts", [3]]]), allowed)).toEqual({
+    "web/src/a.ts": 1,
+  });
+  expect(
+    parseClockAllowlist(formatClockAllowlist({ "web/src/a.ts": 2 })),
+  ).toEqual({
+    "web/src/a.ts": 2,
+  });
+  for (const files of [{ "web/src/a.ts": 0 }, { "web/src/a.ts": 1.5 }])
+    expect(() =>
+      parseClockAllowlist(JSON.stringify({ version: 1, files })),
+    ).toThrow();
 });

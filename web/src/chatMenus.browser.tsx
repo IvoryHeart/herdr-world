@@ -1,3 +1,4 @@
+import { clock } from "./testing/installRunningTestClock";
 import { act, createElement as h } from "react";
 import { createRoot } from "react-dom/client";
 import "./styles/tokens.css";
@@ -18,7 +19,7 @@ const failures: string[] = [];
 const check = (condition: unknown, message: string) => {
   if (!condition) failures.push(message);
 };
-const sleep = (ms: number) => new Promise((done) => setTimeout(done, ms));
+const advanceTime = (ms: number) => clock.advance(ms);
 
 const modelMenu: PendingPrompt = {
   question: ["Select model"],
@@ -169,11 +170,11 @@ const setValue = (
   )!.set!.call(element, value);
   element.dispatchEvent(new Event("input", { bubbles: true }));
 };
-const settle = () => act(async () => sleep(50));
+const advanceTimeInAct = () => act(async () => advanceTime(50));
 
 try {
   await chat();
-  await settle();
+  await advanceTimeInAct();
   check(
     requests.find((request) => request.method === "agent_conversation.latest")
       ?.params.menus === true,
@@ -189,7 +190,7 @@ try {
       .querySelector<HTMLButtonElement>('button[aria-label="Send"]')!
       .click(),
   );
-  await act(async () => sleep(1000));
+  await act(async () => advanceTime(1000));
   const card = document.querySelector<HTMLElement>(".agent-chat-menu");
   check(card, "The menu opened by /model appears without a manual refresh");
   check(
@@ -229,7 +230,7 @@ try {
       }),
     ),
   );
-  await settle();
+  await advanceTimeInAct();
   check(
     sends.length === sendsBefore,
     "Ctrl+Enter sends nothing while a menu is open",
@@ -241,7 +242,7 @@ try {
     return { status: "sent", key: params.key, menu: null };
   };
   await act(async () => button("Fable 5.1")!.click());
-  await settle();
+  await advanceTimeInAct();
   check(
     JSON.stringify(presses()[0]) ===
       JSON.stringify({
@@ -261,7 +262,7 @@ try {
   // Keys on the focused card, and a refusal that names the change.
   menu = modelMenu;
   await chat("chat-2");
-  await settle();
+  await advanceTimeInAct();
   pressReply = () => ({
     status: "refused",
     reason: "changed",
@@ -275,7 +276,7 @@ try {
       new KeyboardEvent("keydown", { key: "ArrowDown", bubbles: true }),
     );
   });
-  await settle();
+  await advanceTimeInAct();
   check(
     last()?.key === "down",
     "Arrow keys on the focused card press the menu's arrows",
@@ -320,7 +321,7 @@ try {
         new KeyboardEvent("keydown", { key, bubbles: true }),
       ),
     );
-    await settle();
+    await advanceTimeInAct();
   }
   check(
     JSON.stringify(
@@ -342,7 +343,7 @@ try {
   const moveDown = button("move");
   moveDown?.focus();
   await act(async () => moveDown!.click());
-  await settle();
+  await advanceTimeInAct();
   check(
     document.activeElement?.classList.contains("agent-chat-menu"),
     "After a clicked key, keyboard focus is back on the card",
@@ -364,7 +365,7 @@ try {
   const composer = document.querySelector("textarea")!;
   await act(async () => composer.focus());
   await act(async () => release());
-  await settle();
+  await advanceTimeInAct();
   check(
     document.activeElement === composer,
     "Focus moved to the composer while a key was pending stays there",
@@ -374,7 +375,7 @@ try {
       new KeyboardEvent("keydown", { key: "1", bubbles: true }),
     ),
   );
-  await settle();
+  await advanceTimeInAct();
   check(
     presses().length === pending + 1,
     "A key typed in the composer afterwards presses nothing in the menu",
@@ -398,7 +399,7 @@ try {
     (document.activeElement as HTMLElement | null)?.blur();
   });
   await act(async () => release());
-  await settle();
+  await advanceTimeInAct();
   check(
     !document.activeElement?.closest(".agent-chat-menu"),
     "A click outside the card while a key was pending keeps focus off the card",
@@ -414,14 +415,14 @@ try {
       )!
       .click(),
   );
-  await settle();
+  await advanceTimeInAct();
   check(
     !document.body.textContent?.includes("The menu changed. Nothing was sent"),
     "A session change retires the last menu notice",
   );
   pressReply = (params) => ({ status: "sent", key: params.key, menu: null });
   await act(async () => button("cancel")!.click());
-  await settle();
+  await advanceTimeInAct();
   check(
     last()?.session_fingerprint === session && last()?.key === "esc",
     "After the switch, keys carry the new session",
@@ -430,7 +431,7 @@ try {
   // A text field: one line typed without Enter, then its own Enter.
   menu = ruleMenu;
   await chat("chat-3");
-  await settle();
+  await advanceTimeInAct();
   const field = document.querySelector<HTMLInputElement>(
     ".agent-chat-menu .agent-chat-ask-text input",
   )!;
@@ -445,7 +446,7 @@ try {
       .querySelector<HTMLFormElement>(".agent-chat-menu .agent-chat-ask-text")!
       .requestSubmit(),
   );
-  await settle();
+  await advanceTimeInAct();
   check(
     last()?.text === "Bash(ls *)" &&
       last()?.key === "" &&
@@ -456,7 +457,7 @@ try {
   // The composer's key controls, behind its vertical ellipsis.
   menu = null;
   await chat("chat-4");
-  await settle();
+  await advanceTimeInAct();
   await act(async () =>
     document
       .querySelector<HTMLButtonElement>(
@@ -464,7 +465,7 @@ try {
       )!
       .click(),
   );
-  await settle();
+  await advanceTimeInAct();
   const ctrlC = document.querySelector<HTMLButtonElement>(
     'button[aria-label="Press Ctrl+C"]',
   );
@@ -482,12 +483,12 @@ try {
     return { status: "sent", key: params.key, menu: null };
   };
   await act(async () => ctrlC!.click());
-  await settle();
+  await advanceTimeInAct();
   check(
     !document.querySelector(".agent-chat-menu"),
     "The redraw has not landed yet",
   );
-  await act(async () => sleep(500));
+  await act(async () => advanceTime(500));
   check(
     document.querySelector(".agent-chat-menu"),
     "A redraw after a composer key appears without a manual refresh",
@@ -519,7 +520,7 @@ try {
   menu = null;
   unreadable = { reason: "terminal_too_small", rows: 2 };
   await chat("too-small-without-command");
-  await settle();
+  await advanceTimeInAct();
   check(
     !sizeNote(),
     "A squeezed idle pane without a command has no menu-size note",
@@ -536,7 +537,7 @@ try {
   };
   deliveries = [command];
   await chat("too-small-command");
-  await settle();
+  await advanceTimeInAct();
   const note = sizeNote();
   check(
     note?.querySelector("p")?.textContent ===
@@ -561,14 +562,14 @@ try {
   );
   deliveries = [{ ...command, fingerprint: "f".repeat(64) }];
   await chat("too-small-other-session");
-  await settle();
+  await advanceTimeInAct();
   check(!sizeNote(), "Another session's command cannot show a size note");
   deliveries = [
     command,
     { ...command, id: "ordinary", kind: undefined, text: "Continue" },
   ];
   await chat("too-small-newer-message");
-  await settle();
+  await advanceTimeInAct();
   check(
     !sizeNote(),
     "An old command cannot show a size note after a newer message",
@@ -576,12 +577,12 @@ try {
   deliveries = [command];
   unreadable = undefined;
   await chat("too-small-unknown");
-  await settle();
+  await advanceTimeInAct();
   check(!sizeNote(), "Unknown size never produces a size note");
   unreadable = { reason: "terminal_too_small", rows: 2 };
   menu = modelMenu;
   await chat("too-small-parsed-menu");
-  await settle();
+  await advanceTimeInAct();
   check(
     !sizeNote() && !!document.querySelector(".agent-chat-menu"),
     "A parsed menu keeps its existing card instead of the size note",

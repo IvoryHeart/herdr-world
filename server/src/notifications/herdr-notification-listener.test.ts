@@ -294,7 +294,7 @@ describe("createHerdrNotificationListener", () => {
     listener.start();
     listener.stop();
     answer.resolve(true);
-    await Bun.sleep(1);
+    for (let i = 0; i < 10; i++) await Promise.resolve();
     expect(created).toBe(0);
   });
 });

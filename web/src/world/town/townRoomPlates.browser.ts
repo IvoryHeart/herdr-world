@@ -1,3 +1,4 @@
+import { pageClock } from "../testing/testClock";
 import { store } from "../../store";
 import type { LaunchTarget } from "../agentProfiles";
 import { prepareTownRoomCard } from "./townRoomCard.browser";
@@ -477,7 +478,7 @@ export async function checkTopRowAgentsTappable(
   const within = async (condition: () => boolean) => {
     for (let wait = 0; wait < 40; wait++) {
       if (condition()) return true;
-      await new Promise((resolve) => setTimeout(resolve, 25));
+      await pageClock().advance(25);
     }
     return condition();
   };
@@ -533,7 +534,7 @@ export async function checkTopRowAgentsTappable(
         new PointerEvent("pointerleave", { pointerId: 81, pointerType: kind }),
       );
       // Past the double-tap window, so the next agent's tap stands alone.
-      await new Promise((resolve) => setTimeout(resolve, 350));
+      await pageClock().advance(350);
     }
   check(
     tapped > 0 && misses.length === 0,

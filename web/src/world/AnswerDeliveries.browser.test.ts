@@ -3,18 +3,15 @@ import { expect, test } from "bun:test";
 import { mkdtemp, rm } from "node:fs/promises";
 import { join } from "node:path";
 import { tmpdir } from "node:os";
+import { withBrowserDeadline } from "../browserChrome";
 import {
-  waitForChromePort,
-  withBrowserDeadline,
-  stopChrome,
-} from "../browserChrome";
+  chromeBinary as chrome,
+  type ChromePage,
+  openChromePage,
+} from "../testing/sharedChrome";
 import { worldBrowserBundle } from "./testing/worldBrowserBundle";
-import {
-  captureResumeViewports,
-  resumeViewports,
-} from "./testing/resumeVisualCapture";
-const chrome =
-  Bun.env.CHROME_BIN || Bun.which("google-chrome") || Bun.which("chromium");
+import { captureResumeViewportsOnPage } from "./testing/resumeCaptureOnPage";
+import { resumeViewports } from "./testing/resumeVisualCapture";
 
 test.skipIf(!chrome)(
   "Reception answer controls preserve uncertainty, exact duplicate decisions and five viewport layouts",
@@ -39,62 +36,23 @@ test.skipIf(!chrome)(
         );
       },
     });
-    let browser: ReturnType<typeof Bun.spawn> | undefined;
-    let socket: WebSocket | undefined;
+    let page: ChromePage | undefined;
     try {
-      browser = Bun.spawn(
-        [
-          chrome!,
-          "--headless=new",
-          "--no-first-run",
-          "--no-default-browser-check",
-          "--disable-dev-shm-usage",
-          "--remote-debugging-port=0",
-          `--user-data-dir=${join(root, "profile")}`,
-          server.url.href,
-        ],
-        { stdout: "ignore", stderr: Bun.file(join(root, "chrome.log")) },
-      );
-      const port = await waitForChromePort(
-        browser,
-        join(root, "profile"),
-        join(root, "chrome.log"),
-      );
+      // Pixels only when the optional captures are taken.
+      page = await openChromePage({
+        viewport: { width: 1280, height: 900 },
+        pixels: !!Bun.env.WORLD_ANSWER_CAPTURE_DIR,
+      });
+      const { command } = page;
+      const evaluate = async (expression: string) => ({
+        value: await page!.evaluate(expression),
+      });
+      await page.command("Page.navigate", { url: server.url.href });
       await withBrowserDeadline(
         ready.promise,
         "Reception fixture ready",
         20000,
       );
-      const targets = (await (
-        await fetch(`http://127.0.0.1:${port}/json/list`)
-      ).json()) as { type: string; webSocketDebuggerUrl: string }[];
-      socket = new WebSocket(
-        targets.find((target) => target.type === "page")!.webSocketDebuggerUrl,
-      );
-      await new Promise<void>((resolve) => {
-        socket!.onopen = () => resolve();
-      });
-      let serial = 0;
-      const pending = new Map<number, (result: any) => void>();
-      socket.onmessage = (event) => {
-        const message = JSON.parse(String(event.data));
-        pending.get(message.id)?.(message.result);
-        pending.delete(message.id);
-      };
-      const command = (method: string, params: Record<string, unknown> = {}) =>
-        new Promise<any>((resolve) => {
-          const id = ++serial;
-          pending.set(id, resolve);
-          socket!.send(JSON.stringify({ id, method, params }));
-        });
-      const evaluate = async (expression: string) =>
-        (
-          await command("Runtime.evaluate", {
-            expression,
-            awaitPromise: true,
-            returnByValue: true,
-          })
-        ).result;
       for (const viewport of resumeViewports) {
         await command("Emulation.setDeviceMetricsOverride", {
           width: viewport.width,
@@ -115,8 +73,8 @@ test.skipIf(!chrome)(
           await evaluate(
             `window.answerDeliveryScene(${JSON.stringify(state)})`,
           );
-          await captureResumeViewports(
-            port,
+          await captureResumeViewportsOnPage(
+            command,
             Bun.env.WORLD_ANSWER_CAPTURE_DIR,
             state,
             { view: "town", content: { selector: ".town-building-sign" } },
@@ -134,8 +92,7 @@ test.skipIf(!chrome)(
         expect(result.value).toEqual([]);
       }
     } finally {
-      socket?.close();
-      await stopChrome(browser);
+      await page?.close();
       await server.stop(true);
       await rm(root, { recursive: true, force: true });
     }

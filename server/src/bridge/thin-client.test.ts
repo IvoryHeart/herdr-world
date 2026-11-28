@@ -22,6 +22,17 @@ afterEach(async () => {
   );
 });
 
+/** Event-loop turns, each polling the sockets, for "nothing more happens" checks. */
+async function turns(count = 20) {
+  for (let i = 0; i < count; i++) await new Promise((r) => setImmediate(r));
+}
+
+async function until(predicate: () => boolean) {
+  for (let i = 0; i < 5000 && !predicate(); i++)
+    await new Promise((r) => setImmediate(r));
+  expect(predicate()).toBe(true);
+}
+
 async function startHandshakeServer(
   welcome: (protocol: number) => {
     version: number;
@@ -266,7 +277,7 @@ describe("Herdr thin-client protocol compatibility", () => {
 
     await client.connect(100, 30, { launchMode: "terminal-attach" });
     client.resize(120, 40);
-    await Bun.sleep(10);
+    await until(() => resizes.length > 0);
 
     expect(resizes).toEqual([0]);
     client.close();
@@ -355,7 +366,7 @@ describe("Herdr thin-client protocol compatibility", () => {
     resolveProtocol(17);
 
     await expect(connecting).rejects.toThrow("thin client is closed");
-    await Bun.sleep(10);
+    await turns();
     expect(connections).toBe(0);
   });
 
@@ -380,7 +391,8 @@ describe("Herdr thin-client protocol compatibility", () => {
     });
     client.attach("term_1", true);
     client.attach("term_1", true);
-    await Bun.sleep(10);
+    await until(() => variants.includes(5));
+    await turns();
 
     expect(variants).toEqual([0, 5]);
     expect(() => client.attach("term_2", true)).toThrow(

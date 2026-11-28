@@ -1,19 +1,14 @@
 import { expect, test } from "bun:test";
-import { existsSync } from "node:fs";
 import { mkdtemp, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { stopChrome, withBrowserDeadline } from "../browserChrome";
+import { withBrowserDeadline } from "../browserChrome";
+import {
+  chromeBinary as chrome,
+  openChromePage,
+  type ChromePage,
+} from "../testing/sharedChrome";
 import { buildWorldBrowserBundle } from "./testing/browserBundles";
-
-const chrome =
-  Bun.env.CHROME_BIN ||
-  Bun.which("google-chrome") ||
-  Bun.which("chromium") ||
-  (process.platform === "darwin" &&
-  existsSync("/Applications/Google Chrome.app/Contents/MacOS/Google Chrome")
-    ? "/Applications/Google Chrome.app/Contents/MacOS/Google Chrome"
-    : undefined);
 
 // FeatureHosts.browser.tsx: the "dialogs" feature slot still opens and
 // closes Apartments and the Memory Library. One desktop viewport: the
@@ -42,26 +37,15 @@ test.skipIf(!chrome)(
           : new Response("Not found", { status: 404 });
       },
     });
-    let child: ReturnType<typeof Bun.spawn> | undefined;
+    let page: ChromePage | undefined;
     try {
-      child = Bun.spawn(
-        [
-          chrome!,
-          "--headless=new",
-          "--disable-gpu",
-          "--window-size=1300,800",
-          "--no-first-run",
-          "--no-default-browser-check",
-          `--user-data-dir=${join(dir, "profile")}`,
-          server.url.href,
-        ],
-        { stdout: "ignore", stderr: "ignore" },
-      );
+      page = await openChromePage({ viewport: { width: 1300, height: 800 } });
+      await page.command("Page.navigate", { url: server.url.href });
       expect(
         await withBrowserDeadline(result.promise, "feature hosts", 45_000),
       ).toEqual([]);
     } finally {
-      await stopChrome(child);
+      await page?.close();
       server.stop(true);
       await rm(dir, { recursive: true, force: true });
     }

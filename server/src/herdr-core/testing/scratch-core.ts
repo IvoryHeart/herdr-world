@@ -8,6 +8,9 @@ import {
 } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
+import { CoreClient } from "../client";
+import { resolveLocalCoreEndpoint } from "../endpoint";
+import { connectUnixStream } from "../stream";
 
 /**
  * A real herdr-core under scratch HOME/XDG directories, for live checks and
@@ -63,15 +66,17 @@ export class ScratchCore {
       stdout: "ignore",
       stderr: "ignore",
     });
-    for (let i = 0; i < 100; i++) {
+    // Ready when core answers a hello on its socket.
+    for (let i = 0; i < 500; i++) {
       try {
-        const socket = readFileSync(join(this.stateDir, "core.lock"), "utf8");
-        if (socket && readdirSync(join(socket, "..")).length > 0) {
-          await Bun.sleep(50);
-          return;
-        }
-      } catch {}
-      await Bun.sleep(20);
+        const client = await CoreClient.open(
+          await connectUnixStream(resolveLocalCoreEndpoint(this.stateDir)),
+        );
+        client.close();
+        return;
+      } catch {
+        await Bun.sleep(10);
+      }
     }
     throw new Error("scratch core did not start");
   }
@@ -130,7 +135,7 @@ export class ScratchCore {
 
   /** Ends everything this scratch core started and removes its files. */
   async dispose(): Promise<void> {
-    for (let round = 0; round < 5; round++) {
+    for (let round = 0; round < 500; round++) {
       const pids = this.pids();
       if (pids.length === 0) break;
       for (const pid of pids) {
@@ -138,7 +143,7 @@ export class ScratchCore {
           process.kill(pid, "SIGKILL");
         } catch {}
       }
-      await Bun.sleep(50);
+      await Bun.sleep(10);
     }
     this.serve = null;
     rmSync(this.root, { recursive: true, force: true });

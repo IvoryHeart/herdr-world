@@ -1,3 +1,4 @@
+import { clock } from "./testing/installRunningTestClock";
 import { checkAnnotationUX } from "./annotations.browser";
 import { worldLocalStorage } from "./browserStorage";
 import { flushSync } from "react-dom";
@@ -25,12 +26,12 @@ const failures: string[] = [];
 const check = (condition: boolean, message: string) => {
   if (!condition) failures.push(message);
 };
-const settle = () => new Promise((resolve) => setTimeout(resolve, 40));
+const advanceTime = () => clock.advance(40);
 async function until(predicate: () => unknown, label: string) {
   void fetch("/event", { method: "POST", body: label });
   for (let i = 0; i < 150; i++) {
     if (predicate()) return;
-    await settle();
+    await advanceTime();
   }
   throw new Error(`Timed out: ${label}`);
 }
@@ -188,7 +189,7 @@ async function showA(path = "A.md") {
     `${path}: image incorrectly uses filesystem scope`,
   );
   // A cached render can precede completion of its background read.
-  await settle();
+  await advanceTime();
 }
 function commandMenuEvent() {
   // Match the platform preset: Meta+K on macOS, Ctrl+Alt+K elsewhere.
@@ -409,7 +410,7 @@ async function run() {
   document.body.append(element);
   const root = createRoot(element);
   flushSync(() => root.render(<App />));
-  await settle();
+  await advanceTime();
   await checkModalCopyFeedback();
   flushSync(() =>
     window.dispatchEvent(
@@ -480,7 +481,7 @@ async function run() {
     const c = request("C.md");
     if (olderFirst) {
       b.resolve(response("B.md"));
-      await settle();
+      await advanceTime();
       check(
         selected() === "C.md",
         "older link replaced pending tree selection",
@@ -494,10 +495,10 @@ async function run() {
       c.resolve(response("C.md"));
     } else {
       c.resolve(response("C.md"));
-      await settle();
+      await advanceTime();
       b.resolve(response("B.md"));
     }
-    await settle();
+    await advanceTime();
     check(
       selected() === "C.md",
       `tree selection lost (olderFirst=${olderFirst})`,
@@ -515,9 +516,9 @@ async function run() {
   const oldTree = request("B.md");
   await quickOpen("/repo/A.md");
   request("/repo/A.md").resolve(response("/repo/A.md"));
-  await settle();
+  await advanceTime();
   oldTree.resolve(response("B.md"));
-  await settle();
+  await advanceTime();
   check(
     selected() === "/repo/A.md",
     "tree response replaced quick-open selection",
@@ -548,7 +549,7 @@ async function run() {
       () => document.querySelector(".file-preview-markdown h2"),
       "canonical alias result",
     );
-    await settle();
+    await advanceTime();
     check(
       scrolled.includes("Section"),
       `${label} fragment lost on canonical response`,
@@ -563,7 +564,7 @@ async function run() {
     scrolled.length = 0;
     tree("alias.md");
     request("alias.md").resolve(response("alias.md"));
-    await settle();
+    await advanceTime();
     check(
       scrolled.length === 0,
       "old fragment reused by unrelated tree request",
@@ -627,15 +628,15 @@ async function run() {
     const current = request("C.md");
     if (olderFirst) {
       oldRefresh.resolve(response("A.md"));
-      await settle();
+      await advanceTime();
       check(selected() === "C.md", "refresh replaced a pending tree selection");
       current.resolve(response("C.md"));
     } else {
       current.resolve(response("C.md"));
-      await settle();
+      await advanceTime();
       oldRefresh.resolve(response("A.md"));
     }
-    await settle();
+    await advanceTime();
     check(selected() === "C.md", "late refresh replaced the selected file");
     check(
       document.querySelector(".file-preview-markdown h1")?.textContent ===
@@ -651,7 +652,7 @@ async function run() {
   tree("C.md");
   request("C.md").resolve(response("C.md"));
   staleFailure.reject(new Error("stale failure"));
-  await settle();
+  await advanceTime();
   check(
     !document.body.textContent?.includes("stale failure"),
     "stale link failure surfaced",
@@ -678,9 +679,9 @@ async function run() {
     })),
   });
   flushSync(() => store.clearNotice());
-  await settle();
+  await advanceTime();
   retiredWorkspace.resolve(response("B.md"));
-  await settle();
+  await advanceTime();
   check(
     selected(workspaces[1]) !== "B.md",
     "retired workspace request persisted under new workspace",
@@ -704,19 +705,19 @@ async function run() {
     "hidden Spaces command menu closed",
   );
   flushSync(() => window.dispatchEvent(commandMenuEvent()));
-  await settle();
+  await advanceTime();
   check(
     !document.querySelector(".command-popover"),
     "hidden Spaces opened the command menu",
   );
   flushSync(() => window.dispatchEvent(tabCreateEvent()));
-  await settle();
+  await advanceTime();
   check(
     !calledMethods.includes("tab.create"),
     "hidden Spaces handled the New Tab shortcut",
   );
   flushSync(() => root.render(<App />));
-  await settle();
+  await advanceTime();
   calledMethods.length = 0;
   flushSync(() => window.dispatchEvent(tabCreateEvent()));
   await until(

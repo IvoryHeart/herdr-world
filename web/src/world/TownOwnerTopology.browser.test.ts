@@ -1,5 +1,4 @@
 import { expect, test } from "bun:test";
-import { existsSync } from "node:fs";
 import { mkdir, mkdtemp, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
@@ -13,28 +12,21 @@ import { worldRuntimeRegistry } from "../../../server/src/world/runtime-registry
 import { WorldSnapshotService } from "../../../server/src/world/snapshot";
 import {
   BROWSER_STARTUP_TIMEOUT_MS,
-  stopChrome,
   waitForBrowserFixture,
-  waitForChromePort,
 } from "../browserChrome";
-import { buildWorldBrowserBundle } from "./testing/browserBundles";
-import { chromeRenderingFlags } from "./testing/chromeRendering";
-import { connectCapture } from "./testing/connectCapture";
+import {
+  chromeBinary as chrome,
+  type ChromePage,
+  openChromePage,
+} from "../testing/sharedChrome";
+import { casePhases } from "./testing/casePhases";
+import { worldBrowserBundle } from "./testing/worldBrowserBundle";
 
 // One machine as its owner runs it (#1198): two Herdr TUI connections on one
 // socket, a herdr-core, an unreachable SSH remote. In both Town layouts, real
 // pointer input reaches every room's controls, the TUI's rooms show once, a
 // building of 20 rooms with one saved spot stays about square, and New agent
 // starts in a core room.
-
-const chrome =
-  Bun.env.CHROME_BIN ||
-  Bun.which("google-chrome") ||
-  Bun.which("chromium") ||
-  (process.platform === "darwin" &&
-  existsSync("/Applications/Google Chrome.app/Contents/MacOS/Google Chrome")
-    ? "/Applications/Google Chrome.app/Contents/MacOS/Google Chrome"
-    : undefined);
 
 const TUI_ROOMS = 18;
 const CORE_ROOMS = ["core-alpha", "core-beta"];
@@ -185,11 +177,19 @@ async function ownerSnapshot(started: boolean) {
 
 type Point = { x: number; y: number };
 
-test.skipIf(!chrome)(
-  "Town on its owner's topology: every room's controls, one TUI, square buildings, a core start",
-  async () => {
+test
+  .skipIf(!chrome)
+  .each(
+    (["machine", "runtime"] as const).flatMap((mode) =>
+      [1, 2].map((part) => [mode, part] as const),
+    ),
+  )(
+  "Town on its owner's topology (%s, rooms %i/2): every room's controls, one TUI, square buildings, a core start",
+  async (mode, part) => {
+    const phases = casePhases(`TownOwnerTopology ${mode} ${part}/2`);
     const dir = await mkdtemp(join(tmpdir(), "town-owner-topology-"));
-    const { assets } = await buildWorldBrowserBundle("TownOwnerTopology", dir);
+    const bundle = await worldBrowserBundle("TownOwnerTopology");
+    const { assets } = bundle;
     const snapshots = new Map([
       ["", JSON.stringify(await ownerSnapshot(false))],
       ["t9", JSON.stringify(await ownerSnapshot(true))],
@@ -213,7 +213,7 @@ test.skipIf(!chrome)(
         if (path === "/") requested.resolve();
         const asset =
           path === "/"
-            ? Bun.file(join(dir, "TownOwnerTopology/index.html"))
+            ? Bun.file(join(bundle.directory, "index.html"))
             : assets.get(path);
         if (asset) return new Response(asset);
         if (path.startsWith("/world/") || path.endsWith(".svg")) {
@@ -225,66 +225,29 @@ test.skipIf(!chrome)(
         return new Response("Not found", { status: 404 });
       },
     });
-    const profile = join(dir, "profile"),
-      log = join(dir, "chrome.log");
-    let child: ReturnType<typeof Bun.spawn> | undefined;
-    let connection: Awaited<ReturnType<typeof connectCapture>> | undefined;
+    let page: ChromePage | undefined;
     try {
-      child = Bun.spawn(
-        [
-          chrome!,
-          "--headless=new",
-          "--remote-debugging-port=0",
-          "--window-size=1512,982",
-          "--enable-webgl",
-          ...(await chromeRenderingFlags(chrome!)),
-          "--disable-dev-shm-usage",
-          "--no-first-run",
-          "--no-default-browser-check",
-          `--user-data-dir=${profile}`,
-          "about:blank",
-        ],
-        { stdout: "ignore", stderr: Bun.file(log) },
-      );
-      const exited = child.exited.then(async (code) => {
-        throw new Error(`Chrome exited ${code}: ${await Bun.file(log).text()}`);
+      const captures = Bun.env.TOWN_OWNER_TOPOLOGY_CAPTURES;
+      // Pixels only when the optional screenshots are taken.
+      page = await openChromePage({
+        viewport: { width: 1512, height: 982 },
+        reducedMotion: true,
+        pixels: !!captures,
       });
-      connection = await connectCapture(
-        await waitForChromePort(child, profile, log),
-      );
-      const { command } = connection;
-      await command("Emulation.setEmulatedMedia", {
-        features: [{ name: "prefers-reduced-motion", value: "reduce" }],
-      });
-      await command("Emulation.setDeviceMetricsOverride", {
-        width: 1512,
-        height: 982,
-        deviceScaleFactor: 1,
-        mobile: false,
-      });
-      const evaluate = async <T = unknown>(expression: string): Promise<T> => {
-        const reply = await command("Runtime.evaluate", {
-          expression,
-          awaitPromise: true,
-          returnByValue: true,
-        });
-        if (reply.exceptionDetails)
-          throw new Error(
-            `${expression.slice(0, 120)}: ${JSON.stringify(reply.exceptionDetails).slice(0, 600)}`,
-          );
-        return reply.result.value as T;
-      };
+      const exited = page.exited;
+      phases.mark("setup");
+      phases.mark("chrome");
+      const { command } = page;
+      const evaluate = <T = unknown>(expression: string): Promise<T> =>
+        page!.evaluate<T>(expression);
       const frames = () =>
         evaluate(
           "new Promise(r => requestAnimationFrame(() => requestAnimationFrame(r)))",
         );
-      const waitFor = async (expression: string, label: string) => {
-        for (let attempt = 0; attempt < 200; attempt++) {
-          if (await evaluate<boolean>(expression)) return;
-          await Bun.sleep(50);
-        }
-        throw new Error(`timed out: ${label}`);
-      };
+      const waitFor = (expression: string, label: string) =>
+        page!.waitFor(expression, 10_000).catch((error: Error) => {
+          throw new Error(`timed out: ${label}: ${error.message}`);
+        });
       const settled = () =>
         waitFor(
           "!window.__HERDR_TOWN_RENDERER__.flying && !window.__HERDR_TOWN_RENDERER__.transitioning",
@@ -484,7 +447,7 @@ test.skipIf(!chrome)(
         return `not brought clear: ${JSON.stringify(await roomBox(label))} at ${await level()}`;
       };
 
-      for (const mode of ["machine", "runtime"] as const) {
+      {
         result = Promise.withResolvers<string[]>();
         requested = Promise.withResolvers<void>();
         await command("Page.navigate", {
@@ -500,7 +463,6 @@ test.skipIf(!chrome)(
           ),
         ).toEqual([]);
         await settled();
-        const captures = Bun.env.TOWN_OWNER_TOPOLOGY_CAPTURES;
         const capture = async (name: string) => {
           if (!captures) return;
           // Buildings paint a few per frame: shoot once Town stops drawing.
@@ -575,7 +537,9 @@ test.skipIf(!chrome)(
 
         // Each room, brought into view: a real pointer reaches its controls.
         const misses: string[] = [];
-        for (const room of rooms) {
+        // The two fresh fixtures cover disjoint room sets; all topology and
+        // launch/reorder assertions still run in each fixture.
+        for (const room of rooms.filter((_, index) => index % 2 === part - 1)) {
           const label = room.label.replace(/^Room /, "").replace(/, .*$/, "");
           const core = room.connection === "core-local";
           const unseen = await visit(mode, room.key, label);
@@ -758,7 +722,10 @@ test.skipIf(!chrome)(
             "the TUI's workspace order",
           );
           await settled();
-          await Bun.sleep(300);
+          await waitFor(
+            "window.__ownerTopology.calls.filter((c) => /:workspace\\./.test(c.method)).length > 1 && window.__ownerTopology.calls.some((c) => c.method === 'world.board.patch' && JSON.stringify(c.params).includes('\"room.place\"'))",
+            "the TUI's order and the saved spot reach the service",
+          );
           const after = await evaluate<{
             failures: string[];
             calls: { method: string; params: Record<string, unknown> }[];
@@ -785,11 +752,12 @@ test.skipIf(!chrome)(
           expect(after.failures).toEqual([]);
         }
       }
+      phases.mark("steps");
     } finally {
-      connection?.close();
-      await stopChrome(child);
+      await page?.close();
       server.stop(true);
       await rm(dir, { recursive: true, force: true });
+      phases.done();
     }
   },
   240000,

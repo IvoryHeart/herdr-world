@@ -1,3 +1,4 @@
+import { clock } from "../testing/installRunningTestClock";
 import { createRoot } from "react-dom/client";
 import { STARTER_PROFILES } from "../../../shared/agentProfile";
 import { bridge } from "../api";
@@ -43,11 +44,7 @@ setMemoryFixtureForTests(true);
 const $ = <T extends HTMLElement = HTMLElement>(selector: string) =>
   document.querySelector<T>(selector);
 async function until(test: () => unknown, what: string) {
-  const deadline = performance.now() + 8_000;
-  while (!test()) {
-    if (performance.now() > deadline) throw new Error(`timed out: ${what}`);
-    await new Promise((resolve) => setTimeout(resolve, 25));
-  }
+  await clock.until(() => !!test(), `timed out: ${what}`, 8_000);
 }
 const closeButton = (label: string) =>
   $(`button[aria-label="${label}"]`)?.click();
@@ -61,7 +58,7 @@ async function run() {
   createRoot(host).render(
     <FeatureHosts slot="dialogs" world={world} onOpen={() => undefined} />,
   );
-  await new Promise((resolve) => setTimeout(resolve, 100));
+  await clock.advance(100);
   check(!$(".apartments-dialog") && !$(".memory-library"), "opened unasked");
 
   openApartments("ada");

@@ -758,7 +758,7 @@ describe("questions and results", () => {
     const slow = {
       ...quick,
       call: async (method: string, params: Record<string, unknown>) => {
-        await new Promise((resolve) => setTimeout(resolve, 20));
+        await new Promise((resolve) => setImmediate(resolve));
         return quick.call(method, params);
       },
     };

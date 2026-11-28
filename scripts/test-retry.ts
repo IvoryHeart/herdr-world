@@ -4,7 +4,11 @@ import { readFileSync, writeFileSync, rmSync } from "node:fs";
 /** @internal */
 export type TestCase = { file: string; name: string };
 /** @internal */
-export type FlakeReport = { files: string[]; flaky: TestCase[] };
+export type FlakeReport = {
+  files: string[];
+  flaky: TestCase[];
+  retried?: TestCase[];
+};
 type CaseResult = TestCase & { status: "pass" | "fail" | "skip" };
 const decode = (value: string) =>
   value.replace(
@@ -80,7 +84,7 @@ export async function retryTests(options: {
       ),
     )
     .map((file) => file.replace(/^\.\//, ""));
-  const evidence: FlakeReport = { files: namedFiles, flaky: [] };
+  const evidence: FlakeReport = { files: namedFiles, flaky: [], retried: [] };
   const save = () => writeFileSync(options.report, JSON.stringify(evidence));
   // A reused workspace must not recover from a previous process's report.
   rmSync(options.junit, { force: true });
@@ -157,6 +161,8 @@ export async function retryTests(options: {
     console.info(
       `[test-runner] retry once: ${file}${options.kind === "browser" ? ` — ${group[0]!.name}` : ""}`,
     );
+    evidence.retried!.push(...group.map(({ file, name }) => ({ file, name })));
+    save();
     const retryCode = await options.run([
       ...options.command.slice(0, prefixEnd),
       `./${file}`,

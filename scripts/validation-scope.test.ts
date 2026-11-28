@@ -6,7 +6,7 @@ import {
   rmSync,
   writeFileSync,
 } from "node:fs";
-import { tmpdir } from "node:os";
+import { availableParallelism, tmpdir } from "node:os";
 import { dirname, join } from "node:path";
 import {
   isToolingOnlyChange,
@@ -18,6 +18,7 @@ import { buildGraph, gitChanges, type Graph } from "./affected";
 import { readCoverageScope } from "./coverage-scope";
 import {
   worldBrowserSuites,
+  worldBrowserShards,
   worldRuntimeSuites,
   webBrowserSuites,
 } from "./world-browser-suites";
@@ -228,7 +229,9 @@ test("browser Chat selects nearby consumers without verification, runtime suites
     unit: [unit],
     world: [worldBrowserSuites[0]],
     web: [webBrowserSuites[0]],
-    worldShards: [1],
+    worldShards: worldBrowserShards.flatMap((files, index) =>
+      files.includes(worldBrowserSuites[0]!) ? [index + 1] : [],
+    ),
   });
 });
 
@@ -343,10 +346,10 @@ test("rename deletions retain World and native obligations", () => {
 test("the CI runner executes only its selected lane and rejects invalid selectors", () => {
   const selection = selectValidation(graph, [chat]);
   expect(selectedCITests(selection, "unit")).toEqual([unit]);
-  expect(selectedCITests(selection, "world", "1")).toEqual([
-    worldBrowserSuites[0]!,
-  ]);
-  expect(selectedCITests(selection, "world", "2")).toEqual([]);
+  for (const [index, files] of worldBrowserShards.entries())
+    expect(selectedCITests(selection, "world", String(index + 1))).toEqual(
+      files.includes(worldBrowserSuites[0]!) ? [worldBrowserSuites[0]!] : [],
+    );
   for (const lane of ["invalid", "full", "latency", "__proto__"])
     expect(() => selectedCITests(selection, lane)).toThrow();
   expect(() => selectedCITests(selection, "world", "0")).toThrow();
@@ -634,11 +637,14 @@ test("the real shard-table graph does not mistake installer test imports for nat
   ).toBe(true);
 });
 
-test("World CI isolates full scenes while keeping lightweight files parallel, with every selected suite once", () => {
+test("World CI runs full scenes in isolated case queues side by side and lightweight files two at a time, with every selected suite once", () => {
   const selection = selectValidation(graph, ["package.json"]);
   const all = { ...selection, world: worldBrowserSuites };
   const batches = ciTestBatches(all, "world");
-  expect(batches.map((batch) => batch.parallel)).toEqual([1, 2]);
+  expect(batches.map(({ parallel, label }) => [parallel, label])).toEqual([
+    [3, "isolated"],
+    [2, "parallel"],
+  ]);
   expect(batches.flatMap((batch) => batch.files).sort()).toEqual(
     [...worldBrowserSuites].sort(),
   );
@@ -653,7 +659,7 @@ test("World CI isolates full scenes while keeping lightweight files parallel, wi
     "WorldTerminalHandoff",
   ])
     expect(isolated).toContain(`web/src/world/${file}.test.ts`);
-  for (let shard = 1; shard <= 6; shard++) {
+  for (let shard = 1; shard <= worldBrowserShards.length; shard++) {
     const actual = ciTestBatches(all, "world", String(shard));
     expect(actual.flatMap((batch) => batch.files).sort()).toEqual(
       selectedCITests(all, "world", String(shard)).sort(),
@@ -666,7 +672,13 @@ test("World CI isolates full scenes while keeping lightweight files parallel, wi
       { ...selection, world: ["web/src/world/NewScene.test.ts"] },
       "world",
     ),
-  ).toEqual([{ files: ["web/src/world/NewScene.test.ts"], parallel: 1 }]);
+  ).toEqual([
+    {
+      files: ["web/src/world/NewScene.test.ts"],
+      parallel: 3,
+      label: "isolated",
+    },
+  ]);
 });
 
 test.each([
@@ -693,7 +705,7 @@ test.each([
         `
 import {appendFileSync} from "node:fs";
 appendFileSync("executions.jsonl", JSON.stringify({args:process.argv.slice(2),label:process.env.HERDR_WORLD_TEST_LABEL})+"\\n");
-if (process.argv.includes("--parallel=${failingBatch === "isolated" ? 1 : 2}") && ${failingPass > 0} && (${runs} === 1 || process.env.HERDR_WORLD_TEST_LABEL?.includes("-pass-${failingPass}-"))) process.exit(7);
+if (process.argv.includes("--parallel=${failingBatch === "isolated" ? 3 : 2}") && ${failingPass > 0} && (${runs} === 1 || process.env.HERDR_WORLD_TEST_LABEL?.includes("-pass-${failingPass}-"))) process.exit(7);
 `,
       );
       const selection = {
@@ -729,10 +741,10 @@ if (process.argv.includes("--parallel=${failingBatch === "isolated" ? 1 : 2}") &
         expected.push({
           args: [
             selection.world[0],
-            "--parallel=1",
+            "--parallel=3",
             "--max-concurrency=1",
             "--retry-flaky=browser",
-            `--flake-report=.agents/delivery/flakes-world-all-${pass}-1-${process.env.GITHUB_RUN_ATTEMPT || "local"}.json`,
+            `--flake-report=.agents/delivery/flakes-world-all-${pass}-3-${process.env.GITHUB_RUN_ATTEMPT || "local"}.json`,
           ],
           label: `${prefix}-isolated`,
         });
@@ -867,7 +879,9 @@ test.each(["unit", "web"])(
         `--retry-flaky=${lane === "unit" ? "unit" : "browser"}`,
       );
       expect(args).toContain(`--parallel=${lane === "unit" ? 4 : 2}`);
-      expect(args).toContain("--max-concurrency=2");
+      expect(args).toContain(
+        `--max-concurrency=${lane === "web" ? availableParallelism() : 2}`,
+      );
       if (lane === "unit")
         expect(args).toContain("--timings=scripts/ci-unit-timings.json");
     } finally {

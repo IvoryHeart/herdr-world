@@ -116,7 +116,8 @@ test("the workflow judges relevant PRs and main pushes with the same web inputs"
   ) as any;
   expect(workflow.on.push.branches).toEqual(["main"]);
   expect(workflow.on.push.paths).toEqual(workflow.on.pull_request.paths);
-  expect(workflow.on.push.paths).toContain("web/**");
+  expect(workflow.on.push.paths).toContain("web/src/**");
+  expect(workflow.on.push.paths).toContain("!web/src/**/*.test.ts");
   expect(workflow.on.push.paths).toContain("shared/**");
   expect(workflow.on.push.paths).not.toContain("server/**");
   expect(workflow.permissions.statuses).toBe("write");

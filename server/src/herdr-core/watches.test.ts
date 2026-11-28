@@ -8,6 +8,7 @@ import {
   type CoreConnectionRuntime,
   createCoreConnectionRuntime,
 } from "./runtime";
+import { until } from "./testing/core-world";
 import { FakeCore } from "./testing/fake-core";
 import { localCoreTransport } from "./transport";
 import { type CoreTerminalPush, CoreTerminalWatches } from "./watches";
@@ -20,14 +21,6 @@ afterEach(async () => {
   for (const root of roots.splice(0))
     rmSync(root, { recursive: true, force: true });
 });
-
-async function until(predicate: () => boolean, ms = 2_000) {
-  const deadline = Date.now() + ms;
-  while (!predicate()) {
-    if (Date.now() > deadline) throw new Error("condition not reached");
-    await Bun.sleep(2);
-  }
-}
 
 type Page = { pushes: CoreTerminalPush[]; buffered: number; open: boolean };
 
@@ -78,7 +71,20 @@ async function served(options: ConstructorParameters<typeof FakeCore>[0] = {}) {
     address,
     stream,
   });
-  return { fake, socket, manager, watches, page, target, seen };
+  /**
+   * Everything World sent core before this call has been handled, and
+   * everything core sent before its reply has arrived: a watch of a probe
+   * terminal opens and closes on the same ordered connection.
+   */
+  const barrier = async () => {
+    const probe = fake.create({ name: "probe" });
+    await seen(probe);
+    const probePage = page();
+    await watches.open(probePage, target(probe, "probe"));
+    watches.close(probePage, "probe");
+    await until(() => fake.viewersOf(probe).length === 0);
+  };
+  return { fake, socket, manager, watches, page, target, seen, barrier };
 }
 
 const bytesOf = (pushes: CoreTerminalPush[]) =>
@@ -139,7 +145,8 @@ describe("World's watches of core terminals", () => {
     page.buffered = 4 << 20;
     const line = `${"y".repeat(1023)}\n`;
     for (let i = 0; i < 600; i++) w.fake.output(t, line);
-    await Bun.sleep(30);
+    await until(() => bytesOf(page.pushes) >= STREAM_WINDOW - 2_048);
+    await w.barrier();
     const stalled = bytesOf(page.pushes);
     // Core stops at its window: World never queued the backlog for the page.
     expect(stalled).toBeLessThanOrEqual(STREAM_WINDOW + 20_000);
@@ -326,7 +333,7 @@ describe("World's seat on a watched core terminal", () => {
     expect(w.keyboard()).toEqual([]);
     await until(() => w.grids().includes("90x30"));
     // Nothing gives it back while the view stays open (no blur or idle rule).
-    await Bun.sleep(30);
+    await w.barrier();
     expect(w.size()).toBe("90x30");
     w.watches.close(w.page, "s1");
     await until(() => w.size() === "200x120");
@@ -357,7 +364,7 @@ describe("World's seat on a watched core terminal", () => {
     w.hold(100, 33);
     await until(() => w.seats().length === 2);
     await until(() => w.fake.viewersOf(w.t).length === 2);
-    await Bun.sleep(20);
+    await w.barrier();
     expect(w.size()).toBe("132x40");
     expect(w.keyboard()).not.toContain(FrameKind.RESIZE);
     expect(w.keyboard()).not.toContain(FrameKind.FOCUS);
@@ -376,7 +383,7 @@ describe("World's seat on a watched core terminal", () => {
     const sent = await Promise.all([w.type("l"), w.type("s"), w.type("\r")]);
     expect(sent).toEqual([{ sent: true }, { sent: true }, { sent: true }]);
     await until(() => (w.fake.typed.get(w.t) ?? "").length >= 3);
-    await Bun.sleep(20);
+    await w.barrier();
     expect(w.fake.typed.get(w.t)).toBe("ls\r");
     expect(w.size()).toBe("90x30");
     await until(() => w.grids().includes("90x30"));
@@ -404,7 +411,7 @@ describe("World's seat on a watched core terminal", () => {
     expect(await w.type("\x1b[1;1R", undefined, true)).toEqual({
       sent: false,
     });
-    await Bun.sleep(20);
+    await w.barrier();
     expect(w.keyboard()).toEqual([]);
     expect(w.size()).toBe("132x40");
     await w.type("a");
@@ -419,7 +426,7 @@ describe("World's seat on a watched core terminal", () => {
     expect(await old.type("\x1b[?1;2c", undefined, true)).toEqual({
       sent: false,
     });
-    await Bun.sleep(20);
+    await old.barrier();
     expect(old.keyboard()).not.toContain(FrameKind.AUTOMATIC_INPUT);
     expect(old.fake.answered.get(old.t)).toBeUndefined();
   });
@@ -458,7 +465,7 @@ describe("World's seat on a watched core terminal", () => {
     await until(() => w.page.pushes.some((p) => "closed" in p));
     await expect(w.type("b")).rejects.toThrow(/not being watched/);
     expect(w.hold(80, 24)).toBe(false);
-    await Bun.sleep(20);
+    await w.barrier();
     expect(w.fake.typed.get(w.t)).toBe("a");
   });
 
@@ -469,7 +476,7 @@ describe("World's seat on a watched core terminal", () => {
         w.fake.replaceWithShell(w.t);
     };
     await expect(w.type("y")).rejects.toThrow();
-    await Bun.sleep(20);
+    await w.barrier();
     expect(w.fake.typed.get(w.t)).toBeUndefined();
     // The seat core opened was left at once: the pane leads.
     await until(

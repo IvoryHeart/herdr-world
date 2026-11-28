@@ -147,10 +147,10 @@ each commit introduced since `origin/main`; `bun run check:privacy --range
 pushed ref, including tags and multiple refs. Before pushing, save the intended
 description and set `HERDR_WORLD_PR_BODY=<file>`; the same privacy step scans that
 file, or the existing PR description when no file is supplied, and the existing PR
-title. The independent **Privacy guard** CI check runs once per PR change,
-including title/description edits, which it scans from the event payload;
-explicit bot dispatches cover token-created PRs. It no longer duplicates every
-branch push. `bun run check:pr-body <file>` also checks description privacy,
+title. CI scans once per PR change inside the required **Delivery checks** job; a
+title or description edit starts only CI's small **Privacy guard** job, which
+scans the event payload. A dispatched CI run (token-created release PRs) scans
+its branch since `origin/main`. No separate privacy workflow runs per push. `bun run check:pr-body <file>` also checks description privacy,
 including hidden Markdown comments and code blocks.
 
 The guard checks full messages and added lines in every introduced commit, so
@@ -268,10 +268,10 @@ full unit inventory locally and full CI gate, even when that input is absent fro
 
 | Suite | PR selection | Full execution |
 | --- | --- | --- |
-| Non-browser tests | Tests reaching changed inputs | All tests, across two CI runners |
-| Behavioral verification | Model/tooling/OpenSpec inputs or model-backed coverage owners; model-free owners run the cheap coverage inventory check | All accepted models, across three CI groups balanced by measured work |
+| Non-browser tests | Tests reaching changed inputs | All tests, across four CI runners |
+| Behavioral verification | Model/tooling/OpenSpec inputs or model-backed coverage owners; model-free owners run the cheap coverage inventory check | All accepted models, across four CI groups balanced by measured work |
 | World browser tests | Nearest consumer suites in the import graph; World runtime paths add the dense end-to-end suites (production and concurrent contexts, terminal handoff) | All six World shards |
-| Web browser shards | Affected registered browser suites | All suites, across two runners |
+| Web browser shards | Affected registered browser suites | All suites, on unit runners 1 and 2 after their unit tests |
 | Native installation | None; PRs run Linux checks | Tags and advisory nightly |
 | Release walk | None; runs with release acceptance | Exact tagged/nightly package, real TUI/core and signed-out Claude/Codex on Linux/macOS |
 
@@ -331,10 +331,17 @@ builds production assets once, instead of building the web app during both type
 checking and compilation.
 
 The protected CI job names remain unchanged. `bun run check:delivery` runs all
-local lanes: static checks first (later lanes read the build), then behavioral
-verification alongside units and World browser suites, followed by the other
-Chrome-driven tests in the same browser slot. It does not replace native platform
-acceptance or CI resource accounting. No suite asserts
+local lanes: static checks first (later lanes read the build), then units
+alongside World browser suites, the other Chrome-driven tests in the same browser
+slot, and behavioral verification last. Verification reuses a passing gate on
+identical inputs ([verification](verification/README.md)). The other
+Chrome-driven tests run as isolated contexts of one shared Chrome per test
+process (`web/src/testing/sharedChrome.ts`), with up to four test processes and
+one page per core. `bun run test:timings [lane…]` runs each lane (`static`,
+`units`, `world`, `web`, `verification`) alone and writes wall time, cgroup CPU,
+peak memory, load, runner milestones and the slowest files and cases to
+`.agents/delivery/timings.md`; repeat lanes it marks as measured under load.
+It does not replace native platform acceptance or CI resource accounting. No suite asserts
 a wall-clock budget: input delays are reported by the non-blocking World latency
 trend ([development](docs/development.md)). Each fixture still exercises its own
 concurrent production contexts and deadlines.
@@ -410,7 +417,8 @@ exception and unrelated ordinary docs skip it. Full CI covers every repository
 check, accepted model and diagnostic/resource control across its workers. Pre-push runs
 `bun run check:changed` for static checks and affected non-browser units;
 browser suites and behavioral acceptance run in CI. `bun run check:delivery`
-runs all local lanes, including the full `verification:gate` (never `--case`). Linux CI additionally enforces the aggregate resource envelope described
+runs all local lanes, including the full `verification:gate` (never `--case`)
+after the test lanes, or its receipt from a pass on identical inputs. Linux CI additionally enforces the aggregate resource envelope described
 in [behavioral evidence](verification/README.md#candidate-commands-and-promotion).
 Independent acceptance is recorded in [promotion decisions](verification/promotion-review.md);
 The [verification guide](verification/README.md) retains final gate/resource

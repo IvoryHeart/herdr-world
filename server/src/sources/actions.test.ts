@@ -222,6 +222,10 @@ describe("pull request verb endpoint", () => {
   function setup(verb: ProcessResult = ok()) {
     let now = 1_000;
     let release: (() => void) | null = null;
+    let closeRunning!: () => void;
+    const closeStarted = new Promise<void>((resolve) => {
+      closeRunning = resolve;
+    });
     const calls: string[][] = [];
     const run: RunProcess = async (argv) => {
       calls.push(argv);
@@ -231,6 +235,7 @@ describe("pull request verb endpoint", () => {
         if (release === null && argv[2] === "close")
           await new Promise<void>((resolve) => {
             release = resolve;
+            closeRunning();
           });
         return verb;
       }
@@ -296,6 +301,7 @@ describe("pull request verb endpoint", () => {
       post,
       calls,
       release: () => release?.(),
+      closeStarted,
       advance: (ms: number) => {
         now += ms;
       },
@@ -377,7 +383,7 @@ describe("pull request verb endpoint", () => {
     }))!;
     expect(unknown.status).toBe(404);
     const first = world.post({ key: KEY, verb: "close" });
-    await Bun.sleep(5);
+    await world.closeStarted;
     const second = (await world.post({ key: KEY, verb: "close" }))!;
     expect([second.status, (await second.json()).error]).toEqual([
       409,

@@ -1,5 +1,7 @@
 import { existsSync, readFileSync, realpathSync } from "node:fs";
-import { balanceShards } from "./balance-shards";
+import { availableParallelism } from "node:os";
+import { CHROME } from "./affected";
+import { planWorldBrowserCases } from "./world-browser-cases";
 import timings from "./world-browser-timings.json";
 import { join, relative, resolve, sep } from "node:path";
 
@@ -33,39 +35,32 @@ export const worldRuntimeSuites = [
   "web/src/world/WorldTerminalHandoff.test.ts",
 ];
 
-// Six runners, longest-first by measured CI seconds. Unmeasured suites use
-// ten seconds until measured; stale timing entries never introduce suites.
-// Weights estimate future work, not test deadlines or runner-speed assertions.
-export function discoverWorldBrowserShards(
+/** Discover tests from source; timing entries never add or remove suites. @internal */
+export function discoverWorldBrowserSuites(
   root = join(import.meta.dir, ".."),
-  seconds: Record<string, number> = timings.seconds,
-): string[][] {
+): string[] {
   const directory = join(root, "web/src/world");
-  const paths = [
-    ...new Bun.Glob("**/*.test.{ts,tsx}").scanSync({ cwd: directory }),
-  ]
+  return [...new Bun.Glob("**/*.test.{ts,tsx}").scanSync({ cwd: directory })]
     .sort()
     .filter((path) =>
       browserSource(readFileSync(join(directory, path), "utf8")),
-    );
-  const weights = Object.fromEntries(
-    paths.map((path) => [
-      path,
-      seconds[path.replace(/\.test\.tsx?$/, "")] ?? 10,
-    ]),
-  );
-  return balanceShards(paths, weights, 6).map((shard) =>
-    shard.map((path) => `web/src/world/${path}`),
-  );
+    )
+    .map((path) => `web/src/world/${path}`);
 }
 
-export const worldBrowserShards = discoverWorldBrowserShards();
+export const worldBrowserSuites = discoverWorldBrowserSuites();
+export const worldBrowserCasePlan = planWorldBrowserCases(
+  worldBrowserSuites,
+  timings.cases,
+);
+// A file can occur on multiple shards; its cases are disjoint. One task also
+// catches every name missing from JUnit, so discovery never depends on timings.
+export const worldBrowserShards = worldBrowserCasePlan.map((workers) => [
+  ...new Set(workers.flatMap((tasks) => tasks.map((task) => task.file))),
+]);
 
-export const worldBrowserSuites = worldBrowserShards.flat();
-
-// Full scenes compete for the same software-rendering CPUs on hosted runners.
-// Only these bounded DOM/transport suites are admitted to parallel file workers;
-// new suites default to isolation until their resource use is understood.
+// Preserve lightweight batches and their artifact namespace. Sharded batches
+// both use isolated case workers; unsharded runs retain file parallelism.
 export const worldBrowserParallelSuites = [
   "AnswerDeliveries.browser",
   "CoreControl.browser",
@@ -99,6 +94,7 @@ export const webBrowserSuites = [
   "web/src/chatMenus.test.ts",
   "web/src/mobileTerminal.test.ts",
   "web/src/layerStack.browser.test.ts",
+  "web/src/testing/chromeHistory.browser.test.ts",
   "web/src/components/VisualPreview.test.ts",
   "web/src/components/TerminalThemeDialog.test.ts",
   "web/src/components/HerdrSetupCard.test.ts",
@@ -110,6 +106,23 @@ export const webBrowserSuites = [
   "server/src/herdr-core/files.browser.test.ts",
   "server/src/ide/webview-origin.browser.test.ts",
 ];
+/**
+ * Concurrent cases of a web browser suite share the run's Chromes (one per
+ * four CPUs) with a browser context per case (`web/src/testing/sharedChrome.ts`) and mostly wait on the
+ * page, so the run holds up to one page per core: `workers` test files at a
+ * time share those pages.
+ */
+export function webBrowserPages(workers = 1) {
+  return Math.max(2, Math.ceil(availableParallelism() / workers));
+}
+/**
+ * Local web browser lane workers: each runs its files one after another, in
+ * the run's shared Chromes, so more cores take more workers (two on a
+ * four-core runner).
+ */
+export function webBrowserWorkers() {
+  return Math.max(2, Math.min(4, Math.floor(availableParallelism() / 4)));
+}
 /** Everything the browser workflow runs, for repository validation to skip. */
 export const browserWorkflowIgnorePattern = ignorePattern([
   ...worldBrowserSuites,
@@ -123,10 +136,7 @@ function ignorePattern(paths: string[]) {
 }
 
 function browserSource(source: string) {
-  return (
-    /^\/\/ @world-browser-suite\b/m.test(source) ||
-    /CHROME_BIN|--headless/.test(source)
-  );
+  return /^\/\/ @world-browser-suite\b/m.test(source) || CHROME.test(source);
 }
 
 export function selectWorldBrowserShard(shard?: string): string[] {
@@ -199,10 +209,32 @@ export function includesBrowserSuites(
   );
 }
 
+/**
+ * Whether the selection runs a suite that opens its pages in the run's shared
+ * Chrome (web/src/testing/sharedChrome.ts). Unlike the slot check, a path
+ * outside the repository's suites selects none.
+ */
+export function includesSharedChromeSuites(
+  args: readonly string[],
+  root = process.cwd(),
+): boolean {
+  const shared = [...webBrowserSuites, ...worldBrowserSuites].filter((file) => {
+    try {
+      return /testing\/(?:sharedChrome|TownCanvas)"/.test(
+        readFileSync(join(root, file), "utf8"),
+      );
+    } catch {
+      return false;
+    }
+  });
+  return shared.length > 0 && includesSuites(args, shared, root, false);
+}
+
 function includesSuites(
   args: readonly string[],
   suites: readonly string[],
   root: string,
+  unknownPath = true,
 ): boolean {
   const valueFlags = new Set([
     "-t",
@@ -229,17 +261,18 @@ function includesSuites(
   if (paths.length === 0) return true;
   return paths.some((arg) => {
     const absolute = resolve(root, arg);
-    if (!existsSync(absolute)) return true;
+    if (!existsSync(absolute)) return unknownPath;
     try {
       const path = relative(realpathSync(root), realpathSync(absolute))
         .split(sep)
         .join("/");
-      if (!path || path === ".." || path.startsWith("../")) return true;
+      if (!path) return true;
+      if (path === ".." || path.startsWith("../")) return unknownPath;
       return suites.some(
         (suite) => suite === path || suite.startsWith(`${path}/`),
       );
     } catch {
-      return true;
+      return unknownPath;
     }
   });
 }

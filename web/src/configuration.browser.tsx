@@ -1,3 +1,4 @@
+import { clock } from "./testing/installConfigurationClock";
 import "./styles/tokens.css";
 import "./styles/base.css";
 import { useState } from "react";
@@ -19,15 +20,30 @@ const failures: string[] = [];
 const check = (condition: boolean, message: string) => {
   if (!condition) failures.push(message);
 };
-const settle = () => new Promise((resolve) => setTimeout(resolve, 50));
+// Test time moves ahead of the product's real-time CSS transitions (this
+// fixture asserts their durations), so a pause also lets running ones end.
+const advanceTimeAndAnimations = async () => {
+  await clock.advance(50);
+  await Promise.all(
+    document
+      .getAnimations()
+      .filter(
+        (animation) =>
+          animation.playState === "running" &&
+          Number.isFinite(animation.effect?.getComputedTiming().endTime),
+      )
+      .map((animation) => animation.finished.catch(() => {})),
+  );
+};
 const renderBoundary = () =>
   new Promise<void>((resolve) =>
     requestAnimationFrame(() => requestAnimationFrame(() => resolve())),
   );
-const waitFor = async (predicate: () => boolean) => {
-  for (let i = 0; i < 80 && !predicate(); i++) await settle();
-  if (!predicate()) throw new Error("Timed out waiting for configuration");
-};
+// Waits depend on the host (held chunks, trusted input over CDP), which real
+// time moves: look again on each real rendering frame while test time runs.
+// Main's 80 polls of 50 ms: 4 s, in test time and in real time alike.
+const waitFor = (predicate: () => boolean) =>
+  clock.until(predicate, "Timed out waiting for configuration", 4000);
 const button = (label: string) => {
   const found = Array.from(
     document.querySelectorAll<HTMLButtonElement>("button"),
@@ -167,7 +183,7 @@ const key = async (element: Element, value: string, shiftKey = false) => {
       text: type === "keyDown" && value === "Enter" ? "\r" : undefined,
       modifiers: shiftKey ? 8 : 0,
     });
-  await settle();
+  await advanceTimeAndAnimations();
 };
 // The Integrations registry and its owners, as the World service reports them.
 const sourceRequests: Array<{ id: string; body: Record<string, unknown> }> = [];
@@ -990,7 +1006,7 @@ async function run() {
     );
   flushSync(render);
   click("Menu");
-  await settle();
+  await advanceTimeAndAnimations();
   // The Menu holds the few things people do every day; Settings holds the rest.
   for (const label of ["Settings", "Find or act", "Zen mode", "Help"])
     check(
@@ -1190,13 +1206,13 @@ async function run() {
     "Chat text must start linked to the terminal font size",
   );
   click("Increase chat text size");
-  await settle();
+  await advanceTimeAndAnimations();
   check(
     getChatTextScale() === 105,
     `Chat text did not unlink (${getChatTextScale()})`,
   );
   click("Follow the terminal, currently 105%");
-  await settle();
+  await advanceTimeAndAnimations();
   check(
     getChatTextScale() === null,
     "Chat text did not link to the terminal again",
@@ -1206,7 +1222,7 @@ async function run() {
     if (increase.disabled) break;
     click("Increase interface size");
   }
-  await settle();
+  await advanceTimeAndAnimations();
   const rect = dialog.getBoundingClientRect();
   check(
     rect.left >= 0 &&
@@ -1338,7 +1354,7 @@ async function run() {
   checkTooltipBounds();
   click("About terminal incremental transport");
   await waitFor(() => !!document.querySelector(".configuration-help-content"));
-  await settle();
+  await advanceTimeAndAnimations();
   const helpContent = document.querySelector<HTMLElement>(
     ".configuration-help-content",
   )!;
@@ -1361,7 +1377,7 @@ async function run() {
   );
   await key(helpContent, "Escape");
   await waitFor(() => !document.querySelector(".configuration-help-content"));
-  await settle();
+  await advanceTimeAndAnimations();
   check(
     dialog.isConnected && document.activeElement === help,
     "closing help closed Settings or lost focus",
@@ -1381,7 +1397,7 @@ async function run() {
     "saving moved focus out of Settings",
   );
   closeSettings();
-  await settle();
+  await advanceTimeAndAnimations();
   check(
     document.activeElement === button("Menu"),
     "closing Settings did not restore Menu focus",
@@ -1467,7 +1483,7 @@ async function run() {
   });
   backToList();
   await openPage("Terminal transport");
-  await settle();
+  await advanceTimeAndAnimations();
   check(
     button("Terminal incremental transport").getAttribute("aria-disabled") ===
       "true",
@@ -1481,7 +1497,7 @@ async function run() {
       "false",
   );
   resolveRead({ surface_codecs: true });
-  await settle();
+  await advanceTimeAndAnimations();
   check(
     button("Terminal incremental transport").getAttribute("aria-checked") ===
       "false",
@@ -1691,7 +1707,7 @@ async function run() {
   resolveIntegrations({
     integrations: [{ ...integrations.beta[0], label: "Stale integration" }],
   });
-  await settle();
+  await advanceTimeAndAnimations();
   check(
     !dialog.textContent!.includes("Stale integration"),
     "late integration list crossed connections",
@@ -1707,7 +1723,7 @@ async function run() {
   const listsBeforeTabRemount = integrationLists();
   backToList();
   await openPage("Integrations");
-  await settle();
+  await advanceTimeAndAnimations();
   check(
     button("Refresh integrations").getAttribute("aria-disabled") === "true" &&
       integrationLists() === listsBeforeTabRemount,
@@ -1752,7 +1768,7 @@ async function run() {
   await waitFor(() => !document.querySelector(".settings-home"));
   dialog = await openSettings();
   await openPage("Integrations");
-  await settle();
+  await advanceTimeAndAnimations();
   check(
     button("Refresh integrations").getAttribute("aria-disabled") === "true" &&
       integrationLists() === listsBeforeDialogRemount,
@@ -1816,7 +1832,7 @@ async function run() {
     target: antigravity.target,
     details: { messages: ["Completed while unmounted"] },
   });
-  await settle();
+  await advanceTimeAndAnimations();
   await openPage("Integrations");
   await waitFor(
     () =>
@@ -1843,7 +1859,7 @@ async function run() {
     else backToList();
     integrationChange = null;
     hiddenFailure.reject(new Error("Mutation failed while unmounted"));
-    await settle();
+    await advanceTimeAndAnimations();
     if (closeDialog) {
       dialog = await openSettings();
     }
@@ -1897,7 +1913,7 @@ async function run() {
       button("Refresh integrations").getAttribute("aria-disabled") === "false",
   );
   resolveChange({ messages: ["Stale mutation result"] });
-  await settle();
+  await advanceTimeAndAnimations();
   check(
     !dialog.textContent!.includes("Stale mutation result") &&
       calls.filter(
@@ -1929,7 +1945,7 @@ async function run() {
     target: "antigravity_cli",
     details: { messages: ["Retired alpha operation"] },
   });
-  await settle();
+  await advanceTimeAndAnimations();
   check(
     !dialog.textContent!.includes("Retired alpha operation"),
     "retired connection operation leaked into the current view",
@@ -1958,7 +1974,7 @@ async function run() {
   runtimeLeaseReady = false;
   restart("disconnected", false);
   restart("connected", false);
-  await settle();
+  await advanceTimeAndAnimations();
   check(
     !document.querySelector('[role="alert"]') &&
       !!document
@@ -1999,14 +2015,14 @@ async function run() {
   );
   // Escape leaves a page for the list, then closes Settings.
   await key(button("Refresh integrations"), "Escape");
-  await settle();
+  await advanceTimeAndAnimations();
   check(
     !document.querySelector(".settings-page") &&
       document.activeElement === button("Open Integrations"),
     "Escape did not return from the page to its row",
   );
   await key(document.activeElement!, "Escape");
-  await settle();
+  await advanceTimeAndAnimations();
   check(
     !document.querySelector(".settings-home") &&
       document.activeElement === button("Menu"),
@@ -2122,7 +2138,7 @@ async function run() {
       );
       // Settings returns focus to Menu on the frame after it closes.
       await waitFor(() => !document.querySelector(".settings-home"));
-      await settle();
+      await advanceTimeAndAnimations();
       check(
         document.activeElement === button("Menu"),
         "drawer dismissal did not restore Menu focus",

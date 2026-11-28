@@ -1,3 +1,4 @@
+import { clock } from "./testing/installRunningTestClock";
 import { TERMINAL_LONG_PRESS_MS } from "./terminalTouchSelection";
 import { StrictMode } from "react";
 import { flushSync } from "react-dom";
@@ -35,14 +36,9 @@ export async function checkAnnotationUX(
     body: `annotation viewport ${innerWidth}x${innerHeight}`,
   });
   const mobile = () => document.documentElement.dataset.layout === "mobile";
-  const settle = () => new Promise((resolve) => setTimeout(resolve, 50));
-  const until = async (predicate: () => unknown, label: string) => {
-    for (let i = 0; i < 100; i++) {
-      if (predicate()) return;
-      await settle();
-    }
-    throw new Error(`Annotation UX: ${label}`);
-  };
+  const advanceTime = () => clock.advance(50);
+  const until = (predicate: () => unknown, label: string) =>
+    clock.until(() => Boolean(predicate()), `Annotation UX: ${label}`, 5_000);
   const click = (selector: string) => {
     const button = document.querySelector<HTMLButtonElement>(selector);
     if (!button) throw new Error(`Missing ${selector}`);
@@ -86,7 +82,7 @@ export async function checkAnnotationUX(
         }),
       ),
     );
-    await settle();
+    await advanceTime();
   };
   const checkAnnotationCount = (count: number) => {
     const label = document.querySelector(
@@ -362,9 +358,9 @@ export async function checkAnnotationUX(
   let touchSelectionCount = 0;
   const select = async () => {
     // Let the layout's resize RPC settle before emitting its matching frame.
-    await new Promise((resolve) => setTimeout(resolve, 250));
+    await clock.advance(250);
     paint();
-    await settle();
+    await advanceTime();
     const screen = document.querySelector<HTMLElement>(".xterm-screen")!;
     const rect = screen.getBoundingClientRect();
     if (mobile() && touchSelectionCount < 2) {
@@ -685,9 +681,9 @@ export async function checkAnnotationUX(
     if (!mobile()) {
       const stage = document.querySelector(".workspace-stage")!;
       const stageWidth = stage.getBoundingClientRect().width;
-      await settle();
+      await advanceTime();
       paint();
-      await settle();
+      await advanceTime();
       const terminalScreen = document.querySelector(".xterm-screen");
       const lifecycleCount = terminalLifecycleCount;
       const checkTerminalPreserved = () =>
@@ -770,7 +766,7 @@ export async function checkAnnotationUX(
         "pointer entering portalled picker collapsed annotations",
       );
       click('[cmdk-item][data-value="other-pane"]');
-      await settle();
+      await advanceTime();
       showAnnotations();
       check(
         document
@@ -784,7 +780,7 @@ export async function checkAnnotationUX(
         "restore floating target picker",
       );
       click('[cmdk-item][data-value="review-pane"]');
-      await settle();
+      await advanceTime();
       showAnnotations();
       click('button[aria-label="Pin annotations"]');
       check(
@@ -905,7 +901,7 @@ export async function checkAnnotationUX(
     for (const text of ["P", "Please", "Please explain"]) {
       type(".annotation-composer-popover textarea", text);
       flushSync(() => store.clearNotice());
-      await settle();
+      await advanceTime();
       check(
         document.querySelector<HTMLTextAreaElement>(
           ".annotation-composer-popover textarea",
@@ -916,7 +912,7 @@ export async function checkAnnotationUX(
     document.activeElement?.dispatchEvent(
       new KeyboardEvent("keydown", { key: "Escape", bubbles: true }),
     );
-    await settle();
+    await advanceTime();
     check(
       !document.querySelector(".annotation-composer-popover"),
       "Escape did not cancel composer",
@@ -952,7 +948,7 @@ export async function checkAnnotationUX(
       () => document.querySelectorAll(".annotation-card").length === 2,
       "terminal creation did not open mixed draft",
     );
-    await settle();
+    await advanceTime();
     check(
       document.activeElement?.getAttribute("aria-label") === "Comment 2",
       "new annotation did not receive focus",
@@ -972,7 +968,7 @@ export async function checkAnnotationUX(
       "selection save opened Inspector",
     );
     paint();
-    await settle();
+    await advanceTime();
     check(
       document.activeElement?.getAttribute("aria-label") === "Comment 2",
       "streaming terminal output stole annotation editing focus",
@@ -1018,7 +1014,7 @@ export async function checkAnnotationUX(
       .querySelector(".workspace-inspector")!
       .getAttribute("data-view");
     flushSync(() => requestAnnotation("with-changes-open"));
-    await settle();
+    await advanceTime();
     check(
       inspectorBefore === "changes" &&
         document
@@ -1037,7 +1033,7 @@ export async function checkAnnotationUX(
       ];
       if (mobile()) {
         click('button[aria-label="Show terminal session"]');
-        await settle();
+        await advanceTime();
       }
       const capsulePositions = mobile()
         ? capsuleSelectors.map((selector) =>
@@ -1045,7 +1041,7 @@ export async function checkAnnotationUX(
           )
         : [];
       showAnnotations();
-      await settle();
+      await advanceTime();
       const panel = document
         .querySelector(".annotation-panel")!
         .getBoundingClientRect();
@@ -1103,10 +1099,10 @@ export async function checkAnnotationUX(
           "mobile Inspector did not replace Annotations surface",
         );
         click('button[aria-label="Show agent message history"]');
-        await settle();
+        await advanceTime();
         showAnnotations();
         click('button[aria-label="Show agent message history"]');
-        await settle();
+        await advanceTime();
         check(
           document
             .querySelector(".body")
@@ -1138,7 +1134,7 @@ export async function checkAnnotationUX(
             }),
           ),
         );
-        await settle();
+        await advanceTime();
         const keyboardWidth = slot.getBoundingClientRect().width;
         check(
           keyboardWidth < beforeResize,
@@ -1168,7 +1164,7 @@ export async function checkAnnotationUX(
             clientY: handle.y,
           }),
         );
-        await settle();
+        await advanceTime();
         check(
           slot.getBoundingClientRect().width > keyboardWidth,
           "peer Inspector pointer resize did not grow panel",
@@ -1208,7 +1204,7 @@ export async function checkAnnotationUX(
       },
     });
     click(".annotation-delivery-actions button:first-child");
-    await settle();
+    await advanceTime();
     check(
       copied.includes("terminal pane") && draft().length === 2,
       "Copy did not retain mixed draft",
@@ -1266,7 +1262,7 @@ export async function checkAnnotationUX(
       );
       pressShortcut("annotations.copy", deliveryEditor);
       pressShortcut("annotations.prefill", deliveryEditor);
-      await settle();
+      await advanceTime();
       check(
         copyCalls === before + 1 && !delivery && draft().length === 2,
         "Copy shortcut duplicated delivery or changed the draft",
@@ -1284,12 +1280,12 @@ export async function checkAnnotationUX(
     }
     flushSync(() => updateShortcut("annotations.copy", ["Alt+F8"]));
     pressShortcut("annotations.copy", deliveryEditor);
-    await settle();
+    await advanceTime();
     checkCopyNotice();
     flushSync(() => selectShortcutPreset(originalPreset));
     copyFails = true;
     pressShortcut("annotations.copy", deliveryEditor);
-    await settle();
+    await advanceTime();
     check(
       store.get().notice?.kind === "error" && draft().length === 2,
       "Failed copy announced success or changed the draft",
@@ -1305,7 +1301,7 @@ export async function checkAnnotationUX(
     type(".annotation-card:last-child textarea", "Edited while sending");
     delivery!.resolve({});
     delivery = null;
-    await settle();
+    await advanceTime();
     check(
       draft().length === 1 && draft()[0]?.comment === "Edited while sending",
       "delivery erased concurrent edits or retained delivered file",
@@ -1314,7 +1310,7 @@ export async function checkAnnotationUX(
     await until(() => delivery, "second pre-fill did not start");
     delivery!.reject(new Error("Synthetic delivery failure"));
     delivery = null;
-    await settle();
+    await advanceTime();
     check(draft().length === 1, "failed delivery erased work");
     type(".annotation-card textarea", " ");
     check(
@@ -1345,7 +1341,7 @@ export async function checkAnnotationUX(
       "other agent option missing",
     );
     click('[cmdk-item][data-value="other-pane"]');
-    await settle();
+    await advanceTime();
     toggleAnnotations();
     toggleAnnotations();
     check(
@@ -1356,7 +1352,7 @@ export async function checkAnnotationUX(
     );
     click('button[aria-label="Close Workspace Inspector"]');
     flushSync(() => openInspector());
-    await settle();
+    await advanceTime();
     showAnnotations();
     check(
       document
@@ -1368,7 +1364,7 @@ export async function checkAnnotationUX(
     await until(() => delivery, "final pre-fill did not start");
     delivery!.resolve({});
     delivery = null;
-    await settle();
+    await advanceTime();
     check(
       draft().length === 0,
       "successful pre-fill did not clear delivered comment",
@@ -1382,7 +1378,7 @@ export async function checkAnnotationUX(
       "successful pre-fill did not offer destination navigation",
     );
     flushSync(() => goToAgent?.click());
-    await settle();
+    await advanceTime();
     check(
       focusedPane === otherPane.pane_id &&
         document
@@ -1418,7 +1414,7 @@ export async function checkAnnotationUX(
     focusedPane = "";
     delivery!.resolve({});
     delivery = null;
-    await settle();
+    await advanceTime();
     check(focusedPane === "", "retired delivery navigated to a terminal");
     check(
       draft().length === 2 &&
@@ -1499,7 +1495,7 @@ export async function checkAnnotationUX(
         }),
       );
       flushSync(() => store.clearNotice());
-      await settle();
+      await advanceTime();
       check(
         document.querySelector<HTMLTextAreaElement>(".annotation-card textarea")
           ?.value === previousDraftText,
@@ -1507,9 +1503,9 @@ export async function checkAnnotationUX(
       );
       // Explicitly close and reopen Annotations to choose the newly focused workspace.
       toggleAnnotations();
-      await settle();
+      await advanceTime();
       showAnnotations();
-      await settle();
+      await advanceTime();
     };
     await switchWorkspace(true);
     previewDelivery!.resolve({
@@ -1552,7 +1548,7 @@ export async function checkAnnotationUX(
     click(".annotation-delivery-actions button:last-child");
     await until(() => delivery, "returned scope delivery did not start");
     retiredScopeDelivery.resolve({});
-    await settle();
+    await advanceTime();
     check(
       readReviewAnnotations(worldLocalStorage, secondKey).length === 1 &&
         document.querySelector<HTMLButtonElement>(
@@ -1562,7 +1558,7 @@ export async function checkAnnotationUX(
     );
     delivery!.reject(new Error("Keep returned draft"));
     delivery = null;
-    await settle();
+    await advanceTime();
     const restoreStorage = worldLocalStorage.setItem;
     try {
       worldLocalStorage.setItem = (storageKey, value) => {
@@ -1612,7 +1608,7 @@ export async function checkAnnotationUX(
       });
       store.clearNotice();
     });
-    await settle();
+    await advanceTime();
     check(
       !document.querySelector(".annotation-panel"),
       "retired runtime kept an actionable annotation surface open",
@@ -1620,7 +1616,7 @@ export async function checkAnnotationUX(
     showAnnotations();
     delivery!.resolve({});
     delivery = null;
-    await settle();
+    await advanceTime();
     check(
       draft().length === 2 &&
         document.querySelectorAll(".annotation-card").length === 2,
@@ -1646,14 +1642,14 @@ export async function checkAnnotationUX(
       });
       store.clearNotice();
     });
-    await settle();
+    await advanceTime();
     check(
       !document.querySelector(".annotation-panel"),
       "removed workspace kept its Annotations surface active",
     );
     delivery!.resolve({});
     delivery = null;
-    await settle();
+    await advanceTime();
     check(
       JSON.stringify(draft()) === JSON.stringify(beforeRemoval),
       "last workspace removal let delayed pre-fill clear its draft",
@@ -1662,7 +1658,7 @@ export async function checkAnnotationUX(
       __storeTesting.replaceState(beforeRemovalSnapshot);
       store.clearNotice();
     });
-    await settle();
+    await advanceTime();
     showAnnotations();
     check(
       !document.querySelector<HTMLButtonElement>(
@@ -1722,10 +1718,10 @@ export async function checkAnnotationUX(
         });
         store.clearNotice();
       });
-      await settle();
+      await advanceTime();
     };
     flushSync(() => openInspector());
-    await settle();
+    await advanceTime();
     showAnnotations();
     click(".annotation-delivery-actions button:last-child");
     await until(() => delivery, "shared checkout original delivery missing");
@@ -1759,7 +1755,7 @@ export async function checkAnnotationUX(
       "shared checkout feedback was sent to previous workspace",
     );
     sharedOldDelivery.resolve({});
-    await settle();
+    await advanceTime();
     check(
       draft().length === 2 &&
         document.querySelector<HTMLButtonElement>(
@@ -1769,7 +1765,7 @@ export async function checkAnnotationUX(
     );
     delivery!.reject(new Error("Retain shared checkout draft"));
     delivery = null;
-    await settle();
+    await advanceTime();
     click('button[aria-label="Close Workspace Inspector"]');
     await focusShared(false);
     check(
@@ -1781,7 +1777,7 @@ export async function checkAnnotationUX(
     );
     __storeTesting.replaceState({ ...store.get(), panes: [], layout: null });
     flushSync(() => store.clearNotice());
-    await settle();
+    await advanceTime();
     check(
       draft().every((item) => item.stale) &&
         document
@@ -1808,7 +1804,7 @@ export async function checkAnnotationUX(
         },
       }),
     );
-    await settle();
+    await advanceTime();
     check(draft().length === 2, "stale connection request added annotation");
   } finally {
     root.unmount();

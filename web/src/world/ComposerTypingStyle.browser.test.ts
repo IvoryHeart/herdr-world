@@ -1,25 +1,17 @@
 import { expect, test } from "bun:test";
-import { existsSync } from "node:fs";
 import { mkdtemp, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { basename, join } from "node:path";
 import {
   BROWSER_STARTUP_TIMEOUT_MS,
-  stopChrome,
   waitForBrowserFixture,
-  waitForChromePort,
 } from "../browserChrome";
+import {
+  chromeBinary as chrome,
+  type ChromePage,
+  openChromePage,
+} from "../testing/sharedChrome";
 import { buildWorldBrowserBundle } from "./testing/browserBundles";
-import { connectCapture } from "./testing/connectCapture";
-
-const chrome =
-  Bun.env.CHROME_BIN ||
-  Bun.which("google-chrome") ||
-  Bun.which("chromium") ||
-  (process.platform === "darwin" &&
-  existsSync("/Applications/Google Chrome.app/Contents/MacOS/Google Chrome")
-    ? "/Applications/Google Chrome.app/Contents/MacOS/Google Chrome"
-    : undefined);
 
 const KEYS = 30;
 /**
@@ -123,52 +115,20 @@ test.skipIf(!chrome)(
           : new Response("Not found", { status: 404 });
       },
     });
-    let child: ReturnType<typeof Bun.spawn> | undefined;
-    let connection: Awaited<ReturnType<typeof connectCapture>> | undefined;
+    let page: ChromePage | undefined;
     try {
-      const profile = join(dir, "profile"),
-        log = join(dir, "chrome.log");
-      child = Bun.spawn(
-        [
-          chrome!,
-          "--headless=new",
-          "--disable-gpu",
-          "--remote-debugging-port=0",
-          "--window-size=1280,900",
-          "--no-first-run",
-          "--no-default-browser-check",
-          `--user-data-dir=${profile}`,
-          server.url.href,
-        ],
-        { stdout: "ignore", stderr: Bun.file(log) },
-      );
+      page = await openChromePage({ viewport: { width: 1280, height: 900 } });
+      void page.navigate(server.url.href).catch(() => {});
       const ready = await waitForBrowserFixture(
         requested.promise,
         result.promise,
-        child.exited.then(async (code) => {
-          throw new Error(
-            `Chrome exited ${code}: ${await Bun.file(log).text()}`,
-          );
-        }),
+        page.exited,
         "Composer typing",
         15000,
       );
       // The page must be World-sized for a whole-app restyle to show.
       expect(ready.elements).toBeGreaterThan(4000);
-      connection = await connectCapture(
-        await waitForChromePort(child, profile, log),
-      );
-      const { command, on } = connection;
-      const evaluate = async (expression: string) => {
-        const reply = await command("Runtime.evaluate", {
-          expression,
-          awaitPromise: true,
-          returnByValue: true,
-        });
-        if (reply.exceptionDetails)
-          throw new Error(JSON.stringify(reply.exceptionDetails));
-        return reply.result.value;
-      };
+      const { command, on, evaluate } = page;
       const frame = () => evaluate("window.__composerTyping.frame()");
       const type = async (character: string) => {
         const params = {
@@ -272,8 +232,7 @@ test.skipIf(!chrome)(
       ).toBeNull();
       expect(await evaluate(header)).not.toBe("none");
     } finally {
-      connection?.close();
-      await stopChrome(child);
+      await page?.close();
       server.stop(true);
       await rm(dir, { recursive: true, force: true });
     }

@@ -6,7 +6,9 @@ import {
   unitNeedsBuild,
   unitTestShards,
 } from "./ci-unit-shards";
+import { WORLD_BROWSER_WORKERS } from "./world-browser-cases";
 import {
+  webBrowserPages,
   worldBrowserParallelSuites,
   worldBrowserShards,
 } from "./world-browser-suites";
@@ -57,12 +59,23 @@ export function ciTestBatches(
   const files = selectedCITests(selection, lane, shard);
   if (lane !== "world")
     return files.length
-      ? [{ files, parallel: lane === "unit" ? UNIT_PARALLEL : 2 }]
+      ? [{ files, parallel: lane === "unit" ? UNIT_PARALLEL : 2, label: lane }]
       : [];
+  // The scene batch runs its shard's process-isolated case queues side by
+  // side, one per queue (their recorded loads are balanced for that); the
+  // lightweight batch keeps two files at a time.
   const parallel = new Set(worldBrowserParallelSuites);
   return [
-    { files: files.filter((file) => !parallel.has(file)), parallel: 1 },
-    { files: files.filter((file) => parallel.has(file)), parallel: 2 },
+    {
+      files: files.filter((file) => !parallel.has(file)),
+      parallel: WORLD_BROWSER_WORKERS,
+      label: "isolated",
+    },
+    {
+      files: files.filter((file) => parallel.has(file)),
+      parallel: 2,
+      label: "parallel",
+    },
   ].filter((batch) => batch.files.length);
 }
 
@@ -117,8 +130,11 @@ if (import.meta.main) {
             ? "scripts/run-world-tests.ts"
             : "scripts/run-tests.ts",
           ...files,
+          ...(lane === "world" && shard
+            ? [`--shard=${shard}/${worldBrowserShards.length}`]
+            : []),
           `--parallel=${parallel}`,
-          `--max-concurrency=${lane === "world" ? 1 : 2}`,
+          `--max-concurrency=${lane === "world" ? 1 : lane === "web" ? webBrowserPages() : 2}`,
           ...(lane === "unit"
             ? ["--timings=scripts/ci-unit-timings.json"]
             : []),
@@ -139,7 +155,7 @@ if (import.meta.main) {
             ...process.env,
             ...(lane === "world"
               ? {
-                  HERDR_WORLD_TEST_LABEL: `${process.env.HERDR_WORLD_TEST_LABEL || "local"}${runs > 1 ? `-pass-${pass}` : ""}-${parallel === 1 ? "isolated" : "parallel"}`,
+                  HERDR_WORLD_TEST_LABEL: `${process.env.HERDR_WORLD_TEST_LABEL || "local"}${runs > 1 ? `-pass-${pass}` : ""}-${batch.label}`,
                 }
               : {}),
           },

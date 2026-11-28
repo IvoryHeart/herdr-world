@@ -1,18 +1,13 @@
 import { expect, test } from "bun:test";
-import { existsSync } from "node:fs";
-import { mkdtemp, readFile, rm } from "node:fs/promises";
-import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { stopChrome } from "../web/src/browserChrome";
+import {
+  type ChromePage,
+  chromeBinary as chrome,
+  openChromePage,
+} from "../web/src/testing/sharedChrome";
 
 // The film runs the app's Town code (site/film/town-art.ts), so a change to
 // Town's layout or sprites can break it while the site still builds.
-const chrome =
-  Bun.env.CHROME_BIN ||
-  (process.platform === "darwin" &&
-  existsSync("/Applications/Google Chrome.app/Contents/MacOS/Google Chrome")
-    ? "/Applications/Google Chrome.app/Contents/MacOS/Google Chrome"
-    : Bun.which("google-chrome") || Bun.which("chromium"));
 
 const film = join(import.meta.dir, "../site/film");
 
@@ -56,7 +51,7 @@ const buildTownArt = () =>
     text: build.success ? await build.outputs[0]!.text() : "",
   })));
 
-// Each run has its own server, browser and profile, so both run side by side.
+// Each run has its own server and browser context, so both run side by side.
 for (const [query, motion] of [
   ["render", "full motion"],
   ["embed&live", "reduced motion"],
@@ -64,9 +59,8 @@ for (const [query, motion] of [
   test.concurrent.skipIf(!chrome)(
     `the website film renders every frame with Town's art (?${query}, ${motion})`,
     async () => {
-      const dir = await mkdtemp(join(tmpdir(), "pages-film-test-"));
       const { promise, resolve } = Promise.withResolvers<unknown>();
-      let child: ReturnType<typeof Bun.spawn> | undefined;
+      let page: ChromePage | undefined;
       let timer: ReturnType<typeof setTimeout> | undefined;
       const built = await buildTownArt();
       expect(built.success).toBe(true);
@@ -96,30 +90,15 @@ for (const [query, motion] of [
         },
       });
       try {
-        const errorOutput = join(dir, "browser.log");
-        child = Bun.spawn(
-          [
-            chrome!,
-            "--headless",
-            "--disable-gpu",
-            "--no-first-run",
-            "--no-default-browser-check",
-            "--mute-audio",
-            ...(motion === "reduced motion"
-              ? ["--force-prefers-reduced-motion"]
-              : []),
-            `--user-data-dir=${join(dir, "profile")}`,
-            server.url.href,
-          ],
-          { stdout: "ignore", stderr: Bun.file(errorOutput) },
-        );
+        // The old headless window's size; the film's frame is fixed in size.
+        page = await openChromePage({
+          viewport: { width: 800, height: 600 },
+          reducedMotion: motion === "reduced motion",
+        });
+        await page.command("Page.navigate", { url: server.url.href });
         const failures = await Promise.race([
           promise,
-          child.exited.then(async (code) => {
-            throw new Error(
-              `Browser exited (${code}): ${await readFile(errorOutput, "utf8")}`,
-            );
-          }),
+          page.exited,
           new Promise<never>((_, reject) => {
             timer = setTimeout(
               () => reject(new Error("Film render check timed out")),
@@ -131,8 +110,7 @@ for (const [query, motion] of [
       } finally {
         clearTimeout(timer);
         server.stop(true);
-        await stopChrome(child);
-        await rm(dir, { recursive: true, force: true });
+        await page?.close();
       }
     },
     75_000,

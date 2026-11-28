@@ -1,5 +1,4 @@
 import { expect, test } from "bun:test";
-import { existsSync } from "node:fs";
 import { mkdir, mkdtemp, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
@@ -15,21 +14,14 @@ import { worldRuntimeRegistry } from "../../../server/src/world/runtime-registry
 import { WorldSnapshotService } from "../../../server/src/world/snapshot";
 import {
   BROWSER_STARTUP_TIMEOUT_MS,
-  stopChrome,
   waitForBrowserFixture,
-  waitForChromePort,
 } from "../browserChrome";
+import {
+  chromeBinary as chrome,
+  openChromePage,
+  type ChromePage,
+} from "../testing/sharedChrome";
 import { buildWorldBrowserBundle } from "./testing/browserBundles";
-import { connectCapture } from "./testing/connectCapture";
-
-const chrome =
-  Bun.env.CHROME_BIN ||
-  Bun.which("google-chrome") ||
-  Bun.which("chromium") ||
-  (process.platform === "darwin" &&
-  existsSync("/Applications/Google Chrome.app/Contents/MacOS/Google Chrome")
-    ? "/Applications/Google Chrome.app/Contents/MacOS/Google Chrome"
-    : undefined);
 
 /** The repository's standard capture viewports. */
 const VIEWPORTS = [
@@ -40,11 +32,25 @@ const VIEWPORTS = [
   { name: "portrait", width: 1440, height: 2560, mobile: false },
 ] as const;
 
+/** Status changes the connection manager publishes, for `until`. */
+let statusChanged: () => void = () => {};
+/** Check again on each published connection status, or fail after `ms`. */
 async function until(predicate: () => boolean, ms = 3_000) {
-  const deadline = Date.now() + ms;
-  while (!predicate()) {
-    if (Date.now() > deadline) throw new Error("condition not reached");
-    await Bun.sleep(5);
+  const deadline = Promise.withResolvers<never>();
+  const timer = setTimeout(
+    () => deadline.reject(new Error("condition not reached")),
+    ms,
+  );
+  try {
+    while (!predicate())
+      await Promise.race([
+        new Promise<void>((resolve) => {
+          statusChanged = resolve;
+        }),
+        deadline.promise,
+      ]);
+  } finally {
+    clearTimeout(timer);
   }
 }
 
@@ -55,7 +61,9 @@ async function coreWorld(root: string) {
   const stateDir = join(root, "core", "state");
   const socket = await fake.listen(stateDir, join(root, "core", "run"));
   let invalidate: (id: string) => void = () => {};
-  const manager = new ConnectionManager<CoreConnectionRuntime>("");
+  const manager = new ConnectionManager<CoreConnectionRuntime>("", () =>
+    statusChanged(),
+  );
   const none = {
     list: () => [],
     has: () => false,
@@ -175,28 +183,13 @@ test.skipIf(!chrome)(
           : new Response("Not found", { status: 404 });
       },
     });
-    let child: ReturnType<typeof Bun.spawn> | undefined;
-    let connection: Awaited<ReturnType<typeof connectCapture>> | undefined;
+    let connection: ChromePage | undefined;
     try {
-      const profile = join(dir, "profile"),
-        log = join(dir, "chrome.log");
-      child = Bun.spawn(
-        [
-          chrome!,
-          "--headless=new",
-          "--disable-gpu",
-          "--remote-debugging-port=0",
-          "--window-size=1000,900",
-          "--no-first-run",
-          "--no-default-browser-check",
-          `--user-data-dir=${profile}`,
-          server.url.href,
-        ],
-        { stdout: "ignore", stderr: Bun.file(log) },
-      );
-      const exited = child.exited.then(async (code) => {
-        throw new Error(`Chrome exited ${code}: ${await Bun.file(log).text()}`);
+      connection = await openChromePage({
+        viewport: { width: 1000, height: 900 },
       });
+      const exited = connection.exited;
+      await connection.navigate(server.url.href);
       expect(
         await waitForBrowserFixture(
           requested.promise,
@@ -221,9 +214,6 @@ test.skipIf(!chrome)(
       const captures = Bun.env.HERDR_WORLD_CORE_CAPTURES;
       if (!captures) return;
       await mkdir(captures, { recursive: true });
-      connection = await connectCapture(
-        await waitForChromePort(child, profile, log),
-      );
       for (const theme of ["light", "dark"] as const)
         for (const viewport of VIEWPORTS) {
           await backend.stop();
@@ -236,7 +226,7 @@ test.skipIf(!chrome)(
           });
           result = Promise.withResolvers<string[]>();
           requested = Promise.withResolvers<void>();
-          await connection.command("Page.navigate", { url: server.url.href });
+          await connection.navigate(server.url.href);
           expect(
             await waitForBrowserFixture(
               requested.promise,
@@ -259,8 +249,7 @@ test.skipIf(!chrome)(
           );
         }
     } finally {
-      connection?.close();
-      await stopChrome(child);
+      await connection?.close();
       server.stop(true);
       await backend.stop();
       await rm(dir, { recursive: true, force: true });

@@ -63,7 +63,7 @@ const frame = () => new Promise<number>((r) => requestAnimationFrame(r));
 const stats = () => window.__HERDR_TOWN_RENDERER__!;
 
 /** Waits until the camera and actors stop moving, or `limit` ms pass. */
-async function settle(limit = 6000) {
+async function untilCalm(limit = 6000) {
   const began = performance.now();
   let calm = 0;
   while (performance.now() - began < limit) {
@@ -148,13 +148,13 @@ const scale = {
       gpu: info ? String(gl!.getParameter(info.UNMASKED_RENDERER_WEBGL)) : "",
       desks: stats().desks,
       actors: stats().actors,
-      ...(await settle(10_000)),
+      ...(await untilCalm(10_000)),
     };
   })(),
   /** Whole town (ALL), then each Zoom in step: building, room, desk. */
   async zoom(step: "all" | "in") {
     click(step === "all" ? "Show the whole town" : "Zoom in");
-    return settle();
+    return untilCalm();
   },
   /**
    * Starts recording frame intervals, Pixi render cost and camera motion:

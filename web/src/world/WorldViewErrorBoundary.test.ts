@@ -1,19 +1,16 @@
 import { expect, test } from "bun:test";
-import { existsSync } from "node:fs";
-import { mkdtemp, readFile } from "node:fs/promises";
+import { mkdtemp } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { basename, join } from "node:path";
 import {
   BROWSER_STARTUP_TIMEOUT_MS,
   waitForBrowserFixture,
 } from "../browserChrome";
-
-const chrome =
-  Bun.env.CHROME_BIN ||
-  (process.platform === "darwin" &&
-  existsSync("/Applications/Google Chrome.app/Contents/MacOS/Google Chrome")
-    ? "/Applications/Google Chrome.app/Contents/MacOS/Google Chrome"
-    : Bun.which("google-chrome") || Bun.which("chromium"));
+import {
+  chromeBinary as chrome,
+  type ChromePage,
+  openChromePage,
+} from "../testing/sharedChrome";
 
 test.skipIf(!chrome)(
   "a visual presenter failure stays inside its view boundary",
@@ -40,7 +37,7 @@ test.skipIf(!chrome)(
         );
       },
     });
-    let browser: ReturnType<typeof Bun.spawn> | undefined;
+    let page: ChromePage | undefined;
     try {
       const build = await Bun.build({
         entrypoints: [
@@ -53,29 +50,13 @@ test.skipIf(!chrome)(
       for (const output of build.outputs) {
         assets.set(`/${basename(output.path)}`, output);
       }
-      const browserLog = join(dir, "browser.log");
-      browser = Bun.spawn(
-        [
-          chrome!,
-          "--headless=new",
-          "--window-size=1280,900",
-          "--disable-gpu",
-          "--disable-background-networking",
-          "--no-first-run",
-          "--no-default-browser-check",
-          `--user-data-dir=${join(dir, "profile")}`,
-          server.url.href,
-        ],
-        { stdout: "ignore", stderr: Bun.file(browserLog) },
-      );
+      page = await openChromePage({ viewport: { width: 1280, height: 900 } });
+      const opened = page;
+      void opened.navigate(server.url.href).catch(() => {});
       const observed = await waitForBrowserFixture(
         pageRequested.promise,
         result.promise,
-        browser.exited.then(async (code) => {
-          throw new Error(
-            `Browser exited (${code}): ${await readFile(browserLog, "utf8")}`,
-          );
-        }),
+        page.exited,
         "View boundary",
         15_000,
       );
@@ -85,7 +66,7 @@ test.skipIf(!chrome)(
         inspector: "Inspector remains mounted",
       });
     } finally {
-      browser?.kill();
+      await page?.close();
       server.stop(true);
     }
   },

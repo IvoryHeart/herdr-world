@@ -132,8 +132,6 @@ test.if(hasSetsid())(
     h.standIn.forget();
     const second = await h.run(h.start(), "another-token\n");
     expect(parseHostLines(second.stdout).values.get("result")).toBe("running");
-    await Bun.sleep(200);
-    expect(existsSync(join(h.top, "launcher.pid"))).toBe(false);
 
     // A later World checks it is its own, for this provider and folder.
     const attached = await h.attach();
@@ -141,6 +139,8 @@ test.if(hasSetsid())(
     expect(attached.values.get("token")).toBe("secret-token-value");
     expect(attached.values.get("started")).toBe("2026-11-19T10:00:00.000Z");
     expect(attached.values.get("downloads")).toBe("0");
+    // The second start launched nothing, still true after the later looks.
+    expect(existsSync(join(h.top, "launcher.pid"))).toBe(false);
     // VS Code's CLI retrying the download of its web server, as it logs it.
     appendFileSync(
       join(h.root, ID, "log"),
@@ -248,11 +248,10 @@ test("a start whose folder another start claimed meanwhile launches nothing and 
     "token-one\n",
   );
   expect(parseHostLines(raced.stdout).values.get("result")).toBe("running");
-  await Bun.sleep(200);
-  expect(existsSync(join(h.top, "launcher.pid"))).toBe(false);
   const folder = join(h.root, ID);
   expect(readFileSync(join(folder, "token"), "utf8")).toBe("other-token");
   expect(readFileSync(join(folder, "record"), "utf8")).toBe("world=other\n");
+  expect(existsSync(join(h.top, "launcher.pid"))).toBe(false);
   expect(
     Bun.spawnSync(["ls", "-A", folder]).stdout.toString().trim().split("\n"),
   ).toEqual(["record", "token"]);
@@ -269,10 +268,10 @@ test.if(hasSetsid())(
     );
     chmodSync(crash, 0o755);
     await h.run(h.start({ binary: crash }), "token\n");
-    const deadline = Date.now() + 10_000;
     let state = await h.attach();
+    const deadline = Date.now() + 10_000;
     while (state.values.get("state") !== "exited" && Date.now() < deadline) {
-      await Bun.sleep(100);
+      await Bun.sleep(10);
       state = await h.attach();
     }
     expect(state.values.get("state")).toBe("exited");
@@ -282,10 +281,9 @@ test.if(hasSetsid())(
     // The supervisor ended the server it left, and that server's terminal.
     const server = Number(readFileSync(join(h.top, "server.pid"), "utf8"));
     const shellFile = join(h.top, "shell.pid");
-    for (let i = 0; i < 50 && !existsSync(shellFile); i++) await Bun.sleep(20);
+    await untilTrue(() => existsSync(shellFile), 1_000);
     const shell = Number(readFileSync(shellFile, "utf8"));
-    for (let i = 0; i < 50 && (alive(server) || alive(shell)); i++)
-      await Bun.sleep(100);
+    await untilTrue(() => !alive(server) && !alive(shell), 5_000);
     expect([server, shell].filter(alive)).toEqual([]);
 
     h.standIn.forget();
@@ -336,8 +334,14 @@ function pausedStart(h: ReturnType<typeof setup>) {
   return `${script.slice(0, claim)}${wait}${script.slice(claim)}`;
 }
 
+/** Polls a host-side fact no event announces, with a short tick. */
+async function untilTrue(done: () => boolean, ms: number) {
+  const deadline = Date.now() + ms;
+  while (!done() && Date.now() < deadline) await Bun.sleep(10);
+}
+
 async function untilFile(path: string) {
-  for (let i = 0; i < 200 && !existsSync(path); i++) await Bun.sleep(20);
+  await untilTrue(() => existsSync(path), 4_000);
   expect(existsSync(path)).toBe(true);
 }
 
@@ -416,7 +420,7 @@ test.if(hasSetsid())(
       // The hand command sends TERM only; the stand-in's server ignores it.
       const ended =
         finish === "Stop" ? [pids.launcher, pids.server] : [pids.launcher];
-      for (let i = 0; i < 100 && ended.some(alive); i++) await Bun.sleep(50);
+      await untilTrue(() => !ended.some(alive), 5_000);
       expect(ended.filter(alive)).toEqual([]);
       expect(existsSync(aside)).toBe(false);
     }

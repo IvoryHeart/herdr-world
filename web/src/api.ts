@@ -125,7 +125,8 @@ export { UncertainRequestError } from "./uncertainRequest";
 export type { ConnectionClient } from "./connectionClient";
 
 const STARTUP_DEFAULT_CONNECTION_ID = "startup-default";
-const RPC_TIMEOUT_MS = 30000;
+/** @internal How long a request waits for its reply. */
+export const RPC_TIMEOUT_MS = 30000;
 const CONNECT_TIMEOUT_MS = 8000;
 const HEARTBEAT_INTERVAL_MS = 10000;
 const HEARTBEAT_TIMEOUT_MS = 6000;

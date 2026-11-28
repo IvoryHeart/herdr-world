@@ -28,6 +28,7 @@ if (process.env.HERDR_WORLD_TOAST_DOM_TEST !== "1") {
   const { act, createElement } = await import("react");
   const { createRoot } = await import("react-dom/client");
   const { Toast } = await import("./Toast");
+  const { setClockForTests } = await import("../clock");
   const { updateLayoutPreferences } = await import("../layoutPreferences");
   test("replacement, protected installation notices, cancellation and output scrolling", async () => {
     updateLayoutPreferences({ mode: "mobile" });
@@ -35,18 +36,19 @@ if (process.env.HERDR_WORLD_TOAST_DOM_TEST !== "1") {
     const root = createRoot(host);
     const timers = new Map<number, () => void>();
     let sequence = 0;
-    const originalSet = window.setTimeout;
-    const originalClear = window.clearTimeout;
     // Drive only Toast's 180ms exit deadline; no wall-clock race in this test.
-    window.setTimeout = ((callback: () => void, delay?: number) => {
-      if (delay !== 180) return originalSet.call(window, callback, delay);
-      const id = ++sequence;
-      timers.set(id, callback);
-      return id;
-    }) as typeof window.setTimeout;
-    window.clearTimeout = ((id: number) => {
-      if (!timers.delete(id)) originalClear.call(window, id);
-    }) as typeof window.clearTimeout;
+    const restoreClock = setClockForTests({
+      setTimeout(callback, delay) {
+        if (delay !== 180)
+          return setTimeout(callback, delay) as unknown as number;
+        const id = ++sequence;
+        timers.set(id, callback);
+        return id;
+      },
+      clearTimeout(id) {
+        if (id !== undefined && !timers.delete(id)) clearTimeout(id);
+      },
+    });
     const dismissed: number[] = [];
     let key = 1;
     const render = async (disabled = false) =>
@@ -147,8 +149,7 @@ if (process.env.HERDR_WORLD_TOAST_DOM_TEST !== "1") {
     } finally {
       await act(async () => root.unmount());
       host.remove();
-      window.setTimeout = originalSet;
-      window.clearTimeout = originalClear;
+      restoreClock();
     }
   });
 }

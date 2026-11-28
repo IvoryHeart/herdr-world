@@ -1,3 +1,4 @@
+import { clock } from "../testing/installRunningTestClock";
 import { flushSync } from "react-dom";
 import { createRoot } from "react-dom/client";
 import { bridge, type BridgeControlMsg } from "../api";
@@ -25,20 +26,31 @@ import "./WorkspaceInspectorFrame.css";
 import "./WorkspaceInspectorHost.css";
 import "../world/windows/windows.css";
 
+// Wall-clock time follows the test clock, so durations the page shows from
+// Date.now move with the time the fixture advances.
+{
+  const realNow = Date.now.bind(Date);
+  const wallStart = realNow();
+  const testStart = performance.now();
+  Date.now = () => wallStart + (performance.now() - testStart);
+}
+
 const failures: string[] = [];
 function check(condition: boolean, message: string) {
   if (!condition) failures.push(message);
 }
-async function settle() {
-  await new Promise((resolve) => setTimeout(resolve, 80));
+async function advanceTime() {
+  await clock.advance(80);
 }
 /**
  * An upload's answer reaches its chip through async body parsing and a
- * render, which can take longer than one settle on a busy machine: wait,
+ * render, which can take longer than one advanceTime step on a busy machine: wait,
  * bounded, for the state the next check reads.
  */
 async function settleUntil(condition: () => boolean) {
-  for (let i = 0; i < 40 && !condition(); i++) await settle();
+  await clock
+    .until(condition, "upload state did not advanceTime", 3200)
+    .catch(() => {});
 }
 
 type Messages = NonNullable<Conversation["messages"]>;
@@ -258,7 +270,7 @@ async function checkTownChat(container: HTMLElement) {
   container
     .querySelector<HTMLButtonElement>(".terminal-composer-more")!
     .click();
-  await settle();
+  await advanceTime();
   const popover = document.querySelector(".chat-composer-tools-popover");
   check(
     !!popover?.classList.contains("is-town-skin") &&
@@ -268,7 +280,7 @@ async function checkTownChat(container: HTMLElement) {
   container
     .querySelector<HTMLButtonElement>(".terminal-composer-more")!
     .click();
-  await settle();
+  await advanceTime();
   check(
     !document.querySelector(".chat-composer-tools-popover"),
     "The composer's controls must close again",
@@ -420,11 +432,11 @@ async function run() {
   const reads = () => count("agent_conversation.latest");
   try {
     render("idle", false);
-    await settle();
+    await advanceTime();
     check(reads() === 0, "A hidden Chat must not read the conversation");
 
     render("idle");
-    await settle();
+    await advanceTime();
     check(reads() === 1, "Opening Chat must read the conversation once");
     check(
       document.activeElement === container.querySelector("textarea"),
@@ -489,10 +501,10 @@ async function run() {
     );
 
     // No timers: nothing rereads until the service says it changed.
-    await new Promise((resolve) => setTimeout(resolve, 600));
+    await clock.advance(600);
     check(reads() === 1, "Chat must not poll");
     push("another-pane");
-    await settle();
+    await advanceTime();
     check(reads() === 1, "A change to another pane must not reread");
     reply = conversation(
       [
@@ -503,7 +515,7 @@ async function run() {
       "working",
     );
     push();
-    await settle();
+    await advanceTime();
     check(reads() === 2, "A pushed change must reread the conversation");
     check(
       container.querySelectorAll(".agent-history-chat-message:not(.is-pending)")
@@ -522,7 +534,7 @@ async function run() {
       textarea.dispatchEvent(new Event("input", { bubbles: true }));
     };
     type("Run the tests");
-    await settle();
+    await advanceTime();
     // Both plain and Shift+Enter keep native multiline editing in Chat.
     for (const shiftKey of [false, true]) {
       const enter = new KeyboardEvent("keydown", {
@@ -532,7 +544,7 @@ async function run() {
         cancelable: true,
       });
       textarea.dispatchEvent(enter);
-      await settle();
+      await advanceTime();
       check(
         !enter.defaultPrevented &&
           !calls.some((call) => call.method === "agent_conversation.send"),
@@ -556,7 +568,7 @@ async function run() {
           [modifier]: true,
         }),
       );
-      await settle();
+      await advanceTime();
     }
     const sent = calls.find(
       (call) => call.method === "agent_conversation.send",
@@ -604,7 +616,7 @@ async function run() {
       ],
     };
     push();
-    await settle();
+    await advanceTime();
     const pendingBubbles = container.querySelectorAll(
       '[data-delivery="pending"]',
     );
@@ -664,7 +676,7 @@ async function run() {
       ],
     };
     push();
-    await settle();
+    await advanceTime();
     const alert = container.querySelector(
       '.agent-chat-misdelivered[role="alert"]',
     );
@@ -672,7 +684,7 @@ async function run() {
       'button[aria-label="Send"]',
     );
     type("Next");
-    await settle();
+    await advanceTime();
     check(
       alert?.textContent?.includes("claude session other") === true &&
         alert.textContent.includes("claude session shown") &&
@@ -695,7 +707,7 @@ async function run() {
     [...container.querySelectorAll<HTMLButtonElement>("button")]
       .find((button) => button.textContent === "Dismiss")
       ?.click();
-    await settle();
+    await advanceTime();
     check(
       calls.some(
         (call) =>
@@ -711,11 +723,11 @@ async function run() {
       message: "The agent is waiting on a question; answer it first.",
     };
     type("Another");
-    await settle();
+    await advanceTime();
     container
       .querySelector<HTMLButtonElement>('button[aria-label="Send"]')!
       .click();
-    await settle();
+    await advanceTime();
     check(
       container.querySelector(".agent-chat-notice")?.textContent ===
         "The agent is waiting on a question; answer it first.",
@@ -726,11 +738,11 @@ async function run() {
     // Commands use native admission and remain unchecked until transcript evidence.
     sendResult = { status: "sent" };
     type("/custom.plugin anything");
-    await settle();
+    await advanceTime();
     container
       .querySelector<HTMLButtonElement>('button[aria-label="Send"]')!
       .click();
-    await settle();
+    await advanceTime();
     check(
       !calls.some((call) => call.method === "terminal.write"),
       "Chat commands must use agent.prompt rather than terminal input",
@@ -758,7 +770,7 @@ async function run() {
       ],
     };
     push();
-    await settle();
+    await advanceTime();
     check(
       container
         .querySelector('.agent-chat-command-receipt[data-delivery="unchecked"]')
@@ -768,7 +780,7 @@ async function run() {
     reply = { ...reply, deliveries: [] };
     push();
     type("Another");
-    await settle();
+    await advanceTime();
 
     // Attachments upload with a chip each; Send waits for them.
     const originalRequest = window.XMLHttpRequest;
@@ -803,7 +815,7 @@ async function run() {
       const draftText = () =>
         container.querySelector<HTMLTextAreaElement>("textarea")?.value ?? "";
       pick();
-      await settle();
+      await advanceTime();
       check(
         chip()?.dataset.status === "uploading" &&
           (chip()?.textContent ?? "").includes("report.txt"),
@@ -815,7 +827,7 @@ async function run() {
       );
       check(send().disabled, "Send must wait for uploads");
       pick();
-      await settle();
+      await advanceTime();
       check(
         uploadRequests.length === 1,
         "The same file picked again while uploading must not upload twice",
@@ -831,7 +843,7 @@ async function run() {
       container
         .querySelector<HTMLButtonElement>('[aria-label="Retry report.txt"]')!
         .click();
-      await settle();
+      await advanceTime();
       check(uploadRequests.length === 2, "Retry must upload the file again");
       uploadRequests[1]!.answer(true);
       await settleUntil(() => chip()?.dataset.status === "done");
@@ -860,13 +872,13 @@ async function run() {
         input.dispatchEvent(new Event("change", { bubbles: true }));
       };
       pickFile(notes);
-      await settle();
+      await advanceTime();
       uploadRequests[2]!.answer(false);
       await settleUntil(
         () => chipFor("notes.txt")?.dataset.status === "failed",
       );
       pickFile(notes);
-      await settle();
+      await advanceTime();
       check(
         uploadRequests.length === 4,
         "Picking a failed file again must retry it",
@@ -874,9 +886,9 @@ async function run() {
 
       // A path that finishes after Chat closes lands when Chat opens again.
       root.render(<div />);
-      await settle();
+      await advanceTime();
       uploadRequests[3]!.answer(true);
-      await settle();
+      await advanceTime();
       render("idle");
       await settleUntil(() => draftText().includes("/uploads/notes.txt"));
       check(
@@ -892,17 +904,17 @@ async function run() {
           lastModified: 3,
         }),
       );
-      await settle();
+      await advanceTime();
       uploadRequests[4]!.answer(false);
       await settleUntil(() => chipFor("log.txt")?.dataset.status === "failed");
       root.render(<div />);
-      await settle();
+      await advanceTime();
       render("idle");
-      await settle();
+      await advanceTime();
       container
         .querySelector<HTMLButtonElement>('[aria-label="Retry log.txt"]')!
         .click();
-      await settle();
+      await advanceTime();
       uploadRequests[5]!.answer(true);
       await settleUntil(() => draftText().includes("/uploads/log.txt"));
       check(
@@ -926,7 +938,7 @@ async function run() {
           clipboardData: clipboard,
         }),
       );
-      await settle();
+      await advanceTime();
       check(
         uploadRequests[6]?.endpoint.endsWith("/upload-image") === true,
         "Pasting a screenshot must start the owning host's image upload",
@@ -941,7 +953,7 @@ async function run() {
       );
       const sendsBeforeAttachments = count("agent_conversation.send");
       send().click();
-      await settle();
+      await advanceTime();
       check(
         count("agent_conversation.send") === sendsBeforeAttachments + 1 &&
           calls
@@ -961,7 +973,7 @@ async function run() {
       unavailable: { reason: "read_failed", detail: "Unexpected end." },
     } as Conversation;
     push();
-    await settle();
+    await advanceTime();
     check(
       container.querySelectorAll(".agent-history-chat-message:not(.is-pending)")
         .length === 4 && !container.querySelector(".agent-chat-unavailable"),
@@ -981,7 +993,7 @@ async function run() {
       session_fingerprint: null,
     };
     push();
-    await settle();
+    await advanceTime();
     check(
       !container.querySelector("textarea") &&
         !!container.querySelector(".agent-chat-guessed") &&
@@ -996,7 +1008,7 @@ async function run() {
       session_fingerprint: null,
     };
     push();
-    await settle();
+    await advanceTime();
     check(
       !container.querySelector("textarea") &&
         container
@@ -1017,7 +1029,7 @@ async function run() {
       message("c1", "assistant", "Later"),
     ]);
     push();
-    await settle();
+    await advanceTime();
     check(
       container.querySelector(".agent-history-chat-divider")?.textContent ===
         "Conversation compacted" &&
@@ -1038,7 +1050,7 @@ async function run() {
       },
     } as Conversation;
     push();
-    await settle();
+    await advanceTime();
     check(
       !!container.querySelector(".agent-chat-link input"),
       "An unlinked Codex pane must offer the link it names",
@@ -1071,7 +1083,7 @@ async function run() {
       },
     } as Conversation;
     push();
-    await settle();
+    await advanceTime();
     const buttons = [
       ...container.querySelectorAll<HTMLButtonElement>(
         ".agent-chat-unavailable button",
@@ -1171,8 +1183,8 @@ async function run() {
       historyAnswer = () => ({ ...historyOf([]), entries: window });
       render("idle", true, 45);
       push();
-      await settle();
-      await settle();
+      await advanceTime();
+      await advanceTime();
       check(
         container.querySelector(".agent-history-chat-tools-errors")
           ?.textContent === "1 error",
@@ -1181,7 +1193,7 @@ async function run() {
       container
         .querySelector<HTMLButtonElement>(".agent-history-chat-tools-toggle")
         ?.click();
-      await settle();
+      await advanceTime();
       const cut = container.querySelectorAll(".agent-history-chat-step")[2];
       const arrived = container.querySelectorAll(".agent-history-chat-step")[3];
       check(
@@ -1206,7 +1218,7 @@ async function run() {
       rows[0]!
         .querySelector<HTMLButtonElement>(".agent-history-chat-step-row")!
         .click();
-      await settle();
+      await advanceTime();
       check(
         rows[0]!.querySelector(".is-removed")?.textContent ===
           "-   return 1000;" &&
@@ -1216,7 +1228,7 @@ async function run() {
       rows[1]!
         .querySelector<HTMLButtonElement>(".agent-history-chat-step-row")!
         .click();
-      await settle();
+      await advanceTime();
       check(
         rows[1]!
           .querySelector(".agent-chat-step-strip.is-red")
@@ -1233,26 +1245,26 @@ async function run() {
       );
       window = [...window, entry("i1", "tool_result", "Bash")];
       push();
-      await settle();
-      await settle();
+      await advanceTime();
+      await advanceTime();
       const settled = container.querySelectorAll(".agent-history-chat-step")[2];
       check(
         settled?.classList.contains("is-done") === true &&
           settled.textContent?.includes("3.0s") === true,
-        `A late result must settle an interrupted call (${settled?.textContent})`,
+        `A late result must advanceTime an interrupted call (${settled?.textContent})`,
       );
       // Calls that leave History's window leave Chat's evidence too: one that
       // comes back is asked for again.
       const saved = window;
       window = window.filter((item) => !item.id.endsWith("-e1"));
       push();
-      await settle();
-      await settle();
+      await advanceTime();
+      await advanceTime();
       const before = stepsAsked.length;
       window = saved;
       push();
-      await settle();
-      await settle();
+      await advanceTime();
+      await advanceTime();
       check(
         stepsAsked.slice(before).some((ids) => ids.includes("e1")),
         "Evidence must be kept only for the calls in History's window",
@@ -1279,7 +1291,7 @@ async function run() {
     };
     render("blocked", true, 50);
     push();
-    await settle();
+    await advanceTime();
     const card = container.querySelector<HTMLElement>(".agent-chat-ask")!;
     check(
       card.querySelector("pre")?.textContent ===
@@ -1294,19 +1306,19 @@ async function run() {
     container
       .querySelector<HTMLElement>(".agent-chat-list")!
       .dispatchEvent(new KeyboardEvent("keydown", { key: "2", bubbles: true }));
-    await settle();
+    await advanceTime();
     check(answers().length === 0, "A number outside the card must not answer");
     // A held key repeats nothing.
     card.focus();
     card.dispatchEvent(
       new KeyboardEvent("keydown", { key: "2", bubbles: true, repeat: true }),
     );
-    await settle();
+    await advanceTime();
     check(answers().length === 0, "A repeated key must not answer");
     card.dispatchEvent(
       new KeyboardEvent("keydown", { key: "2", bubbles: true }),
     );
-    await settle();
+    await advanceTime();
     check(
       answers().length === 1 &&
         answers()[0]!.params.key === "2" &&
@@ -1336,7 +1348,7 @@ async function run() {
       pending_prompt: null,
     };
     push();
-    await settle();
+    await advanceTime();
     check(
       container.querySelector(".agent-chat-answered") !== null,
       "The answer's receipt must stay after the transcript updates",
@@ -1352,7 +1364,7 @@ async function run() {
       },
     };
     push();
-    await settle();
+    await advanceTime();
     check(
       container.querySelectorAll(".agent-chat-ask-options button").length ===
         0 &&
@@ -1380,7 +1392,7 @@ async function run() {
       },
     };
     push();
-    await settle();
+    await advanceTime();
     const choices = [
       ...container.querySelectorAll(".agent-chat-ask-options button"),
     ];
@@ -1409,7 +1421,7 @@ async function run() {
       },
     };
     push();
-    await settle();
+    await advanceTime();
     const steps = [
       ...container.querySelectorAll<HTMLElement>(".agent-chat-ask-steps li"),
     ];
@@ -1440,8 +1452,8 @@ async function run() {
         />
       </div>,
     );
-    await settle();
-    await settle();
+    await advanceTime();
+    await advanceTime();
     const cards = container.querySelectorAll<HTMLElement>(".agent-chat-ask");
     const before = answers().length;
     // This time the agent moves on, so the receipt says it was answered.
@@ -1450,7 +1462,7 @@ async function run() {
     cards[0]!.dispatchEvent(
       new KeyboardEvent("keydown", { key: "1", bubbles: true }),
     );
-    await settle();
+    await advanceTime();
     check(
       cards.length === 2 &&
         answers().length === before + 1 &&
@@ -1464,7 +1476,7 @@ async function run() {
       "An answer the agent moved on from must say it was answered",
     );
     render("working", true, 52);
-    await settle();
+    await advanceTime();
     // The Now bar: Herdr's status, the task from the terminal title and the
     // time since the status changed; the step running now has its own timer.
     reply = {
@@ -1479,7 +1491,7 @@ async function run() {
     };
     render("idle", true, 60);
     push();
-    await settle();
+    await advanceTime();
     render("working", true, 61);
     // The display clock ticks once a second from when it started, so a fixed
     // wait can read it before its first full second; wait for that instead.
@@ -1492,7 +1504,7 @@ async function run() {
       );
       waited += 100
     )
-      await new Promise((resolve) => setTimeout(resolve, 100));
+      await clock.advance(100);
     const now = container.querySelector(".agent-chat-now");
     check(
       now?.querySelector(".agent-chat-state-word")?.textContent === "Working" &&
@@ -1507,7 +1519,7 @@ async function run() {
     );
     container.style.width = "390px";
     container.classList.add("is-town-skin");
-    await settle();
+    await advanceTime();
     const nowButtons = [
       ...now!.querySelectorAll<HTMLButtonElement>("button"),
     ].map((button) => button.getBoundingClientRect());
@@ -1542,13 +1554,13 @@ async function run() {
           JSON.stringify(call.params.keys) === '["escape"]',
       ).length;
     container.querySelector<HTMLButtonElement>(".agent-chat-stop")!.click();
-    await settle();
+    await advanceTime();
     check(escapes() === 1, "Stop must press Esc in the agent's pane");
     const list = container.querySelector<HTMLElement>(".agent-chat-list")!;
     list.dispatchEvent(
       new KeyboardEvent("keydown", { key: "Escape", bubbles: true }),
     );
-    await settle();
+    await advanceTime();
     check(
       escapes() === 1 &&
         (
@@ -1559,7 +1571,7 @@ async function run() {
     list.dispatchEvent(
       new KeyboardEvent("keydown", { key: "Escape", bubbles: true }),
     );
-    await settle();
+    await advanceTime();
     check(escapes() === 2, "Esc twice must press Esc in the agent's pane");
     // Only the status and task are announced; the clocks tick silently.
     check(
@@ -1576,7 +1588,7 @@ async function run() {
     );
     // An Esc another handler used does not arm Stop, and the note to press
     // again lasts only as long as a second Esc would stop.
-    await new Promise((resolve) => setTimeout(resolve, 800));
+    await clock.advance(800);
     list.addEventListener("keydown", (event) => event.preventDefault(), {
       once: true,
     });
@@ -1590,9 +1602,9 @@ async function run() {
     list.dispatchEvent(
       new KeyboardEvent("keydown", { key: "Escape", bubbles: true }),
     );
-    await settle();
+    await advanceTime();
     check(escapes() === 2, "An Esc already handled must not count");
-    await new Promise((resolve) => setTimeout(resolve, 800));
+    await clock.advance(800);
     check(
       !(
         container.querySelector(".agent-chat-now-note")?.textContent ?? ""
@@ -1606,7 +1618,7 @@ async function run() {
       ["idle", 63],
     ] as const) {
       render(status, true, sequence);
-      await settle();
+      await advanceTime();
       check(
         !container.querySelector(".agent-chat-running") &&
           !container.querySelector(".agent-chat-now .agent-chat-now-time"),
@@ -1627,10 +1639,10 @@ async function run() {
       );
       reply = conversation(long);
       render("idle", false);
-      await settle();
+      await advanceTime();
       render("idle");
-      await settle();
-      await settle();
+      await advanceTime();
+      await advanceTime();
       const list = container.querySelector<HTMLElement>(".agent-history-chat")!;
       check(
         list.scrollHeight > list.clientHeight * 2,
@@ -1642,7 +1654,7 @@ async function run() {
       );
       list.scrollTop = 0;
       list.dispatchEvent(new Event("scroll"));
-      await settle();
+      await advanceTime();
       const jump = () =>
         container.querySelector<HTMLButtonElement>(".agent-history-chat-jump");
       check(jump() !== null, `Jump to latest should show at ${width}px`);
@@ -1655,7 +1667,7 @@ async function run() {
         }
         list.scrollTop = list.scrollHeight / 2;
         list.dispatchEvent(new Event("scroll"));
-        await settle();
+        await advanceTime();
         const shown = jump()?.getBoundingClientRect();
         const view = list.getBoundingClientRect();
         check(
@@ -1671,14 +1683,14 @@ async function run() {
       }
       list.scrollTop = 0;
       list.dispatchEvent(new Event("scroll"));
-      await settle();
+      await advanceTime();
       reply = conversation([
         ...long,
         message(`long-${width}-new`, "assistant", "A new message lands."),
       ]);
       push();
-      await settle();
-      await settle();
+      await advanceTime();
+      await advanceTime();
       check(
         list.scrollTop < 4,
         `a new message moved a reader who scrolled up at ${width}px`,
@@ -1695,14 +1707,14 @@ async function run() {
       ]);
       reply.messages![reply.messages!.length - 1]!.kind = "notice";
       push();
-      await settle();
+      await advanceTime();
       check(
         jump()?.textContent?.includes("1 new") === true,
         "Own messages and compaction notices must not inflate catch-up",
       );
 
       jump()!.click();
-      await settle();
+      await advanceTime();
       check(
         list.scrollHeight - list.scrollTop - list.clientHeight < 4 &&
           jump() === null,
@@ -1730,8 +1742,8 @@ async function run() {
       ]);
       render("idle");
       push();
-      await settle();
-      await settle();
+      await advanceTime();
+      await advanceTime();
       let release!: () => void;
       const gate = new Promise<void>((resolve) => (release = resolve));
       historyAnswer = async () => {
@@ -1739,9 +1751,9 @@ async function run() {
         return historyOf(reply.messages ?? []);
       };
       root.render(<div />);
-      await settle();
+      await advanceTime();
       render("idle");
-      await settle();
+      await advanceTime();
       check(
         (
           container.querySelector(".agent-history-chat")?.textContent ?? ""
@@ -1750,7 +1762,7 @@ async function run() {
       );
       release();
       historyAnswer = null;
-      await settle();
+      await advanceTime();
     }
 
     // A long, busy transcript stays responsive: History's window arrives once
@@ -1873,8 +1885,8 @@ async function run() {
         }
       reply = conversation([message("busy-0", "user", "Busy message 0")]);
       push();
-      await settle();
-      await settle();
+      await advanceTime();
+      await advanceTime();
       check(
         !!container.querySelector(
           '.pr-card[aria-label="Pull request example/project#42"]',
@@ -1903,10 +1915,10 @@ async function run() {
         });
         order.push(id, `${id}-reply`);
         push();
-        await new Promise((resolve) => setTimeout(resolve, 40));
+        await clock.advance(40);
       }
-      await settle();
-      await settle();
+      await advanceTime();
+      await advanceTime();
       observer.disconnect();
       check(
         (
@@ -2058,8 +2070,8 @@ async function run() {
             </div>
           </div>,
         );
-        await settle();
-        await settle();
+        await advanceTime();
+        await advanceTime();
         const body = container
           .querySelector(".workspace-inspector-body")!
           .getBoundingClientRect();
@@ -2176,8 +2188,8 @@ async function run() {
           phoneChat
         ),
       );
-      await settle();
-      await settle();
+      await advanceTime();
+      await advanceTime();
       const body = container
         .querySelector(".workspace-inspector-body")!
         .getBoundingClientRect();
@@ -2188,8 +2200,8 @@ async function run() {
         tries < 50 && !container.querySelector(".agent-history-chat pre");
         tries += 1
       )
-        await new Promise((resolve) => setTimeout(resolve, 100));
-      await settle();
+        await clock.advance(100);
+      await advanceTime();
       check(
         !!container.querySelector(".agent-history-chat pre"),
         `The phone check needs its code block rendered: ${container.querySelector(".agent-history-chat-bubble")?.innerHTML.slice(0, 300)}`,
@@ -2209,14 +2221,14 @@ async function run() {
       );
       contextToggle!.focus();
       contextToggle!.click();
-      await settle();
+      await advanceTime();
       check(
         contextToggle!.getAttribute("aria-expanded") === "true" &&
           !!context!.querySelector(".quest-log-steps .is-active"),
         "Quest objectives must expand inline from a keyboard-reachable button",
       );
       contextToggle!.click();
-      await settle();
+      await advanceTime();
       // Every element, not a chosen few: whatever widens the window counts.
       const wider = [
         ...container.querySelectorAll<HTMLElement>(".agent-chat *"),
@@ -2295,7 +2307,7 @@ async function run() {
         };
       };
       root.render(<div />);
-      await settle();
+      await advanceTime();
       root.render(
         <div
           className="workspace-inspector-body"
@@ -2311,8 +2323,8 @@ async function run() {
           </div>
         </div>,
       );
-      await settle();
-      await settle();
+      await advanceTime();
+      await advanceTime();
       const list = container.querySelector<HTMLElement>(".agent-history-chat")!;
       check(
         !!container.querySelector(".agent-history-chat-older"),
@@ -2321,8 +2333,8 @@ async function run() {
       const before = olderReads();
       list.scrollTop = 0;
       list.dispatchEvent(new Event("scroll"));
-      await settle();
-      await settle();
+      await advanceTime();
+      await advanceTime();
       const anchor = [
         ...container.querySelectorAll<HTMLElement>(
           ".agent-history-chat-message",
@@ -2341,8 +2353,8 @@ async function run() {
       // The last page ends the offer.
       list.scrollTop = 0;
       list.dispatchEvent(new Event("scroll"));
-      await settle();
-      await settle();
+      await advanceTime();
+      await advanceTime();
       check(
         (list.textContent ?? "").includes("Turn 0 ") &&
           !container.querySelector(".agent-history-chat-older"),
@@ -2395,7 +2407,7 @@ async function run() {
         };
       };
       root.render(<div />);
-      await settle();
+      await advanceTime();
       root.render(
         <div
           className="workspace-inspector-body"
@@ -2420,8 +2432,8 @@ async function run() {
           </div>
         </div>,
       );
-      await settle();
-      await settle();
+      await advanceTime();
+      await advanceTime();
       const requestOlder = () => {
         if (mode === "hook") probe.current?.loadOlder();
         else {
@@ -2434,9 +2446,9 @@ async function run() {
       };
       const requestsBefore = olderReads();
       requestOlder();
-      await settle();
+      await advanceTime();
       requestOlder();
-      await settle();
+      await advanceTime();
       check(
         olderReads() === requestsBefore + 1,
         `${mode}: repeated requests must keep one older-page RPC while its reply is pending`,
@@ -2446,17 +2458,17 @@ async function run() {
       revision = 2;
       if (mode === "chat") push(paneId);
       else probe.current?.refresh();
-      await settle();
-      await settle();
+      await advanceTime();
+      await advanceTime();
       requestOlder();
-      await settle();
+      await advanceTime();
       check(
         olderReads() === requestsBefore + 1,
         `${mode}: window eviction must not restart a pending older-page RPC`,
       );
       page.resolve();
-      await settle();
-      await settle();
+      await advanceTime();
+      await advanceTime();
       const shown =
         mode === "hook"
           ? (probe.current?.messages ?? []).map((entry) =>
@@ -2515,8 +2527,8 @@ async function run() {
           !container.querySelector(".agent-history-chat-markdown p");
           tries += 1
         )
-          await new Promise((resolve) => setTimeout(resolve, 100));
-        await settle();
+          await clock.advance(100);
+        await advanceTime();
         const text = container.querySelector<HTMLElement>(
           ".agent-history-chat-markdown p",
         )!;
@@ -2581,8 +2593,8 @@ async function run() {
           onClose={() => {}}
         />,
       );
-      await settle();
-      await settle();
+      await advanceTime();
+      await advanceTime();
       const order = [
         ...container.querySelectorAll<HTMLElement>(
           ".agent-history-chat-message",
@@ -2625,10 +2637,10 @@ async function run() {
         throw new Error("History read failed.");
       };
       root.render(<div />);
-      await settle();
+      await advanceTime();
       render("idle", true, 99);
-      await settle();
-      await settle();
+      await advanceTime();
+      await advanceTime();
       const text = () =>
         container.querySelector(".agent-chat")?.textContent ?? "";
       check(
@@ -2640,8 +2652,8 @@ async function run() {
       container
         .querySelector<HTMLButtonElement>('[aria-label="Refresh conversation"]')
         ?.click();
-      await settle();
-      await settle();
+      await advanceTime();
+      await advanceTime();
       check(
         text().includes("Recovered answer") &&
           !text().includes("History read failed."),
@@ -2660,8 +2672,8 @@ async function run() {
         throw new Error("History read failed again.");
       };
       refresh();
-      await settle();
-      await settle();
+      await advanceTime();
+      await advanceTime();
       check(
         text().includes("History read failed again.") &&
           text().includes("Recovered answer"),
@@ -2682,8 +2694,8 @@ async function run() {
         };
       };
       refresh();
-      await settle();
-      await settle();
+      await advanceTime();
+      await advanceTime();
       check(
         unchanged > 0 &&
           !text().includes("History read failed again.") &&
@@ -2699,7 +2711,7 @@ async function run() {
     otherInput.focus();
     const unwatched = count("agent_conversation.unwatch");
     render("done", false);
-    await settle();
+    await advanceTime();
     check(
       count("agent_conversation.unwatch") === unwatched + 1,
       "Hiding Chat must stop watching the pane",
@@ -2709,7 +2721,7 @@ async function run() {
       "A hidden Chat must leave focus in the other input",
     );
     render("done");
-    await settle();
+    await advanceTime();
     check(
       retainedEditor !== null &&
         retainedEditor === container.querySelector("textarea") &&
@@ -2718,7 +2730,7 @@ async function run() {
     );
     otherInput.focus();
     push("p");
-    await settle();
+    await advanceTime();
     check(
       document.activeElement === otherInput,
       "A transcript refresh must not take focus from another input",
@@ -2746,10 +2758,10 @@ async function run() {
       );
       // Town closes the peek immediately, before qualified opening/readiness.
       peekOpener.remove();
-      await settle();
+      await advanceTime();
       townReply.resolve(reply);
-      await settle();
-      await settle();
+      await advanceTime();
+      await advanceTime();
       check(
         container.querySelector("textarea") !== null &&
           document.activeElement === container.querySelector("textarea"),
@@ -2765,13 +2777,13 @@ async function run() {
           onClose={() => {}}
         />,
       );
-      await settle();
+      await advanceTime();
       const elsewhere = document.createElement("input");
       document.body.append(elsewhere);
       elsewhere.focus();
       delayed.resolve(reply);
-      await settle();
-      await settle();
+      await advanceTime();
+      await advanceTime();
       check(
         document.activeElement === elsewhere,
         "A conversation loaded after focus moved elsewhere must not take it back",
@@ -2791,13 +2803,13 @@ async function run() {
           />,
         );
       renderSession("session-a");
-      await settle();
-      await settle();
+      await advanceTime();
+      await advanceTime();
       otherEditor.focus();
       reply = { ...reply, session_fingerprint: "b".repeat(64) };
       renderSession("session-b");
-      await settle();
-      await settle();
+      await advanceTime();
+      await advanceTime();
       check(
         document.activeElement === otherEditor,
         "A session-keyed Inspector Chat remount must not renew its opening focus",
@@ -2825,16 +2837,16 @@ async function run() {
           />
         </div>,
       );
-      await settle();
-      await settle();
+      await advanceTime();
+      await advanceTime();
       const newerEditor = container.querySelector("textarea");
       check(
         newerEditor !== null && document.activeElement === newerEditor,
         "The newer Chat receives its explicit opening focus first",
       );
       older.resolve({ ...reply, pane_id: "slow-a" });
-      await settle();
-      await settle();
+      await advanceTime();
+      await advanceTime();
       check(
         document.activeElement === newerEditor,
         "An older Chat that loads late must not take focus from the newer Chat",
@@ -2874,8 +2886,8 @@ async function run() {
           onClose={() => {}}
         />,
       );
-      await settle();
-      await settle();
+      await advanceTime();
+      await advanceTime();
       check(
         Boolean(container.querySelector(".agent-chat-unavailable")) === !empty,
         `${reason}: only an expected record or unsupported lookup should show unavailable`,
@@ -2893,8 +2905,8 @@ async function run() {
         // The same mounted Chat becomes readable when the first session arrives.
         reply = conversation([message("first", "user", "Hello")]);
         push(paneId);
-        await settle();
-        await settle();
+        await advanceTime();
+        await advanceTime();
         check(
           container.textContent?.includes("Hello") === true &&
             Boolean(container.querySelector("textarea")),
@@ -2924,8 +2936,8 @@ async function run() {
             onClose={() => {}}
           />,
         );
-        await settle();
-        await settle();
+        await advanceTime();
+        await advanceTime();
         check(
           !!container.querySelector(".agent-chat-unavailable") &&
             !container.querySelector(".agent-chat-empty"),
@@ -2947,17 +2959,17 @@ async function run() {
           onError={() => {}}
         />,
       );
-      await settle();
+      await advanceTime();
       container
         .querySelector<HTMLButtonElement>(
           'button[aria-label="More composer controls"]',
         )!
         .click();
-      await settle();
+      await advanceTime();
       Array.from(document.querySelectorAll("button"))
         .find((button) => button.textContent?.includes("Browse commands"))!
         .click();
-      await settle();
+      await advanceTime();
       const command = container.querySelector<HTMLButtonElement>(
         ".terminal-composer-command-list button",
       )!;

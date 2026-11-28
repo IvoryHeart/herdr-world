@@ -1,15 +1,14 @@
 import { expect, test } from "bun:test";
-import { existsSync } from "node:fs";
-import { mkdtemp, readFile } from "node:fs/promises";
+import { mkdtemp } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { basename, join } from "node:path";
+import {
+  chromeBinary,
+  openChromePage,
+  type ChromePage,
+} from "../testing/sharedChrome";
 
-const chrome =
-  Bun.env.CHROME_BIN ||
-  (process.platform === "darwin" &&
-  existsSync("/Applications/Google Chrome.app/Contents/MacOS/Google Chrome")
-    ? "/Applications/Google Chrome.app/Contents/MacOS/Google Chrome"
-    : Bun.which("google-chrome") || Bun.which("chromium"));
+const chrome = chromeBinary;
 
 test.skipIf(!chrome)(
   "the shell-owned Inspector stays interactive outside the hidden Spaces tree",
@@ -34,7 +33,7 @@ test.skipIf(!chrome)(
         );
       },
     });
-    let browser: ReturnType<typeof Bun.spawn> | undefined;
+    let page: ChromePage | undefined;
     try {
       const build = await Bun.build({
         entrypoints: [
@@ -47,28 +46,11 @@ test.skipIf(!chrome)(
       for (const output of build.outputs) {
         assets.set(`/${basename(output.path)}`, output);
       }
-      const browserLog = join(dir, "browser.log");
-      browser = Bun.spawn(
-        [
-          chrome!,
-          "--headless=new",
-          "--window-size=1280,900",
-          "--disable-gpu",
-          "--disable-background-networking",
-          "--no-first-run",
-          "--no-default-browser-check",
-          `--user-data-dir=${join(dir, "profile")}`,
-          server.url.href,
-        ],
-        { stdout: "ignore", stderr: Bun.file(browserLog) },
-      );
+      page = await openChromePage({ viewport: { width: 1280, height: 900 } });
+      await page.command("Page.navigate", { url: server.url.href });
       const observed = await Promise.race([
         result.promise,
-        browser.exited.then(async (code) => {
-          throw new Error(
-            `Browser exited (${code}): ${await readFile(browserLog, "utf8")}`,
-          );
-        }),
+        page.exited,
         new Promise<never>((_, reject) =>
           setTimeout(
             () => reject(new Error("Inspector portal timed out")),
@@ -82,7 +64,7 @@ test.skipIf(!chrome)(
         portalClass: true,
       });
     } finally {
-      browser?.kill();
+      await page?.close();
       server.stop(true);
     }
   },

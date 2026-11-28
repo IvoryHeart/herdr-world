@@ -64,17 +64,18 @@ export function coreReplayWitness(source: string, fault: string) {
     step: "publicationReplay",
   };
 }
+// Three disjoint fault partitions keep the slowest part off the critical path.
+const coreParts = ["full", "replay", "controls-1", "controls-2", "controls-3"];
+const CORE_CONTROL_PARTS = 3;
+
 /** @internal Disjoint fault partitions retain the complete maintained inventory. */
 export function coreControlPart(part = "full") {
-  assert(
-    ["full", "replay", "controls-1", "controls-2"].includes(part),
-    "Invalid core model part",
-  );
+  assert(coreParts.includes(part), "Invalid core model part");
   return coreFaults.filter(
     (_, index) =>
       part === "full" ||
       (part.startsWith("controls-") &&
-        index % 2 === Number(part.slice(-1)) - 1),
+        index % CORE_CONTROL_PARTS === Number(part.slice(-1)) - 1),
   );
 }
 
@@ -99,10 +100,7 @@ export async function runCoreVerification(h: Harness) {
     materialize(source.replace("CHECKING = false", "CHECKING = true")),
   );
   const part = h.part ?? "full";
-  assert(
-    ["full", "replay", "controls-1", "controls-2"].includes(part),
-    "Invalid core model part",
-  );
+  assert(coreParts.includes(part), "Invalid core model part");
   const controlsOnly = part.startsWith("controls-");
   if (!controlsOnly) {
     const verification = await h.command("herdr-core-runtime-verification", [

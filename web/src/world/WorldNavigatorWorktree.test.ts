@@ -1,16 +1,11 @@
 import { expect, test } from "bun:test";
-import { existsSync } from "node:fs";
 import { mkdtemp, readFile, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { basename, join } from "node:path";
-import { stopChrome } from "../browserChrome";
-
-const chrome =
-  Bun.env.CHROME_BIN ||
-  (process.platform === "darwin" &&
-  existsSync("/Applications/Google Chrome.app/Contents/MacOS/Google Chrome")
-    ? "/Applications/Google Chrome.app/Contents/MacOS/Google Chrome"
-    : Bun.which("google-chrome") || Bun.which("chromium"));
+import {
+  chromeBinary as chrome,
+  openChromePage,
+} from "../testing/sharedChrome";
 
 test.skipIf(!chrome)(
   "World navigator offers worktree actions on repository workspaces on desktop and phone, inert on a stale host",
@@ -74,32 +69,15 @@ test.skipIf(!chrome)(
         assets.set(`/${basename(output.path)}`, output);
 
       for (const [mode, size] of [
-        ["desktop", "1280,800"],
-        ["phone", "390,844"],
+        ["desktop", { width: 1280, height: 800 }],
+        ["phone", { width: 390, height: 844 }],
       ] as const) {
-        const browserLog = join(dir, `${mode}.log`);
-        const browser = Bun.spawn(
-          [
-            chrome!,
-            "--headless=new",
-            "--disable-gpu",
-            "--disable-background-networking",
-            "--no-first-run",
-            "--no-default-browser-check",
-            `--window-size=${size}`,
-            `--user-data-dir=${join(dir, `profile-${mode}`)}`,
-            `${server.url.href}?mode=${mode}`,
-          ],
-          { stdout: "ignore", stderr: Bun.file(browserLog) },
-        );
+        const page = await openChromePage({ viewport: size });
         try {
+          await page.navigate(`${server.url.href}?mode=${mode}`);
           const observed = await Promise.race([
             results.get(mode)!.promise,
-            browser.exited.then(async (code) => {
-              throw new Error(
-                `Browser exited (${code}): ${await readFile(browserLog, "utf8")}`,
-              );
-            }),
+            page.exited,
             new Promise<never>((_, reject) =>
               setTimeout(
                 () => reject(new Error(`${mode} worktree navigator timed out`)),
@@ -109,7 +87,7 @@ test.skipIf(!chrome)(
           ]);
           expect(observed).toMatchObject({ mode, failures: [] });
         } finally {
-          await stopChrome(browser);
+          await page.close();
         }
       }
     } finally {

@@ -5,10 +5,15 @@ import {
   writeFileSync,
 } from "node:fs";
 import { basename, join } from "node:path";
-import { CHROME, TEST, type Affected } from "./affected";
+import type { Affected } from "./affected";
 import { acquireCheckSlot, type CheckClass, heldEnv } from "./check-lock";
+import { splitTests, trackedTests } from "./delivery-tests";
 import { repositorySelection } from "./validation-scope";
-import { worldBrowserSuites } from "./world-browser-suites";
+import {
+  webBrowserPages,
+  webBrowserWorkers,
+  worldBrowserSuites,
+} from "./world-browser-suites";
 
 /**
  * Local checks in lanes. Static checks run first, outside the heavy queue.
@@ -116,24 +121,12 @@ const staticCommands = STATIC.filter((command) => {
   return staticGroup === undefined || group === staticGroup;
 });
 
-function trackedTests() {
-  const result = Bun.spawnSync(["git", "ls-files"], { cwd: root });
-  return result.stdout
-    .toString()
-    .split("\n")
-    .filter((path) => TEST.test(path));
-}
-
 function plan(selection: Affected) {
-  const world = new Set(worldBrowserSuites);
   const browser = selection.full ? worldBrowserSuites : selection.browser;
-  const tests = (selection.full ? trackedTests() : selection.unit).filter(
-    (path) => !world.has(path),
+  const { unit, chrome } = splitTests(
+    root,
+    selection.full ? trackedTests(root) : selection.unit,
   );
-  const chrome = tests.filter((path) =>
-    CHROME.test(readFileSync(join(root, path), "utf8")),
-  );
-  const unit = tests.filter((path) => !chrome.includes(path));
   const busy: Lane[] = [];
   if (unit.length && !browserOnly)
     busy.push({
@@ -153,7 +146,15 @@ function plan(selection: Affected) {
     quiet.push({
       name: "quiet",
       queue: "browser",
-      commands: [["bun", "scripts/run-tests.ts", ...chrome, "--parallel=2"]],
+      commands: [
+        [
+          "bun",
+          "scripts/run-tests.ts",
+          ...chrome,
+          `--parallel=${webBrowserWorkers()}`,
+          `--max-concurrency=${webBrowserPages(Math.min(webBrowserWorkers(), chrome.length))}`,
+        ],
+      ],
     });
   const verification: Lane[] =
     full && !browserOnly
@@ -161,7 +162,8 @@ function plan(selection: Affected) {
           {
             name: "verification",
             queue: "verification",
-            commands: [["bun", "run", "verification:gate"]],
+            // The complete gate, or its receipt on identical inputs.
+            commands: [["bun", "scripts/verification-reuse.ts"]],
           },
         ]
       : [];
@@ -280,11 +282,11 @@ if (results.every((result) => result.code === 0)) {
       ? [...done, ...(await Promise.all(quiet.map(runLane)))]
       : done;
   })();
-  const [checked, tested] = await Promise.all([
-    Promise.all(verification.map(runLane)),
-    tests,
-  ]);
-  results.push(...checked, ...tested);
+  // Model checking runs after the browser lanes: beside them, a fresh gate
+  // contended for the same cores and exceeded its run deadline.
+  const tested = await tests;
+  const checked = await Promise.all(verification.map(runLane));
+  results.push(...tested, ...checked);
 }
 
 const failed = results.filter((result) => result.code !== 0);

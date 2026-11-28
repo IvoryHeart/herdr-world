@@ -1,3 +1,4 @@
+import { clock } from "./testing/installRunningTestClock";
 import { useRef, useState } from "react";
 import { flushSync } from "react-dom";
 import { createRoot } from "react-dom/client";
@@ -25,11 +26,11 @@ const failures: string[] = [];
 const check = (condition: boolean, message: string) => {
   if (!condition) failures.push(message);
 };
-const settle = () => new Promise((resolve) => setTimeout(resolve, 25));
+const advanceTime = () => clock.advance(25);
 async function until(predicate: () => boolean, label: string) {
   for (let i = 0; i < 160; i++) {
     if (predicate()) return;
-    await settle();
+    await advanceTime();
   }
   throw new Error(`Timed out: ${label}`);
 }
@@ -217,10 +218,10 @@ async function run() {
     await until(() => !!treeFile() && !collapsed(), "tree and diff ready");
     for (const theme of ["dark", "light"]) {
       document.documentElement.dataset.theme = theme;
-      await settle();
+      await advanceTime();
       for (const mobile of [true, false]) {
         flushSync(() => root.render(<Fixture mobile={mobile} />));
-        await settle();
+        await advanceTime();
         check(
           !!firstSection().querySelector(".diff-file-collapse") === !mobile,
           `${theme}: collapse button did not follow compact mode`,

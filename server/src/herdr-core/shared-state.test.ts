@@ -343,7 +343,8 @@ async function replayShared(split: Split) {
     (await runtime.operations.listTerminals()).panes!.find(
       (row) => row.pane_id === address,
     )!;
-  const settle = () => Bun.sleep(2);
+  /** The in-memory streams deliver on microtasks: a macrotask turn runs them all. */
+  const settle = () => new Promise<void>((resolve) => setImmediate(resolve));
   return {
     calls,
     alerts,

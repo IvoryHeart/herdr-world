@@ -22,7 +22,7 @@ bridge.call = (async () => {
 }) as typeof bridge.call;
 history.replaceState(null, "", "/?usageFixture=busy");
 
-const settle = () =>
+const flushReact = () =>
   act(async () => {
     await new Promise((resolve) => setTimeout(resolve, 0));
   });
@@ -60,7 +60,7 @@ async function run() {
     await act(async () =>
       root.render(<UsageLens initialTab="budget" onClose={() => {}} />),
     );
-    await settle();
+    await flushReact();
     if (location.search)
       failures.push(`the switch stayed in the address: ${location.search}`);
     const lens = host.querySelector<HTMLElement>(".usage-lens")!;
@@ -88,7 +88,7 @@ async function run() {
     checkInside(lens, `Runs at once as a table at ${width}px`);
 
     await act(async () => tab("Tokens").click());
-    await settle();
+    await flushReact();
     if (!lens.querySelector(".usage-flag"))
       failures.push(`${width}px: no run stands out as waste`);
     checkInside(lens, `Tokens at ${width}px`);

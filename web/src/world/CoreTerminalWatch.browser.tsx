@@ -1,3 +1,4 @@
+import { clock } from "../testing/installRunningTestClock";
 import { createRoot } from "react-dom/client";
 import { flushSync } from "react-dom";
 import { bridge } from "../api";
@@ -34,12 +35,14 @@ const frame = () => new Promise((resolve) => requestAnimationFrame(resolve));
 const frames = async (n: number) => {
   for (let i = 0; i < n; i++) await frame();
 };
-const pause = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
 window.addEventListener("error", (event) => failures.push(String(event.error)));
 const capture = new URL(location.href).searchParams.get("capture");
 const until = async (condition: () => boolean, ms = 2000) => {
-  const end = performance.now() + ms;
-  while (!condition() && performance.now() < end) await frame();
+  try {
+    await clock.until(condition, "condition not reached", ms);
+  } catch {
+    // The caller checks the state it waited for.
+  }
   return condition();
 };
 
@@ -79,6 +82,12 @@ const screenText = () =>
 /** Asks the test to set the viewport, as rotating or a keyboard would. */
 const viewport = async (width: number, height: number) => {
   await fetch(`/viewport?width=${width}&height=${height}`);
+  // Chrome lays the new viewport out and delivers resize observations on
+  // its own frames: two real ones, then the page's frames on test time.
+  const realFrame = () =>
+    new Promise((resolve) => clock.real.requestAnimationFrame!(resolve));
+  await realFrame();
+  await realFrame();
   await frames(4);
 };
 /** A real key press (CDP), into whatever has focus. */
@@ -197,7 +206,7 @@ async function run() {
     `the open view holds its size: ${JSON.stringify(holds())}`,
   );
   // Once its header settles, the size held is the one that fits.
-  await pause(300);
+  await clock.advance(300);
   fitsView(lastHold(), "the held grid fits the view");
   const grids = pushes.flatMap((p, i) => ("grid" in p ? [i] : []));
   check(grids.length === 3, `three grids recorded: ${grids.length}`);
@@ -271,7 +280,7 @@ async function run() {
     inputs().length === sent,
     `rotation and keyboard type nothing: ${JSON.stringify(inputs().slice(sent))}`,
   );
-  await pause(300);
+  await clock.advance(300);
   fitsView(lastHold(), "after the rotations World holds the grid that fits");
   check(
     holds().length <= 5,
@@ -391,7 +400,7 @@ async function earlyKeys() {
       );
   root.querySelector<HTMLTextAreaElement>(".core-watch-host textarea")!.focus();
   await press("a");
-  await pause(200);
+  await clock.advance(200);
   check(
     sentOn().length === 0,
     `a key waits while the watch opens: ${JSON.stringify(sentOn())}`,
@@ -399,7 +408,7 @@ async function earlyKeys() {
   watchGate = null;
   release();
   await until(() => sentOn().length > 0);
-  await pause(200);
+  await clock.advance(200);
   const typed = sentOn()
     .filter((c) => !c.params.automatic)
     .map((c) => atob(String(c.params.data)))
@@ -536,10 +545,10 @@ async function typing() {
   await until(() => inputs().length > beforeEscape);
   check(typedText(before) === "a\x1b", `Escape is typed: ${typedText(before)}`);
   // Focus leaves and the page idles: World keeps its size (no give-back).
-  await pause(300);
+  await clock.advance(300);
   const holding = holds().length;
   xtermInput().blur();
-  await pause(1500);
+  await clock.advance(1500);
   check(
     holds().length === holding &&
       calls.every((c) => c.method !== "world.core.leave"),

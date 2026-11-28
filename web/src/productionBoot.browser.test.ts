@@ -3,17 +3,13 @@ import { mkdtemp, readFile, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
 import { build } from "vite";
-import { InputDriver } from "./world/browserAcceptanceFixture";
 import {
-  stopChrome,
-  waitForChromePort,
-  withBrowserDeadline,
-} from "./browserChrome";
-import { SWIFTSHADER_FLAGS } from "./world/testing/chromeRendering";
+  chromeBinary as chrome,
+  openChromePage,
+  type ChromePage,
+} from "./testing/sharedChrome";
 import previous from "./testing/previous-release-storage.json";
 
-const chrome =
-  Bun.env.CHROME_BIN || Bun.which("google-chrome") || Bun.which("chromium");
 const root = resolve(import.meta.dir, "../..");
 
 test.skipIf(!chrome)(
@@ -21,8 +17,7 @@ test.skipIf(!chrome)(
   async () => {
     const directory = await mkdtemp(join(tmpdir(), "production-boot-"));
     const assets = join(directory, "public");
-    let browser: ReturnType<typeof Bun.spawn> | undefined;
-    let driver: InputDriver | undefined;
+    let page: ChromePage | undefined;
     let suffix = "Before resume";
     let servedNewBuild = false;
     let workerRequests = 0;
@@ -67,25 +62,10 @@ test.skipIf(!chrome)(
           : new Response(null, { status: 404 });
       },
     });
-    const evaluate = async <T>(expression: string): Promise<T> => {
-      const response = (await withBrowserDeadline(
-        driver!.call("Runtime.evaluate", {
-          expression,
-          awaitPromise: true,
-          returnByValue: true,
-        }),
-        "Production journey step",
-        20_000,
-      )) as { result: { value: T }; exceptionDetails?: unknown };
-      expect(response.exceptionDetails).toBeUndefined();
-      return response.result.value;
-    };
+    const evaluate = <T>(expression: string): Promise<T> =>
+      page!.evaluate<T>(expression);
     // Conditions observe the actual mounted application; no fixed dwell waits.
-    const until = (condition: string) =>
-      evaluate(`new Promise((resolve,reject)=>{
-    const ready=()=>{if(${condition}){observer.disconnect();clearTimeout(timer);resolve(true)}};
-    const observer=new MutationObserver(ready);observer.observe(document,{subtree:true,childList:true,attributes:true,characterData:true});
-    const timer=setTimeout(()=>{observer.disconnect();reject(new Error('Application condition: '+${JSON.stringify(condition)}))},15000);ready();})`);
+    const until = (condition: string) => page!.waitFor(condition, 15_000);
     try {
       // Use the release Vite configuration and unchanged index.html/main.tsx.
       await build({
@@ -105,55 +85,8 @@ test.skipIf(!chrome)(
         join(assets, "journey-notifications.js"),
         await helper.outputs[0]!.text(),
       );
-      const log = join(directory, "chrome.log");
-      browser = Bun.spawn(
-        [
-          chrome!,
-          "--headless=new",
-          "--no-sandbox",
-          "--disable-dev-shm-usage",
-          "--disable-background-networking",
-          "--no-first-run",
-          "--no-default-browser-check",
-          "--remote-debugging-port=0",
-          `--user-data-dir=${join(directory, "profile")}`,
-          "--window-size=1280,800",
-          ...SWIFTSHADER_FLAGS,
-          "about:blank",
-        ],
-        { stdout: "ignore", stderr: Bun.file(log) },
-      );
-      const port = await waitForChromePort(
-        browser,
-        join(directory, "profile"),
-        log,
-      );
-      const targets = (await (
-        await fetch(`http://127.0.0.1:${port}/json/list`)
-      ).json()) as { type: string; webSocketDebuggerUrl: string }[];
-      const socket = new WebSocket(
-        targets.find((target) => target.type === "page")!.webSocketDebuggerUrl,
-      );
-      await new Promise<void>((done, fail) => {
-        socket.onopen = () => done();
-        socket.onerror = () => fail(new Error("CDP failed"));
-      });
-      driver = new InputDriver(socket);
-      await driver.call("Page.enable", {});
-      const navigate = async (url: string) => {
-        const loaded = Promise.withResolvers<void>();
-        const receive = (event: MessageEvent) => {
-          if (JSON.parse(String(event.data)).method === "Page.loadEventFired")
-            loaded.resolve();
-        };
-        socket.addEventListener("message", receive);
-        try {
-          await driver!.call("Page.navigate", { url });
-          await withBrowserDeadline(loaded.promise, "Production page load");
-        } finally {
-          socket.removeEventListener("message", receive);
-        }
-      };
+      page = await openChromePage({ viewport: { width: 1280, height: 800 } });
+      const navigate = (url: string) => page!.navigate(url);
       await navigate(`${server.url}previous`);
       await previousRequested.promise;
       await until(
@@ -184,23 +117,29 @@ test.skipIf(!chrome)(
       await evaluate(
         `window.__bootErrors=[];window.__resumeCount=0;window.__bootIdentity={};window.addEventListener('error',e=>window.__bootErrors.push(e.message));window.addEventListener('unhandledrejection',e=>window.__bootErrors.push(String(e.reason)));document.addEventListener('resume',()=>window.__resumeCount++);true`,
       );
-      const background = (await driver.call("Target.createTarget", {
+      // Hidden needs real focus: leave focus emulation, and open the other
+      // tab in this case's own window.
+      await page.command("Emulation.setFocusEmulationEnabled", {
+        enabled: false,
+      });
+      const background = (await page.command("Target.createTarget", {
         url: "about:blank",
+        browserContextId: page.browserContextId,
       })) as { targetId: string };
-      await driver.call("Target.activateTarget", {
+      await page.command("Target.activateTarget", {
         targetId: background.targetId,
       });
       expect(await evaluate(`document.visibilityState`)).toBe("hidden");
-      await driver.call("Page.setWebLifecycleState", { state: "frozen" });
+      await page.command("Page.setWebLifecycleState", { state: "frozen" });
       suffix = "After resume";
       servedNewBuild = true;
-      await driver.call("Page.setWebLifecycleState", { state: "active" });
-      await driver.call("Page.bringToFront", {});
-      await driver.call("Target.closeTarget", {
+      await page.command("Page.setWebLifecycleState", { state: "active" });
+      await page.command("Page.bringToFront", {});
+      await page.command("Target.closeTarget", {
         targetId: background.targetId,
       });
       // The focus event is real CDP focus, and the production listeners recheck.
-      await driver.call("Emulation.setFocusEmulationEnabled", {
+      await page.command("Emulation.setFocusEmulationEnabled", {
         enabled: true,
       });
       await until(`window.__resumeCount > 0`);
@@ -221,8 +160,7 @@ test.skipIf(!chrome)(
       ).toBe(true);
       expect(await evaluate(`window.__bootErrors`)).toEqual([]);
     } finally {
-      driver?.close();
-      await stopChrome(browser);
+      await page?.close();
       server.stop(true);
       await rm(directory, { recursive: true, force: true });
     }

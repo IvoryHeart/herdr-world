@@ -47,7 +47,11 @@ test("explicit half-page history retains legacy Wheel source and line count", as
       lines: 14,
       source: "history",
     });
-    await Bun.sleep(40);
+    await waitForCondition(
+      () => sources.length === 1,
+      "history scroll did not reach the terminal",
+    );
+    await turns();
     expect(sources).toEqual([0]);
   } finally {
     bridge.dispose();
@@ -262,6 +266,11 @@ async function waitForTerminalFrame(messages: string[]) {
   throw new Error("timed out waiting for terminal frame");
 }
 
+/** Event-loop turns, each polling the sockets, for "nothing more arrives" checks. */
+async function turns(count = 20) {
+  for (let i = 0; i < count; i++) await new Promise((r) => setImmediate(r));
+}
+
 async function waitForCondition(
   predicate: () => boolean,
   message: string,
@@ -450,7 +459,7 @@ describe("terminal bridge sharing", () => {
         rows: 30,
       },
     );
-    await Bun.sleep(5);
+    await turns();
     expect(
       messages
         .get(secondBrowser)!
@@ -866,7 +875,7 @@ describe("terminal bridge sharing", () => {
         rows: 30,
       },
     );
-    await Bun.sleep(5);
+    await turns();
 
     for (const sent of messages.values()) {
       expect(
@@ -1094,7 +1103,7 @@ describe("terminal bridge sharing", () => {
         relay_active: false,
       },
     );
-    await Bun.sleep(5);
+    await turns();
     expect(tracker.appSizes).toEqual(["168x45", "170x46"]);
 
     await bridge.handleTerminalRpc(
@@ -1161,7 +1170,10 @@ describe("terminal bridge sharing", () => {
         relay_rows: 40,
       },
     );
-    await Bun.sleep(5);
+    await waitForCondition(
+      () => tracker.events.filter((event) => event === "attach").length === 2,
+      "the delayed attach did not reach the terminal",
+    );
     await bridge.handleTerminalRpc(
       browser,
       "new-target",
@@ -1710,7 +1722,7 @@ describe("shared terminal size after a viewer leaves", () => {
       const resizesBefore = resizes();
 
       bridge.cleanupWs(phone);
-      await Bun.sleep(10);
+      await turns();
 
       expect(resizes()).toBe(resizesBefore);
       expect(framesFor(desktop).at(-1)).toBe("170x47");

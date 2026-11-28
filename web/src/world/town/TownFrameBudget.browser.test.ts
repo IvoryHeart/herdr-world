@@ -1,18 +1,17 @@
 import { expect, test } from "bun:test";
-import { existsSync } from "node:fs";
-import { mkdtemp, rm } from "node:fs/promises";
-import { tmpdir } from "node:os";
-import { join } from "node:path";
 import {
   BROWSER_STARTUP_TIMEOUT_MS,
-  stopChrome,
   waitForBrowserFixture,
-  waitForChromePort,
 } from "../../browserChrome";
-import { buildWorldBrowserBundle } from "../testing/browserBundles";
+import {
+  chromeBinary as chrome,
+  type ChromePage,
+  openChromePage,
+} from "../../testing/sharedChrome";
+import { casePhases } from "../testing/casePhases";
+import { worldBrowserBundle } from "../testing/worldBrowserBundle";
 import { SWIFTSHADER_FLAGS } from "../testing/chromeRendering";
 import { gestureTrace } from "../testing/frameTrace";
-import { connectCapture } from "../testing/connectCapture";
 
 /*
  * Town's frame budget at scale (#1248), on the town-scale page
@@ -23,15 +22,6 @@ import { connectCapture } from "../testing/connectCapture";
  * and frames shown with undrawn tiles while panning and zooming, and Town
  * draws while typing in the composer.
  */
-
-const chrome =
-  Bun.env.CHROME_BIN ||
-  Bun.which("google-chrome") ||
-  Bun.which("chromium") ||
-  (process.platform === "darwin" &&
-  existsSync("/Applications/Google Chrome.app/Contents/MacOS/Google Chrome")
-    ? "/Applications/Google Chrome.app/Contents/MacOS/Google Chrome"
-    : undefined);
 
 type TraceEvent = {
   name: string;
@@ -75,15 +65,26 @@ const RASTER_PER_PAN_FRAME = [1.5, 4];
  * (about 150 tasks per home pan) and fails RASTER_PER_PAN_FRAME.
  */
 const UNDRAWN_SHARE = 1 / 20;
+/**
+ * Ambient motion keeps its own pace in real time, so the composer phase
+ * counts Town's draws over a stretch of the page's own presented frames: it
+ * waits on animation frames until their timestamps span `ms`, not on a timer.
+ */
+const framesSpanning = (ms: number) => `new Promise((resolve) => {
+  let first;
+  const frame = (at) => {
+    first ??= at;
+    if (at - first >= ${ms}) resolve(at - first);
+    else requestAnimationFrame(frame);
+  };
+  requestAnimationFrame(frame);
+})`;
 
-test.skipIf(!chrome)(
-  "Town pans at the display's rate, zooms without restyling its overlay and quiets for the composer",
-  async () => {
-    const dir = await mkdtemp(join(tmpdir(), "town-frame-budget-"));
-    const { assets } = await buildWorldBrowserBundle(
-      "testing/town-scale/TownScale",
-      dir,
-    );
+test.skipIf(!chrome).each(["home-pan", "zoom", "desk-pan", "composer"])(
+  "Town frame budget (%s): display-rate pans, bounded zoom restyles and composer quiet",
+  async (phase) => {
+    const phases = casePhases(`TownFrameBudget ${phase}`);
+    const { assets } = await worldBrowserBundle("testing/town-scale/TownScale");
     const requested = Promise.withResolvers<void>();
     const loaded = Promise.withResolvers<void>();
     const server = Bun.serve({
@@ -108,44 +109,28 @@ test.skipIf(!chrome)(
           : new Response("Not found", { status: 404 });
       },
     });
-    let child: ReturnType<typeof Bun.spawn> | undefined;
-    let connection: Awaited<ReturnType<typeof connectCapture>> | undefined;
+    let page: ChromePage | undefined;
     try {
-      const profile = join(dir, "profile"),
-        log = join(dir, "chrome.log");
-      child = Bun.spawn(
-        [
-          chrome!,
-          "--headless=new",
-          "--no-sandbox",
-          "--disable-dev-shm-usage",
-          "--remote-debugging-port=0",
-          "--enable-webgl",
-          ...SWIFTSHADER_FLAGS,
-          "--window-size=1512,982",
-          "--force-device-scale-factor=1",
-          "--no-first-run",
-          "--no-default-browser-check",
-          `--user-data-dir=${profile}`,
-          server.url.href,
-        ],
-        { stdout: "ignore", stderr: Bun.file(log) },
-      );
+      phases.mark("setup");
+      // Its own Chrome (a distinct launch set): the trace reads every
+      // renderer in the browser, so no other case's frames may share it.
+      page = await openChromePage({
+        // The frame ceilings were measured on CI's pinned Chrome, whose
+        // 1512x982 headless window gave a 1512x782 page.
+        viewport: { width: 1512, height: 782 },
+        pixels: true,
+        launchFlags: SWIFTSHADER_FLAGS,
+      });
+      await page.navigate(server.url.href);
       await waitForBrowserFixture(
         requested.promise,
         loaded.promise,
-        child.exited.then(async (code) => {
-          throw new Error(
-            `Chrome exited ${code}: ${await Bun.file(log).text()}`,
-          );
-        }),
+        page.exited,
         "Town frame budget",
         30000,
       );
-      connection = await connectCapture(
-        await waitForChromePort(child, profile, log),
-      );
-      const { command, on } = connection;
+      phases.mark("load");
+      const { command, on } = page;
       const evaluate = async (expression: string, deadlineMs?: number) => {
         const reply = await command(
           "Runtime.evaluate",
@@ -302,39 +287,65 @@ test.skipIf(!chrome)(
       const overlay = await evaluate(
         "document.querySelectorAll('.town-world *').length",
       );
-      const pans = [await pan()];
-      const zooms = [await zoomIn(), await zoomIn(), await zoomIn()];
-      pans.push(await pan());
-      const idle = await draws();
-      await evaluate("new Promise((r) => setTimeout(r, 2000))");
-      const idleDraws = (await draws()) - idle;
-      // A headless page has no window focus; without it no focus events fire.
-      await command("Emulation.setFocusEmulationEnabled", { enabled: true });
-      await evaluate(`(() => {
+      const pans = phase === "home-pan" ? [await pan()] : [];
+      const zooms =
+        phase === "zoom"
+          ? [await zoomIn(), await zoomIn(), await zoomIn()]
+          : [];
+      if (phase === "desk-pan" || phase === "composer") {
+        // Fresh fixture: reach desk scale without replaying another case's traces.
+        for (let step = 0; step < 3; step++)
+          await evaluate('window.townScale.zoom("in")', MEASURE_DEADLINE_MS);
+      }
+      if (phase === "desk-pan") pans.push(await pan());
+      let idleDraws = 0,
+        typingDraws = 0,
+        resumedDraws = 0,
+        value = 0;
+      if (phase === "composer") {
+        const idle = await draws();
+        await evaluate(framesSpanning(2000));
+        idleDraws = (await draws()) - idle;
+        // A headless page has no window focus; without it no focus events fire.
+        await command("Emulation.setFocusEmulationEnabled", { enabled: true });
+        await evaluate(`(() => {
         const input = document.createElement("textarea");
         input.className = "terminal-composer-input";
         input.style.cssText = "position:fixed;left:8px;bottom:8px;z-index:10";
         document.body.append(input);
         input.focus();
       })()`);
-      const typed = await draws();
-      for (let index = 0; index < TYPED_KEYS; index++) {
-        const key = { key: "a", code: "KeyA", windowsVirtualKeyCode: 65 };
-        await command("Input.dispatchKeyEvent", {
-          ...key,
-          type: "keyDown",
-          text: "a",
-        });
-        await command("Input.dispatchKeyEvent", { ...key, type: "keyUp" });
-        await evaluate("new Promise((r) => setTimeout(r, 100))");
+        const typed = await draws();
+        for (let index = 0; index < TYPED_KEYS; index++) {
+          const key = { key: "a", code: "KeyA", windowsVirtualKeyCode: 65 };
+          await command("Input.dispatchKeyEvent", {
+            ...key,
+            type: "keyDown",
+            text: "a",
+          });
+          await command("Input.dispatchKeyEvent", { ...key, type: "keyUp" });
+          await evaluate(framesSpanning(100));
+        }
+        typingDraws = (await draws()) - typed;
+        const resumed = await draws();
+        // This is a frame-count assertion, not a one-second speed budget.
+        // Shared software-rendering CPUs may present only one frame per second.
+        const afterResume = await evaluate(
+          `new Promise((resolve) => {
+            const sample = () => {
+              const frames = window.__HERDR_TOWN_RENDERER__.frames;
+              if (frames - ${resumed} > ${typingDraws}) resolve(frames);
+              else requestAnimationFrame(sample);
+            };
+            sample();
+          })`,
+          MEASURE_DEADLINE_MS,
+        );
+        resumedDraws = afterResume - resumed;
+        value = await evaluate(
+          "document.querySelector('.terminal-composer-input').value.length",
+        );
       }
-      const typingDraws = (await draws()) - typed;
-      const resumed = await draws();
-      await evaluate("new Promise((r) => setTimeout(r, 1000))");
-      const resumedDraws = (await draws()) - resumed;
-      const value = await evaluate(
-        "document.querySelector('.terminal-composer-input').value.length",
-      );
       // Numbers for the PR; the assertions below are counts.
       console.log(
         JSON.stringify({
@@ -363,7 +374,7 @@ test.skipIf(!chrome)(
         // tile by tile on every frame. At desk scale a pan uncovers new
         // tiles; repainting the moved overlay took over twice as many.
         expect(run.raster).toBeLessThan(
-          run.ticks * RASTER_PER_PAN_FRAME[index]!,
+          run.ticks * RASTER_PER_PAN_FRAME[phase === "desk-pan" ? 1 : index]!,
         );
       }
       expect(zooms.map((zoom) => zoom.level)).not.toContain("home");
@@ -377,17 +388,19 @@ test.skipIf(!chrome)(
         );
         expect(zoom.forced).toBe(0);
       }
-      // Ambient motion keeps its own pace, not the display's.
-      expect(idleDraws).toBeLessThanOrEqual(64);
-      expect(value).toBe(TYPED_KEYS);
-      // Typing in the composer quiets Town's motion, then it resumes.
-      expect(typingDraws).toBeLessThanOrEqual(4);
-      expect(resumedDraws).toBeGreaterThan(typingDraws);
+      if (phase === "composer") {
+        // Ambient motion keeps its own pace, not the display's.
+        expect(idleDraws).toBeLessThanOrEqual(64);
+        expect(value).toBe(TYPED_KEYS);
+        // Typing in the composer quiets Town's motion, then it resumes.
+        expect(typingDraws).toBeLessThanOrEqual(4);
+        expect(resumedDraws).toBeGreaterThan(typingDraws);
+      }
+      phases.mark("steps");
     } finally {
-      connection?.close();
-      await stopChrome(child);
+      await page?.close();
       server.stop(true);
-      await rm(dir, { recursive: true, force: true });
+      phases.done();
     }
   },
   120000 + BROWSER_STARTUP_TIMEOUT_MS,

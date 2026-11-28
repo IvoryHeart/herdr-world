@@ -5,7 +5,11 @@ import { resolve } from "node:path";
 import { readVerificationResources } from "./verification-resources";
 import { createHash } from "node:crypto";
 import { execFileSync } from "node:child_process";
-import { modelInputs } from "./ci-model-inputs";
+import {
+  modelInputs,
+  scanModelInputs,
+  type ModelInputScan,
+} from "./ci-model-inputs";
 import { fingerprintInputs } from "./verification-evidence";
 import {
   verificationJobs,
@@ -143,6 +147,11 @@ export function validateModelBundle(
 }
 
 export async function modelCacheKey(root: string, index: number) {
+  return (await modelCacheKeys(root, [index]))[0]!;
+}
+
+/** Several parts' keys from one tool identification and one input scan. */
+export async function modelCacheKeys(root: string, indices: number[]) {
   // These actual identities are checked after pinned setup and enter every key.
   const node = Bun.spawnSync(["node", "--version"]);
   const java = Bun.spawnSync(["java", "-version"]);
@@ -155,18 +164,31 @@ export async function modelCacheKey(root: string, index: number) {
     node: node.stdout.toString().trim(),
     java: java.stderr.toString().trim().split("\n")[0]!,
   };
-  return keyForToolIdentity(root, index, {
+  const toolIdentity = {
     runtime,
     java: java.stderr.toString().trim(),
     platform: process.platform,
     arch: process.arch,
-  });
+  };
+  const scan = scanModelInputs(root, trackedFiles(root));
+  const keys = [];
+  for (const index of indices)
+    keys.push(await keyForToolIdentity(root, index, toolIdentity, scan));
+  return keys;
+}
+
+function trackedFiles(root: string) {
+  return execFileSync("git", ["ls-files", "-z"], { cwd: root })
+    .toString()
+    .split("\0")
+    .filter(Boolean);
 }
 
 async function keyForToolIdentity(
   root: string,
   index: number,
   toolIdentity: ModelToolIdentity,
+  scan?: ModelInputScan,
 ) {
   assert(
     toolIdentity &&
@@ -191,13 +213,10 @@ async function keyForToolIdentity(
     toolIdentity.arch,
   ].join("\n");
   const job = verificationJob(index);
-  const files = execFileSync("git", ["ls-files", "-z"], { cwd: root })
-    .toString()
-    .split("\0")
-    .filter(Boolean);
+  const files = trackedFiles(root);
   const inputs = await fingerprintInputs(
     root,
-    modelInputs(root, files, job.model),
+    modelInputs(root, files, job.model, scan ?? scanModelInputs(root, files)),
   );
   const hash = createHash("sha256")
     .update(

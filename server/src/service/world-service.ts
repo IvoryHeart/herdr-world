@@ -492,6 +492,7 @@ async function compose(
         )(...args);
     },
     serviceIncarnation,
+    scheduler,
   );
   const publication = composeWorldPublication({
     settings,

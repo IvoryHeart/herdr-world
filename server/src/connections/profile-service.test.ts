@@ -30,6 +30,11 @@ import {
 
 const roots: string[] = [];
 const servers: net.Server[] = [];
+/** Event-loop turns, each polling the sockets, for "nothing more happens" checks. */
+async function turns(count = 20) {
+  for (let i = 0; i < count; i++) await new Promise((r) => setImmediate(r));
+}
+
 async function waitUntil(predicate: () => boolean) {
   const deadline = Date.now() + 1000;
   while (!predicate()) {
@@ -1029,7 +1034,7 @@ describe("connection profile service", () => {
     const disconnecting = service.disconnect("remote");
     releaseStop();
     await disconnecting;
-    await Bun.sleep(1);
+    await turns();
 
     expect(created).toHaveLength(1);
     expect(manager.status("remote").state).toBe("disconnected");
@@ -1173,7 +1178,7 @@ describe("connection profile service", () => {
     expect(timers[2].delayMs).toBe(100);
     timers[2].callback();
     await waitUntil(() => manager.status("remote").state === "error");
-    await Bun.sleep(1);
+    await turns();
     expect(timers).toHaveLength(3);
     expect(created.get("remote")).toHaveLength(4);
   });
@@ -1260,7 +1265,7 @@ describe("connection profile service", () => {
     expect(timers).toHaveLength(1);
     expect(timers[0].cancelled).toBeTrue();
     timers[0].callback();
-    await Bun.sleep(1);
+    await turns();
     expect(created.get("remote")).toHaveLength(2);
   });
 
@@ -1372,7 +1377,7 @@ describe("connection profile service", () => {
     expect(timers).toHaveLength(1);
     expect(timers[0].cancelled).toBeTrue();
     timers[0].callback();
-    await Bun.sleep(1);
+    await turns();
     expect(created.get("remote")).toHaveLength(1);
   });
 
@@ -1643,7 +1648,7 @@ test("removal cancels default transient recovery and a late timer cannot revive 
     await service.remove("remote");
     expect(timers[0]!.cancelled).toBe(true);
     timers[0]!.callback();
-    await Bun.sleep(1);
+    await turns();
     expect(manager.has("remote")).toBe(false);
     expect(created.get("remote")).toHaveLength(1);
     expect(healthy.isCurrent()).toBe(true);

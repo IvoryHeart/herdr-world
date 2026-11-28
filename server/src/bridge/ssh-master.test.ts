@@ -256,7 +256,7 @@ describe("SSH command master lifecycle", () => {
       bindSshCommand(sshCommandArgv("dev-box", "true"), CONTROL_PATH),
     ).not.toContain("-S");
     // ...while the running one keeps its master.
-    await Bun.sleep(20);
+    await flushMicrotasks();
     expect(spawned[0].signals).toEqual([]);
     upload.release();
     await stopping;

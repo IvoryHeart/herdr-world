@@ -1,3 +1,4 @@
+import { clock } from "../testing/installRunningTestClock";
 import { flushSync } from "react-dom";
 import { createRoot } from "react-dom/client";
 import "../styles/tokens.css";
@@ -37,7 +38,6 @@ new MutationObserver((records) => {
         if (node instanceof Element && node.matches('[role="menu"]'))
           record(event, node);
 }).observe(document.body, { childList: true, subtree: true });
-const settle = () => new Promise((resolve) => setTimeout(resolve, 60));
 
 async function run() {
   // Headless Chrome can deliver its startup resize after this classic script
@@ -75,7 +75,7 @@ async function run() {
   trigger.focus();
   record("first-open");
   trigger.click();
-  await settle();
+  await clock.advance(60);
 
   record("first-query");
   const menu = document.querySelector<HTMLElement>('[role="menu"]');
@@ -130,14 +130,14 @@ async function run() {
     "keyboard users must reach unavailable reasons",
   );
   items[2]?.click();
-  await settle();
+  await clock.advance(60);
   check(
     calls.length === 0 && !!document.querySelector('[role="menu"]'),
     "unavailable choice must leave placement unchanged",
   );
 
   items[1]?.click();
-  await settle();
+  await clock.advance(60);
   check(
     calls.join(",") === "cascade",
     "enabled choice must invoke its command once",
@@ -152,7 +152,7 @@ async function run() {
   );
 
   trigger.click();
-  await settle();
+  await clock.advance(60);
   document.dispatchEvent(
     new KeyboardEvent("keydown", {
       key: "Escape",
@@ -160,7 +160,7 @@ async function run() {
       cancelable: true,
     }),
   );
-  await settle();
+  await clock.advance(60);
   check(!document.querySelector('[role="menu"]'), "Escape must close the menu");
   check(
     document.activeElement === trigger,
@@ -168,15 +168,15 @@ async function run() {
   );
 
   trigger.click();
-  await settle();
+  await clock.advance(60);
   window.dispatchEvent(new Event("resize"));
-  await settle();
+  await clock.advance(60);
   check(!document.querySelector('[role="menu"]'), "resize must close the menu");
 
   document.getElementById("root")!.style.cssText =
     "position:fixed;right:8px;bottom:8px";
   trigger.click();
-  await settle();
+  await clock.advance(60);
   const floatingMenuBounds = document
     .querySelector<HTMLElement>('[role="menu"]')!
     .getBoundingClientRect();
@@ -187,12 +187,12 @@ async function run() {
   );
 
   trigger.click();
-  await settle();
+  await clock.advance(60);
   document.documentElement.style.zoom = "1.4";
   document.getElementById("root")!.style.cssText =
     "position:fixed;right:8px;top:52px";
   trigger.click();
-  await settle();
+  await clock.advance(60);
   const zoomedMenu = document.querySelector<HTMLElement>('[role="menu"]');
   const zoomedTriggerBounds = trigger.getBoundingClientRect();
   const zoomedMenuBounds = zoomedMenu?.getBoundingClientRect();
@@ -209,7 +209,7 @@ async function run() {
     ...document.querySelectorAll<HTMLButtonElement>('[role="menuitem"]'),
   ].find((item) => item.textContent?.includes("Close all terminal windows"));
   closeAll?.click();
-  await settle();
+  await clock.advance(60);
   check(
     calls.join(",") === "cascade,close-all",
     "Close all must dispatch through the shared arrangement control",

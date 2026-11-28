@@ -88,6 +88,17 @@ test("browser diagnostics preserve Chrome arguments and exit status while record
       process.listenerCount("SIGTERM"),
       process.listenerCount("SIGINT"),
     ];
+    const loggedPageAttached = async () => {
+      const files = await readdir(join(directory, "logs")).catch(() => []);
+      for (const file of files)
+        if (
+          (await readFile(join(directory, "logs", file), "utf8")).includes(
+            '"page-attached"',
+          )
+        )
+          return true;
+      return false;
+    };
     const result = runBrowserDiagnostics(
       {
         executable: "fake-chrome",
@@ -98,7 +109,14 @@ test("browser diagnostics preserve Chrome arguments and exit status while record
         spawn: (argv) => {
           forwarded = argv.slice(1);
           return fakeChrome(
-            ready.promise.then(() => Bun.sleep(25)).then(() => 7),
+            ready.promise
+              .then(async () => {
+                // Exit once the adapter has logged the page it attached to.
+                const deadline = Date.now() + 5_000;
+                while (!(await loggedPageAttached()) && Date.now() < deadline)
+                  await Bun.sleep(10);
+              })
+              .then(() => 7),
             "DevTools listening on " +
               server.url.href.replace("http:", "ws:") +
               "\n",

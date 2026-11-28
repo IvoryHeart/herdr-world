@@ -1,5 +1,7 @@
 import { expect, test } from "bun:test";
 import { createDenseSnapshotFixture } from "./browserAcceptanceFixture";
+import { SNAPSHOT_RESPONSE_DEADLINE_MS } from "../../../server/src/world/snapshot";
+import { RPC_TIMEOUT_MS } from "../api";
 
 test("owner maximum-scale acceptance observes three hosts, eight workspaces and fifteen tabs per workspace", async () => {
   const fixture = createDenseSnapshotFixture({ maximumScale: true });
@@ -42,7 +44,7 @@ test("production fixture refresh sends only changed topology against its negotia
       })),
     };
     fixture.startStalledAttentionRefresh();
-    // Release host reads here; the browser acceptance owns the real 20 s stall.
+    // Release host reads here; the next case holds them past the deadline.
     fixture.release();
     const refreshed = await fixture.snapshot({ base });
     expect(refreshed.connections.map((host) => host.connection_id)).toEqual(
@@ -69,4 +71,41 @@ test("production fixture refresh sends only changed topology against its negotia
   } finally {
     fixture.release();
   }
+});
+
+test("a stalled refresh replies when its 20 s response deadline expires in test time, with the stalled hosts stale", async () => {
+  const fixture = createDenseSnapshotFixture({ maximumScale: true });
+  try {
+    const initial = await fixture.snapshot();
+    const base = {
+      service_incarnation: initial.service_incarnation,
+      hosts: initial.connections.map((host) => ({
+        connection_id: host.connection_id,
+        generation: host.generation,
+        token: host.token!,
+      })),
+    };
+    fixture.startStalledAttentionRefresh();
+    const refreshed = await fixture.snapshot({ base });
+    expect(fixture.expiredDeadlines).toEqual([SNAPSHOT_RESPONSE_DEADLINE_MS]);
+    const alpha = refreshed.connections[0]!;
+    expect(alpha.connection_id).toBe("alpha");
+    expect(alpha.stale).toBeFalsy();
+    expect(
+      alpha.snapshot!.panes.every((pane) => pane.agent_status === "working"),
+    ).toBe(true);
+    for (const id of fixture.stalledIds)
+      expect(
+        refreshed.connections.find((host) => host.connection_id === id)?.stale,
+      ).toBe(true);
+  } finally {
+    fixture.release();
+  }
+});
+
+test("the browser waits for a snapshot reply longer than the service's response deadline", () => {
+  // The acceptance fixture expires the deadline in test time, so this holds
+  // the property its 20 real seconds used to show: a stalled host's reply
+  // reaches the browser before the browser gives up on the request.
+  expect(RPC_TIMEOUT_MS).toBeGreaterThan(SNAPSHOT_RESPONSE_DEADLINE_MS);
 });

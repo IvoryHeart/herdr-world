@@ -374,9 +374,20 @@ test.skipIf(process.platform !== "linux")(
     const shell = Bun.spawn(["sh"], { cwd: shellDir, stdin: "pipe" });
     const server = Bun.spawn(["sleep", "30"], { cwd: serverDir });
     try {
-      await Bun.sleep(200);
-      const use = processUse();
       const real = (path: string) => realpathSync(path);
+      // Both children have started once the table shows their directories.
+      const deadline = Date.now() + 5_000;
+      let use = processUse();
+      while (
+        !(
+          use.cwds.includes(real(shellDir)) &&
+          use.uses.includes(real(serverDir))
+        ) &&
+        Date.now() < deadline
+      ) {
+        await Bun.sleep(10);
+        use = processUse();
+      }
       expect(use.cwds).toContain(real(shellDir));
       expect(use.uses).not.toContain(real(shellDir));
       expect(use.uses).toContain(real(serverDir));

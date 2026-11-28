@@ -8,10 +8,11 @@ import {
   rmSync,
   writeFileSync,
 } from "node:fs";
-import { tmpdir } from "node:os";
+import { availableParallelism, tmpdir } from "node:os";
 import { join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { acquireAllCheckSlots, acquireCheckSlot } from "./check-lock";
+import { webBrowserWorkers } from "./world-browser-suites";
 
 const root = fileURLToPath(new URL("../", import.meta.url));
 const staticCommands = [
@@ -394,7 +395,7 @@ test("tooling scope runs static checks and affected units without heavy lanes", 
   );
   expect(
     result.commands.some((cmd) =>
-      /run-world-tests|verification:gate/.test(cmd),
+      /run-world-tests|verification-reuse|verification:gate/.test(cmd),
     ),
   ).toBe(false);
 });
@@ -415,7 +416,7 @@ test("tooling classification includes earlier PR commits on an incremental push"
     ["package.json"],
     true,
   );
-  expect(full.commands).toContain("run verification:gate");
+  expect(full.commands).toContain("scripts/verification-reuse.ts");
   expect(
     full.commands.some((cmd) => cmd.startsWith("scripts/run-world-tests.ts")),
   ).toBe(true);
@@ -438,7 +439,7 @@ test("an uncovered agent module runs the entire agent test inventory without hea
     );
     expect(
       result.commands.some((cmd) =>
-        /run-world-tests|verification:gate/.test(cmd),
+        /run-world-tests|verification-reuse|verification:gate/.test(cmd),
       ),
     ).toBe(false);
   }
@@ -452,7 +453,7 @@ test("pre-push keeps all non-browser units for gate changes and leaves heavy sui
   );
   expect(
     result.commands.some((cmd) =>
-      /uiScale|run-world-tests|verification:gate/.test(cmd),
+      /uiScale|run-world-tests|verification-reuse|verification:gate/.test(cmd),
     ),
   ).toBe(false);
   const full = exercise(["scripts/check-delivery.ts", "--full"], "", [
@@ -460,12 +461,19 @@ test("pre-push keeps all non-browser units for gate changes and leaves heavy sui
   ]);
   expect(full.status).toBe(0);
   expect(full.commands).toContain(
-    "scripts/run-tests.ts web/src/uiScale.test.ts --parallel=2",
+    `scripts/run-tests.ts web/src/uiScale.test.ts --parallel=${webBrowserWorkers()} --max-concurrency=${availableParallelism()}`,
   );
-  expect(full.commands).toContain("run verification:gate");
+  expect(full.commands).toContain("scripts/verification-reuse.ts");
   expect(
     full.commands.some((cmd) => cmd.startsWith("scripts/run-world-tests.ts")),
   ).toBe(true);
+  // A fresh gate beside the browser lanes overran its deadline; it starts
+  // only after every test lane has finished.
+  const gate = full.commands.indexOf("scripts/verification-reuse.ts");
+  const lastTest = full.commands.findLastIndex((cmd) =>
+    /run-world-tests|run-tests\.ts/.test(cmd),
+  );
+  expect(gate).toBeGreaterThan(lastTest);
 });
 
 test("static failures report while all heavy check slots are held, regardless of a disk floor", async () => {
@@ -521,10 +529,12 @@ test("Chrome lanes share the browser slot while unit and verification work hold 
     );
     expect(result.status).toBe(0);
     expect(result.commands).toContain(
-      "scripts/run-tests.ts web/src/uiScale.test.ts --parallel=2",
+      `scripts/run-tests.ts web/src/uiScale.test.ts --parallel=${webBrowserWorkers()} --max-concurrency=${availableParallelism()}`,
     );
     expect(
-      result.commands.some((cmd) => /verification:gate|^run /.test(cmd)),
+      result.commands.some((cmd) =>
+        /verification-reuse|verification:gate|^run /.test(cmd),
+      ),
     ).toBe(false);
   } finally {
     verification();

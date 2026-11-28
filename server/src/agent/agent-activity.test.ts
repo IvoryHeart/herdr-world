@@ -148,7 +148,8 @@ describe("agent activity timestamps", () => {
       ...localAgentSessionFiles,
       async statFile(path: string) {
         peak = Math.max(peak, ++active);
-        await Bun.sleep(1);
+        await Promise.resolve();
+        await new Promise((resolve) => setImmediate(resolve));
         active--;
         return { path, mtimeMs: 1000 };
       },
@@ -188,7 +189,7 @@ test("slow activity lookups return all agents promptly and stop scheduling work"
     expect(result).toEqual({ agents: snapshot });
     expect(calls).toBe(4);
     release();
-    await Bun.sleep(1);
+    await new Promise((resolve) => setImmediate(resolve));
     expect(calls).toBe(4);
     expect(result).toEqual({ agents: snapshot });
   } finally {

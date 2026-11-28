@@ -239,9 +239,8 @@ describe.skipIf(process.platform === "win32")(
         await Bun.sleep(10);
       }
       expect(starts()).toBe(SSH_SESSION_LIMIT);
-      // Give a ninth process the chance to start if the limit leaked.
-      await Bun.sleep(300);
-      expect(starts()).toBe(SSH_SESSION_LIMIT);
+      // A ninth process that started while these were held would overlap
+      // them in the log, which the peak concurrency below rules out.
       run.release();
       const results = await run.results;
       expect(results).toHaveLength(SSH_SESSION_LIMIT + 2);

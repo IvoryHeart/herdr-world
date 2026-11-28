@@ -1,5 +1,4 @@
 import { expect, test } from "bun:test";
-import { existsSync } from "node:fs";
 import { mkdir, mkdtemp, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
@@ -12,23 +11,14 @@ import { worldRuntimeRegistry } from "../../../server/src/world/runtime-registry
 import { WorldSnapshotService } from "../../../server/src/world/snapshot";
 import {
   BROWSER_STARTUP_TIMEOUT_MS,
-  stopChrome,
   waitForBrowserFixture,
-  waitForChromePort,
 } from "../browserChrome";
-import { InputDriver } from "./browserAcceptanceFixture";
+import {
+  chromeBinary as chrome,
+  openChromePage,
+  type ChromePage,
+} from "../testing/sharedChrome";
 import { buildWorldBrowserBundle } from "./testing/browserBundles";
-import { chromeRenderingFlags } from "./testing/chromeRendering";
-import { connectCapture } from "./testing/connectCapture";
-
-const chrome =
-  Bun.env.CHROME_BIN ||
-  Bun.which("google-chrome") ||
-  Bun.which("chromium") ||
-  (process.platform === "darwin" &&
-  existsSync("/Applications/Google Chrome.app/Contents/MacOS/Google Chrome")
-    ? "/Applications/Google Chrome.app/Contents/MacOS/Google Chrome"
-    : undefined);
 
 /** The repository's standard capture viewports. */
 const VIEWPORTS = [
@@ -227,30 +217,13 @@ for (const scene of ["launcher", "bin"] as const)
             : new Response("Not found", { status: 404 });
         },
       });
-      let child: ReturnType<typeof Bun.spawn> | undefined;
-      let connection: Awaited<ReturnType<typeof connectCapture>> | undefined;
+      let connection: ChromePage | undefined;
       try {
-        const profile = join(dir, "profile"),
-          log = join(dir, "chrome.log");
-        child = Bun.spawn(
-          [
-            chrome!,
-            "--headless=new",
-            "--disable-gpu",
-            "--remote-debugging-port=0",
-            "--window-size=1000,900",
-            "--no-first-run",
-            "--no-default-browser-check",
-            `--user-data-dir=${profile}`,
-            `${server.url.href}?scene=${scene}`,
-          ],
-          { stdout: "ignore", stderr: Bun.file(log) },
-        );
-        const exited = child.exited.then(async (code) => {
-          throw new Error(
-            `Chrome exited ${code}: ${await Bun.file(log).text()}`,
-          );
+        connection = await openChromePage({
+          viewport: { width: 1000, height: 900 },
         });
+        const exited = connection.exited;
+        await connection.navigate(`${server.url.href}?scene=${scene}`);
         expect(
           await waitForBrowserFixture(
             requested.promise,
@@ -264,9 +237,6 @@ for (const scene of ["launcher", "bin"] as const)
         const captures = Bun.env.HERDR_WORLD_CORE_CAPTURES;
         if (!captures) return;
         await mkdir(captures, { recursive: true });
-        connection = await connectCapture(
-          await waitForChromePort(child, profile, log),
-        );
         for (const theme of ["light", "dark"] as const)
           for (const viewport of VIEWPORTS) {
             await connection.command("Emulation.setDeviceMetricsOverride", {
@@ -277,9 +247,7 @@ for (const scene of ["launcher", "bin"] as const)
             });
             result = Promise.withResolvers<string[]>();
             requested = Promise.withResolvers<void>();
-            await connection.command("Page.navigate", {
-              url: `${server.url.href}?scene=${scene}`,
-            });
+            await connection.navigate(`${server.url.href}?scene=${scene}`);
             expect(
               await waitForBrowserFixture(
                 requested.promise,
@@ -302,8 +270,7 @@ for (const scene of ["launcher", "bin"] as const)
             );
           }
       } finally {
-        connection?.close();
-        await stopChrome(child);
+        await connection?.close();
         server.stop(true);
         await rm(dir, { recursive: true, force: true });
       }
@@ -332,10 +299,7 @@ test.skipIf(!chrome).each([1440, 390])(
       );
     const result = Promise.withResolvers<string[]>();
     const requested = Promise.withResolvers<void>();
-    const profile = join(dir, "profile"),
-      log = join(dir, "chrome.log");
-    let child: ReturnType<typeof Bun.spawn> | undefined;
-    let socket: WebSocket | undefined;
+    let page: ChromePage | undefined;
     const server = Bun.serve({
       hostname: "127.0.0.1",
       port: 0,
@@ -350,34 +314,7 @@ test.skipIf(!chrome).each([1440, 390])(
           return new Response(
             snapshots.get(url.searchParams.get("started") ?? ""),
           );
-        if (path === "/viewport-ready") {
-          const port = await waitForChromePort(child!, profile, log);
-          const targets = (await (
-            await fetch(`http://127.0.0.1:${port}/json/list`)
-          ).json()) as { type: string; webSocketDebuggerUrl: string }[];
-          socket = new WebSocket(
-            targets.find((target) => target.type === "page")!
-              .webSocketDebuggerUrl,
-          );
-          await new Promise<void>((resolve, reject) => {
-            socket!.onopen = () => resolve();
-            socket!.onerror = () => reject(new Error("CDP connection failed"));
-          });
-          const driver = new InputDriver(socket);
-          await driver.call("Emulation.setEmulatedMedia", {
-            features: [{ name: "prefers-reduced-motion", value: "reduce" }],
-          });
-          await driver.call("Emulation.setDeviceMetricsOverride", {
-            width,
-            height: width === 390 ? 844 : 1000,
-            deviceScaleFactor: 1,
-            mobile: width === 390,
-          });
-          await driver.call("Emulation.setTouchEmulationEnabled", {
-            enabled: width === 390,
-          });
-          return new Response(String(width));
-        }
+        if (path === "/viewport-ready") return new Response(String(width));
         if (path === "/") requested.resolve();
         const asset =
           path === "/"
@@ -394,25 +331,17 @@ test.skipIf(!chrome).each([1440, 390])(
       },
     });
     try {
-      child = Bun.spawn(
-        [
-          chrome!,
-          "--headless=new",
-          "--remote-debugging-port=0",
-          "--window-size=1440,1000",
-          "--enable-webgl",
-          ...(await chromeRenderingFlags(chrome!)),
-          "--disable-dev-shm-usage",
-          "--no-first-run",
-          "--no-default-browser-check",
-          `--user-data-dir=${profile}`,
-          `${server.url.href}?scene=start`,
-        ],
-        { stdout: "ignore", stderr: Bun.file(log) },
-      );
-      const exited = child.exited.then(async (code) => {
-        throw new Error(`Chrome exited ${code}: ${await Bun.file(log).text()}`);
+      page = await openChromePage({
+        viewport: {
+          width,
+          height: width === 390 ? 844 : 1000,
+          mobile: width === 390,
+        },
+        touch: width === 390,
+        reducedMotion: true,
       });
+      const exited = page.exited;
+      void page.navigate(`${server.url.href}?scene=start`).catch(() => {});
       expect(
         await waitForBrowserFixture(
           requested.promise,
@@ -423,8 +352,7 @@ test.skipIf(!chrome).each([1440, 390])(
         ),
       ).toEqual([]);
     } finally {
-      socket?.close();
-      await stopChrome(child);
+      await page?.close();
       server.stop(true);
       await rm(dir, { recursive: true, force: true });
     }
@@ -443,11 +371,7 @@ test.skipIf(!chrome)(
     const snapshot = JSON.stringify(await coreSnapshot());
     const result = Promise.withResolvers<string[]>();
     const requested = Promise.withResolvers<void>();
-    const profile = join(dir, "profile"),
-      log = join(dir, "chrome.log");
-    let child: ReturnType<typeof Bun.spawn> | undefined;
-    let socket: WebSocket | undefined;
-    let driver: InputDriver | undefined;
+    let page: ChromePage | undefined;
     const KEYS: Record<
       string,
       {
@@ -488,18 +412,18 @@ test.skipIf(!chrome)(
           };
           if (body.click) {
             const at = { x: body.click.x, y: body.click.y };
-            await driver!.call("Input.dispatchMouseEvent", {
+            await page!.command("Input.dispatchMouseEvent", {
               type: "mouseMoved",
               ...at,
             });
-            await driver!.call("Input.dispatchMouseEvent", {
+            await page!.command("Input.dispatchMouseEvent", {
               type: "mousePressed",
               button: "left",
               buttons: 1,
               clickCount: 1,
               ...at,
             });
-            await driver!.call("Input.dispatchMouseEvent", {
+            await page!.command("Input.dispatchMouseEvent", {
               type: "mouseReleased",
               button: "left",
               buttons: 0,
@@ -515,45 +439,21 @@ test.skipIf(!chrome)(
               windowsVirtualKeyCode: key.keyCode,
               modifiers: key.modifiers ?? 0,
             };
-            await driver!.call("Input.dispatchKeyEvent", {
+            await page!.command("Input.dispatchKeyEvent", {
               type: key.text ? "keyDown" : "rawKeyDown",
               ...common,
               ...(key.text ? { text: key.text } : {}),
             });
-            await driver!.call("Input.dispatchKeyEvent", {
+            await page!.command("Input.dispatchKeyEvent", {
               type: "keyUp",
               ...common,
             });
           }
           if (body.text)
-            await driver!.call("Input.insertText", { text: body.text });
+            await page!.command("Input.insertText", { text: body.text });
           return new Response("ok");
         }
-        if (path === "/viewport-ready") {
-          const port = await waitForChromePort(child!, profile, log);
-          const targets = (await (
-            await fetch(`http://127.0.0.1:${port}/json/list`)
-          ).json()) as { type: string; webSocketDebuggerUrl: string }[];
-          socket = new WebSocket(
-            targets.find((target) => target.type === "page")!
-              .webSocketDebuggerUrl,
-          );
-          await new Promise<void>((resolve, reject) => {
-            socket!.onopen = () => resolve();
-            socket!.onerror = () => reject(new Error("CDP connection failed"));
-          });
-          driver = new InputDriver(socket);
-          await driver.call("Emulation.setEmulatedMedia", {
-            features: [{ name: "prefers-reduced-motion", value: "reduce" }],
-          });
-          await driver.call("Emulation.setDeviceMetricsOverride", {
-            width: 1440,
-            height: 1000,
-            deviceScaleFactor: 1,
-            mobile: false,
-          });
-          return new Response("1440");
-        }
+        if (path === "/viewport-ready") return new Response("1440");
         if (path === "/") requested.resolve();
         const asset =
           path === "/"
@@ -570,25 +470,12 @@ test.skipIf(!chrome)(
       },
     });
     try {
-      child = Bun.spawn(
-        [
-          chrome!,
-          "--headless=new",
-          "--remote-debugging-port=0",
-          "--window-size=1440,1000",
-          "--enable-webgl",
-          ...(await chromeRenderingFlags(chrome!)),
-          "--disable-dev-shm-usage",
-          "--no-first-run",
-          "--no-default-browser-check",
-          `--user-data-dir=${profile}`,
-          `${server.url.href}?scene=find`,
-        ],
-        { stdout: "ignore", stderr: Bun.file(log) },
-      );
-      const exited = child.exited.then(async (code) => {
-        throw new Error(`Chrome exited ${code}: ${await Bun.file(log).text()}`);
+      page = await openChromePage({
+        viewport: { width: 1440, height: 1000 },
+        reducedMotion: true,
       });
+      const exited = page.exited;
+      void page.navigate(`${server.url.href}?scene=find`).catch(() => {});
       expect(
         await waitForBrowserFixture(
           requested.promise,
@@ -599,8 +486,7 @@ test.skipIf(!chrome)(
         ),
       ).toEqual([]);
     } finally {
-      socket?.close();
-      await stopChrome(child);
+      await page?.close();
       server.stop(true);
       await rm(dir, { recursive: true, force: true });
     }

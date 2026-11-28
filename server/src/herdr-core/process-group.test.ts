@@ -4,6 +4,7 @@ import { CoreObservationStore } from "./observations";
 import { localForegroundGroups, readForegroundGroup } from "./process-group";
 import { createCoreConnectionRuntime } from "./runtime";
 import { memoryStreamPair } from "./stream";
+import { until } from "./testing/core-world";
 import { FakeCore } from "./testing/fake-core";
 
 type Proc = {
@@ -92,6 +93,28 @@ describe("a local core's runtime looks inside a wrapper while one leads", () => 
     let group: string[][] = [];
     let reads = 0;
     let changes = 0;
+    // The refresh timers (groupRefreshMs) armed and not yet fired or cleared.
+    const refreshes = new Set<unknown>();
+    const realSetTimeout = globalThis.setTimeout;
+    const realClearTimeout = globalThis.clearTimeout;
+    globalThis.setTimeout = ((
+      fn: () => void,
+      ms?: number,
+      ...rest: unknown[]
+    ) => {
+      if (ms !== 5) return realSetTimeout(fn, ms, ...rest);
+      const handle = realSetTimeout(() => {
+        refreshes.delete(handle);
+        fn();
+      }, ms);
+      refreshes.add(handle);
+      return handle;
+    }) as typeof setTimeout;
+    globalThis.clearTimeout = ((handle: unknown) => {
+      refreshes.delete(handle);
+      return realClearTimeout(handle as never);
+    }) as typeof clearTimeout;
+    const drain = () => new Promise<void>((resolve) => setImmediate(resolve));
     const runtime = createCoreConnectionRuntime({
       identity: { id: "core", label: "core", source: "test" },
       context: { generation: 1, isCurrent: () => true, reportError: () => {} },
@@ -134,10 +157,16 @@ describe("a local core's runtime looks inside a wrapper while one leads", () => 
       const root = fake.terminal(address)!.pid as number;
       fake.foreground(address, { pid: root, name: "bash", argv: ["bash"] });
       await until(async () => (await desk())[0] === null);
+      // Reading is the runtime's refresh timer: with no wrapper leading,
+      // none is armed, so no further read can happen.
+      await until(() => refreshes.size === 0);
       const settled = reads;
-      await Bun.sleep(30);
+      await drain();
+      expect(refreshes.size).toBe(0);
       expect(reads).toBe(settled);
     } finally {
+      globalThis.setTimeout = realSetTimeout;
+      globalThis.clearTimeout = realClearTimeout;
       runtime.stop();
     }
   });
@@ -203,11 +232,3 @@ describe("a local core's runtime looks inside a wrapper while one leads", () => 
     }
   });
 });
-
-async function until(predicate: () => boolean | Promise<boolean>, ms = 2_000) {
-  const deadline = Date.now() + ms;
-  while (!(await predicate())) {
-    if (Date.now() > deadline) throw new Error("condition not reached");
-    await Bun.sleep(2);
-  }
-}

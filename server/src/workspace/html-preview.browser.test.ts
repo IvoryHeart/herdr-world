@@ -4,7 +4,6 @@ import {
   runBinaryProcessWithTimeout,
 } from "./process";
 import { expect, test } from "bun:test";
-import { existsSync } from "node:fs";
 import { mkdtemp, mkdir, readFile, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { basename, join } from "node:path";
@@ -16,18 +15,12 @@ import {
   PreviewSessionDetachedError,
 } from "./html-preview-cdp.fixture";
 import { shQuote } from "../utils/process-utils";
+import { withBrowserDeadline } from "../../../web/src/browserChrome";
 import {
-  stopChrome,
-  waitForChromePort,
-  withBrowserDeadline,
-} from "../../../web/src/browserChrome";
-
-const chrome =
-  Bun.env.CHROME_BIN ||
-  (process.platform === "darwin" &&
-  existsSync("/Applications/Google Chrome.app/Contents/MacOS/Google Chrome")
-    ? "/Applications/Google Chrome.app/Contents/MacOS/Google Chrome"
-    : Bun.which("google-chrome") || Bun.which("chromium"));
+  chromeBinary as chrome,
+  type ChromePage,
+  openChromePage,
+} from "../../../web/src/testing/sharedChrome";
 
 const attack = `<script>document.documentElement.dataset.executed='yes';fetch('/canary/script')</script>
 <script src="/canary/external.js"></script><script src="https://cdn.example.invalid/blocked.js"></script>
@@ -140,8 +133,7 @@ test.skipIf(!chrome)(
           : new Response("Not found", { status: 404 });
       },
     });
-    let child: ReturnType<typeof Bun.spawn> | undefined;
-    let socket: WebSocket | undefined;
+    let page: ChromePage | undefined;
     try {
       const build = await Bun.build({
         entrypoints: [
@@ -175,45 +167,45 @@ test.skipIf(!chrome)(
       expect(build.success).toBe(true);
       for (const asset of build.outputs)
         assets.set(`/${basename(asset.path)}`, asset);
-      child = Bun.spawn(
-        [
-          chrome!,
-          "--headless=new",
-          "--disable-gpu",
-          "--remote-debugging-port=0",
-          "--window-size=1000,900",
-          "--no-first-run",
-          "--no-default-browser-check",
-          `--user-data-dir=${join(dir, "profile")}`,
-          "about:blank",
-        ],
-        { stdout: "ignore", stderr: Bun.file(join(dir, "browser.log")) },
-      );
-      const port = await waitForChromePort(
-        child,
-        join(dir, "profile"),
-        join(dir, "browser.log"),
-      );
-      const targets = () =>
-        fetch(`http://127.0.0.1:${port}/json/list`, {
-          signal: AbortSignal.timeout(10_000),
-        }).then((response) => response.json()) as Promise<
-          { type: string; webSocketDebuggerUrl: string }[]
-        >;
-      socket = new WebSocket(
-        (await targets()).find((target) => target.type === "page")!
-          .webSocketDebuggerUrl,
-      );
-      await withBrowserDeadline(
-        new Promise<void>((resolve, reject) => {
-          socket!.onopen = () => resolve();
-          socket!.onerror = () => reject(new Error("CDP connection failed"));
-        }),
-        "CDP connection",
-      );
-      const { cdp, receive, close } = createPreviewCdp((message) =>
-        socket!.send(message),
-      );
+      page = await openChromePage({ viewport: { width: 1000, height: 900 } });
+      const preview = page;
+      // The debugger speaks to frames Chrome attaches (the sandboxed preview)
+      // through the page's own session: `Target.sendMessageToTarget` out,
+      // `Target.receivedMessageFromTarget` back in.
+      let dispatch: (message: any) => void = () => {};
+      const contextWaiters: Array<() => void> = [];
+      const contextCreated = () =>
+        new Promise<void>((resolve) => contextWaiters.push(resolve));
+      const eventWaiters: Array<() => void> = [];
+      const browserEvent = () =>
+        new Promise<void>((resolve) => eventWaiters.push(resolve));
+      const { cdp, receive, close } = createPreviewCdp((raw) => {
+        const request = JSON.parse(raw);
+        const { sessionId, ...body } = request;
+        const sent = sessionId
+          ? preview.command("Target.sendMessageToTarget", {
+              sessionId,
+              message: JSON.stringify(body),
+            })
+          : preview.command(request.method, request.params);
+        sent.then(
+          (result) => {
+            if (!sessionId) receive({ id: request.id, result });
+          },
+          (error: Error) =>
+            receive({ id: request.id, error: { message: error.message } }),
+        );
+      });
+      const targets = async () =>
+        (
+          (await preview.command("Target.getTargets")) as {
+            targetInfos: { type: string; browserContextId?: string }[];
+          }
+        ).targetInfos.filter(
+          (target) => target.browserContextId === ownContext,
+        );
+      const ownContext = (await preview.command("Target.getTargetInfo"))
+        .targetInfo.browserContextId as string;
       type FrameContext = { id: number; sessionId?: string };
       const contexts = new Map<string, FrameContext>();
       const cdnRequests: { path: string; referer: unknown }[] = [];
@@ -247,9 +239,10 @@ test.skipIf(!chrome)(
         "/import.css": "h1{letter-spacing:3px}",
         "/inline.css": "h1{word-spacing:5px}",
       };
-      socket.onmessage = (event) => {
-        const message = JSON.parse(String(event.data));
+      dispatch = (message) => {
         receive(message);
+        if (message.method)
+          for (const changed of eventWaiters.splice(0)) changed();
         if (message.method === "Target.detachedFromTarget") {
           for (const [frameId, context] of contexts) {
             if (context.sessionId === message.params.sessionId)
@@ -313,13 +306,37 @@ test.skipIf(!chrome)(
         if (
           message.method === "Runtime.executionContextCreated" &&
           message.params.context.auxData?.isDefault
-        )
+        ) {
           contexts.set(message.params.context.auxData.frameId, {
             id: message.params.context.id,
             sessionId: message.sessionId,
           });
+          for (const created of contextWaiters.splice(0)) created();
+        }
       };
-      socket.onclose = socket.onerror = close;
+      preview.on("Target.receivedMessageFromTarget", (event) =>
+        dispatch({ ...JSON.parse(event.message), sessionId: event.sessionId }),
+      );
+      for (const method of [
+        "Target.attachedToTarget",
+        "Target.detachedFromTarget",
+        "Fetch.requestPaused",
+        "Runtime.executionContextCreated",
+      ])
+        preview.on(method, (params) => dispatch({ method, params }));
+      for (const method of [
+        "Page.frameNavigated",
+        "Page.frameAttached",
+        "Page.frameDetached",
+        "Page.domContentEventFired",
+        "Page.loadEventFired",
+        "Page.frameStoppedLoading",
+        "Runtime.executionContextDestroyed",
+      ])
+        preview.on(method, () => {
+          for (const changed of eventWaiters.splice(0)) changed();
+        });
+      preview.exited.catch(close);
       const screenshot = async (name: string) => {
         const directory = Bun.env.HERDR_WORLD_TEST_SCREENSHOTS;
         if (!directory) return;
@@ -345,11 +362,48 @@ test.skipIf(!chrome)(
           throw new Error(JSON.stringify(result.exceptionDetails));
         return result.result.value;
       };
+      // Fifty turns of the page's task queue: navigations and popups started
+      // by a click have begun by then (the canary server and the target list
+      // prove none did). Rendering can be held by the paused canary frame, so
+      // this does not wait for a frame.
+      const frames = () =>
+        evaluate(
+          "(async () => { for (let turn = 0; turn < 50; turn++) await new Promise((resolve) => { const channel = new MessageChannel(); channel.port1.onmessage = resolve; channel.port2.postMessage(0); }); })()",
+        );
+      // Re-check the expression only when something changed: the top page
+      // reports a DOM or document-state change or a load (a capture listener
+      // also hears the preview frame's load, since the sandboxed frame runs no
+      // script of its own), or the browser sends an event (a navigation,
+      // frame, context or load). While the paused canary frame holds the
+      // page's promise tasks, the browser events still arrive.
+      const pageChange = () =>
+        evaluate(
+          `new Promise((resolve) => {
+            const changed = () => {
+              observer.disconnect();
+              document.removeEventListener("readystatechange", changed);
+              document.removeEventListener("load", changed, true);
+              resolve(true);
+            };
+            const observer = new MutationObserver(changed);
+            observer.observe(document, {
+              subtree: true,
+              childList: true,
+              attributes: true,
+              characterData: true,
+            });
+            document.addEventListener("readystatechange", changed);
+            document.addEventListener("load", changed, true);
+          })`,
+        ).catch(() => {});
       const wait = async (expression: string, contextId?: FrameContext) => {
         await withBrowserDeadline(
           (async () => {
-            while (!(await evaluate(expression, contextId)))
-              await Bun.sleep(25);
+            for (;;) {
+              const change = Promise.race([browserEvent(), pageChange()]);
+              if (await evaluate(expression, contextId)) return;
+              await change;
+            }
           })(),
           expression,
         );
@@ -360,7 +414,7 @@ test.skipIf(!chrome)(
       await cdp("Target.setAutoAttach", {
         autoAttach: true,
         waitForDebuggerOnStart: true,
-        flatten: true,
+        flatten: false,
       });
       await cdp("Page.navigate", { url: server.url.href });
       await wait('!!document.querySelector("iframe.file-preview-html")');
@@ -392,6 +446,7 @@ test.skipIf(!chrome)(
         await withBrowserDeadline(
           (async () => {
             while (!context) {
+              const created = contextCreated();
               for (const candidate of contexts.values()) {
                 const url = await evaluate("location.href", candidate).catch(
                   () => "",
@@ -404,7 +459,8 @@ test.skipIf(!chrome)(
                   break;
                 }
               }
-              if (!context) await Bun.sleep(25);
+              // A frame's document gets a new execution context: wait for it.
+              if (!context) await created;
             }
           })(),
           "HTML frame context",
@@ -621,7 +677,7 @@ test.skipIf(!chrome)(
         });
       }
       // Observe delayed refresh/navigation and popup attempts after trusted clicks.
-      await Bun.sleep(250);
+      await frames();
       expect(
         (await targets()).filter((target) => target.type === "page").length,
       ).toBe(pagesBefore);
@@ -647,7 +703,9 @@ test.skipIf(!chrome)(
       await wait(
         'document.readyState === "complete" && !!document.querySelector("#top")',
       );
-      await Bun.sleep(250);
+      // The paused canary frame can hold promise tasks; plain round trips
+      // through the page's main thread still turn.
+      for (let turn = 0; turn < 50; turn++) await evaluate("0");
       expect(await evaluate("location.href")).toBe(
         new URL("/policy.html", server.url).href,
       );
@@ -669,8 +727,7 @@ test.skipIf(!chrome)(
       await Promise.all(interceptions);
       expect(interceptionErrors).toEqual([]);
     } finally {
-      socket?.close();
-      await stopChrome(child);
+      await page?.close();
       server.stop(true);
       await rm(dir, { recursive: true, force: true });
     }

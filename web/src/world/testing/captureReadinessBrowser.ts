@@ -3,21 +3,21 @@ import { mkdtemp, rm, readFile, mkdir, readdir } from "node:fs/promises";
 import { tmpdir, loadavg } from "node:os";
 import { join, basename } from "node:path";
 import {
-  stopChrome,
-  waitForChromePort,
+  BROWSER_STARTUP_TIMEOUT_MS,
   withBrowserDeadline,
 } from "../../browserChrome";
-import { chromeRenderingFlags } from "./chromeRendering";
-import { connectCapture } from "./connectCapture";
+import {
+  chromeBinary as chrome,
+  type ChromePage,
+  openChromePage,
+} from "../../testing/sharedChrome";
 import { captureScene, resizeCapture } from "./captureScene";
-import { captureResumeViewports } from "./resumeVisualCapture";
+import { captureResumeViewportsOnPage } from "./resumeCaptureOnPage";
 
 export function registerCaptureReadinessTests() {
-  const chrome =
-    Bun.env.CHROME_BIN || Bun.which("google-chrome") || Bun.which("chromium");
-  test.skipIf(!chrome)(
-    "capture waits for controlled slow assets/fonts, fences resize/view changes and rejects missing content",
-    async () => {
+  test.skipIf(!chrome).each(["assets", "views", "recovery"])(
+    "capture readiness (%s): controlled assets, resize/view fences and negative controls",
+    async (scenario) => {
       const dir = await mkdtemp(join(tmpdir(), "capture-readiness-"));
       const assets = new Map<string, Blob>();
       const mounted = Promise.withResolvers<void>();
@@ -74,8 +74,7 @@ export function registerCaptureReadinessTests() {
           return new Response("Not found", { status: 404 });
         },
       });
-      let child: ReturnType<typeof Bun.spawn> | undefined;
-      let connection: Awaited<ReturnType<typeof connectCapture>> | undefined;
+      let page: ChromePage | undefined;
       try {
         const build = await Bun.build({
           entrypoints: [join(import.meta.dir, "CaptureReadiness.browser.tsx")],
@@ -106,24 +105,13 @@ export function registerCaptureReadinessTests() {
         expect(build.success).toBe(true);
         for (const output of build.outputs)
           assets.set(`/${basename(output.path)}`, output);
-        const log = join(dir, "chrome.log"),
-          profile = join(dir, "profile");
-        child = Bun.spawn(
-          [
-            chrome!,
-            "--headless=new",
-            "--remote-debugging-port=0",
-            "--no-first-run",
-            "--no-default-browser-check",
-            `--user-data-dir=${profile}`,
-            ...(await chromeRenderingFlags(chrome!)),
-            server.url.href,
-          ],
-          { stdout: "ignore", stderr: Bun.file(log) },
-        );
-        const port = await waitForChromePort(child, profile, log);
-        connection = await connectCapture(port);
-        const command = connection.command;
+        // Captures are asserted pixels: the Town draws.
+        page = await openChromePage({
+          viewport: { width: 1512, height: 982 },
+          pixels: true,
+        });
+        await page.navigate(server.url.href);
+        const command = page.command;
         const evaluate = async (expression: string) => {
           const r = await command("Runtime.evaluate", {
             expression,
@@ -143,243 +131,276 @@ export function registerCaptureReadinessTests() {
           `(()=>{const c=window.__HERDR_WORLD_CAPTURE__,wait=c.wait.bind(c);c.wait=(o)=>{const p=wait(o);void fetch('/waiting');return p;};})()`,
         );
         await resizeCapture(command, 1512, 982);
-        await evaluate(
-          "captureFixture.asset('held-image');captureFixture.font()",
-        );
-        await Promise.all([requestedImage.promise, requestedFont.promise]);
-        let screenshots = 0;
-        const tracked = async (
-          method: string,
-          params?: Record<string, unknown>,
-        ) => {
-          if (method === "Page.captureScreenshot") screenshots++;
-          return command(method, params);
-        };
-        const slow = captureScene(tracked, {
-          view: "town",
-          width: 1512,
-          height: 982,
-          content: { selector: "canvas[data-office-canvas]" },
-        });
-        await withBrowserDeadline(waiting.promise, "capture wait begins");
-        expect(screenshots).toBe(0);
-        expect(
-          await evaluate("document.documentElement.dataset.worldDrawn ?? null"),
-        ).toBeNull();
-        image.resolve();
-        font.resolve();
-        const current = await slow;
-        expect(current.receipt.view).toBe("town");
-        expect(current.sanity.foreground).toBeGreaterThan(0.02);
-        const old = current.receipt;
-        await resizeCapture(command, 1280, 1440);
-        expect(
+        let current: Awaited<ReturnType<typeof captureScene>>;
+        let resized: Awaited<ReturnType<typeof captureScene>>;
+        if (scenario === "assets") {
           await evaluate(
-            `window.__HERDR_WORLD_CAPTURE__.matches(${JSON.stringify(old)})`,
-          ),
-        ).toBe(false);
-        const resized = await captureScene(command, {
-          view: "town",
-          width: 1280,
-          height: 1440,
-        });
-        expect(resized.receipt.revision).toBeGreaterThan(old.revision);
-        // Exhaust the per-frame work budget after the scene has been baked.
-        // Budget exhaustion alone must not invent pending materialization.
-        await evaluate("captureFixture.exhaustMaterializationBudget(true)");
-        try {
-          const loaded = await captureScene(command, {
+            "captureFixture.asset('held-image');captureFixture.font()",
+          );
+          await Promise.all([requestedImage.promise, requestedFont.promise]);
+          let screenshots = 0;
+          const tracked = async (
+            method: string,
+            params?: Record<string, unknown>,
+          ) => {
+            if (method === "Page.captureScreenshot") screenshots++;
+            return command(method, params);
+          };
+          const slow = captureScene(tracked, {
+            view: "town",
+            // The first capture includes cold renderer setup on shared CI CPUs.
+            timeoutMs: BROWSER_STARTUP_TIMEOUT_MS,
+            width: 1512,
+            height: 982,
+            content: { selector: "canvas[data-office-canvas]" },
+          });
+          await withBrowserDeadline(waiting.promise, "capture wait begins");
+          expect(screenshots).toBe(0);
+          expect(
+            await evaluate(
+              "document.documentElement.dataset.worldDrawn ?? null",
+            ),
+          ).toBeNull();
+          image.resolve();
+          font.resolve();
+          current = await slow;
+          expect(current.receipt.view).toBe("town");
+          expect(current.sanity.foreground).toBeGreaterThan(0.02);
+          const old = current.receipt;
+          await resizeCapture(command, 1280, 1440);
+          expect(
+            await evaluate(
+              `window.__HERDR_WORLD_CAPTURE__.matches(${JSON.stringify(old)})`,
+            ),
+          ).toBe(false);
+          resized = await captureScene(command, {
             view: "town",
             width: 1280,
             height: 1440,
-            timeoutMs: 5000,
+          });
+          expect(resized.receipt.revision).toBeGreaterThan(old.revision);
+          // Exhaust the per-frame work budget after the scene has been baked.
+          // Budget exhaustion alone must not invent pending materialization.
+          await evaluate("captureFixture.exhaustMaterializationBudget(true)");
+          try {
+            const loaded = await captureScene(command, {
+              view: "town",
+              width: 1280,
+              height: 1440,
+              timeoutMs: 5000,
+              content: { selector: "canvas[data-office-canvas]" },
+            });
+            expect(loaded.receipt.revision).toBe(resized.receipt.revision);
+            expect(loaded.sanity.foreground).toBeGreaterThan(0.02);
+          } finally {
+            await evaluate(
+              "captureFixture.exhaustMaterializationBudget(false)",
+            );
+          }
+          // Request-driven captures: all five sizes, the same synthetic topology.
+          if (Bun.env.WORLD_CAPTURE_EVIDENCE_DIR)
+            await captureResumeViewportsOnPage(
+              command,
+              Bun.env.WORLD_CAPTURE_EVIDENCE_DIR,
+              "town",
+              { content: { selector: "canvas[data-office-canvas]" } },
+            );
+        } else {
+          current = await captureScene(command, {
+            view: "town",
+            // The first capture includes cold renderer setup on shared CI CPUs.
+            timeoutMs: BROWSER_STARTUP_TIMEOUT_MS,
+            width: 1512,
+            height: 982,
             content: { selector: "canvas[data-office-canvas]" },
           });
-          expect(loaded.receipt.revision).toBe(resized.receipt.revision);
-          expect(loaded.sanity.foreground).toBeGreaterThan(0.02);
-        } finally {
-          await evaluate("captureFixture.exhaustMaterializationBudget(false)");
-        }
-        // Request-driven captures: all five sizes, the same synthetic topology.
-        if (Bun.env.WORLD_CAPTURE_EVIDENCE_DIR)
-          await captureResumeViewports(
-            port,
-            Bun.env.WORLD_CAPTURE_EVIDENCE_DIR,
-            "town",
-            { content: { selector: "canvas[data-office-canvas]" } },
-          );
-        await evaluate("captureFixture.retainHiddenTown()");
-        for (const view of ["board", "desk"] as const) {
-          await evaluate(`captureFixture.mount(${JSON.stringify(view)})`);
           await resizeCapture(command, 1280, 1440);
-          const size = { width: 1280, height: 1440 };
-          const frame = await captureScene(command, {
-            view: view as "board" | "desk",
-            ...size,
+          resized = await captureScene(command, {
+            view: "town",
+            width: 1280,
+            height: 1440,
           });
-          expect(frame.receipt.view).toBe(view);
-          let hidden = "";
-          try {
-            await captureScene(command, { view: "town", ...size });
-          } catch (e) {
-            hidden = String(e);
-          }
-          expect(hidden).toContain("found 0");
-          expect(
-            await evaluate(
-              `window.__HERDR_WORLD_CAPTURE__.matches(${JSON.stringify(resized.receipt)})`,
-            ),
-          ).toBe(false);
-          if (Bun.env.WORLD_CAPTURE_EVIDENCE_DIR)
-            await captureResumeViewports(
-              port,
-              Bun.env.WORLD_CAPTURE_EVIDENCE_DIR,
-              view,
-              {
-                content: {
-                  selector:
-                    view === "board" ? ".board-workspace" : ".desk-card",
+        }
+        if (scenario === "views") {
+          await evaluate("captureFixture.retainHiddenTown()");
+          for (const view of ["board", "desk"] as const) {
+            await evaluate(`captureFixture.mount(${JSON.stringify(view)})`);
+            await resizeCapture(command, 1280, 1440);
+            const size = { width: 1280, height: 1440 };
+            const frame = await captureScene(command, {
+              view: view as "board" | "desk",
+              ...size,
+            });
+            expect(frame.receipt.view).toBe(view);
+            let hidden = "";
+            try {
+              await captureScene(command, { view: "town", ...size });
+            } catch (e) {
+              hidden = String(e);
+            }
+            expect(hidden).toContain("found 0");
+            expect(
+              await evaluate(
+                `window.__HERDR_WORLD_CAPTURE__.matches(${JSON.stringify(resized.receipt)})`,
+              ),
+            ).toBe(false);
+            if (Bun.env.WORLD_CAPTURE_EVIDENCE_DIR)
+              await captureResumeViewportsOnPage(
+                command,
+                Bun.env.WORLD_CAPTURE_EVIDENCE_DIR,
+                view,
+                {
+                  content: {
+                    selector:
+                      view === "board" ? ".board-workspace" : ".desk-card",
+                  },
                 },
-              },
+              );
+            await evaluate(
+              `captureFixture.mount(${JSON.stringify(view)},true)`,
             );
-          await evaluate(`captureFixture.mount(${JSON.stringify(view)},true)`);
-          await resizeCapture(command, 1280, 1440);
-          const dimensions = { width: 1280, height: 1440 };
-          expect(
-            (
+            await resizeCapture(command, 1280, 1440);
+            const dimensions = { width: 1280, height: 1440 };
+            expect(
+              (
+                await captureScene(command, {
+                  view: view as "board" | "desk",
+                  ...dimensions,
+                })
+              ).receipt.view,
+            ).toBe(view);
+            let missing = "";
+            try {
               await captureScene(command, {
                 view: view as "board" | "desk",
                 ...dimensions,
-              })
-            ).receipt.view,
-          ).toBe(view);
-          let missing = "";
+                content: { selector: ".does-not-exist" },
+              });
+            } catch (e) {
+              missing = String(e);
+            }
+            expect(missing).toContain("expected content missing");
+          }
+        }
+        if (scenario === "recovery") {
+          await evaluate("captureFixture.mount('desk')");
+          // A uniform output with a nominal DOM element must still fail sanity.
+          await evaluate(
+            `(()=>{const s=document.createElement('style');s.id='blank-control';s.textContent='.desk>*{visibility:hidden}.desk{background:#fff!important}';document.head.append(s);const el=document.createElement('div');el.className='capture-expected';el.style.cssText='visibility:visible;position:absolute;width:2px;height:2px';document.querySelector('.desk').append(el);})()`,
+          );
+          const blankSize = await evaluate(
+            "({width:innerWidth,height:innerHeight})",
+          );
+          let background = "";
           try {
             await captureScene(command, {
-              view: view as "board" | "desk",
-              ...dimensions,
-              content: { selector: ".does-not-exist" },
+              view: "desk",
+              ...blankSize,
+              content: { selector: ".capture-expected" },
             });
           } catch (e) {
-            missing = String(e);
+            background = String(e);
           }
-          expect(missing).toContain("expected content missing");
-        }
-        // A uniform output with a nominal DOM element must still fail sanity.
-        await evaluate(
-          `(()=>{const s=document.createElement('style');s.id='blank-control';s.textContent='.desk>*{visibility:hidden}.desk{background:#fff!important}';document.head.append(s);const el=document.createElement('div');el.className='capture-expected';el.style.cssText='visibility:visible;position:absolute;width:2px;height:2px';document.querySelector('.desk').append(el);})()`,
-        );
-        const blankSize = await evaluate(
-          "({width:innerWidth,height:innerHeight})",
-        );
-        let background = "";
-        try {
-          await captureScene(command, {
-            view: "desk",
-            ...blankSize,
-            content: { selector: ".capture-expected" },
-          });
-        } catch (e) {
-          background = String(e);
-        }
-        expect(background).toContain("predominantly background");
-        await evaluate(
-          "document.getElementById('blank-control').remove();captureFixture.mount('town')",
-        );
-        let changed = "";
-        try {
-          await captureScene(
-            async (method, params) => {
-              const reply = await command(method, params);
-              if (method === "Page.captureScreenshot")
-                await evaluate("captureFixture.mount('desk')");
-              return reply;
-            },
-            { view: "town", ...blankSize },
+          expect(background).toContain("predominantly background");
+          await evaluate(
+            "document.getElementById('blank-control').remove();captureFixture.mount('town')",
           );
-        } catch (e) {
-          changed = String(e);
-        }
-        expect(changed).toContain("revision changed during screenshot");
-        await evaluate(
-          "captureFixture.mount('town');captureFixture.asset('never-image')",
-        );
-        const dimensions = await evaluate(
-          "({width:innerWidth,height:innerHeight})",
-        );
-        let failed = "";
-        try {
-          await captureScene(command, {
+          let changed = "";
+          try {
+            await captureScene(
+              async (method, params) => {
+                const reply = await command(method, params);
+                if (method === "Page.captureScreenshot")
+                  await evaluate("captureFixture.mount('desk')");
+                return reply;
+              },
+              { view: "town", ...blankSize },
+            );
+          } catch (e) {
+            changed = String(e);
+          }
+          expect(changed).toContain("revision changed during screenshot");
+          await evaluate(
+            "captureFixture.mount('town');captureFixture.asset('never-image')",
+          );
+          const dimensions = await evaluate(
+            "({width:innerWidth,height:innerHeight})",
+          );
+          let failed = "";
+          try {
+            await captureScene(command, {
+              view: "town",
+              ...dimensions,
+              timeoutMs: 100,
+            });
+          } catch (e) {
+            failed = String(e);
+          }
+          expect(failed).toContain("stage=assets");
+          const failedDir = join(dir, "failed-capture");
+          let neverArtifact = "";
+          try {
+            await captureResumeViewportsOnPage(command, failedDir, "never", {
+              timeoutMs: 100,
+            });
+          } catch (e) {
+            neverArtifact = String(e);
+          }
+          expect(neverArtifact).toContain("stage=assets");
+          expect(await readdir(failedDir)).toEqual([]);
+          // Recover on the same mounted owner without releasing /never-image.
+          await resizeCapture(command, dimensions.width, dimensions.height);
+          const ownerBeforeRemoval = await evaluate(
+            "document.querySelector('#root .town-shell').dataset.worldCaptureOwner",
+          );
+          waiting = Promise.withResolvers<void>();
+          const recovering = captureScene(command, {
             view: "town",
             ...dimensions,
-            timeoutMs: 100,
+            content: { selector: "canvas[data-office-canvas]" },
           });
-        } catch (e) {
-          failed = String(e);
-        }
-        expect(failed).toContain("stage=assets");
-        const failedDir = join(dir, "failed-capture");
-        let neverArtifact = "";
-        try {
-          await captureResumeViewports(port, failedDir, "never", {
-            timeoutMs: 100,
-          });
-        } catch (e) {
-          neverArtifact = String(e);
-        }
-        expect(neverArtifact).toContain("stage=assets");
-        expect(await readdir(failedDir)).toEqual([]);
-        // Recover on the same mounted owner without releasing /never-image.
-        await resizeCapture(command, dimensions.width, dimensions.height);
-        const ownerBeforeRemoval = await evaluate(
-          "document.querySelector('#root .town-shell').dataset.worldCaptureOwner",
-        );
-        waiting = Promise.withResolvers<void>();
-        const recovering = captureScene(command, {
-          view: "town",
-          ...dimensions,
-          content: { selector: "canvas[data-office-canvas]" },
-        });
-        await withBrowserDeadline(
-          waiting.promise,
-          "replacement capture waits on obsolete image",
-        );
-        await evaluate("captureFixture.removeAssets()");
-        const replacement = await recovering;
-        expect(String(replacement.receipt.owner)).toBe(ownerBeforeRemoval);
-        expect(replacement.sanity.foreground).toBeGreaterThan(0.02);
-        const nextCapture = await captureScene(command, {
-          view: "town",
-          ...dimensions,
-          content: { selector: "canvas[data-office-canvas]" },
-        });
-        expect(nextCapture.receipt.owner).toBe(replacement.receipt.owner);
-        if (Bun.env.WORLD_CAPTURE_EVIDENCE_DIR) {
-          await mkdir(Bun.env.WORLD_CAPTURE_EVIDENCE_DIR, { recursive: true });
-          await Bun.write(
-            join(Bun.env.WORLD_CAPTURE_EVIDENCE_DIR, "controls.json"),
-            JSON.stringify(
-              {
-                controlledDelay:
-                  "image and font held until capture pending with no marker or screenshot",
-                slow: current.receipt,
-                resize: resized.receipt,
-                neverReady: failed,
-                replacementAfterNeverReady: replacement.receipt,
-                obsoleteImageReleasedBeforeReplacement: false,
-                loadAverage: loadavg(),
-              },
-              null,
-              2,
-            ),
+          await withBrowserDeadline(
+            waiting.promise,
+            "replacement capture waits on obsolete image",
           );
+          await evaluate("captureFixture.removeAssets()");
+          const replacement = await recovering;
+          expect(String(replacement.receipt.owner)).toBe(ownerBeforeRemoval);
+          expect(replacement.sanity.foreground).toBeGreaterThan(0.02);
+          const nextCapture = await captureScene(command, {
+            view: "town",
+            ...dimensions,
+            content: { selector: "canvas[data-office-canvas]" },
+          });
+          expect(nextCapture.receipt.owner).toBe(replacement.receipt.owner);
+          if (Bun.env.WORLD_CAPTURE_EVIDENCE_DIR) {
+            await mkdir(Bun.env.WORLD_CAPTURE_EVIDENCE_DIR, {
+              recursive: true,
+            });
+            await Bun.write(
+              join(Bun.env.WORLD_CAPTURE_EVIDENCE_DIR, "controls.json"),
+              JSON.stringify(
+                {
+                  controlledDelay:
+                    "image and font held until capture pending with no marker or screenshot",
+                  slow: current.receipt,
+                  resize: resized.receipt,
+                  neverReady: failed,
+                  replacementAfterNeverReady: replacement.receipt,
+                  obsoleteImageReleasedBeforeReplacement: false,
+                  loadAverage: loadavg(),
+                },
+                null,
+                2,
+              ),
+            );
+          }
         }
       } finally {
         image.resolve();
         font.resolve();
         never.resolve();
-        connection?.close();
-        await stopChrome(child);
+        await page?.close();
         server.stop(true);
         await rm(dir, { recursive: true, force: true });
       }

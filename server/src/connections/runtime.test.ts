@@ -483,7 +483,7 @@ test("layout subscription ACK and reconnect request browser reconciliation", asy
     expect(subscriptions).toHaveLength(1);
     expect(events).toEqual([]); // No snapshot invalidation before the ACK.
     subscriptions[0]!.ack();
-    await Bun.sleep(10);
+    for (let i = 0; i < 3000 && events.length < 1; i++) await Bun.sleep(1);
     expect(events).toEqual([{ event: "session.resync_required", data: {} }]);
     // Subscription name is dotted; tagged event envelopes use snake_case.
     const layout = {
@@ -499,7 +499,7 @@ test("layout subscription ACK and reconnect request browser reconciliation", asy
     expect(subscriptions).toHaveLength(2);
     expect(events).toHaveLength(2);
     subscriptions[1]!.ack();
-    await Bun.sleep(10);
+    for (let i = 0; i < 3000 && events.length < 3; i++) await Bun.sleep(1);
     expect(events.at(-1)).toEqual({
       event: "session.resync_required",
       data: {},
@@ -807,7 +807,9 @@ test("herdr notification source falls back to agent status on legacy Herdr", asy
       : method === "tab.list"
         ? { tabs: [{ tab_id: "w1:t1", workspace_id: "w1", label: "Peter" }] }
         : { panes: [] };
+  let subscribed = 0;
   runtime.herdr.subscribe = () => {
+    subscribed++;
     const closed = Promise.withResolvers<void>();
     return {
       ready: Promise.resolve(),
@@ -817,8 +819,8 @@ test("herdr notification source falls back to agent status on legacy Herdr", asy
   };
   try {
     runtime.startBackground();
-    for (let i = 0; i < 20 && pings === 0; i++) await Bun.sleep(1);
-    await Bun.sleep(1);
+    for (let i = 0; i < 3000 && (pings === 0 || subscribed === 0); i++)
+      await Bun.sleep(1);
     for (const agent_status of ["working", "blocked"]) {
       runtime.herdr.emit("event", {
         event: "pane.agent_status_changed",

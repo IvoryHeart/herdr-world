@@ -270,7 +270,7 @@ async function waitUntil<T>(read: () => T | null): Promise<T> {
   while (Date.now() < deadline) {
     const value = read();
     if (value !== null) return value;
-    await Bun.sleep(20);
+    await Bun.sleep(10);
   }
   throw new Error("condition not reached");
 }
@@ -282,7 +282,7 @@ async function waitForHealth(port: number): Promise<void> {
     } catch {
       // The child may still be binding.
     }
-    await Bun.sleep(25);
+    await Bun.sleep(10);
   }
   throw new Error("SSH profile process fixture did not become healthy");
 }
@@ -440,7 +440,7 @@ test("production bridge supervises two independent SSH profile tunnels", async (
         legacy?.state === "ready"
       )
         break;
-      await Bun.sleep(20);
+      await Bun.sleep(10);
     }
     const alpha = catalog.connections.find(
       (item: any) => item.id === "ssh-alpha",
@@ -512,7 +512,7 @@ test("production bridge supervises two independent SSH profile tunnels", async (
         nextAlpha.generation !== alphaGeneration
       )
         break;
-      await Bun.sleep(20);
+      await Bun.sleep(10);
     }
     expect(sawReconnecting).toBeTrue();
     expect(betaRoutedDuringReconnect).toBeTrue();
@@ -559,7 +559,7 @@ test("production bridge supervises two independent SSH profile tunnels", async (
         (item: any) => item.id === "startup-default",
       );
       if (legacyStatus?.state === "error") break;
-      await Bun.sleep(20);
+      await Bun.sleep(10);
     }
     expect(legacyStatus).toMatchObject({ state: "error" });
     expect(legacyStatus.generation).not.toBe(legacyGeneration);

@@ -25,12 +25,18 @@
 import { existsSync, readFileSync, writeFileSync } from "node:fs";
 import { dirname, join, normalize, resolve } from "node:path";
 import { parse } from "@babel/parser";
+import { children, isIdentifier, type Node, TEST_FILE } from "./source-ast";
+import {
+  compareProductionClock,
+  formatClockAllowlist,
+  loweredClock,
+  PRODUCTION_CLOCK_ALLOWLIST,
+  parseClockAllowlist,
+  scanProductionClock,
+} from "./production-clock";
 
 const ALLOWLIST = "scripts/test-waits-allowlist.json";
 const POLL_TICK_MS = 10;
-/** @internal */
-export const TEST_FILE =
-  /(?:\.(?:test|browser)\.[cm]?[jt]sx?|\.(?:fixture|cases|browserMock)\.[cm]?[jt]sx?|\/testing\/[^/]+\.[cm]?[jt]sx?)$/;
 const RESOLVER = /^(?:resolve\w*|res|r|done|wake\w*|next|ok)$/;
 const LOOPS = new Set([
   "ForStatement",
@@ -47,11 +53,6 @@ const FUNCTIONS = new Set([
   "ClassMethod",
 ]);
 
-type Node = {
-  type: string;
-  loc?: { start: { line: number } };
-  [key: string]: unknown;
-};
 /** A pause's length; `{ param }` is a helper's own parameter, set per call. */
 type Delay = number | "unknown" | "none" | { param: number };
 type Site = { line: number; delay: Delay; loop: boolean; helper?: string };
@@ -61,27 +62,6 @@ type FileScan = {
   /** Helpers that pause once per call, by name, for importing files. */
   exported: Map<string, Delay>;
 };
-
-function children(node: Node): Node[] {
-  const out: Node[] = [];
-  for (const [key, value] of Object.entries(node)) {
-    if (
-      key === "loc" ||
-      key === "start" ||
-      key === "end" ||
-      key === "extra" ||
-      key.endsWith("Comments")
-    )
-      continue;
-    if (Array.isArray(value)) {
-      for (const item of value)
-        if (item && typeof item === "object" && "type" in item)
-          out.push(item as Node);
-    } else if (value && typeof value === "object" && "type" in value)
-      out.push(value as Node);
-  }
-  return out;
-}
 
 /** A clock read: `Date.now()`, `performance.now()`, `Bun.nanoseconds()`, `new Date()`. */
 const isClock = (node: Node) => {
@@ -312,16 +292,11 @@ function delayOf(
   return param >= 0 ? { param } : "unknown";
 }
 
-const isIdentifier = (node: unknown, name?: string | RegExp): boolean =>
-  !!node &&
-  (node as Node).type === "Identifier" &&
-  (name === undefined ||
-    (typeof name === "string"
-      ? (node as Node).name === name
-      : name.test((node as Node).name as string)));
-
 /** `resolve` or `() => resolve(...)`: a callback that only settles a promise. */
-function onlyResolves(callback: Node | undefined, executorParam?: string) {
+function onlyResolves(
+  callback: Node | undefined,
+  executorParam?: string,
+): boolean {
   const resolver = (node: unknown) =>
     isIdentifier(node, RESOLVER) ||
     (executorParam !== undefined && isIdentifier(node, executorParam));
@@ -342,7 +317,13 @@ function onlyResolves(callback: Node | undefined, executorParam?: string) {
       return false;
     body = statements[0]!.expression as Node;
   }
-  return body.type === "CallExpression" && resolver(body.callee);
+  if (body.type !== "CallExpression") return false;
+  if (resolver(body.callee)) return true;
+  // A deferral that still only settles the promise:
+  // `setTimeout(() => requestAnimationFrame(() => resolve()), ms)`.
+  return (body.arguments as Node[]).some((argument) =>
+    onlyResolves(argument, executorParam),
+  );
 }
 
 /** The name a function node is bound to, when it is a named helper. */
@@ -863,8 +844,12 @@ function sourceFiles(root: string) {
   return files;
 }
 
-/** The allowlist at the PR base, so raising it cannot bless a new sleep. */
-function allowlistAtBase(root: string): Allowlist | undefined {
+/** An allowlist at the PR base, so raising it cannot bless a new use. */
+function atBase<T>(
+  root: string,
+  file: string,
+  parse: (text: string) => T,
+): T | undefined {
   const git = (args: string[]) =>
     Bun.spawnSync(["git", ...args], { cwd: root });
   const merge = git(["merge-base", "HEAD", "origin/main"]);
@@ -873,11 +858,11 @@ function allowlistAtBase(root: string): Allowlist | undefined {
     (merge.exitCode === 0 ? merge.stdout.toString().trim() : undefined);
   if (!ref) return;
   if (git(["rev-parse", "--verify", `${ref}^{commit}`]).exitCode !== 0)
-    throw new Error(`Cannot resolve the test-waits allowlist base ${ref}`);
-  const entry = `${ref}:${ALLOWLIST}`;
+    throw new Error(`Cannot resolve the allowlist base ${ref} for ${file}`);
+  const entry = `${ref}:${file}`;
   // A base predating this check is its adoption.
   if (git(["cat-file", "-e", entry]).exitCode !== 0) return;
-  return parseAllowlist(git(["show", entry]).stdout.toString());
+  return parse(git(["show", entry]).stdout.toString());
 }
 
 if (import.meta.main) {
@@ -887,16 +872,31 @@ if (import.meta.main) {
     new Map([...sources].filter(([path]) => TEST_FILE.test(path))),
   );
   const allowed = parseAllowlist(readFileSync(join(root, ALLOWLIST), "utf8"));
+  const clockUses = scanProductionClock(sources);
+  const clockAllowed = parseClockAllowlist(
+    readFileSync(join(root, PRODUCTION_CLOCK_ALLOWLIST), "utf8"),
+  );
   if (process.argv.includes("--update")) {
     writeFileSync(
       join(root, ALLOWLIST),
       formatAllowlist(lowered(current, allowed)),
     );
-    console.info(`${ALLOWLIST}: lowered to the current counts`);
+    writeFileSync(
+      join(root, PRODUCTION_CLOCK_ALLOWLIST),
+      formatClockAllowlist(loweredClock(clockUses, clockAllowed)),
+    );
+    console.info(
+      `${ALLOWLIST}, ${PRODUCTION_CLOCK_ALLOWLIST}: lowered to the current counts`,
+    );
   } else {
     const problems = [
-      ...compare(current, allowed, allowlistAtBase(root)),
+      ...compare(current, allowed, atBase(root, ALLOWLIST, parseAllowlist)),
       ...timingSwitchesOutsideTests(sources),
+      ...compareProductionClock(
+        clockUses,
+        clockAllowed,
+        atBase(root, PRODUCTION_CLOCK_ALLOWLIST, parseClockAllowlist),
+      ),
     ];
     const total = [...current.values()].reduce(
       (sum, lines) => sum + lines.length,
@@ -906,8 +906,15 @@ if (import.meta.main) {
       for (const problem of problems) console.error(problem);
       process.exit(1);
     }
+    const clockTotal = [...clockUses.values()].reduce(
+      (sum, lines) => sum + lines.length,
+      0,
+    );
     console.info(
       `test waits: ${total} allowlisted fixed sleep(s) in ${Object.keys(allowed).length} file(s); no new ones`,
+    );
+    console.info(
+      `production clock: ${clockTotal} allowlisted direct use(s) in ${clockUses.size} file(s); no new ones`,
     );
   }
 }

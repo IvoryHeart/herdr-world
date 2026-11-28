@@ -42,13 +42,15 @@ import type { ConnectionId } from "../connections/types";
 import type { WorldWatchlist } from "./watchlist";
 import type { WorldRuntimeStatus } from "./runtime-registry";
 import type { WorldHost } from "../../../shared/hosts";
+import { type Scheduler, systemScheduler } from "../service/clock";
 
 const MAX_WORKSPACES = 512;
 const MAX_TABS = 2_048;
 const MAX_PANES = 4_096;
 const MAX_AGENTS = 4_096;
 const MAX_CONCURRENT_CONNECTIONS = 4;
-const SNAPSHOT_RESPONSE_DEADLINE_MS = 20_000;
+/** @internal How long a snapshot reply waits for slow hosts before it marks them stale. */
+export const SNAPSHOT_RESPONSE_DEADLINE_MS = 20_000;
 const SNAPSHOT_FRESH_MS = 15_000;
 const MAX_PRESENTED_SPACES = 128;
 const MAX_PRESENTED_TABS_PER_SPACE = 8;
@@ -159,6 +161,7 @@ export class WorldSnapshotService<Runtime extends RuntimeWithOperations> {
     private readonly onFreshObservation?: observation.Fresh,
     private readonly onCompleteObservation?: observation.Complete,
     incarnation?: string,
+    private readonly scheduler: Scheduler = systemScheduler,
   ) {
     this.observation = new WorldObservation(incarnation);
   }
@@ -300,15 +303,15 @@ export class WorldSnapshotService<Runtime extends RuntimeWithOperations> {
         : this.fallback(status);
       if (accepting) completed.set(status.id, connection);
     });
-    let deadline: ReturnType<typeof setTimeout> | undefined;
+    let deadline: { cancel(): void } | undefined;
     await Promise.race([
       Promise.all(observations),
       new Promise<void>((resolve) => {
-        deadline = setTimeout(resolve, this.responseDeadlineMs);
+        deadline = this.scheduler.schedule(resolve, this.responseDeadlineMs);
       }),
     ]);
     accepting = false;
-    if (deadline) clearTimeout(deadline);
+    deadline?.cancel();
     const gathered = statuses.map((status) => {
       const connection = completed.get(status.id);
       if (connection) return connection;

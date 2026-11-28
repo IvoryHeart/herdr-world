@@ -237,7 +237,27 @@ if (process.env.TOWN_WAREHOUSE_DOM !== "1") {
     expect(dialog.textContent).toContain("Merge…");
 
     // GitHub reports it merged: it leaves the yard, carried off.
-    await publish([{ ...items[1]!, lane: "merged" }, items[0]!, items[2]!]);
+    // The carried parcel's leave timer is caught, then run by the test.
+    const leaves: (() => void)[] = [];
+    const windowTimeout = browser.setTimeout;
+    browser.setTimeout = ((
+      callback: () => void,
+      delay?: number,
+      ...rest: unknown[]
+    ) =>
+      delay === TOWN_WAREHOUSE_LEAVE_MS
+        ? leaves.push(callback)
+        : (windowTimeout as (...args: unknown[]) => number).call(
+            browser,
+            callback,
+            delay,
+            ...rest,
+          )) as typeof windowTimeout;
+    try {
+      await publish([{ ...items[1]!, lane: "merged" }, items[0]!, items[2]!]);
+    } finally {
+      browser.setTimeout = windowTimeout;
+    }
     expect(office.parcels().map((parcel) => parcel.dataset.state)).toEqual([
       "failing",
       "waiting",
@@ -250,12 +270,8 @@ if (process.env.TOWN_WAREHOUSE_DOM !== "1") {
     );
     // The card stays on the merged pull request.
     expect(document.querySelector('[role="dialog"] .pr-card')).not.toBeNull();
-    await act(
-      () =>
-        new Promise((resolve) =>
-          setTimeout(resolve, TOWN_WAREHOUSE_LEAVE_MS + 50),
-        ),
-    );
+    expect(leaves).toHaveLength(1);
+    await act(async () => leaves[0]!());
     expect(office.host.querySelector("[data-leaving]")).toBeNull();
     // A closed pull request just goes.
     await publish([items[0]!]);

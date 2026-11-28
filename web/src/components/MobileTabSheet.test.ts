@@ -1,15 +1,14 @@
 import { expect, test } from "bun:test";
-import { existsSync } from "node:fs";
 import { mkdtemp, readFile, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { basename, join } from "node:path";
+import {
+  chromeBinary,
+  openChromePage,
+  type ChromePage,
+} from "../testing/sharedChrome";
 
-const chrome =
-  Bun.env.CHROME_BIN ||
-  (process.platform === "darwin" &&
-  existsSync("/Applications/Google Chrome.app/Contents/MacOS/Google Chrome")
-    ? "/Applications/Google Chrome.app/Contents/MacOS/Google Chrome"
-    : Bun.which("google-chrome") || Bun.which("chromium"));
+const chrome = chromeBinary;
 
 test.skipIf(!chrome)(
   "mobile Tabs restores qualified windows and keeps native tab actions",
@@ -34,7 +33,7 @@ test.skipIf(!chrome)(
         );
       },
     });
-    let browser: ReturnType<typeof Bun.spawn> | undefined;
+    let page: ChromePage | undefined;
     try {
       const build = await Bun.build({
         entrypoints: [join(import.meta.dir, "MobileTabSheet.browser.tsx")],
@@ -63,27 +62,11 @@ test.skipIf(!chrome)(
       for (const output of build.outputs) {
         assets.set(`/${basename(output.path)}`, output);
       }
-      const browserLog = join(dir, "browser.log");
-      browser = Bun.spawn(
-        [
-          chrome!,
-          "--headless=new",
-          "--disable-gpu",
-          "--disable-background-networking",
-          "--no-first-run",
-          "--no-default-browser-check",
-          `--user-data-dir=${join(dir, "profile")}`,
-          server.url.href,
-        ],
-        { stdout: "ignore", stderr: Bun.file(browserLog) },
-      );
+      page = await openChromePage({ viewport: { width: 800, height: 600 } });
+      await page.command("Page.navigate", { url: server.url.href });
       const observed = await Promise.race([
         result.promise,
-        browser.exited.then(async (code) => {
-          throw new Error(
-            `Browser exited (${code}): ${await readFile(browserLog, "utf8")}`,
-          );
-        }),
+        page.exited,
         new Promise<never>((_, reject) =>
           setTimeout(
             () => reject(new Error("Mobile tab sheet timed out")),
@@ -111,7 +94,7 @@ test.skipIf(!chrome)(
         hasNew: true,
       });
     } finally {
-      browser?.kill();
+      await page?.close();
       server.stop(true);
       await rm(dir, { recursive: true, force: true });
     }

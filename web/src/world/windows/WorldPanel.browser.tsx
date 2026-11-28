@@ -172,7 +172,7 @@ const failures: string[] = [];
 const check = (condition: unknown, message: string) => {
   if (!condition) failures.push(message);
 };
-const settle = () =>
+const nextFrames = () =>
   new Promise<void>((resolve) =>
     requestAnimationFrame(() => requestAnimationFrame(() => resolve())),
   );
@@ -182,8 +182,8 @@ const panelWindow = () =>
 async function run() {
   const root = createRoot(document.getElementById("root")!);
   flushSync(() => root.render(<Fixture />));
-  await settle();
-  await settle();
+  await nextFrames();
+  await nextFrames();
   check(panelWindow(), "an open panel did not open a window");
   check(
     panelWindow()?.querySelector(".world-panel-title")?.textContent ===
@@ -196,7 +196,7 @@ async function run() {
     "the panel's content did not render inside its window",
   );
   flushSync(() => harness.setCount(2));
-  await settle();
+  await nextFrames();
   check(
     panelWindow()?.querySelector(".summary-content")?.textContent ===
       "Agents: 2",
@@ -205,41 +205,41 @@ async function run() {
   panelWindow()
     ?.querySelector<HTMLButtonElement>('[aria-label="Close Summary window"]')
     ?.click();
-  await settle();
-  await settle();
+  await nextFrames();
+  await nextFrames();
   check(harness.closes === 1, "Back did not ask the caller to close");
   check(!panelWindow(), "closing the panel left its window open");
   flushSync(() => harness.setOpen(true));
-  await settle();
-  await settle();
+  await nextFrames();
+  await nextFrames();
   check(
     panelWindow()?.querySelector(".summary-content"),
     "a reopened panel did not open its window again",
   );
   flushSync(() => harness.dispatch({ type: "minimize", id: "panel:summary" }));
-  await settle();
+  await nextFrames();
   check(
     harness.state.windows["panel:summary"]?.minimized,
     "the setup did not minimize Summary",
   );
   flushSync(() => harness.launch());
-  await settle();
-  await settle();
+  await nextFrames();
+  await nextFrames();
   check(
     !harness.state.windows["panel:summary"]?.minimized &&
       harness.state.activeId === "panel:summary",
     "launching an open Summary did not restore it",
   );
   flushSync(() => harness.setLate(["cover"]));
-  await settle();
-  await settle();
+  await nextFrames();
+  await nextFrames();
   check(
     harness.state.activeId === "panel:cover",
     "the setup did not cover Summary",
   );
   flushSync(() => harness.launch());
-  await settle();
-  await settle();
+  await nextFrames();
+  await nextFrames();
   check(
     harness.state.activeId === "panel:summary" &&
       harness.state.stack[harness.state.stack.length - 1] === "panel:summary",
@@ -249,43 +249,43 @@ async function run() {
     harness.setOpen(false);
     harness.setLate([]);
   });
-  await settle();
-  await settle();
+  await nextFrames();
+  await nextFrames();
   const before = harness.delivered.length;
   flushSync(() => {
     harness.focus("panel:late-a");
     harness.focus("panel:late-b");
   });
   flushSync(() => harness.setLate(["late-a"]));
-  await settle();
-  await settle();
+  await nextFrames();
+  await nextFrames();
   check(
     harness.delivered.length === before,
     "a superseded request focused late A",
   );
   flushSync(() => harness.setLate(["late-a", "late-b"]));
-  await settle();
-  await settle();
+  await nextFrames();
+  await nextFrames();
   check(
     harness.delivered.slice(before).join() === "panel:late-b" &&
       harness.state.activeId === "panel:late-b",
     "the newest pre-registration request did not focus B once",
   );
   flushSync(() => harness.setLate(["late-a"]));
-  await settle();
-  await settle();
+  await nextFrames();
+  await nextFrames();
   flushSync(() => harness.setLate(["late-a", "late-b"]));
-  await settle();
-  await settle();
+  await nextFrames();
+  await nextFrames();
   check(
     harness.delivered.length === before + 1,
     "registration replayed a consumed focus request",
   );
   flushSync(() => harness.setDelivering(false));
-  await settle();
+  await nextFrames();
   flushSync(() => harness.setDelivering(true));
-  await settle();
-  await settle();
+  await nextFrames();
+  await nextFrames();
   check(
     harness.delivered.length === before + 1,
     "remount replayed a consumed focus request",
@@ -294,11 +294,11 @@ async function run() {
     harness.focus("panel:late-b");
     harness.setLate(["late-a"]);
   });
-  await settle();
-  await settle();
+  await nextFrames();
+  await nextFrames();
   flushSync(() => harness.setLate(["late-a", "late-b"]));
-  await settle();
-  await settle();
+  await nextFrames();
+  await nextFrames();
   check(
     harness.delivered.length === before + 1,
     "a stale request survived unregister/re-register",
@@ -320,15 +320,15 @@ async function run() {
     });
     removeOld();
   });
-  await settle();
+  await nextFrames();
   check(
     harness.panels.find((panel) => panel.id === "panel:replace")?.label ===
       "New",
     "an obsolete cleanup removed the replacement registration",
   );
   flushSync(() => harness.focus("panel:replace"));
-  await settle();
-  await settle();
+  await nextFrames();
+  await nextFrames();
   check(
     harness.delivered[harness.delivered.length - 1] === "panel:replace" &&
       harness.state.activeId === "panel:replace",
@@ -339,11 +339,11 @@ async function run() {
     harness.setLate([]);
     harness.setOpen(true);
   });
-  await settle();
-  await settle();
+  await nextFrames();
+  await nextFrames();
   flushSync(() => harness.setOpen(false));
-  await settle();
-  await settle();
+  await nextFrames();
+  await nextFrames();
   check(!panelWindow(), "unmounting the panel left its window open");
   root.unmount();
 }

@@ -230,6 +230,10 @@ test("a building of two runtimes orders only the TUI's rooms, on its own connect
   // by side, plus a second TUI whose ordering fails.
   const calls: [string, string, number][] = [];
   let finished = 0;
+  // The working TUI answers only once the failing one has refused, so a fast
+  // refusal elsewhere would otherwise end the order before it finished.
+  let refused = Promise.withResolvers<void>();
+  refused.resolve();
   const connection = bridge.connection;
   bridge.connection = ((connectionId: string, generation: number) => ({
     connectionId,
@@ -241,10 +245,11 @@ test("a building of two runtimes orders only the TUI's rooms, on its own connect
       calls.push([method, connectionId, generation]);
       if (connectionId === "core")
         throw new Error("core has no workspace.list");
-      if (connectionId === "broken") throw new Error("socket closed");
-      // The working TUI answers last, so a fast refusal elsewhere would
-      // otherwise end the order before it finished.
-      await new Promise((resolve) => setTimeout(resolve, 5));
+      if (connectionId === "broken") {
+        refused.resolve();
+        throw new Error("socket closed");
+      }
+      await refused.promise;
       if (method === "workspace.list")
         return {
           workspaces: [
@@ -275,6 +280,7 @@ test("a building of two runtimes orders only the TUI's rooms, on its own connect
     // ordering has finished.
     calls.length = 0;
     finished = 0;
+    refused = Promise.withResolvers<void>();
     expect(
       await requestBuildingRoomOrder(
         [room("x1", "broken"), room("w2"), room("c1", "core", 7), room("w1")],

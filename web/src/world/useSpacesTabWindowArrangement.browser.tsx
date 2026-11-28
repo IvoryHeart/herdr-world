@@ -1,3 +1,4 @@
+import { clock } from "../testing/installRunningTestClock";
 import { flushSync } from "react-dom";
 import { createRoot } from "react-dom/client";
 import { useSpacesTabWindowArrangement } from "./useSpacesTabWindowArrangement";
@@ -49,12 +50,16 @@ const check = (condition: boolean, message: string) => {
   if (!condition) failures.push(message);
   progress(message);
 };
-const settle = () => new Promise((resolve) => setTimeout(resolve, 40));
+const advanceTime = () => clock.advance(40);
 
 async function until(predicate: () => boolean) {
   for (let attempt = 0; attempt < 40; attempt += 1) {
     if (predicate()) return true;
-    await settle();
+    await advanceTime();
+    // Scroll events are delivered at real frames, which test time skips.
+    await new Promise<void>((resolve) =>
+      clock.real.requestAnimationFrame!(() => resolve()),
+    );
   }
   return false;
 }
@@ -129,7 +134,7 @@ async function run() {
       '[aria-label="More actions for First window"]',
     )
     ?.click();
-  await settle();
+  await advanceTime();
   [
     ...document.querySelectorAll<HTMLButtonElement>(
       '[role="menu"][aria-label="Window actions"] button',
@@ -137,20 +142,20 @@ async function run() {
   ]
     .find((button) => button.textContent === "Minimize")
     ?.click();
-  await settle();
+  await advanceTime();
   if (
     hook().arrangementControl.windows?.find((entry) => entry.id === "one")
       ?.minimized
   ) {
     layout.setMobile(true);
-    await settle();
+    await advanceTime();
     check(
       hook().presentedTabId === "two" && !hook().suspended,
       "compact Spaces resurrected the minimized active tab",
     );
     layout.setMobile(false);
     hook().resumeTab("one");
-    await settle();
+    await advanceTime();
   } else check(false, "First window minimize control missing");
   const firstWidth = windows()[0]?.style.width;
   const openTabsBeforeCloseAll = mock.snapshot().tabs.length;
@@ -318,7 +323,7 @@ async function run() {
   );
 
   hook().onFocusSpacesTabWindow("three", "pane-three");
-  await settle();
+  await advanceTime();
   check(
     mock.calls.focusTab.length === 0,
     "pane focus must not send a second tab-focus action",
@@ -383,7 +388,7 @@ async function run() {
       focused: workspace.workspace_id === "beta",
     })),
   });
-  await settle();
+  await advanceTime();
   mock.set({ workspaces: suspendedSnapshot.workspaces });
   check(
     await until(() => hook().suspended && windows().length === 0),
@@ -420,7 +425,7 @@ async function run() {
   mock.set({
     tabs: mock.snapshot().tabs.filter((tab) => tab.tab_id !== "three"),
   });
-  await settle();
+  await advanceTime();
   hook().arrangementControl.onSelect("restore");
   check(
     await until(() => windows().length === 0),

@@ -34,7 +34,8 @@ describe("runProcessWithInputTimeout", () => {
       expect(result.code).toBe(128);
       // The broken pipe must not escape as an unhandled rejection: nothing
       // holds that promise, so it would terminate the whole server process.
-      await new Promise((resolve) => setTimeout(resolve, 300));
+      for (let turn = 0; turn < 50; turn++)
+        await new Promise((resolve) => setImmediate(resolve));
       expect(escaped).toEqual([]);
     } finally {
       process.off("unhandledRejection", record);

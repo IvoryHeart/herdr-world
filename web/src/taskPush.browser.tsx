@@ -1,3 +1,4 @@
+import { clock } from "./testing/installRunningTestClock";
 import { createRoot } from "react-dom/client";
 import { flushSync } from "react-dom";
 import { ConfigMenu } from "./components/ConfigMenu";
@@ -9,7 +10,7 @@ const failures: string[] = [];
 const check = (condition: boolean, message: string) => {
   if (!condition) failures.push(message);
 };
-const settle = () => new Promise((resolve) => setTimeout(resolve, 50));
+const advanceTime = () => clock.advance(50);
 const originalFetch = window.fetch;
 const calls: Array<{ method: string; body: any }> = [];
 let subscribed = true;
@@ -122,8 +123,13 @@ async function run() {
         document.querySelectorAll<HTMLButtonElement>(".config-menu-item"),
       ).find((button) => button.textContent?.includes("Settings"))!;
       flushSync(() => settings.click());
-      for (let i = 0; i < 40 && !document.querySelector(".settings-home"); i++)
-        await settle();
+      // Settings loads as its own chunk: wait for that real fetch itself, so
+      // test time does not run out before it lands.
+      await import("./settings/SettingsHome");
+      await clock.until(
+        () => Boolean(document.querySelector(".settings-home")),
+        "Settings did not open",
+      );
     }
     const menu = document.querySelector<HTMLElement>(".settings-home")!;
     flushSync(() =>
@@ -131,7 +137,7 @@ async function run() {
         .querySelector<HTMLButtonElement>("#settings-tab-notifications")!
         .click(),
     );
-    await settle();
+    await advanceTime();
     check(Boolean(menu), `${theme}: notification configuration missing`);
     for (const animation of menu.getAnimations({ subtree: true }))
       animation.finish();
@@ -156,7 +162,7 @@ async function run() {
     completion.scrollIntoView({ block: "nearest" });
     completion.focus();
     flushSync(() => completion.click());
-    await settle();
+    await advanceTime();
     check(
       completion.getAttribute("aria-checked") === "false",
       `${theme}: completion preference not updated`,
@@ -196,13 +202,13 @@ async function run() {
       );
     }
     flushSync(() => completion.click());
-    await settle();
+    await advanceTime();
   }
   const toggle = document.querySelector<HTMLButtonElement>(
     "button[aria-label='Task notifications']",
   )!;
   flushSync(() => toggle.click());
-  await settle();
+  await advanceTime();
   check(
     calls.slice(-1)[0]?.method === "DELETE" && !subscribed,
     "device was not revoked",

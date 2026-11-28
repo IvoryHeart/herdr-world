@@ -1,4 +1,4 @@
-import { afterEach, describe, expect, test } from "bun:test";
+import { afterEach, describe, expect, jest, test } from "bun:test";
 import type {
   AssistantSnapshot,
   AssistantTaskNotification,
@@ -19,6 +19,10 @@ const originalLocation = Object.getOwnPropertyDescriptor(
   "location",
 );
 const testBridges: Bridge[] = [];
+// Sockets open in a microtask: let the queued opens and replies run.
+const flushMicrotasks = async () => {
+  for (let i = 0; i < 10; i++) await Promise.resolve();
+};
 
 describe("simultaneous qualified runtime admission", () => {
   function setup(
@@ -947,6 +951,7 @@ function sendHello(
 }
 
 afterEach(() => {
+  jest.useRealTimers();
   testBridges.splice(0).forEach((bridge) => bridge.disconnect());
   globalThis.WebSocket = originalWebSocket;
   globalThis.fetch = originalFetch;
@@ -1184,16 +1189,18 @@ describe("bridge connection lifecycle", () => {
         });
       }
     }
+    jest.useFakeTimers();
     installBrowserGlobals(OpeningWebSocket as unknown as typeof WebSocket);
     const bridge = createTestBridge(50);
 
     bridge.connect();
-    await Bun.sleep(1);
+    await flushMicrotasks();
     expect(bridge.status).toBe("connecting");
 
     sendHello(OpeningWebSocket.instance);
     expect(bridge.status).toBe("connected");
-    await Bun.sleep(60);
+    jest.advanceTimersByTime(60);
+    await flushMicrotasks();
     expect(bridge.status).toBe("connected");
   });
 
@@ -1207,11 +1214,13 @@ describe("bridge connection lifecycle", () => {
         });
       }
     }
+    jest.useFakeTimers();
     installBrowserGlobals(SilentWebSocket as unknown as typeof WebSocket);
     const bridge = createTestBridge(5, 1000);
 
     bridge.connect();
-    await Bun.sleep(15);
+    await flushMicrotasks();
+    jest.advanceTimersByTime(15);
 
     expect(bridge.status).toBe("disconnected");
   });
@@ -1232,7 +1241,7 @@ describe("bridge connection lifecycle", () => {
     installBrowserGlobals(ManualWebSocket as unknown as typeof WebSocket);
     const bridge = createTestBridge(50);
     bridge.connect();
-    await Bun.sleep(1);
+    await flushMicrotasks();
 
     ManualWebSocket.instance.onmessage?.({
       data: JSON.stringify({
@@ -1258,13 +1267,14 @@ describe("bridge connection lifecycle", () => {
   });
 
   test("leaves connecting state when the WebSocket handshake hangs", async () => {
+    jest.useFakeTimers();
     installBrowserGlobals(HangingWebSocket as unknown as typeof WebSocket);
     const bridge = createTestBridge();
     const statuses: ConnectionStatus[] = [];
     bridge.onStatus((status) => statuses.push(status));
 
     bridge.connect();
-    await Bun.sleep(15);
+    jest.advanceTimersByTime(15);
 
     expect(statuses).toEqual(["disconnected", "connecting", "disconnected"]);
     expect(bridge.status).toBe("disconnected");
@@ -1286,22 +1296,15 @@ describe("bridge connection lifecycle", () => {
         }
       }
     }
+    jest.useFakeTimers();
     installBrowserGlobals(RecoveringWebSocket as unknown as typeof WebSocket);
     const bridge = createTestBridge(5, 1);
-    const connected = new Promise<void>((resolve, reject) => {
-      const timer = setTimeout(
-        () => reject(new Error("timed out waiting for reconnect")),
-        100,
-      );
-      bridge.onStatus((status) => {
-        if (status !== "connected") return;
-        clearTimeout(timer);
-        resolve();
-      });
-    });
 
     bridge.connect();
-    await connected;
+    // The first handshake times out at 5 ms; the retry follows 1 ms later.
+    jest.advanceTimersByTime(5);
+    jest.advanceTimersByTime(1);
+    await flushMicrotasks();
 
     expect(RecoveringWebSocket.instances).toBe(2);
     expect(bridge.status).toBe("connected");
@@ -1342,10 +1345,11 @@ describe("bridge connection lifecycle", () => {
         this.sent.push(raw);
       }
     }
+    jest.useFakeTimers();
     installBrowserGlobals(ManualWebSocket as unknown as typeof WebSocket);
     const bridge = createTestBridge();
     bridge.connect();
-    await Bun.sleep(1);
+    await flushMicrotasks();
     sendHello(ManualWebSocket.instance);
 
     const response = bridge.call(
@@ -1354,7 +1358,7 @@ describe("bridge connection lifecycle", () => {
       null,
     );
     const request = JSON.parse(ManualWebSocket.instance.sent[0]);
-    await Bun.sleep(5);
+    jest.advanceTimersByTime(5);
     ManualWebSocket.instance.onmessage?.({
       data: JSON.stringify({
         connection_id: "startup-default",
@@ -1390,7 +1394,7 @@ describe("bridge connection lifecycle", () => {
       received.push(clipboard),
     );
     bridge.connect();
-    await Bun.sleep(1);
+    await flushMicrotasks();
     sendHello(ManualWebSocket.instance);
 
     const push = { terminal_id: "term_1", data: "Y29weQ==" };
@@ -1429,7 +1433,7 @@ describe("bridge connection lifecycle", () => {
     const events: unknown[] = [];
     bridge.onEvent((event) => events.push(event));
     bridge.connect();
-    await Bun.sleep(1);
+    await flushMicrotasks();
     sendHello(ManualWebSocket.instance);
 
     const statusEvent = {
@@ -1473,7 +1477,7 @@ describe("bridge connection lifecycle", () => {
     bridge.onTerminalClosed((push) => closed.push(push));
     bridge.onTerminal((terminal) => terminals.push(terminal));
     bridge.connect();
-    await Bun.sleep(1);
+    await flushMicrotasks();
     sendHello(ManualWebSocket.instance);
 
     ManualWebSocket.instance.onmessage?.({
@@ -1513,7 +1517,7 @@ describe("bridge connection lifecycle", () => {
     bridge.onEvent((event) => events.push(event));
     bridge.onTerminal((terminal) => terminals.push(terminal));
     bridge.connect();
-    await Bun.sleep(1);
+    await flushMicrotasks();
     sendHello(ManualWebSocket.instance);
 
     const event = {
@@ -1566,7 +1570,7 @@ describe("bridge connection lifecycle", () => {
     installBrowserGlobals(ManualWebSocket as unknown as typeof WebSocket);
     const bridge = createTestBridge();
     bridge.connect();
-    await Bun.sleep(1);
+    await flushMicrotasks();
     sendHello(ManualWebSocket.instance);
     bridge.setActiveConnection("alpha");
 
@@ -1616,7 +1620,7 @@ describe("bridge connection lifecycle", () => {
     installBrowserGlobals(ManualWebSocket as unknown as typeof WebSocket);
     const bridge = createTestBridge();
     bridge.connect();
-    await Bun.sleep(1);
+    await flushMicrotasks();
     sendHello(ManualWebSocket.instance);
     bridge.setActiveConnection("alpha");
     const client = bridge.connection("alpha");
@@ -1655,12 +1659,12 @@ describe("bridge connection lifecycle", () => {
     // A background answer lets the next one go.
     reply(sent()[0], { state: "none" });
     await expect(shared).resolves.toEqual({ state: "none" });
-    await Bun.sleep(0);
+    await flushMicrotasks();
     expect(sent()).toHaveLength(BACKGROUND_RPC_LIMIT + 2);
     for (const request of sent().slice(1))
       if (request.method === "git.pull_request")
         reply(request, { state: "none" });
-    await Bun.sleep(0);
+    await flushMicrotasks();
     for (const request of sent().slice(BACKGROUND_RPC_LIMIT + 2))
       reply(request, { state: "none" });
     await Promise.all(background);
@@ -1685,7 +1689,7 @@ describe("bridge connection lifecycle", () => {
     installBrowserGlobals(ManualWebSocket as unknown as typeof WebSocket);
     const bridge = createTestBridge();
     bridge.connect();
-    await Bun.sleep(1);
+    await flushMicrotasks();
     sendHello(ManualWebSocket.instance);
     bridge.setActiveConnection("alpha");
     const calls = Array.from({ length: BACKGROUND_RPC_LIMIT + 1 }, (_, i) =>
@@ -1730,7 +1734,7 @@ describe("bridge connection lifecycle", () => {
     bridge.onTerminal((terminal) => terminals.push(terminal));
     bridge.onTerminalClipboard((clipboard) => clipboards.push(clipboard));
     bridge.connect();
-    await Bun.sleep(1);
+    await flushMicrotasks();
     bridge.setActiveConnection("alpha");
     const clientCreatedBeforeHello = bridge.connection("alpha", 7);
     await expect(
@@ -1887,7 +1891,7 @@ describe("bridge connection lifecycle", () => {
     installBrowserGlobals(ManualWebSocket as unknown as typeof WebSocket);
     const bridge = createTestBridge();
     bridge.connect();
-    await Bun.sleep(1);
+    await flushMicrotasks();
     sendHello(ManualWebSocket.instance);
     bridge.setActiveConnection("alpha");
 
@@ -1925,7 +1929,7 @@ describe("bridge connection lifecycle", () => {
     installBrowserGlobals(ManualWebSocket as unknown as typeof WebSocket);
     const bridge = createTestBridge();
     bridge.connect();
-    await Bun.sleep(1);
+    await flushMicrotasks();
     sendHello(ManualWebSocket.instance);
     bridge.setActiveConnection("alpha");
     const alpha = bridge.connection();
@@ -1960,7 +1964,7 @@ describe("bridge connection lifecycle", () => {
     installBrowserGlobals(ManualWebSocket as unknown as typeof WebSocket);
     const bridge = createTestBridge();
     bridge.connect();
-    await Bun.sleep(1);
+    await flushMicrotasks();
     sendHello(ManualWebSocket.instance);
     bridge.setActiveConnection("alpha");
     const alpha = bridge.connection();
@@ -1996,7 +2000,7 @@ describe("bridge connection lifecycle", () => {
     bridge.onTerminal((terminal) => terminals.push(terminal));
     bridge.onTerminalClipboard((clipboard) => clipboards.push(clipboard));
     bridge.connect();
-    await Bun.sleep(1);
+    await flushMicrotasks();
 
     const hello = {
       hello: true,
@@ -2114,7 +2118,7 @@ describe("bridge connection lifecycle", () => {
     bridge.onHello((hello) => hellos.push(hello));
     bridge.onEvent((event) => events.push(event));
     bridge.connect();
-    await Bun.sleep(1);
+    await flushMicrotasks();
 
     const hello = {
       hello: true,
@@ -2332,10 +2336,11 @@ describe("bridge connection lifecycle", () => {
         this.readyState = FrozenWebSocket.CLOSED;
       }
     }
+    jest.useFakeTimers();
     installBrowserGlobals(FrozenWebSocket as unknown as typeof WebSocket);
     const bridge = createTestBridge(50, 1);
     bridge.connect();
-    await Bun.sleep(1);
+    await flushMicrotasks();
     sendHello(FrozenWebSocket.instances[0]);
     expect(bridge.status).toBe("connected");
 
@@ -2343,7 +2348,7 @@ describe("bridge connection lifecycle", () => {
     bridge.probeConnectionNow();
     expect(bridge.status).toBe("disconnected");
 
-    await Bun.sleep(10);
+    jest.advanceTimersByTime(10);
     expect(FrozenWebSocket.instances.length).toBe(2);
   });
 
@@ -2368,7 +2373,7 @@ describe("bridge connection lifecycle", () => {
     installBrowserGlobals(ProbedWebSocket as unknown as typeof WebSocket);
     const bridge = createTestBridge(50);
     bridge.connect();
-    await Bun.sleep(1);
+    await flushMicrotasks();
     sendHello(ProbedWebSocket.instance);
     const generation = bridge.clientGeneration;
 
@@ -2378,7 +2383,7 @@ describe("bridge connection lifecycle", () => {
     bridge.probeConnectionNow();
     expect(ProbedWebSocket.instance.sent.length).toBe(1);
     ProbedWebSocket.instance.onclose?.();
-    await Bun.sleep(1);
+    await flushMicrotasks();
 
     expect(bridge.clientGeneration).toBe(generation + 1);
   });
@@ -2399,7 +2404,7 @@ describe("bridge connection lifecycle", () => {
     installBrowserGlobals(OpeningWebSocket as unknown as typeof WebSocket);
     const bridge = createTestBridge(50);
     bridge.connect();
-    await Bun.sleep(1);
+    await flushMicrotasks();
     sendHello(OpeningWebSocket.instance);
     const generation = bridge.clientGeneration;
 
@@ -2435,10 +2440,11 @@ describe("bridge connection lifecycle", () => {
         this.sent.push(raw);
       }
     }
+    jest.useFakeTimers();
     installBrowserGlobals(ProbedWebSocket as unknown as typeof WebSocket);
     const bridge = createTestBridge(50);
     bridge.connect();
-    await Bun.sleep(1);
+    await flushMicrotasks();
     sendHello(ProbedWebSocket.instance);
 
     bridge.probeConnectionNow();
@@ -2449,7 +2455,8 @@ describe("bridge connection lifecycle", () => {
     ProbedWebSocket.instance.onmessage?.({
       data: JSON.stringify({ id: ping.id, result: { ok: true } }),
     } as MessageEvent);
-    await Bun.sleep(5);
+    await flushMicrotasks();
+    jest.advanceTimersByTime(5);
     expect(bridge.status).toBe("connected");
   });
 
@@ -2471,20 +2478,21 @@ describe("bridge connection lifecycle", () => {
       }
       send() {}
     }
+    jest.useFakeTimers();
     installBrowserGlobals(SlowWebSocket as unknown as typeof WebSocket);
     const bridge = new Bridge(50, 1000, undefined, 20);
     testBridges.push(bridge);
     bridge.connect();
-    await Bun.sleep(1);
+    await flushMicrotasks();
     sendHello(SlowWebSocket.instance);
-    await Bun.sleep(2);
     bridge.probeConnectionNow();
-    await Bun.sleep(5);
+    jest.advanceTimersByTime(5);
     if (delivers)
       SlowWebSocket.instance.onmessage?.({
         data: JSON.stringify({ event: "synthetic-frame" }),
       } as MessageEvent);
-    await Bun.sleep(40);
+    jest.advanceTimersByTime(40);
+    await flushMicrotasks();
     expect(bridge.status).toBe(status);
   });
 });
