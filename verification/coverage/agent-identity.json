@@ -1,0 +1,31 @@
+{
+  "id": "agent-identity",
+  "area": "World agent identity (agent store, resolver, snapshot)",
+  "owner": "server/src/world/agent-resolver.ts",
+  "requirement": "openspec/changes/world-agent-identity/specs/world-identity/spec.md",
+  "properties": "One agent per seat; a seat is set only by a witnessed newcomer, a held seat seen again, World's own result or the user's confirmation; a partial or duplicate listing binds, moves and ends nothing and leaves the seated agent unresolved; an agent with a conversation whose terminal closes is away, one with nothing to resume ends, and an ended agent never returns; a hand-started terminal running an away agent's conversation is a new agent with an offer, never merged; one conversation claimed by two live agents is a conflict for both; an agent keeps its ID across a new conversation, a World restart and a reload",
+  "existingTests": [
+    "quint/agent-identity.test.ts",
+    "server/src/world/agent-resolver.test.ts",
+    "server/src/storage/agent-store.test.ts",
+    "server/src/world/world-cross-view.test.ts"
+  ],
+  "acceptedDelivery": "https://github.com/IvoryHeart/herdr-world/pull/1489",
+  "status": "pending",
+  "technique": "design-model-with-production-replay",
+  "assessment": "Bounded model of three agents, three terminals and two conversations with complete, partial and duplicate listings, World and runtime restarts, new conversations, closes, World resume and move, resume by hand, the user's confirmation and End. Seven named scenarios pass and three seeds of 2,000 random traces (up to 30 steps) keep the safety invariant; exhaustive TLC does not finish in ten minutes, so this is sampling, not exhaustive. All seven scenarios replay through the real World writer over a temporary world.sqlite, the agent store's port and the agent records that resolve each listing and derive each reply's states, up to World resume, World move and the user's confirmation, which are not built yet. The model control (an away agent re-bound by its conversation) and three production mutants (ambiguous listing published, close never ends, no conversation conflict) are rejected.",
+  "remaining": "Independent review. World resume, World move and the user's confirmation are modelled but not built (tasks 8 and 9), so their steps are not replayed; the conversation comes only from the runtime's session report until the task-2 readers land; herdr-core and several connections share the replayed resolver and store but are covered by unit and cross-view tests, not replay.",
+  "requiredChecks": ["bun run check", "bun run verification:gate"],
+  "partialEvidence": {
+    "models": ["quint/agent-identity.qnt"],
+    "contracts": ["verification/contracts/agent-identity.md"],
+    "tests": [
+      "quint/agent-identity.test.ts",
+      "server/src/world/agent-resolver.test.ts",
+      "server/src/storage/agent-store.test.ts",
+      "server/src/world/world-cross-view.test.ts"
+    ],
+    "checks": ["bun run verification:gate"],
+    "review": "New design contract pending PR review."
+  }
+}

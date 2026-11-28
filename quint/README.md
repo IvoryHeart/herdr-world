@@ -163,6 +163,12 @@ in ten minutes), runs its nine named scenarios with `--backend typescript`, and
 replays seven of them through the real snapshot service, command path and two
 browser replicas; two model flags and three production mutants are rejected.
 
+The [agent identity case](../verification/contracts/agent-identity.md) samples
+three seeds of three agents in three terminals (exhaustive TLC does not finish
+in ten minutes), checks its broken model with TLC, runs its seven
+named scenarios, and replays them through the real World writer, agent store and
+agent records; one model control and three production mutants are rejected.
+
 The [Claude tap ownership case](../verification/contracts/claude-tap-lock.md)
 checks all eight bounded live/dead suspension schedules, replays their real
 filesystem commit histories and retains unsafe live-owner stealing as a rejected

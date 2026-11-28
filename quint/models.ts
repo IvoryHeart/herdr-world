@@ -21,4 +21,5 @@ export const verificationModels = [
   "claude-tap-lock",
   "agent-move",
   "world-write-path",
+  "agent-identity",
 ] as const;

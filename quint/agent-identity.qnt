@@ -1,4 +1,4 @@
-// Design-stage model for world-agent-identity: agents, terminals, conversations.
+// Model for world-agent-identity: agents, terminals, conversations.
 // Agents 1..3 start "free" (not yet issued). Terminal and conversation 0 mean none.
 // The negative control sets BROKEN = true: a hand-started terminal running an
 // away agent's conversation silently re-binds that agent.
@@ -38,7 +38,14 @@ module agent_identity {
     world(st, seat, conv, offer, how, everEnded, "stale", name) }
   action still = all { alive' = alive, occ' = occ, tconv' = tconv }
 
+  // TLC needs `init` used only as the init, so scenarios start from `boot`,
+  // the same state.
   action init = all {
+    alive' = TERMS.mapBy(t => false), occ' = TERMS.mapBy(t => false), tconv' = TERMS.mapBy(t => 0),
+    st' = AGENTS.mapBy(a => "free"), seat' = AGENTS.mapBy(a => 0), conv' = AGENTS.mapBy(a => 0),
+    offer' = AGENTS.mapBy(a => 0), how' = AGENTS.mapBy(a => "none"), everEnded' = AGENTS.mapBy(a => false),
+    listing' = "stale", prevSeat' = AGENTS.mapBy(a => 0), prevSt' = AGENTS.mapBy(a => "free"), op' = "init" }
+  action boot = all {
     alive' = TERMS.mapBy(t => false), occ' = TERMS.mapBy(t => false), tconv' = TERMS.mapBy(t => 0),
     st' = AGENTS.mapBy(a => "free"), seat' = AGENTS.mapBy(a => 0), conv' = AGENTS.mapBy(a => 0),
     offer' = AGENTS.mapBy(a => 0), how' = AGENTS.mapBy(a => "none"), everEnded' = AGENTS.mapBy(a => false),
@@ -126,7 +133,7 @@ module agent_identity {
   val safety = oneAgentPerSeat and seatOnlyByDeclaredPaths and ambiguityBindsNothing and endedNeverReturns and onlyAccurateActs
 
   // Scenarios, checked with `quint test`.
-  action seatOne = init.then(openTerminal(1)).then(startHarness(1, 1)).then(observeComplete).then(admit(1))
+  action seatOne = boot.then(openTerminal(1)).then(startHarness(1, 1)).then(observeComplete).then(admit(1))
   run renamedOrRestartedKeepsAgentTest = seatOne.then(worldRestart).then(observeComplete)
     .expect(st.get(1) == "live" and seat.get(1) == 1 and safety)
   run newConversationKeepsAgentTest = seatOne.then(newConversation(1, 2)).then(observeComplete)
@@ -144,7 +151,7 @@ module agent_identity {
   run sameConversationTwiceConflictsTest = seatOne.then(openTerminal(2)).then(startHarness(2, 1))
     .then(observeComplete).then(admit(2))
     .expect(conflicted(1) and conflicted(2) and not(canAct(1)) and not(canAct(2)) and offer.get(2) == 0 and safety)
-  run emptyConversationEndsOnCloseTest = init.then(openTerminal(1)).then(startHarness(1, 0)).then(observeComplete)
+  run emptyConversationEndsOnCloseTest = boot.then(openTerminal(1)).then(startHarness(1, 0)).then(observeComplete)
     .then(admit(1)).then(closeTerminal(1)).then(observeComplete).then(openTerminal(1)).then(startHarness(1, 0))
     .then(observeComplete).then(admit(1))
     .expect(st.get(1) == "ended" and st.get(2) == "live" and safety)

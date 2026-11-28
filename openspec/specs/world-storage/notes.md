@@ -34,6 +34,8 @@
 - `web/src/world/NeedsYouAskerActions.dom.test.ts`
 - `server/src/storage/world-storage.ts`
 - `server/src/storage/world-storage-crash.test.ts`
+- `server/src/storage/agent-store.ts` (`entities` and `facts`; agent facts declared once with their owner)
+- `server/src/storage/agent-store.test.ts`
 - `server/src/storage/`
 - `server/src/config/`
 

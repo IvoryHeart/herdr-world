@@ -317,7 +317,7 @@ interrupted move or resume leaves evidence that recovery must classify.
 `binding-resolution` models one binding at a time, so it cannot show uniqueness
 across agents.
 
-[`agent-identity.qnt`](agent-identity.qnt) is a design-stage model of agents,
+[`agent-identity.qnt`](../../../quint/agent-identity.qnt) is the model of agents,
 terminals and conversations. It covers complete, partial and duplicate
 observations, World and runtime restarts, new conversations, harness swaps,
 closes, World moves and resumes, resumes by hand, the user's confirmation and End.
@@ -333,9 +333,9 @@ attaches to is the identity question the model already explores. The migration's
 "copy only when the key is unique" rule is the model's ambiguity rule, and the
 cross-view test (task 6.1, extended by task 8.4) is the check that views agree.
 
-It is not yet maintained evidence: there is no implementation to replay. Task 5
-moves it into `quint/` with an adapter over the real resolver, a coverage entry and
-the full gate.
+Task 5 moved it into `quint/` with an adapter that replays its scenarios through
+the real writer, agent store and resolver, a coverage entry
+([contract](../../../verification/contracts/agent-identity.md)) and the full gate.
 
 ## Risks
 

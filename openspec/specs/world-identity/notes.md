@@ -20,9 +20,19 @@
 - `server/src/herdr-core/ask-caller.ts` (current core tab/room from World topology)
 - `server/src/storage/catalog.ts` (existing actor snapshot stores and limits)
 - `web/src/world/worldAsks.ts` (ask actor consumer)
-- `openspec/changes/world-agent-identity/agent-identity.qnt` (design-stage agent identity model; moves to `quint/` with its adapter)
+- `server/src/world/agent-resolver.ts` (agent resolver: newcomers, held seats, away, ended, unresolved, conflicts, offers)
+- `server/src/world/agent-records.ts` (resolves each complete listing of both runtimes; publishes `agents` and terminal-row `agent_id`)
+- `server/src/storage/agent-store.ts` (agent records in `entities` and `facts`, seated by a `seat` binding)
+- `server/src/world/binding-types.ts` (the `seat` binding policy)
+- `server/src/world/world-cross-view.test.ts` (agent IDs, states and names across both runtimes, a reload and a restart)
+- `quint/agent-identity.qnt`, `quint/agent-identity.ts`, `verification/contracts/agent-identity.md` (maintained model, replay adapter, contract)
 
 **Pitfalls:**
+
+- An agent's ID comes from World's store, never from a harness or runtime ID.
+  A listing World cannot read clearly (a terminal shown twice) leaves seated
+  agents unresolved and changes nothing. A hand-started terminal running an
+  away agent's conversation is a new agent; "Same agent as …?" is not built yet.
 
 - Names are display labels; durable identity is qualified by runtime.
 - `herdr-world whoami` shows the caller's current runtime location. Herdr resolves
