@@ -8,13 +8,22 @@ import { SWIFTSHADER_FLAGS } from "./world/testing/chromeRendering";
 const chrome =
   Bun.env.CHROME_BIN || Bun.which("google-chrome") || Bun.which("chromium");
 const root = resolve(import.meta.dir, "../..");
-type Result = { mounted: boolean; entry: string | null; errors: string[] };
+type Result = {
+  mounted: boolean;
+  entry: string | null;
+  errors: string[];
+  runtimeSends?: number;
+  refusals?: number;
+};
 
-test.skipIf(!chrome).each(["app", "title-spinner", "board-text"] as const)(
+test
+  .skipIf(!chrome)
+  .each(["app", "title-spinner", "board-text", "agent-refused"] as const)(
   "the real application entry mounts and consumes its switch (%s)",
   async (preview) => {
     const spinnerPreview = preview === "title-spinner";
     const boardPreview = preview === "board-text";
+    const agentRefusalPreview = preview === "agent-refused";
     const artifacts = join(root, ".agents/delivery");
     await mkdir(artifacts, { recursive: true });
     const directory = await mkdtemp(join(artifacts, "app-startup-"));
@@ -77,10 +86,18 @@ test.skipIf(!chrome).each(["app", "title-spinner", "board-text"] as const)(
                   children: `
           (() => {
             const errors=[]; let sent=false; let previewStarted=false;
+            let inputResult={};
+            const replaceState=history.replaceState.bind(history);
+            history.replaceState=(state,unused,url)=>{
+              if(url!=null && new URL(url,location.href).pathname!==location.pathname &&
+                new URL(location.href).searchParams.has('agentInputGuard'))
+                errors.push('Input refusal was not captured before routing');
+              return replaceState(state,unused,url);
+            };
             const report=mounted=>{
               if(sent)return;sent=true;
               fetch('/__startup_result',{method:'POST',body:JSON.stringify({mounted,
-                entry:document.querySelector('script[src="/src/main.tsx"]')?.getAttribute('src')??null,errors})});
+                entry:document.querySelector('script[src="/src/main.tsx"]')?.getAttribute('src')??null,errors,...inputResult})});
             };
             window.addEventListener('error',event=>{errors.push(event.message);report(false);});
             window.addEventListener('unhandledrejection',event=>{errors.push(String(event.reason));report(false);});
@@ -160,7 +177,18 @@ test.skipIf(!chrome).each(["app", "title-spinner", "board-text"] as const)(
                 if(!previewStarted){previewStarted=true;boardText().catch(error=>{errors.push(String(error));report(false);});}
                 return;
               }
-              if(document.querySelector('#root .world-foundation-shell')){setTimeout(()=>report(true),250);return;}
+              if(document.querySelector('#root .world-foundation-shell')){
+                if(${agentRefusalPreview}){
+                  if(location.pathname!=='/town'){requestAnimationFrame(inspect);return;}
+                  if(!previewStarted){
+                    previewStarted=true;
+                    import('/src/testing/agentInputPreviewAcceptance.ts').then(module=>module.checkAgentInputPreview())
+                      .then(result=>{inputResult=result;report(true);})
+                      .catch(error=>{errors.push(String(error));report(false);});
+                  }
+                }else setTimeout(()=>report(true),250);
+                return;
+              }
               if(!sent)requestAnimationFrame(inspect);
             };
             document.addEventListener('DOMContentLoaded',inspect);
@@ -195,7 +223,9 @@ test.skipIf(!chrome).each(["app", "title-spinner", "board-text"] as const)(
             ? address + "?titleSpinnerFixture&keep=yes"
             : boardPreview
               ? address + "?boardTextConflictFixture&keep=yes"
-              : address,
+              : agentRefusalPreview
+                ? address + "?agentInputGuard=refused"
+                : address,
         ],
         { stdout: "ignore", stderr: "ignore" },
       );
@@ -210,6 +240,8 @@ test.skipIf(!chrome).each(["app", "title-spinner", "board-text"] as const)(
       );
       expect(observed.errors).toEqual([]);
       expect(observed).toMatchObject({ mounted: true, entry: "/src/main.tsx" });
+      if (agentRefusalPreview)
+        expect(observed).toMatchObject({ runtimeSends: 0, refusals: 7 });
     } finally {
       backend.stop(true);
       try {

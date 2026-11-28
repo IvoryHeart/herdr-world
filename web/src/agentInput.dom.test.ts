@@ -12,10 +12,13 @@ test("preview refusal removes its switch and never calls the runtime", async () 
     configurable: true,
   });
   try {
-    const { sendAgentInput } = await import("./agentInput");
+    // The eager entry captures the switch; lazy senders load after routing.
+    await import("./agentInputPreview");
     expect(browser.location.href).toBe(
       "https://world.example.test/?keep=1#town",
     );
+    browser.history.replaceState(null, "", "/town");
+    const { sendAgentInput } = await import("./agentInput");
     let writes = 0;
     const client = {
       isCurrent: () => true,
