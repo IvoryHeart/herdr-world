@@ -2,11 +2,7 @@ import {
   readTerminalInputMode,
   rememberTerminalInputMode,
 } from "../terminalInputMode";
-import {
-  TERMINAL_COMPOSER_REQUEST_EVENT,
-  takeTerminalComposerRequest,
-  terminalComposerRequestKey,
-} from "../world/terminalComposerRequest";
+import { subscribeTerminalComposerRequest } from "../world/terminalComposerRequest";
 import type { TerminalInputMode } from "./TerminalComposer";
 import {
   filesFromTerminalDrop,
@@ -653,20 +649,18 @@ export function TerminalView({
   // never takes them.
   useEffect(() => {
     if (!paneId || !isActivePane) return;
-    const target = {
-      connectionId: s.activeConnectionId,
-      generation: s.connectionGeneration,
-      paneId,
-    };
-    const key = terminalComposerRequestKey(target);
-    if (takeTerminalComposerRequest(target)) setComposerOpen(true);
-    const request = (event: Event) => {
-      if ((event as CustomEvent<string>).detail !== key) return;
-      if (takeTerminalComposerRequest(target)) setComposerOpen(true);
-    };
-    window.addEventListener(TERMINAL_COMPOSER_REQUEST_EVENT, request);
-    return () =>
-      window.removeEventListener(TERMINAL_COMPOSER_REQUEST_EVENT, request);
+    return subscribeTerminalComposerRequest(
+      {
+        connectionId: s.activeConnectionId,
+        generation: s.connectionGeneration,
+        paneId,
+      },
+      () => {
+        pendingExplicitModeRef.current = "composer";
+        setComposerMode("composer");
+        setComposerOpen(true);
+      },
+    );
   }, [
     paneId,
     isActivePane,

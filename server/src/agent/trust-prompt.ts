@@ -1,4 +1,5 @@
 import { createHash, randomUUID } from "node:crypto";
+import { withAgentInput } from "../adapters/agent-input";
 import { basename } from "node:path";
 import type { PendingPrompt } from "./pending-prompt";
 import { PROMPT_SCREEN_LINES } from "./pending-prompt";
@@ -291,11 +292,13 @@ export function createTrustPrompts(args: {
       )
     )
       return false;
-    await args.herdrCall("pane.send_input", {
-      pane_id: paneId,
-      text: "",
-      keys: [key],
-    });
+    await withAgentInput(after.info, () =>
+      args.herdrCall("pane.send_input", {
+        pane_id: paneId,
+        text: "",
+        keys: [key],
+      }),
+    );
     return true;
   };
 

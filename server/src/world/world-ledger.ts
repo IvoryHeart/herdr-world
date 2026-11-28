@@ -22,6 +22,8 @@ export type CliActor = {
   verified: boolean;
   connection_id?: string;
   pane_id?: string;
+  /** Current runtime tab at the time this actor was recorded. */
+  tab_id?: string;
   connection_generation?: number;
   workspace_id?: string;
   agent_session_id?: string;

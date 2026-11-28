@@ -4,12 +4,14 @@ import type { WorldAsk } from "../worldAsks";
 import type { WorldObject } from "../worldObject";
 import type { HerdrOfficeProjection } from "../herdrOfficeProjection";
 import type { TownAsker } from "./townAskers";
+import type { TerminalComposerTarget } from "../terminalComposerRequest";
 export const AnswerOutboxContext = createContext<() => void>(() => {});
 export const useOpenAnswerOutbox = () => useContext(AnswerOutboxContext);
 export type AnswerRecipientView = {
   name: string;
   location: string;
   target: TownAsker | null;
+  terminal?: { nodeId: string; target: TerminalComposerTarget };
 };
 /** Opening a current conversation is an explicit owner action, never a resend target. */
 export function answerRecipientView(
@@ -31,6 +33,18 @@ export function answerRecipientView(
   const pane =
     leaf && office.paneRoster.find((entry) => entry.device.nodeId === leaf.id);
   return {
+    ...(leaf
+      ? {
+          terminal: {
+            nodeId: leaf.id,
+            target: {
+              connectionId: leaf.connectionId,
+              generation: leaf.generation,
+              paneId: leaf.pane.pane_id,
+            },
+          },
+        }
+      : {}),
     name: ask.actor.name ?? ask.actor.label,
     location: townLocation(agent ?? pane) || "original host",
     target: agent

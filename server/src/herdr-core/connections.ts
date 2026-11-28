@@ -1,3 +1,4 @@
+import type { ForegroundGroupReader } from "./process-group";
 import { type CorePage, CoreTerminalWatches } from "./watches";
 import { ConnectionManager } from "../connections/manager";
 import type { CoreConnectionSupport } from "../connections/core-support";
@@ -79,6 +80,8 @@ export function createCoreConnections(args: {
     onTunnelExit: (error: Error) => void,
   ) => CoreTransport;
   connect?: CoreStreamConnector;
+  /** @internal Host process reader override for isolated runtimes. */
+  foregroundGroups?: ForegroundGroupReader;
   /** World's own layout of each core (M1), from its SQLite. */
   topology?: () => CoreTopologyPort | null;
   /** Sends a watched terminal's push line to its page; false if it cannot. */
@@ -132,6 +135,7 @@ export function createCoreConnections(args: {
         attentions.set(profile.id, (attention = new CoreAttention()));
       return createCoreConnectionRuntime({
         local: profile.type === "local",
+        foregroundGroups: args.foregroundGroups,
         firstSight,
         attention,
         onAlerts: (alerts, terminals, coreName) => {

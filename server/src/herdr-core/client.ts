@@ -458,12 +458,12 @@ export class CoreClient {
       timeoutMs,
     ) as Promise<CoreTerminalRecord>;
   }
-
   /** Native scheduling and best-effort cancellation; lost replies stay uncertain. */
   sendText(
     address: string,
     text: string,
     options: Parameters<typeof coreSendRequest>[2] | number = 15_000,
+    cancel?: AbortSignal,
   ) {
     if (typeof options === "number") {
       if (!text.trim() || text.length > 32_000 || text.includes("\0"))
@@ -472,13 +472,13 @@ export class CoreClient {
         "terminal.send",
         { terminal: localAddress(address), text, force: false, wait: false },
         options,
+        cancel,
       ) as Promise<CoreSendResult>;
     }
     return this.write(
       ...coreSendRequest(address, text, options),
     ) as Promise<CoreSendResult>;
   }
-
   /**
    * Presses named keys after ~3 s of a person's quiet. Core cannot cancel
    * keys once asked, so World checks first. `control`: Chat's keys, Stop.

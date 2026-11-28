@@ -1,4 +1,5 @@
 import { answerRecipientView } from "./answerOutbox";
+import { requestTerminalComposer } from "../terminalComposerRequest";
 import { ConnectedAnswerDeliveries } from "./AnswerDeliveries";
 import { useAnswerDeliveryCounts } from "../worldAnswerDeliveries";
 import {
@@ -402,6 +403,16 @@ export function useTownSummary({
     <ConnectedAnswerDeliveries
       focusKey={deliveryFocus}
       recipient={(notice) => answerRecipientView(notice.ask, world, office)}
+      compose={(notice) => {
+        const terminal = answerRecipientView(
+          notice.ask,
+          world,
+          office,
+        ).terminal;
+        if (!terminal) return;
+        requestTerminalComposer(terminal.target, notice.ask.answer?.text);
+        openTerminal(terminal.nodeId);
+      }}
       open={(target) => {
         if (target.key === null) return;
         if (target.terminal) openTerminal(target.key);

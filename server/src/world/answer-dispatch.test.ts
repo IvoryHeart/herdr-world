@@ -16,9 +16,11 @@ import { answerPrompt, createAnswerDispatcher } from "./answer-dispatch";
 import {
   ANSWER_DELIVERY_VERB,
   answeringAgent,
+  isQuestionAsker,
+  originalAsker,
   type AnswerActor,
 } from "./ask-delivery-types";
-import type { CliActor, LedgerAsk } from "./world-ledger";
+import { WorldLedger, type CliActor, type LedgerAsk } from "./world-ledger";
 const cleanups: (() => Promise<void>)[] = [];
 afterEach(async () => {
   for (const cleanup of cleanups.splice(0)) await cleanup();
@@ -51,6 +53,7 @@ async function fixture(
     online: true,
     registered: true,
     generation: 1,
+    askerPane: "w1:p1",
     session: session("original"),
     speakerSession: session("answerer"),
     scheme: "reported" as "reported" | "title" | "guessed",
@@ -70,7 +73,7 @@ async function fixture(
   const prompts: string[] = [];
   const delays: number[] = [];
   const info = (id: string) => ({
-    pane_id: id === "studio" ? "w1:p1" : "w1:p2",
+    pane_id: id === "studio" ? state.askerPane : "w1:p2",
     terminal_id: id === "studio" ? "term-original" : "term-answerer",
     agent: state.agent,
     agent_status: "idle",
@@ -191,6 +194,15 @@ async function fixture(
           agentSessions: { conversation: source },
           ...herdrRuntimeFixture({
             async call(_method: string, params: Record<string, unknown>) {
+              if (_method === "pane.process_info")
+                return {
+                  process_info: {
+                    pane_id: info(id).pane_id,
+                    shell_pid: 10,
+                    foreground_process_group_id: 20,
+                    foreground_processes: [{ pid: 20, name: state.agent }],
+                  },
+                };
               if (params.pane_id !== info(id).pane_id)
                 throw new Error("pane_not_found: fixture");
               return { pane: info(id) };
@@ -334,14 +346,14 @@ test("offline answers remain pending and attach to the original session after a 
   expect((await f.entry()).evidence?.fence?.generation).toBe(20);
 });
 
-test("a changed session or fingerprint scheme refuses delivery and leaves ask get readable", async () => {
+test("a changed agent session or fingerprint scheme can receive a saved answer", async () => {
   const changed = await fixture();
   await changed.answer();
   changed.state.session = session("replacement");
   changed.time(4000);
   await changed.dispatcher.wake();
-  expect((await changed.entry()).state).toBe("refused");
-  expect(changed.prompts).toEqual([]);
+  expect((await changed.entry()).state).toBe("delivered");
+  expect(changed.prompts).toHaveLength(1);
   expect(changed.storage.ledger.ask("q-fixture")?.answer?.text).toBe("Proceed");
   const scheme = await fixture();
   await scheme.answer();
@@ -349,8 +361,8 @@ test("a changed session or fingerprint scheme refuses delivery and leaves ask ge
   scheme.state.agent = "codex";
   scheme.time(4000);
   await scheme.dispatcher.wake();
-  expect((await scheme.entry()).state).toBe("refused");
-  expect(scheme.prompts).toEqual([]);
+  expect((await scheme.entry()).state).toBe("delivered");
+  expect(scheme.prompts).toHaveLength(1);
 });
 
 test("legacy asks are not rebound when answered and generate final not-sent evidence", async () => {
@@ -472,6 +484,70 @@ test("current answering-agent policy is checked again before dispatch, and owner
     ownerOnly.answer("No", answeringAgent(ownerOnly.actor("speaker"))),
   ).rejects.toThrow("could not be verified");
   expect(ownerOnly.storage.ledger.ask("q-fixture")?.answer).toBeUndefined();
+});
+
+for (const legacy of [false, true]) {
+  test(`a moved asker is refused by answer authorization and recording (legacy=${legacy})`, async () => {
+    const f = await fixture({ ownerOnly: false, legacy });
+    const ask = f.storage.ledger.ask("q-fixture")!;
+    f.state.askerPane = "w2:p3";
+    const moved = answeringAgent(f.actor());
+    expect(await f.recipients.authorize(moved, ask)).toBe("refused");
+    await expect(f.answer("yes", moved)).rejects.toThrow(
+      "could not be verified",
+    );
+    // The commit-time guard must also refuse if an earlier check allowed it.
+    const ledger = new WorldLedger("/synthetic/ledger.json", {
+      persist: false,
+    });
+    ledger.update((document) => document.asks.push(structuredClone(ask)));
+    const record = createAnswerRecorder({
+      ledger: () => ledger,
+      recipients: {
+        resolve: f.recipients.resolve,
+        authorize: async () => "allowed",
+      },
+      now: () => 1000,
+    });
+    await expect(record(ask.id, "yes", moved)).rejects.toThrow(
+      "not authorized",
+    );
+    expect(ledger.ask(ask.id)?.answer).toBeUndefined();
+    expect(f.storage.ledger.ask(ask.id)?.answer).toBeUndefined();
+    expect(await f.storage.outbox.forRecord(ask.id)).toEqual([]);
+    expect(f.prompts).toEqual([]);
+  });
+}
+
+test("self-answer ownership exhausts terminal identity without granting original-recipient authority", async () => {
+  const f = await fixture({ ownerOnly: false });
+  const ask = f.storage.ledger.ask("q-fixture")!;
+  // Every combination of verification, connection, terminal, generation,
+  // session fingerprint, session ID and pane equality (128 equivalence classes).
+  for (let mask = 0; mask < 128; mask++) {
+    const actor: CliActor = {
+      ...f.askingActor,
+      verified: !(mask & 1),
+      connection_id: mask & 2 ? "other" : f.askingActor.connection_id,
+      terminal_id: mask & 4 ? "other-terminal" : f.askingActor.terminal_id,
+      connection_generation: mask & 8 ? 9 : f.askingActor.connection_generation,
+      agent_session_fingerprint:
+        mask & 16 ? "replacement" : f.askingActor.agent_session_fingerprint,
+      agent_session_id: mask & 32 ? "replacement-session" : undefined,
+      pane_id: mask & 64 ? "w2:p3" : f.askingActor.pane_id,
+    };
+    expect(isQuestionAsker(ask, actor)).toBe(!(mask & 7));
+    if (mask & 64) expect(originalAsker(ask.recipient, actor)).toBe(false);
+  }
+  // Old records without a stable terminal retain same-connection pane matching.
+  const legacy = { actor: { ...ask.actor, terminal_id: undefined } };
+  expect(isQuestionAsker(legacy, f.askingActor)).toBe(true);
+  expect(isQuestionAsker(legacy, { ...f.askingActor, pane_id: "w2:p3" })).toBe(
+    false,
+  );
+  expect(
+    isQuestionAsker(legacy, { ...f.askingActor, connection_id: "other" }),
+  ).toBe(false);
 });
 
 test("creation does not bind a replacement that appears during conversation lookup", async () => {

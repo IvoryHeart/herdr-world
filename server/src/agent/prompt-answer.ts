@@ -2,6 +2,7 @@ import type {
   ConversationSource,
   AnswerUnconfirmedReason,
 } from "./conversation";
+import { withAgentInput } from "../adapters/agent-input";
 import { createMenuPresser } from "./menu-keys";
 import type { PendingPrompt } from "./pending-prompt";
 import type { HerdrCall } from "./session-types";
@@ -142,11 +143,13 @@ export function createPromptActions(
         "changed",
         "The agent changed while Chat checked its question. Nothing was sent; check it and answer again.",
       );
-    await args.herdrCall("pane.send_input", {
-      pane_id,
-      text: "",
-      keys: [option.key],
-    });
+    await withAgentInput(after, () =>
+      args.herdrCall("pane.send_input", {
+        pane_id,
+        text: "",
+        keys: [option.key],
+      }),
+    );
     if (option.input) {
       // Wait on Herdr's output event, then recheck the destination before
       // writing text. A selected option alone does not prove an editor opened.
@@ -226,11 +229,13 @@ export function createPromptActions(
             "changed",
             "The pane changed while Chat checked the text editor. No text was sent; check the Terminal.",
           );
-        await args.herdrCall("pane.send_input", {
-          pane_id,
-          text: text!,
-          keys: ["enter"],
-        });
+        await withAgentInput(checked, () =>
+          args.herdrCall("pane.send_input", {
+            pane_id,
+            text: text!,
+            keys: ["enter"],
+          }),
+        );
       } else {
         if (!MOVED_ON.has(stringValue(current.agent_status)))
           return refuse(
@@ -275,10 +280,12 @@ export function createPromptActions(
         // The normal prompt operation pastes literal text and submits it,
         // and refuses if the agent became blocked before dispatch.
         discussionState = checked;
-        const sent = await args.herdrCall("agent.prompt", {
-          target: pane_id,
-          text: text!,
-        });
+        const sent = await withAgentInput(checked, () =>
+          args.herdrCall("agent.prompt", {
+            target: pane_id,
+            text: text!,
+          }),
+        );
         if (
           !isRecord(sent) ||
           !isRecord(sent.agent) ||

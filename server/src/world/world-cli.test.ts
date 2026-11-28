@@ -740,6 +740,7 @@ describe("questions and results", () => {
         connection_id: "studio",
         connection_generation: 2,
         pane_id: "w1:p1",
+        tab_id: "w1:t1",
         terminal_id: "term_a",
         workspace_id: "w1",
         agent: "claude",

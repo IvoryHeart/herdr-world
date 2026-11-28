@@ -108,9 +108,16 @@ Targets are on your own host; add --connection ID for another one.
   ask get ID [--wait] | ask answer ID "ANSWER" | ask withdraw ID|--key CAUSE
          New asks from a verified local Linux caller with a supported bound
          Chat session can receive the saved answer there without --wait.
-         Offline delivery waits for that original session; a changed session
-         is skipped. Older, unverified and unsupported asks stay retrieval-only.
-         Always keep the ask ID: ask get reads the saved answer after restart.
+         Right before typing, World checks only the runtime-reported foreground
+         group leader's executable basename, ignoring arguments and children.
+         Shells, REPL interpreters, editors/pagers, ssh, sudo/su, database clients,
+         tmux/screen/zellij and docker receive nothing. Reception says Not sent;
+         Copy answer and herdr-world ask get ID keep the saved answer available.
+         Other executable names are allowed without original-session matching.
+         MCP helpers and all children are ignored; a shell inside a live harness
+         is a known limit. With no runtime foreground information (macOS, remote
+         cores, TUI without process info), this check preserves prior behavior.
+         Older, unverified and unsupported asks keep answers for ask get.
          An owner answer may end with "Attached files:" and one absolute path
          per line: files the owner attached, stored temporarily; open them.
          Possible pane sends are never retried automatically. The owner can

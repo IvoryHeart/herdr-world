@@ -17,6 +17,7 @@ export type WorldAsk = {
     verified: boolean;
     connection_id?: string;
     pane_id?: string;
+    tab_id?: string;
     terminal_id?: string;
     connection_generation?: number;
     workspace_id?: string;

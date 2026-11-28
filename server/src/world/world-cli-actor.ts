@@ -37,7 +37,7 @@ export type CoreCliOccupant = {
   coreId: string;
   pid: number;
   foregroundPid: number | null;
-  foreground?: { pid: number; name: string };
+  foreground?: { pid: number; name: string; argv?: string[] };
   /** `coreOccupantFingerprint`: core, address, pid, argv, template. */
   fingerprint: string;
 };
@@ -69,9 +69,12 @@ export type CoreCliHost = {
   /** The live program at `address` (`tN`) on this core, or null. */
   occupant(address: string): CoreCliOccupant | null;
   /** World's read-model row for it: room, harness and name. */
-  describe(
-    address: string,
-  ): Promise<{ workspace_id?: string; agent?: string; name?: string } | null>;
+  describe(address: string): Promise<{
+    tab_id?: string;
+    workspace_id?: string;
+    agent?: string;
+    name?: string;
+  } | null>;
 };
 
 export type CoreCallerSource = {
@@ -110,6 +113,7 @@ export async function coreActor(
     pane_id: address,
     terminal_id: address,
     agent_session_fingerprint: occupant.fingerprint,
+    ...(row?.tab_id ? { tab_id: row.tab_id } : {}),
     ...(row?.workspace_id ? { workspace_id: row.workspace_id } : {}),
     ...(row?.agent ? { agent: row.agent } : {}),
     ...(row?.name ? { name: row.name } : {}),
@@ -201,7 +205,7 @@ export async function identifyCaller(
       matches.push({
         distance,
         resolve: async () => ({
-          actor: (await paneActor(host, paneId)).actor,
+          actor: (await paneActor(host, paneId, { resolveAlias: true })).actor,
           host,
         }),
       });
@@ -245,6 +249,7 @@ export async function identifyCaller(
 export async function paneActor(
   host: CliHost,
   paneId: string,
+  options: { resolveAlias?: boolean } = {},
 ): Promise<{ state: "present" | "absent" | "unknown"; actor: CliActor }> {
   let state: "present" | "absent" | "unknown" = "unknown";
   let pane: Record<string, unknown> | undefined;
@@ -255,7 +260,12 @@ export async function paneActor(
       } | null
     )?.pane;
     if (
-      candidate?.pane_id === paneId &&
+      typeof candidate?.pane_id === "string" &&
+      (candidate.pane_id === paneId ||
+        (options.resolveAlias &&
+          /^[A-Za-z0-9_-]{1,32}:[A-Za-z0-9_-]{1,32}$/.test(
+            candidate.pane_id,
+          ))) &&
       typeof candidate.terminal_id === "string" &&
       candidate.terminal_id
     ) {
@@ -266,15 +276,22 @@ export async function paneActor(
     const message = error instanceof Error ? error.message : String(error);
     if (/^pane_not_found(?::|$)/.test(message)) state = "absent";
   }
+  // Herdr resolves launch-time IDs after a move. They are lookup aliases,
+  // while every new actor snapshot belongs to the returned current location.
+  // Only caller identification opts in after verifying process ancestry;
+  // original-recipient and unverified placement reads still require an exact ID.
+  const currentPaneId =
+    typeof pane?.pane_id === "string" ? pane.pane_id : paneId;
   const agent = typeof pane?.agent === "string" ? pane.agent : undefined;
   return {
     state,
     actor: {
-      label: `${agent ?? "terminal"} in ${paneId}`,
+      label: `${agent ?? "terminal"} in ${currentPaneId}`,
       verified: true,
       connection_id: host.connection_id,
       connection_generation: host.generation,
-      pane_id: paneId,
+      pane_id: currentPaneId,
+      ...(typeof pane?.tab_id === "string" ? { tab_id: pane.tab_id } : {}),
       ...(typeof pane?.terminal_id === "string"
         ? { terminal_id: pane.terminal_id }
         : {}),

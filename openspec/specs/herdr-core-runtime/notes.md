@@ -8,6 +8,10 @@
 
 **Code:**
 
+- `server/src/herdr-core/delivery.ts`, `server/src/herdr-core/delivery.test.ts`
+- `server/src/herdr-core/native-send.test.ts`
+- `server/src/herdr-core/recipient.ts`
+
 - `server/src/herdr-core/host-runtime.ts`
 - `server/src/herdr-core/host-runtime.test.ts`
 - `server/src/herdr-core/town-move.ts`
@@ -369,3 +373,7 @@ with source creation/merge dates and current session-qualified links for agent
 attribution. Missing sources never imply zero. Reads refuse unqualified pane/room
 filters, unsupported windows and arbitrary paths. `usage --fixture` runs a
 synthetic example offline, including an owner wait and a usage limit.
+
+## Foreground admission
+
+See [Foreground admission](../ask-answer-delivery/notes.md#foreground-admission) for agent input checks, restarts and wrapper scripts.

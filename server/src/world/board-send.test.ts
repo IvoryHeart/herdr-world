@@ -10,6 +10,7 @@ function herdr(
     agent?: boolean;
     terminal?: string;
     blocked?: boolean;
+    promptError?: string;
     prompt?: unknown;
     occupant?: Occupant;
     /** The occupant once the prompt has been submitted. */
@@ -54,6 +55,7 @@ function herdr(
         },
       };
     if (method === "agent.prompt") {
+      if (options.promptError) throw new Error(options.promptError);
       if (options.blocked) throw new Error("agent_blocked: waiting for input");
       expect(params).toEqual({ target: "w1:p1", text: "Ship the login fix" });
       if (options.afterPrompt) occupant = options.afterPrompt;
@@ -418,4 +420,18 @@ describe("the saved link a Send relies on", () => {
       status: "refused",
     });
   });
+});
+
+test("foreground refusal is definitely Not sent and hides native codes", async () => {
+  const h = herdr({
+    promptError:
+      "agent_not_ready: Original agent is not attached. Nothing was sent.",
+  });
+  const result = await sendNote(h.call, await request());
+  expect(result).toMatchObject({
+    status: "refused",
+    message: expect.stringContaining("Not sent."),
+  });
+  expect(JSON.stringify(result)).not.toContain("agent_not_ready:");
+  expect(JSON.stringify(result)).not.toContain("may not");
 });

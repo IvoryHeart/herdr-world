@@ -1,3 +1,4 @@
+import type { ForegroundGroupReader } from "../process-group";
 import { mkdtempSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
@@ -32,7 +33,10 @@ import { FakeCore, type FakeCoreOptions } from "./fake-core";
  * World's layout in memory. Call `dispose` after each test.
  */
 export async function coreWorld(
-  options: FakeCoreOptions & { topology?: CoreTopologyPort } = {},
+  options: FakeCoreOptions & {
+    topology?: CoreTopologyPort;
+    foregroundGroups?: ForegroundGroupReader;
+  } = {},
 ) {
   const root = mkdtempSync(join(tmpdir(), "hcw-op-"));
   const fake = new FakeCore({ heartbeatMs: 60_000, ...options });
@@ -43,6 +47,7 @@ export async function coreWorld(
   /** When each read-model change was announced. */
   const changedAt: number[] = [];
   const core = createCoreConnections({
+    foregroundGroups: options.foregroundGroups ?? (() => []),
     logger: silentLogger,
     changed: () => {},
     observed: (id) => {

@@ -28,6 +28,8 @@ export type PaneRecipient = {
   /** What to call the agent when asking the user. */
   label: string;
   terminal_id: string;
+  /** Transient source evidence for the final guarded transport, never saved. */
+  agent_info?: Record<string, unknown>;
 };
 
 /** No agent, or one whose identity cannot be verified. */
@@ -129,6 +131,7 @@ export async function readPaneRecipient(
     token: encodeRecipient({ agent: kind, session, group }),
     label: String(agent.name || kind),
     terminal_id: pane.terminal_id,
+    agent_info: agent,
   };
 }
 

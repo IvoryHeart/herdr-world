@@ -1,5 +1,6 @@
 import { isLocalCoreAddress } from "../../../shared/coreAddress";
-import type { CliActor } from "./world-ledger";
+import { questionAskerKey } from "../../../shared/questionAsker";
+import type { CliActor, LedgerAsk } from "./world-ledger";
 
 /** Only this record-delivery verb is queueable; generic Chat/terminal sends are not. */
 export const ANSWER_DELIVERY_VERB = {
@@ -31,8 +32,8 @@ export type ChatAnswerRecipient = {
  * `reported` holds the occupant fingerprint the verified caller had
  * (`coreOccupantFingerprint`: core, address, pid, argv, template and occupancy), so a kept
  * terminal's replacement shell, even one reusing the pid, is another asker.
- * World sends saved answers only to this original program and foreground;
- * `ask get`/`--wait` remain available when delivery cannot be established.
+ * Saved answers address this terminal's current admitted foreground program;
+ * original caller identity still owns ask get/--wait and acknowledgements.
  */
 export type CoreAnswerRecipient = {
   adapter: "herdr-core";
@@ -183,6 +184,23 @@ export function originalAsker(
       actor.pane_id === recipient.pane_id &&
       actor.terminal_id === recipient.terminal_id &&
       actor.agent_session_fingerprint === recipient.reported.fingerprint,
+  );
+}
+
+/** Question ownership survives moves; it does not grant delivery or ACK authority. */
+export function isQuestionAsker(
+  ask: Pick<LedgerAsk, "actor" | "recipient">,
+  actor: AnsweringAgent,
+) {
+  const key = questionAskerKey(ask.actor);
+  return Boolean(
+    (actor.verified &&
+      (key !== null
+        ? key === questionAskerKey(actor)
+        : ask.actor.connection_id === actor.connection_id &&
+          Boolean(ask.actor.pane_id) &&
+          ask.actor.pane_id === actor.pane_id)) ||
+      originalAsker(ask.recipient, actor),
   );
 }
 

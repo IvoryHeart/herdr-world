@@ -1,5 +1,5 @@
 import { createHash } from "node:crypto";
-import { harnessName, harnessOfArgv } from "./harness";
+import { foregroundInputRefusal } from "../adapters/agent-input";
 
 /**
  * Who a reply is for (delivery.ts): the program a person addressed in a
@@ -95,14 +95,7 @@ export function coreRecipientChange(
   occupancy: number | null = null,
 ): "ended" | "changed" | null {
   if (!record || record.remote || record.state !== "live") return "ended";
-  const fg = record.foreground as { name?: unknown; argv?: unknown } | null;
-  const expected =
-    harnessOfArgv(record.argv) ??
-    harnessName((record.status as { app?: unknown } | null)?.app);
-  if (
-    expected &&
-    expected !== (harnessOfArgv(fg?.argv) ?? harnessName(fg?.name))
-  )
+  if (foregroundOf(record) && foregroundInputRefusal(record.foreground))
     return "changed";
   const now = coreRecipientToken(coreId, record, occupancy);
   if (!now) return "changed";
