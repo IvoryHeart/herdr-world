@@ -398,7 +398,7 @@ async function loadingKeys() {
   );
   await press("a");
   await press("c", true);
-  await pause(100);
+  await until(() => typed.length >= 2);
   check(
     typed.join("") === "a\x03" && !root.querySelector(".core-watch-host"),
     `keys typed while the watch loads are kept, Ctrl+C too: ${JSON.stringify(typed)}`,
@@ -430,7 +430,8 @@ async function loadingKeys() {
   );
   await press("b");
   await until(() => typedOn().length > 2);
-  await pause(100);
+  // A replayed duplicate would follow within a few frames of the drain.
+  await frames(6);
   check(
     typedOn() === "a\x03b",
     `the kept key goes once, before later keys: ${JSON.stringify(typedOn())}`,
