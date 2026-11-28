@@ -717,7 +717,22 @@ async function run() {
         );
       // Keep input and real pushes running throughout layout, canvas paints and
       // a bounded settling window, rather than stopping at first DOM.
-      await new Promise((resolve) => setTimeout(resolve, 1000));
+      // The producer pushes 8 frames every 25 ms: 320 of them are the
+      // second this window used to be, counted rather than timed.
+      const windowStart = receivedFrames;
+      await new Promise<void>((resolve, reject) => {
+        const deadline = setTimeout(
+          () => reject(new Error("The producer's frames stopped arriving")),
+          10_000,
+        );
+        const look = () => {
+          if (receivedFrames - windowStart >= 320) {
+            clearTimeout(deadline);
+            resolve();
+          } else requestAnimationFrame(look);
+        };
+        look();
+      });
       await frames(4);
       if (view === "town") {
         const renderer = window.__HERDR_TOWN_RENDERER__;

@@ -5,6 +5,7 @@
  */
 import { writeFileSync } from "node:fs";
 import { CoreClient, type CoreTerminalRecord } from "../client";
+import { CoreMirror } from "../mirror";
 import { resolveLocalCoreEndpoint } from "../endpoint";
 import { connectUnixStream } from "../stream";
 import { desktopPane } from "./desktop-pane";
@@ -30,6 +31,33 @@ const AGENT = [
   "printf '\\033]7501;state=done\\033\\\\'",
   "exec sh",
 ].join("; ");
+
+/** Waits for what the scenario just did to show, polling at a short tick. */
+async function until(done: () => boolean, what: string) {
+  for (let tick = 0; ; tick++) {
+    if (done()) return;
+    if (tick >= 3_000)
+      throw new Error(`capture: timed out waiting for ${what}`);
+    await Bun.sleep(10);
+  }
+}
+
+/** What core's event stream has said so far, to wait on instead of pausing. */
+async function observe(client: CoreClient) {
+  const mirror = new CoreMirror();
+  let heartbeats = 0;
+  await client.subscribe({
+    baseline: (seq, terminals) => {
+      mirror.baseline(seq, terminals);
+    },
+    line: (line) => {
+      if (line.method === "heartbeat") heartbeats++;
+      mirror.apply(line);
+    },
+    end: () => {},
+  });
+  return { mirror, heartbeats: () => heartbeats };
+}
 
 async function recordConnection(
   core: ScratchCore,
@@ -85,11 +113,7 @@ export async function captureCore(bin: string): Promise<CoreRecording> {
         await client.status();
         const seen: CoreTerminalRecord[] = [];
         calls.push("events.subscribe");
-        await client.subscribe({
-          baseline: () => {},
-          line: () => {},
-          end: () => {},
-        });
+        const { mirror } = await observe(client);
         await core.hc(
           "run",
           "--bg",
@@ -101,9 +125,16 @@ export async function captureCore(bin: string): Promise<CoreRecording> {
           "-c",
           AGENT,
         );
-        await Bun.sleep(700);
+        // The agent works, then finishes its turn.
+        await until(
+          () => Number(mirror.terminal("t1")?.turn ?? 0) >= 1,
+          "turn 1",
+        );
         await core.hc("label", "agent", "note=café ü✓ 漢字");
-        await Bun.sleep(700);
+        await until(
+          () => mirror.terminal("t1")?.labels?.note !== undefined,
+          "the label",
+        );
         calls.push("terminal.read t1");
         await client.readScreen("t1");
         void seen;
@@ -112,8 +143,7 @@ export async function captureCore(bin: string): Promise<CoreRecording> {
     );
     // Holders keep the program and start a new core on the same state.
     let second: RecordedConnection | null = null;
-    for (let attempt = 0; attempt < 50 && !second; attempt++) {
-      await Bun.sleep(100);
+    for (let attempt = 0; attempt < 3_000 && !second; attempt++) {
       try {
         second = await recordConnection(
           core,
@@ -122,17 +152,16 @@ export async function captureCore(bin: string): Promise<CoreRecording> {
             calls.push("server.status");
             await client.status();
             calls.push("events.subscribe");
-            await client.subscribe({
-              baseline: () => {},
-              line: () => {},
-              end: () => {},
-            });
-            await Bun.sleep(700);
+            const { heartbeats } = await observe(client);
+            // Heartbeats keep coming from the new core.
+            await until(() => heartbeats() >= 2, "two heartbeats");
             client.close();
           },
         );
       } catch {
         second = null;
+        // The core has not come back yet.
+        await Bun.sleep(10);
       }
     }
     if (!second) throw new Error("core did not come back after kill -9");
@@ -184,11 +213,8 @@ export async function captureSharedState(bin: string): Promise<CoreRecording> {
         calls.push("server.status");
         await client.status();
         calls.push("events.subscribe");
-        await client.subscribe({
-          baseline: () => {},
-          line: () => {},
-          end: () => {},
-        });
+        const { mirror } = await observe(client);
+        const label = (key: string) => mirror.terminal("t1")?.labels?.[key];
         await core.hc(
           "run",
           "--bg",
@@ -200,18 +226,21 @@ export async function captureSharedState(bin: string): Promise<CoreRecording> {
           "-c",
           FINISHING,
         );
-        await Bun.sleep(700);
+        await until(
+          () => Number(mirror.terminal("t1")?.turn ?? 0) >= 1,
+          "turn 1",
+        );
         calls.push("terminal.label t1 herdr.seen=1");
         await client.shareLabel("t1", { "herdr.seen": "1" });
-        await Bun.sleep(300);
+        await until(() => label("herdr.seen") === "1", "herdr.seen=1");
         // The other client: mark unread (turn - 1), then pin.
         await core.hc("label", "agent", "herdr.seen=0");
-        await Bun.sleep(300);
+        await until(() => label("herdr.seen") === "0", "herdr.seen=0");
         await core.hc("label", "agent", "herdr.pinned=1");
-        await Bun.sleep(300);
+        await until(() => label("herdr.pinned") === "1", "herdr.pinned=1");
         calls.push("terminal.label t1 herdr.pinned=");
         await client.shareLabel("t1", { "herdr.pinned": "" });
-        await Bun.sleep(300);
+        await until(() => label("herdr.pinned") === undefined, "unpin");
         await core.hc(
           "run",
           "--bg",
@@ -223,7 +252,10 @@ export async function captureSharedState(bin: string): Promise<CoreRecording> {
           "-c",
           ASKING,
         );
-        await Bun.sleep(700);
+        await until(
+          () => mirror.terminal("t2")?.status === "blocked",
+          "the question",
+        );
         client.close();
       },
     );
@@ -281,20 +313,28 @@ export async function captureWatch(bin: string): Promise<CoreRecording> {
         );
         await pane.attach("t1", 120, 40);
         calls.push("terminal.attach t1 observe");
+        let screen = "";
+        const text = new TextDecoder();
         await client.watch(
           "t1",
           { cols: 120, rows: 40 },
           {
             resize: (cols, rows) => sizes.push([cols, rows]),
-            data: () => {},
+            data: (bytes) => {
+              screen += text.decode(bytes, { stream: true });
+            },
             close: () => {},
           },
         );
-        await Bun.sleep(1_200);
+        // The split character is whole, then the pane resizes.
+        await until(() => screen.includes("done"), "the split character");
         pane.resize(90, 25);
-        await Bun.sleep(700);
+        await until(() => sizes.some(([cols]) => cols === 90), "the new grid");
+        await until(() => screen.includes("after resize"), "the next line");
+        const grids = sizes.length;
         pane.detach();
-        await Bun.sleep(900);
+        await until(() => sizes.length > grids, "the headless grid");
+        await until(() => screen.includes("headless now"), "the last line");
         core.killCore();
       },
     );

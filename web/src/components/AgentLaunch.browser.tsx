@@ -1,3 +1,4 @@
+import { clock } from "../testing/installRunningTestClock";
 import { useState } from "react";
 import { flushSync } from "react-dom";
 import { createRoot } from "react-dom/client";
@@ -14,7 +15,6 @@ const failures: string[] = [];
 const check = (ok: boolean, message: string) => {
   if (!ok) failures.push(message);
 };
-const settle = () => new Promise((resolve) => setTimeout(resolve, 160));
 const initial = { connectionId: "alpha", generation: 7, workspaceId: "room" };
 const world = {
   spaces: [
@@ -188,7 +188,7 @@ async function run() {
   const start = () => button(".agent-launcher-kind").click();
   const render = async (key: string) => {
     root.render(<Harness key={key} />);
-    await settle();
+    await clock.advance(160);
   };
   const openTab = () =>
     Array.from(host.querySelectorAll("button"))
@@ -207,9 +207,9 @@ async function run() {
     "";
   const reopen = async () => {
     button('[aria-label="Close new agent"]').click();
-    await settle();
+    await clock.advance(160);
     button("#reopen").click();
-    await settle();
+    await clock.advance(160);
   };
   try {
     for (const status of ["started", "sent", "uncertain", "failed"] as const) {
@@ -225,7 +225,7 @@ async function run() {
       );
       choice.click();
       choice.click();
-      await settle();
+      await clock.advance(160);
       check(
         starts === before + 1 && choice.disabled && visibleStatus(),
         `${status}: one pending submit with visible progress`,
@@ -252,7 +252,7 @@ async function run() {
         terminal_id: "new-terminal",
         message: `${status} fixture`,
       });
-      await settle();
+      await clock.advance(160);
       const confirmed = status === "started" || status === "sent";
       check(
         pending().length === 0 && !loaderText(),
@@ -280,22 +280,22 @@ async function run() {
           answer = Promise.withResolvers();
           choice.click();
           choice.click();
-          await settle();
+          await clock.advance(160);
           check(starts === before + 2, "A deliberate retry submits once");
           answer.resolve({
             status: "uncertain",
             terminal_id: "new-terminal",
             message: "Retry uncertain",
           });
-          await settle();
+          await clock.advance(160);
           check(choice.disabled, "An uncertain retry stays locked");
         } else {
           choice.click();
-          await settle();
+          await clock.advance(160);
           check(starts === before + 1, "Uncertainty cannot submit twice");
         }
         openTab();
-        await settle();
+        await clock.advance(160);
         check(
           !host.querySelector(".agent-launcher"),
           "Explicit Open closes the launcher",
@@ -327,7 +327,7 @@ async function run() {
       button(
         kind === "agent" ? ".agent-launcher-kind" : ".agent-launcher-card",
       ).click();
-      await settle();
+      await clock.advance(160);
       check(
         loaderText().includes(
           kind === "agent" ? "Starting Codex…" : "Creating a Terminal tab…",
@@ -342,7 +342,7 @@ async function run() {
       if (kind === "agent")
         answer.resolve({ status: "started", terminal_id: "old-terminal" });
       else terminal.resolve();
-      await settle();
+      await clock.advance(160);
       check(
         opened.length === 0 && !!host.querySelector(".agent-launcher"),
         `${kind}: old completion cannot open a terminal or close the reopened dialog`,
@@ -368,7 +368,7 @@ async function run() {
           initialWorld={certified}
         />,
       );
-      await settle();
+      await clock.advance(160);
       const presence: boolean[] = [];
       let collapsed = false;
       const watch = new MutationObserver(() => {
@@ -394,17 +394,17 @@ async function run() {
         `${path}: an uncertain room keeps its choice but cannot start an agent`,
       );
       flushSync(() => showWorld(certified));
-      await settle();
+      await clock.advance(160);
       const catalogsBefore = catalogs;
       button(selector).click();
-      await settle();
+      await clock.advance(160);
       flushSync(() => showWorld(uncertain));
-      await settle();
+      await clock.advance(160);
       flushSync(() => showWorld(certified));
-      await settle();
+      await clock.advance(160);
       answer.resolve({ status: "started", terminal_id: "observed-terminal" });
-      await settle();
-      await settle();
+      await clock.advance(160);
+      await clock.advance(160);
       watch.disconnect();
       const started = startedWith();
       check(
@@ -438,22 +438,22 @@ async function run() {
     const before = starts;
     button(".agent-launcher-login-row button").click();
     start();
-    await settle();
+    await clock.advance(160);
     check(starts === before, "Pending login blocks start");
     login.resolve({ terminal_id: "login-terminal", command: "example login" });
-    await settle();
+    await clock.advance(160);
     check(
       !button(".agent-launcher-kind").disabled,
       "Login completion restores choices",
     );
     start();
-    await settle();
+    await clock.advance(160);
     answer.resolve({
       status: "uncertain",
       terminal_id: "after-login",
       message: "Agent uncertainty remains",
     });
-    await settle();
+    await clock.advance(160);
     check(
       starts === before + 1 &&
         host

@@ -1,3 +1,4 @@
+import { clock } from "../testing/installRunningTestClock";
 import { flushSync } from "react-dom";
 import { createRoot } from "react-dom/client";
 import { useSpacesTabWindowArrangement } from "./useSpacesTabWindowArrangement";
@@ -49,12 +50,16 @@ const check = (condition: boolean, message: string) => {
   if (!condition) failures.push(message);
   progress(message);
 };
-const settle = () => new Promise((resolve) => setTimeout(resolve, 40));
+const settle = () => clock.advance(40);
 
 async function until(predicate: () => boolean) {
   for (let attempt = 0; attempt < 40; attempt += 1) {
     if (predicate()) return true;
     await settle();
+    // Scroll events are delivered at real frames, which test time skips.
+    await new Promise<void>((resolve) =>
+      clock.real.requestAnimationFrame!(() => resolve()),
+    );
   }
   return false;
 }

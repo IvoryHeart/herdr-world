@@ -1,3 +1,4 @@
+import { clock } from "../testing/installRunningTestClock";
 import { createRoot } from "react-dom/client";
 import { flushSync } from "react-dom";
 import { bridge } from "../api";
@@ -209,13 +210,8 @@ async function startScene() {
   const root = document.createElement("div");
   document.body.append(root);
   createRoot(root).render(<WorldFoundationApp />);
-  const until = async (condition: () => unknown, label: string) => {
-    for (let attempt = 0; attempt < 300; attempt++) {
-      if (condition()) return;
-      await new Promise((resolve) => setTimeout(resolve, 50));
-    }
-    throw new Error(`timed out: ${label}`);
-  };
+  const until = (condition: () => unknown, label: string) =>
+    clock.until(() => !!condition(), `timed out: ${label}`, 15000);
   // A managed window showing the started terminal's core watch.
   const windowOf = (address: string) =>
     [
@@ -346,13 +342,8 @@ async function findScene() {
   const root = document.createElement("div");
   document.body.append(root);
   createRoot(root).render(<WorldFoundationApp />);
-  const until = async (condition: () => unknown, label: string) => {
-    for (let attempt = 0; attempt < 200; attempt++) {
-      if (condition()) return;
-      await new Promise((resolve) => setTimeout(resolve, 50));
-    }
-    throw new Error(`timed out: ${label}`);
-  };
+  const until = (condition: () => unknown, label: string) =>
+    clock.until(() => !!condition(), `timed out: ${label}`, 10000);
   const input = (body: Record<string, unknown>) =>
     fetch("/input", { method: "POST", body: JSON.stringify(body) });
   const clickAt = async (element: Element) => {

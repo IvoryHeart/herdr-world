@@ -236,7 +236,24 @@ export function installTestClock(
   // The running clock's one driver, for the page's life: frame after frame
   // while anything is scheduled, at rest while nothing is. It never skips
   // ahead, so the fixture's own advances stay close to what they ask for.
+  // While the fixture waits (an advance or until in progress) frames follow
+  // one another as fast as the page handles them; otherwise the clock keeps
+  // real pace, one step per real frame, so a page with a long poll or an
+  // idle animation does not spin a core between the fixture's waits.
   let idle = false;
+  let demand = 0;
+  let paced: (() => void) | null = null;
+  const demanding = async <T>(wait: () => Promise<T>) => {
+    demand++;
+    const resume = paced;
+    paced = null;
+    resume?.();
+    try {
+      return await wait();
+    } finally {
+      demand--;
+    }
+  };
   if (running)
     void (async () => {
       for (;;) {
@@ -248,10 +265,35 @@ export function installTestClock(
           idle = false;
           continue;
         }
+        if (demand <= 0)
+          await new Promise<void>((resolve) => {
+            paced = resolve;
+            real.setTimeout(() => {
+              if (paced === resolve) paced = null;
+              resolve();
+            }, FRAME_MS);
+          });
         await step();
       }
     })();
-  /** One frame of progress: driven here, or waited for on the running clock. */
+  /**
+   * One real rendering frame, where the page lays out and its layout
+   * observers report. Without real frames (unit tests) nothing to wait for.
+   */
+  const rendered = async () => {
+    if (!real.requestAnimationFrame) return;
+    // Test time keeps real pace meanwhile, as it would in the browser: a
+    // demand left standing would run it on at full speed for the whole frame.
+    const standing = demand;
+    demand = 0;
+    try {
+      await new Promise<void>((resolve) => {
+        real.requestAnimationFrame!(() => resolve());
+      });
+    } finally {
+      demand += standing;
+    }
+  };
   /**
    * One completed step: its timers and frame callbacks have all run. On the
    * running clock that is the driver's next step to finish, not merely its
@@ -276,33 +318,20 @@ export function installTestClock(
     // Durations count from the time of the call (`now`, which runs a step
     // ahead of `settled` during one) and are over once a step that reached
     // them has finished.
-    async advance(ms) {
-      const end = now + ms;
-      // Zero-delay timers first, as a real task turn would run them.
-      if (!running) await runTimers();
-      while (settled < end) await progress();
+    advance(ms) {
+      return demanding(async () => {
+        // Layout observers (ResizeObserver, IntersectionObserver) report only
+        // in a real rendering frame, as one would during any real stretch of
+        // time: on the running clock let one pass first.
+        if (running) await rendered();
+        const end = now + ms;
+        // Zero-delay timers first, as a real task turn would run them.
+        if (!running) await runTimers();
+        while (settled < end) await progress();
+      });
     },
-    async until(done, message, limit = 10_000) {
-      const end = now + limit;
-      if (!running) await runTimers();
-      while (!done()) {
-        if (settled >= end) throw new Error(message);
-        if (running && idle) {
-          // At rest only real input (a fetch, a socket, a message) can change
-          // anything: give it a short real tick, ended early when the page
-          // schedules work, before moving test time on.
-          await new Promise<void>((resolve) => {
-            const look = () => {
-              waiters.delete(look);
-              resolve();
-            };
-            waiters.add(look);
-            real.setTimeout(look, 10);
-          });
-          if (done()) return;
-        }
-        await progress();
-      }
+    until(done, message, limit = 10_000) {
+      return demanding(() => waitUntil(done, message, limit));
     },
     real: {
       setTimeout: real.setTimeout,
@@ -311,51 +340,38 @@ export function installTestClock(
       cancelAnimationFrame: real.cancelAnimationFrame,
     },
   };
+  async function waitUntil(
+    done: () => boolean,
+    message: string,
+    limit: number,
+  ) {
+    const end = now + limit;
+    if (!running) await runTimers();
+    for (let steps = 1; !done(); steps++) {
+      if (settled >= end) throw new Error(message);
+      // A state that follows layout needs real rendering frames too.
+      if (running && steps % 4 === 0) {
+        await rendered();
+        if (done()) return;
+      }
+      if (running && idle) {
+        // At rest only real input (a fetch, a socket, a message) can change
+        // anything: give it a short real tick, ended early when the page
+        // schedules work, before moving test time on.
+        await new Promise<void>((resolve) => {
+          const look = () => {
+            waiters.delete(look);
+            resolve();
+          };
+          waiters.add(look);
+          real.setTimeout(look, 10);
+        });
+        if (done()) return;
+      }
+      await progress();
+    }
+  }
 }
-
-/**
- * The same interface on real time, for a case that cannot yet run on test
- * time: advance sleeps and until polls. Each use names why, with its issue.
- */
-export function realTimeClock(): TestClock {
-  const sleep = (ms: number) =>
-    new Promise<void>((resolve) => setTimeout(resolve, ms));
-  return {
-    now: () => performance.now(),
-    advance: sleep,
-    frame: () =>
-      new Promise<void>((resolve) =>
-        requestAnimationFrame(() => requestAnimationFrame(() => resolve())),
-      ),
-    // As fixtures waited before test time: on each DOM change, or the limit.
-    until: (done, message, limit = 10_000) =>
-      done()
-        ? Promise.resolve()
-        : new Promise<void>((resolve, reject) => {
-            const observer = new MutationObserver(() => {
-              if (!done()) return;
-              clearTimeout(timeout);
-              observer.disconnect();
-              resolve();
-            });
-            const timeout = setTimeout(() => {
-              observer.disconnect();
-              if (done()) resolve();
-              else reject(new Error(message));
-            }, limit);
-            observer.observe(document.body, {
-              childList: true,
-              subtree: true,
-              attributes: true,
-            });
-          }),
-    real: {
-      setTimeout: window.setTimeout.bind(window),
-      now: performance.now.bind(performance),
-    },
-  };
-}
-
 declare global {
   interface Window {
     /** The page's test clock, once a fixture installs one. */

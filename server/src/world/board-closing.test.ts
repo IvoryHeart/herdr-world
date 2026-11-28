@@ -13,8 +13,6 @@ beforeEach(() => {
 });
 afterEach(() => rmSync(root, { recursive: true, force: true }));
 
-const settle = () => new Promise((resolve) => setTimeout(resolve, 10));
-
 test("a closed tab drops its colour and pin; a closed pane drops gone terminals' interest", async () => {
   const board = new BoardStore(join(root, "board.json"));
   board.patch([
@@ -35,22 +33,20 @@ test("a closed tab drops its colour and pin; a closed pane drops gone terminals'
     isCurrent: () => true,
     changed: (revision: number) => revisions.push(revision),
   };
-  afterHerdrClose(
+  await afterHerdrClose(
     board,
     "conn-a",
     "tab_closed",
     { data: { tab_id: "w1" } },
     host,
   );
-  await settle();
   const layout = board.get().layout;
   expect(layout.colors).toEqual({});
   expect(layout.desk_pins).toEqual({});
   expect(layout.interest).toEqual({});
   expect(revisions.length).toBe(2);
 
-  afterHerdrClose(board, "conn-a", "pane_agent_status_changed", {}, host);
-  await settle();
+  await afterHerdrClose(board, "conn-a", "pane_agent_status_changed", {}, host);
   expect(revisions.length).toBe(2);
 });
 

@@ -211,13 +211,26 @@ async function registerDomTests() {
   test("a guard removal that never lands stops holding routes back", async () => {
     await start();
     await set(["more"]);
-    await act(async () => show([]));
-    await act(async () => Promise.resolve());
+    // Capture the give-up timer instead of waiting out its second.
+    const realSetTimeout = globalThis.setTimeout;
+    const giveUp: (() => void)[] = [];
+    globalThis.setTimeout = ((handler: () => void, ms?: number) => {
+      if (ms !== 1_000) return realSetTimeout(handler, ms);
+      giveUp.push(handler);
+      return 0;
+    }) as unknown as typeof setTimeout;
+    try {
+      await act(async () => show([]));
+      await act(async () => Promise.resolve());
+    } finally {
+      globalThis.setTimeout = realSetTimeout;
+    }
     expect(isBackPending()).toBe(true);
     // The traversal is lost: no popstate ever arrives.
     traversals.splice(0);
     pushRoute({}, new URL("http://localhost/d"));
-    await act(async () => new Promise((resolve) => setTimeout(resolve, 1100)));
+    expect(giveUp).toHaveLength(1);
+    await act(async () => giveUp[0]());
     expect(isBackPending()).toBe(false);
     expect(String(at())).toBe("http://localhost/d");
   });

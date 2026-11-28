@@ -1,3 +1,4 @@
+import { clock } from "../testing/installRunningTestClock";
 // Worktree entry points in the World navigator, on repository workspaces:
 // desktop (right-click) and phone (long-press), and a stale host whose tree
 // shows them but stays inert. A live herdr-core host's agents are chosen by
@@ -139,10 +140,10 @@ createRoot(mount).render(
   />,
 );
 
-const settle = (ms = 0) =>
-  new Promise((resolve) =>
-    setTimeout(() => requestAnimationFrame(() => resolve(undefined)), ms),
-  );
+const settle = async (ms = 0) => {
+  await clock.advance(ms);
+  await clock.frame();
+};
 const tree = (connectionId: string) =>
   document.querySelector<HTMLElement>(
     `[data-world-navigator-host="${connectionId}"] .world-navigator-tree`,

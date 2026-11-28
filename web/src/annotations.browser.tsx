@@ -1,3 +1,4 @@
+import { clock } from "./testing/installRunningTestClock";
 import { TERMINAL_LONG_PRESS_MS } from "./terminalTouchSelection";
 import { StrictMode } from "react";
 import { flushSync } from "react-dom";
@@ -35,14 +36,9 @@ export async function checkAnnotationUX(
     body: `annotation viewport ${innerWidth}x${innerHeight}`,
   });
   const mobile = () => document.documentElement.dataset.layout === "mobile";
-  const settle = () => new Promise((resolve) => setTimeout(resolve, 50));
-  const until = async (predicate: () => unknown, label: string) => {
-    for (let i = 0; i < 100; i++) {
-      if (predicate()) return;
-      await settle();
-    }
-    throw new Error(`Annotation UX: ${label}`);
-  };
+  const settle = () => clock.advance(50);
+  const until = (predicate: () => unknown, label: string) =>
+    clock.until(() => Boolean(predicate()), `Annotation UX: ${label}`, 5_000);
   const click = (selector: string) => {
     const button = document.querySelector<HTMLButtonElement>(selector);
     if (!button) throw new Error(`Missing ${selector}`);
@@ -362,7 +358,7 @@ export async function checkAnnotationUX(
   let touchSelectionCount = 0;
   const select = async () => {
     // Let the layout's resize RPC settle before emitting its matching frame.
-    await new Promise((resolve) => setTimeout(resolve, 250));
+    await clock.advance(250);
     paint();
     await settle();
     const screen = document.querySelector<HTMLElement>(".xterm-screen")!;

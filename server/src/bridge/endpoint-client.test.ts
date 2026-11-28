@@ -182,6 +182,17 @@ function controlFrame(kind: string, data: string): Buffer {
 }
 
 /**
+ * Sent last: the connection is ordered, so once the client reports it, it has
+ * handled every frame sent before it.
+ */
+function sentinelFrame(): Buffer {
+  const w = new BinWriter();
+  w.variant(15);
+  w.string("sentinel");
+  return encodeFrame(w.toBuffer());
+}
+
+/**
  * Fake endpoint server: expects endpoint.hello.v1 as the first message, then
  * replies with the welcome and runs the given script.
  */
@@ -285,14 +296,15 @@ describe("EndpointClient (endpoint generation 1)", () => {
       const w = new BinWriter();
       w.variant(5);
       w.string(data);
-      socket.write(encodeFrame(w.toBuffer()));
+      socket.write(Buffer.concat([encodeFrame(w.toBuffer()), sentinelFrame()]));
     });
     const client = new EndpointClient(socketPath);
     const received: unknown[] = [];
     client.on("clipboard", (value) => received.push(value));
+    const handled = once(client, "shell_error");
     try {
       await client.connect(80, 24);
-      await Bun.sleep(20);
+      await handled;
       expect(received).toEqual([]);
       expect(client.isClosed).toBe(false);
     } finally {
@@ -315,9 +327,10 @@ describe("EndpointClient (endpoint generation 1)", () => {
       received.push(value);
       client.close();
     });
+    const closed = once(client, "close");
     try {
       await client.connect(80, 24);
-      await Bun.sleep(20);
+      await closed;
       expect(received).toEqual([{ data: "YQ==" }]);
       expect(client.isClosed).toBe(true);
     } finally {
@@ -572,13 +585,15 @@ describe("EndpointClient (endpoint generation 1)", () => {
           ),
         );
       }
+      socket.write(sentinelFrame());
     });
     const client = new EndpointClient(socketPath);
     const surfaces: EndpointSurface[] = [];
     client.on("surface", (surface) => surfaces.push(surface));
+    const handled = once(client, "shell_error");
     try {
       await client.connect(10, 5);
-      await Bun.sleep(50);
+      await handled;
       expect(surfaces).toHaveLength(cursors.length);
       expect(surfaces.map((surface) => surface.frame.cursor)).toEqual(cursors);
       expect(surfaces[0].panes.map((pane) => pane.paneId)).toEqual([
@@ -633,13 +648,15 @@ describe("EndpointClient (endpoint generation 1)", () => {
           }),
         ),
       );
+      socket.write(sentinelFrame());
     });
     const client = new EndpointClient(socketPath);
     const surfaces: EndpointSurface[] = [];
     client.on("surface", (surface) => surfaces.push(surface));
+    const handled = once(client, "shell_error");
     try {
       await client.connect(10, 5);
-      await Bun.sleep(50);
+      await handled;
       expect(surfaces).toHaveLength(3);
       expect(
         surfaces.map((surface) =>
@@ -723,6 +740,7 @@ describe("EndpointClient (endpoint generation 1)", () => {
 
   test("encodes resize and answers health pings with a pong", async () => {
     const seen: Array<{ variant: number; fields: unknown[] }> = [];
+    const allSeen = Promise.withResolvers<void>();
     const socketPath = await startEndpointServer(
       (_hello, socket) => {
         socket.write(
@@ -747,13 +765,15 @@ describe("EndpointClient (endpoint generation 1)", () => {
             encodeFrame(controlFrame("endpoint.health.pong.v1", "{}")),
           );
         }
+        // Resize, ping, and the pong reply to the server's ping.
+        if (seen.length >= 3) allSeen.resolve();
       },
     );
     const client = new EndpointClient(socketPath);
     await client.connect(100, 30);
     client.resize(80, 24);
     client.ping();
-    await new Promise((resolve) => setTimeout(resolve, 200));
+    await allSeen.promise;
 
     expect(seen).toContainEqual({ variant: 12, fields: [0, 0, 80, 24, false] });
     expect(seen).toContainEqual({
@@ -1671,14 +1691,20 @@ describe("SemanticNotification (tag 14)", () => {
 
   test("terminal clients ignore notifications so open views do not multiply them", async () => {
     const socketPath = await startEndpointServer((_hello, socket) =>
-      socket.write(semanticNotificationFrame({ kind: 1, title: "done" })),
+      socket.write(
+        Buffer.concat([
+          semanticNotificationFrame({ kind: 1, title: "done" }),
+          sentinelFrame(),
+        ]),
+      ),
     );
     const client = new EndpointClient(socketPath);
     const received: unknown[] = [];
     client.on("semantic_notification", (value) => received.push(value));
+    const handled = once(client, "shell_error");
     try {
       await client.connect(80, 24);
-      await Bun.sleep(20);
+      await handled;
       expect(received).toEqual([]);
       expect(client.isClosed).toBe(false);
     } finally {

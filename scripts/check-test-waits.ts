@@ -293,7 +293,10 @@ function delayOf(
 }
 
 /** `resolve` or `() => resolve(...)`: a callback that only settles a promise. */
-function onlyResolves(callback: Node | undefined, executorParam?: string) {
+function onlyResolves(
+  callback: Node | undefined,
+  executorParam?: string,
+): boolean {
   const resolver = (node: unknown) =>
     isIdentifier(node, RESOLVER) ||
     (executorParam !== undefined && isIdentifier(node, executorParam));
@@ -314,7 +317,13 @@ function onlyResolves(callback: Node | undefined, executorParam?: string) {
       return false;
     body = statements[0]!.expression as Node;
   }
-  return body.type === "CallExpression" && resolver(body.callee);
+  if (body.type !== "CallExpression") return false;
+  if (resolver(body.callee)) return true;
+  // A deferral that still only settles the promise:
+  // `setTimeout(() => requestAnimationFrame(() => resolve()), ms)`.
+  return (body.arguments as Node[]).some((argument) =>
+    onlyResolves(argument, executorParam),
+  );
 }
 
 /** The name a function node is bound to, when it is a named helper. */

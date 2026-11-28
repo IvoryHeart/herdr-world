@@ -10,6 +10,9 @@ import { memoryStreamPair } from "./stream";
 import { FakeCore } from "./testing/fake-core";
 import { encodeFrame, FrameDecoder, FrameKind } from "./wire";
 
+/** The in-memory streams deliver on microtasks: a macrotask turn runs them all. */
+const drain = () => new Promise<void>((resolve) => setImmediate(resolve));
+
 const json = (value: unknown) =>
   new TextEncoder().encode(JSON.stringify(value));
 const helloResult = (overrides: Record<string, unknown> = {}) => ({
@@ -148,7 +151,7 @@ describe("core client", () => {
     const pending = client.readScreen(fake.create());
     fake.kill();
     await expect(pending).rejects.toThrow();
-    await Bun.sleep(1);
+    await drain();
     expect(client.closed).toBe(true);
     expect(ended()?.message).toContain("event stream closed");
   });
@@ -159,7 +162,7 @@ describe("core client", () => {
       new TextEncoder().encode('{"jsonrpc":"2.0","method":"ev'),
     );
     fake.create();
-    await Bun.sleep(5);
+    await drain();
     expect(client.closed).toBe(true);
     expect((await client.whenClosed()).message).toContain("lost line framing");
   });
@@ -169,7 +172,7 @@ describe("core client", () => {
     const t1 = fake.create();
     for (let i = 0; i < 400; i++)
       fake.label(t1, { [`k${i % 4}`]: "x".repeat(900) + i });
-    await Bun.sleep(50);
+    await drain();
     expect(lines.length).toBe(401);
     expect(mirror.cursor).toBe(401);
     expect(mirror.actionable).toBe(true);
@@ -196,7 +199,7 @@ describe("core client", () => {
         '{"jsonrpc":"2.0","id":0,"method":"hello","params":{"framed":true}}\n',
       ),
     );
-    await Bun.sleep(1);
+    await drain();
     raw.write(
       encodeFrame(
         0,
@@ -204,20 +207,20 @@ describe("core client", () => {
         json({ jsonrpc: "2.0", id: 1, method: "events.subscribe", params: {} }),
       ),
     );
-    await Bun.sleep(1);
+    await drain();
     const t1 = fake.create();
     for (let i = 0; i < 400; i++) fake.label(t1, { k: "x".repeat(900) + i });
-    await Bun.sleep(20);
+    await drain();
     expect(received).toBe(256 * 1024);
   });
 
   test("an oversized missed is dropped silently; the next heartbeat exposes it", async () => {
     const { fake, mirror } = await connected();
     const t1 = fake.create();
-    await Bun.sleep(1);
+    await drain();
     fake.label(t1, { huge: "x".repeat(5 << 20) });
     fake.heartbeatNow();
-    await Bun.sleep(20);
+    await drain();
     expect(mirror.terminal(t1)?.labels).toEqual({});
     expect(mirror.actionable).toBe(false);
     expect(mirror.retired).toBe("heartbeat-jump");
@@ -376,14 +379,14 @@ describe("core client", () => {
         end: (reason) => ends.push(reason),
       },
     );
-    await Bun.sleep(5);
+    await drain();
     expect(seen).toEqual(["$ "]);
     // Nothing is credited until the consumer says it delivered the bytes.
     expect(credits).toEqual([]);
     attachment.credit(2);
     attachment.detach();
     attachment.detach();
-    await Bun.sleep(20);
+    await drain();
     expect(ends).toEqual(["detached"]);
     expect(seen).toEqual(["$ "]);
     expect(credits).toEqual([2]);
@@ -404,7 +407,7 @@ describe("core client", () => {
       },
     );
     fake.kill();
-    await Bun.sleep(10);
+    await drain();
     expect(ends.length).toBe(1);
     expect(client.closed).toBe(true);
   });

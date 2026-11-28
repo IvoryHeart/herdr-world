@@ -48,7 +48,8 @@ function recorder() {
   };
 }
 
-const settle = () => new Promise((resolve) => setTimeout(resolve, 5));
+/** The in-memory streams deliver on microtasks: a macrotask turn runs them all. */
+const settle = () => new Promise<void>((resolve) => setImmediate(resolve));
 
 describe("watching a core terminal", () => {
   test("adopts the desktop pane's grid before the first paint and never sizes it", async () => {

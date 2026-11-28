@@ -1,3 +1,4 @@
+import { clock } from "./testing/installRunningTestClock";
 import { TerminalLinkInspector } from "./testing/TerminalLinkInspector";
 import { Terminal, type ILink, type ILinkProvider } from "@xterm/xterm";
 import { createRoot } from "react-dom/client";
@@ -34,8 +35,9 @@ const settle = () =>
     requestAnimationFrame(() => requestAnimationFrame(() => resolve())),
   );
 const until = async (ready: () => boolean, label = "startup") => {
-  const deadline = performance.now() + 6_000;
-  while (performance.now() < deadline) {
+  // Real time: the page's own clock runs ahead while real I/O is pending.
+  const deadline = clock.real.now() + 6_000;
+  while (clock.real.now() < deadline) {
     if (ready()) return;
     await settle();
   }
@@ -361,7 +363,7 @@ let realLongPresses = 0;
 const press = async (row: number, col: number) => {
   if (realLongPresses++ === 0) {
     await touch("touchStart", [point(row, col)]);
-    await new Promise((done) => setTimeout(done, TERMINAL_LONG_PRESS_MS + 50));
+    await clock.advance(TERMINAL_LONG_PRESS_MS + 50);
   } else {
     const originalSetTimeout = window.setTimeout;
     const schedule = originalSetTimeout.bind(window);
@@ -644,7 +646,7 @@ async function runTouch() {
     if (kind === "multi") await touch("touchStart", [point(1, 3), point(2, 3)]);
     if (kind === "cancel") await touch("touchCancel");
     else await touch("touchEnd");
-    await new Promise((resolve) => setTimeout(resolve, 500));
+    await clock.advance(500);
     check(
       !!action("Open link") || !!action("Done"),
       false,
@@ -991,7 +993,7 @@ async function run() {
       ).length;
       await hover(1, 2);
       // Observe a full repaint-storm window, not just the first resolved frame.
-      await new Promise((resolve) => setTimeout(resolve, 200));
+      await clock.advance(200);
       check(
         calls.filter((c) => c.method === "terminal.link.resolve").length -
           probes <=

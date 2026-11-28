@@ -1,3 +1,4 @@
+import { clock } from "../../testing/installRunningTestClock";
 import { flushSync } from "react-dom";
 import { TownLibrary } from "../town/TownLibrary";
 import type { TownLayout } from "../town/townLayout";
@@ -53,13 +54,9 @@ async function waitFor<T>(
   read: () => T,
   message: string,
 ): Promise<NonNullable<T>> {
-  const until = performance.now() + 8_000;
-  for (;;) {
-    const value = read();
-    if (value) return value as NonNullable<T>;
-    if (performance.now() > until) throw new Error(message);
-    await new Promise((resolve) => setTimeout(resolve, 25));
-  }
+  let value: T;
+  await clock.until(() => Boolean((value = read())), message, 8_000);
+  return value! as NonNullable<T>;
 }
 
 function type(el: HTMLInputElement | HTMLTextAreaElement, value: string) {

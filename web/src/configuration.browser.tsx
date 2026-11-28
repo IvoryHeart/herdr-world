@@ -1,3 +1,4 @@
+import { clock } from "./testing/installConfigurationClock";
 import "./styles/tokens.css";
 import "./styles/base.css";
 import { useState } from "react";
@@ -19,14 +20,34 @@ const failures: string[] = [];
 const check = (condition: boolean, message: string) => {
   if (!condition) failures.push(message);
 };
-const settle = () => new Promise((resolve) => setTimeout(resolve, 50));
+// Test time moves ahead of the product's real-time CSS transitions (this
+// fixture asserts their durations), so a pause also lets running ones end.
+const settle = async () => {
+  await clock.advance(50);
+  await Promise.all(
+    document
+      .getAnimations()
+      .filter(
+        (animation) =>
+          animation.playState === "running" &&
+          Number.isFinite(animation.effect?.getComputedTiming().endTime),
+      )
+      .map((animation) => animation.finished.catch(() => {})),
+  );
+};
 const renderBoundary = () =>
   new Promise<void>((resolve) =>
     requestAnimationFrame(() => requestAnimationFrame(() => resolve())),
   );
+// Waits depend on the host (held chunks, trusted input over CDP), which real
+// time moves: poll on real ticks, as the fixture did, while test time runs.
 const waitFor = async (predicate: () => boolean) => {
-  for (let i = 0; i < 80 && !predicate(); i++) await settle();
-  if (!predicate()) throw new Error("Timed out waiting for configuration");
+  const end = clock.real.now() + 4000;
+  while (!predicate()) {
+    if (clock.real.now() > end)
+      throw new Error("Timed out waiting for configuration");
+    await new Promise<void>((resolve) => clock.real.setTimeout(resolve, 10));
+  }
 };
 const button = (label: string) => {
   const found = Array.from(

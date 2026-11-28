@@ -43,6 +43,12 @@ async function until(predicate: () => boolean | Promise<boolean>, ms = 3_000) {
   }
 }
 
+/** Lets pending socket and timer work run: for checks that nothing more arrives. */
+async function quiet() {
+  for (let turn = 0; turn < 100; turn++)
+    await new Promise((resolve) => setImmediate(resolve));
+}
+
 async function world(ordinal = 1) {
   const root = mkdtempSync(join(tmpdir(), "hcw-s-"));
   roots.push(root);
@@ -313,7 +319,7 @@ describe("push from core status events", () => {
     expect(w.pushed[1]).toMatchObject({ kind: "blocked", paneId: w.scout });
     w.fake.replaceWithShell(w.scout);
     await until(() => w.record()?.status === null);
-    await Bun.sleep(20);
+    await quiet();
     expect(w.pushed).toHaveLength(2);
   });
 
@@ -331,7 +337,7 @@ describe("push from core status events", () => {
     await until(() => w.pushed.length === 1, 5_000);
     expect(w.pushed[0]).toMatchObject({ kind: "completed", paneId: w.scout });
     expect(w.pushed[0]!.generation).toBeGreaterThan(first);
-    await Bun.sleep(20);
+    await quiet();
     expect(w.pushed).toHaveLength(1);
   });
 });

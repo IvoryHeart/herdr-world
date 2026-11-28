@@ -1,3 +1,4 @@
+import { clock } from "./testing/installRunningTestClock";
 import { Terminal } from "@xterm/xterm";
 import { TerminalAttachFrameWatchdog } from "./terminalResize";
 import {
@@ -149,7 +150,7 @@ const render = (showMobileKeys = false, uiScale = 100) =>
   );
 rememberTerminalInputMode("direct");
 render();
-const settle = () => new Promise((resolve) => setTimeout(resolve, 80));
+const settle = () => clock.advance(80);
 const frame = (text: string, mouse: boolean | null = true) => {
   const encoded = new TextEncoder().encode(text);
   let binary = "";

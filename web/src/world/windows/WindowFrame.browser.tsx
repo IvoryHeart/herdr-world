@@ -1,3 +1,4 @@
+import { clock } from "../../testing/installRunningTestClock";
 import { useState } from "react";
 import { flushSync } from "react-dom";
 import { createRoot } from "react-dom/client";
@@ -127,7 +128,29 @@ const failures: string[] = [];
 const check = (condition: boolean, message: string) => {
   if (!condition) failures.push(message);
 };
-const settle = () => new Promise((resolve) => setTimeout(resolve, 40));
+const settle = () => clock.advance(40);
+/**
+ * The surface reads its scroll from scroll events, delivered at real frames,
+ * and scrolls itself to keep a window in view: wait until two real frames
+ * pass with no scroll event, then let the page's own work run.
+ */
+async function scrollQuiet(surface: HTMLElement) {
+  const realFrame = () =>
+    new Promise<void>((resolve) =>
+      clock.real.requestAnimationFrame!(() => resolve()),
+    );
+  for (;;) {
+    let scrolled = false;
+    const onScroll = () => {
+      scrolled = true;
+    };
+    surface.addEventListener("scroll", onScroll);
+    await realFrame();
+    await realFrame();
+    surface.removeEventListener("scroll", onScroll);
+    if (!scrolled) return;
+  }
+}
 const frame = (id = "A") =>
   document.querySelector<HTMLElement>(`[data-window-id="${id}"]`)!;
 const geometry = (id = "A") => windowGeometry(harness.state, id, harness.size)!;
@@ -510,6 +533,7 @@ async function run() {
       )!;
       surface.scrollLeft = surface.scrollWidth;
       surface.scrollTop = surface.scrollHeight;
+      await scrollQuiet(surface);
       await settle();
       check(
         preset === "columns" ? surface.scrollLeft > 0 : surface.scrollTop > 0,
@@ -546,6 +570,7 @@ async function run() {
             ? harness.size.height - 2
             : harness.size.height / 2);
       pointer(window, "pointermove", x, y);
+      await scrollQuiet(surface);
       await settle();
       const preview = document.querySelector<HTMLElement>(
         ".world-window-snap-preview",
@@ -566,6 +591,7 @@ async function run() {
           `${preset}/${target}: preview ${JSON.stringify(cssGeometry(preview))} did not match work area ${JSON.stringify(expected)}`,
         );
       pointer(window, "pointerup", x, y);
+      await scrollQuiet(surface);
       await settle();
       check(
         sameGeometry(cssGeometry(frame("H")), expected),

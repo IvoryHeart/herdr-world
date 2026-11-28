@@ -21,6 +21,25 @@ afterEach(() => {
   publishMemoryHosts([]);
 });
 
+/**
+ * Timers scheduled while `body` runs, caught instead of started: the owed
+ * read's timer is the code's own, so the test runs it itself.
+ */
+async function caughtTimers(body: () => Promise<void>) {
+  const real = globalThis.setTimeout;
+  const caught: (() => void)[] = [];
+  globalThis.setTimeout = ((callback: () => void) => {
+    caught.push(callback);
+    return caught.length;
+  }) as unknown as typeof setTimeout;
+  try {
+    await body();
+  } finally {
+    globalThis.setTimeout = real;
+  }
+  return caught;
+}
+
 const host = (generation = 1) => ({
   connection_id: "c1",
   connection_generation: generation,
@@ -152,15 +171,17 @@ test("a request the minute holds back is read once the minute is up", async () =
   // Chat's turn ends while the shelf is fresh: held back, but owed, once.
   const at = (artefactShelfState(host(1)) as { at: number }).at;
   const almost = at + ARTEFACT_SHELF_FRESH_MS - 5;
-  await requestArtefactShelf(host(1), { now: almost });
-  await requestArtefactShelf(host(1), { now: almost });
+  const owed = await caughtTimers(async () => {
+    await requestArtefactShelf(host(1), { now: almost });
+    await requestArtefactShelf(host(1), { now: almost });
+  });
   expect(calls).toBe(1);
-  await Bun.sleep(40);
-  await Promise.resolve();
+  // One owed read for both requests.
+  expect(owed).toHaveLength(1);
+  owed[0]!();
+  await requestArtefactShelf(host(1), { force: true });
   expect(calls).toBe(2);
   expect(artefactShelfState(host(1))?.shelf?.artefacts).toHaveLength(5);
-  await Bun.sleep(20);
-  expect(calls).toBe(2);
 });
 
 test("an owed read is dropped with its generation", async () => {
@@ -175,11 +196,13 @@ test("an owed read is dropped with its generation", async () => {
   publishMemoryHosts([host(1)]);
   await requestArtefactShelf(host(1));
   const at = (artefactShelfState(host(1)) as { at: number }).at;
-  await requestArtefactShelf(host(1), {
-    now: at + ARTEFACT_SHELF_FRESH_MS - 5,
-  });
+  const owed = await caughtTimers(() =>
+    requestArtefactShelf(host(1), { now: at + ARTEFACT_SHELF_FRESH_MS - 5 }),
+  );
+  expect(owed).toHaveLength(1);
   publishMemoryHosts([host(2)]);
-  await Bun.sleep(40);
+  // The timer comes due after the host's generation went away.
+  owed[0]!();
   expect(calls).toBe(1);
 });
 

@@ -25,6 +25,7 @@ import {
 } from "./float-shell";
 import { parseCoreKillConfirmation, planCoreKill } from "./operations";
 import type { CoreConnectionRuntime } from "./runtime";
+import { until } from "./testing/core-world";
 import { FakeCore, type FakeCoreOptions } from "./testing/fake-core";
 import { CORE_FLOAT_LABEL, CORE_UNPLACED_WORKSPACE } from "./topology";
 import { localCoreTransport } from "./transport";
@@ -44,14 +45,6 @@ afterEach(async () => {
   for (const root of roots.splice(0))
     rmSync(root, { recursive: true, force: true });
 });
-
-async function until(predicate: () => boolean, ms = 2_000) {
-  const deadline = Date.now() + ms;
-  while (!predicate()) {
-    if (Date.now() > deadline) throw new Error("condition not reached");
-    await Bun.sleep(2);
-  }
-}
 
 async function world(options: FakeCoreOptions = {}) {
   const root = mkdtempSync(join(tmpdir(), "hcw-f-"));
@@ -624,7 +617,8 @@ describe("World float shell on herdr-core", () => {
     const before = tab.bytes(stream);
     const burst = STREAM_WINDOW * 3;
     w.fake.output(address, new Uint8Array(burst).fill(0x61));
-    await Bun.sleep(150);
+    // Core sends up to its window and stops: wait for the window to fill.
+    await until(() => tab.bytes(stream) - before >= STREAM_WINDOW - 65_536);
     // Core sent only its window; nothing more until World returns credit.
     expect(tab.bytes(stream) - before).toBeLessThanOrEqual(STREAM_WINDOW);
     tab.setBehind(0);

@@ -1,3 +1,4 @@
+import { clock } from "../../testing/installRunningTestClock";
 import { flushSync } from "react-dom";
 import { createRoot } from "react-dom/client";
 import { worldSessionStorage } from "../../browserStorage";
@@ -33,15 +34,15 @@ console.error = (...args: unknown[]) => {
 const check = (condition: boolean, message: string) => {
   if (!condition) failures.push(message);
 };
-const settle = (ms = 80) => new Promise((resolve) => setTimeout(resolve, ms));
+const settle = (ms = 80) => clock.advance(ms);
 async function until(condition: () => boolean, message: string, ms = 5000) {
-  const end = Date.now() + ms;
-  while (Date.now() < end) {
-    if (condition()) return true;
-    await settle(30);
+  try {
+    await clock.until(condition, message, ms);
+    return true;
+  } catch {
+    failures.push(message);
+    return false;
   }
-  failures.push(message);
-  return false;
 }
 const $ = <T extends Element = HTMLElement>(selector: string) =>
   document.querySelector<T>(selector);

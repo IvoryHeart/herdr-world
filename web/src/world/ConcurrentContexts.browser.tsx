@@ -355,6 +355,12 @@ function client(host: string, generation: number | null): ConnectionClient {
   };
 }
 
+/** Browser frames, as many as the pause they replace had of 16 ms steps. */
+async function animationFrames(count: number) {
+  for (let index = 0; index < count; index++)
+    await new Promise((resolve) => requestAnimationFrame(resolve));
+}
+
 function waitForDom(
   predicate: () => boolean,
   label = "component",
@@ -511,11 +517,11 @@ async function run() {
       });
   };
   identicalFrame();
-  await new Promise((resolve) => setTimeout(resolve, 100));
+  await animationFrames(6);
   const stableRefreshes = alphaRefreshes;
   for (let index = 0; index < 8; index++) {
     identicalFrame();
-    await new Promise((resolve) => setTimeout(resolve, 30));
+    await animationFrames(2);
   }
   check(
     alphaRefreshes === stableRefreshes,
@@ -731,7 +737,7 @@ async function run() {
   };
   await beginStress("noisy-output");
   emitNoise();
-  await new Promise((resolve) => setTimeout(resolve, 150));
+  await animationFrames(9);
   await finishStress();
   for (const [turn, host] of ["alpha", "beta", "alpha"].entries()) {
     if (turn > 0) emitNoise();

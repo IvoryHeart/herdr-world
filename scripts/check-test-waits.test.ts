@@ -127,6 +127,17 @@ while (!done()) await sleep(3);`;
   expect(lines(text)).toEqual([1, 2, 7, 8, 9]);
 });
 
+test("a timer that settles through a frame callback is a pause", () => {
+  expect(
+    lines(`const settle = (ms = 0) =>
+  new Promise((resolve) =>
+    setTimeout(() => requestAnimationFrame(() => resolve(undefined)), ms),
+  );
+await settle(700);
+await new Promise((r) => setTimeout(() => reject(new Error("late")), 50));`),
+  ).toEqual([5]);
+});
+
 test("a new sleep inside a helper that already pauses still counts", () => {
   const before = `async function run() {
   await Bun.sleep(50);

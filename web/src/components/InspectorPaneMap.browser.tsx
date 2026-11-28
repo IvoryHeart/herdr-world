@@ -1,3 +1,4 @@
+import { clock } from "../testing/installRunningTestClock";
 import { useState } from "react";
 import { flushSync } from "react-dom";
 import { createRoot } from "react-dom/client";
@@ -16,10 +17,6 @@ const failures: string[] = [];
 const check = (ok: boolean, message: string) => {
   if (!ok) failures.push(message);
 };
-const settle = () =>
-  new Promise<void>((resolve) =>
-    requestAnimationFrame(() => setTimeout(resolve, 20)),
-  );
 
 const workspace: Workspace = {
   workspace_id: "w1",
@@ -144,7 +141,7 @@ async function run() {
     createRoot(multi).render(<Fixture tabId="w1:t1" />);
     createRoot(single).render(<Fixture tabId="w1:t2" />);
   });
-  await settle();
+  await clock.advance(20);
 
   check(single.childElementCount === 0, "a single-pane tab shows a glyph");
   const glyph = multi.querySelector<HTMLButtonElement>(
@@ -216,12 +213,12 @@ async function run() {
     new KeyboardEvent("keydown", { key: "Enter", bubbles: true }),
   );
   glyph.click();
-  await settle();
+  await clock.advance(20);
   const map = () =>
     document.querySelector<HTMLElement>('[aria-label="Panes in this tab"]');
   check(!!map(), "one tap does not open the map");
   pendingFocus.shift()?.(performance.now());
-  await settle();
+  await clock.advance(20);
   check(!!map(), "queued terminal focus closed the keyboard-opened pane map");
   check(
     document.activeElement !== terminalInput,
@@ -252,7 +249,7 @@ async function run() {
   );
 
   buttons[2]?.click();
-  await settle();
+  await clock.advance(20);
   check(
     selections.join(",") === "w1:p3",
     `tapping a pane selected ${selections.join(",") || "nothing"}`,
@@ -264,25 +261,25 @@ async function run() {
   );
 
   glyph.click();
-  await settle();
+  await clock.advance(20);
   map()
     ?.querySelector<HTMLButtonElement>('[data-map-pane-id="w1:p3"]')
     ?.click();
-  await settle();
+  await clock.advance(20);
   check(
     selections.length === 1 && !map(),
     "tapping the shown pane switched again or left the map open",
   );
 
   glyph.click();
-  await settle();
+  await clock.advance(20);
   document.dispatchEvent(
     new KeyboardEvent("keydown", { key: "Escape", bubbles: true }),
   );
-  await settle();
+  await clock.advance(20);
   check(!map(), "Escape does not close the map");
   focusTerminal(windowId);
-  await settle();
+  await clock.advance(20);
   check(
     document.activeElement === terminalInput,
     "terminal handoff did not resume after the pane map closed",

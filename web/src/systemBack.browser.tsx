@@ -1,3 +1,6 @@
+// Manual test time: a traversal lands on the browser's real clock, so time
+// must not run on while the page waits for it (its own give-up timer is 1 s).
+import { clock } from "./world/testing/installTestClock";
 import type { ReactNode } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { flushSync } from "react-dom";
@@ -16,7 +19,42 @@ const failures: string[] = [];
 const check = (condition: boolean, message: string) => {
   if (!condition) failures.push(message);
 };
-const settle = () => new Promise((resolve) => setTimeout(resolve, 80));
+// The page's reaction on test time, once any traversal of its own has landed
+// (a real browser event, so the running clock waits for it at rest).
+// Session-history traversals are the browser's own work: each one that has a
+// target ends in a popstate, a no-op ends in nothing. Count the ones in flight
+// (the page's own included) and let settle wait for them, not for time.
+type NavigationApi = {
+  currentEntry: { index: number };
+  entries(): unknown[];
+};
+const navigation = (window as unknown as { navigation: NavigationApi })
+  .navigation;
+let inFlight = 0;
+let landed: (() => void) | undefined;
+const realGo = history.go.bind(history);
+history.go = (delta = 0) => {
+  const target = navigation.currentEntry.index + delta;
+  if (delta !== 0 && target >= 0 && target < navigation.entries().length)
+    inFlight++;
+  realGo(delta);
+};
+history.back = () => history.go(-1);
+history.forward = () => history.go(1);
+addEventListener("popstate", () => {
+  inFlight--;
+  landed?.();
+});
+const nextPopstate = () =>
+  new Promise<void>((resolve) => {
+    landed = resolve;
+  });
+const settle = async () => {
+  do {
+    await clock.advance(80);
+    while (inFlight > 0) await nextPopstate();
+  } while (inFlight > 0);
+};
 
 type Name = "terminal" | "composer" | "navigation" | "menu";
 const levels: Record<Name, SystemBackLevel> = {
@@ -64,10 +102,11 @@ const guarded = () =>
   history.state !== null &&
   "herdrBack" in history.state;
 const at = () => location.pathname;
-async function userBack() {
-  history.back();
+async function traverse(move: () => void) {
+  move();
   await settle();
 }
+const userBack = () => traverse(() => history.back());
 // Every case starts on /office, reached from /graph, with nothing open.
 async function start() {
   show([]);
@@ -259,8 +298,7 @@ async function run() {
       at() === "/office" && !guarded(),
       `${label}: Back from the route reached ${at()}`,
     );
-    history.forward();
-    await settle();
+    await traverse(() => history.forward());
     check(
       at() === "/spaces",
       `${label}: Forward from Office stayed at ${at()}`,
@@ -283,8 +321,7 @@ async function run() {
     show([]);
     await settle();
     check(at() === "/office" && !guarded(), `${label}: guards left current`);
-    history.forward();
-    await settle();
+    await traverse(() => history.forward());
     // Forward has nowhere real to go: it must not leave Office.
     check(at() === "/office", `${label}: Forward left Office for ${at()}`);
     await userBack();
@@ -300,8 +337,7 @@ async function run() {
     await settle();
     show([]);
     await settle();
-    history.forward();
-    await settle();
+    await traverse(() => history.forward());
     const url = new URL(location.href);
     url.pathname = "/spaces";
     pushRoute({ herdrFrom: "/office" }, url);

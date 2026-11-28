@@ -6,8 +6,15 @@ function setup() {
   let path: string | null = "/work/demo/session.jsonl";
   const notified: string[] = [];
   const files = new Map<string, () => void>();
+  let checks = 0;
+  let seen = 0;
+  let wake: (() => void) | null = null;
   const watcher = createConversationWatcher({
-    identity: async () => ({ key, paths: path ? [path] : [] }),
+    identity: async () => {
+      checks++;
+      wake?.();
+      return { key, paths: path ? [path] : [] };
+    },
     notify: (paneId, owners) => notified.push(`${paneId}:${owners.size}`),
     watchFile: (file, onChange) => {
       files.set(file, onChange);
@@ -15,7 +22,15 @@ function setup() {
     },
     debounceMs: 1,
   });
-  const settle = () => new Promise((resolve) => setTimeout(resolve, 10));
+  // Waits for the next identity check the watcher makes, then lets its
+  // continuation (watching files, notifying) run.
+  const settle = async () => {
+    while (checks <= seen)
+      await new Promise<void>((resolve) => (wake = resolve));
+    seen = checks;
+    wake = null;
+    await new Promise((resolve) => setImmediate(resolve));
+  };
   return {
     watcher,
     notified,

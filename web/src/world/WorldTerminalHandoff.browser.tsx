@@ -1,3 +1,4 @@
+import { clock } from "../testing/installRunningTestClock";
 import { installTownMasterFixture } from "./testing/townMasterFixture";
 import {
   admissionClock,
@@ -89,13 +90,10 @@ let failInterestPatch = false;
 const check = (condition: boolean, message: string) => {
   if (!condition) failures.push(message);
 };
-const settle = () => new Promise((resolve) => setTimeout(resolve, 80));
+const settle = () => clock.advance(80);
 // ResizeObserver runs after layout. Give its React update a painted frame
 // before dispatching another arrangement or saving a geometry baseline.
-const settleWindowLayout = () =>
-  new Promise<void>((resolve) =>
-    requestAnimationFrame(() => requestAnimationFrame(() => resolve())),
-  );
+const settleWindowLayout = () => clock.frame();
 function enterSearch(input: HTMLInputElement, value: string) {
   Object.getOwnPropertyDescriptor(
     HTMLInputElement.prototype,
@@ -156,17 +154,26 @@ async function until(
   condition: () => unknown,
   message: string | (() => string),
 ) {
-  for (let index = 0; index < 200; index += 1) {
-    if (renderError)
-      throw new Error(
-        `Render failed while waiting for ${typeof message === "function" ? message() : message}: ${renderError instanceof Error ? renderError.stack : String(renderError)}`,
-      );
-    if (condition()) return;
-    await settle();
+  const timedOut = "until: timed out";
+  try {
+    await clock.until(
+      () => {
+        if (renderError)
+          throw new Error(
+            `Render failed while waiting for ${typeof message === "function" ? message() : message}: ${renderError instanceof Error ? renderError.stack : String(renderError)}`,
+          );
+        return !!condition();
+      },
+      timedOut,
+      200 * 80,
+    );
+  } catch (error) {
+    if (!(error instanceof Error) || error.message !== timedOut) throw error;
+    throw new Error(
+      `Timed out: ${typeof message === "function" ? message() : message}; titles=${JSON.stringify([...document.querySelectorAll(".world-managed-window")].map((e) => [e.getAttribute("aria-label"), e.className, e.querySelector("[data-pane-id]")?.getAttribute("data-pane-id")]))}; phases=${JSON.stringify(creationPhases)}; notice=${JSON.stringify(store.get().notice)}; mode=${store.get().navigationMode}; browser=${JSON.stringify(store.get().browserNavigation)}; selected=${store.get().selectedPaneId}; owners=${document.querySelectorAll(".world-terminal-owner").length}; parking=${document.querySelectorAll(".world-terminal-parking").length}; inspectors=${document.querySelectorAll(".workspace-inspector").length}; rail=${document.querySelector(".world-context-rail")?.className}; text=${document.body.textContent?.slice(-1200)}; calls=${JSON.stringify(calls.slice(-12))}`,
+      { cause: error },
+    );
   }
-  throw new Error(
-    `Timed out: ${typeof message === "function" ? message() : message}; titles=${JSON.stringify([...document.querySelectorAll(".world-managed-window")].map((e) => [e.getAttribute("aria-label"), e.className, e.querySelector("[data-pane-id]")?.getAttribute("data-pane-id")]))}; phases=${JSON.stringify(creationPhases)}; notice=${JSON.stringify(store.get().notice)}; mode=${store.get().navigationMode}; browser=${JSON.stringify(store.get().browserNavigation)}; selected=${store.get().selectedPaneId}; owners=${document.querySelectorAll(".world-terminal-owner").length}; parking=${document.querySelectorAll(".world-terminal-parking").length}; inspectors=${document.querySelectorAll(".workspace-inspector").length}; rail=${document.querySelector(".world-context-rail")?.className}; text=${document.body.textContent?.slice(-1200)}; calls=${JSON.stringify(calls.slice(-12))}`,
-  );
 }
 
 const workspaceBase: Workspace = {
@@ -1309,6 +1316,8 @@ async function run() {
       browserLocalCreateCount + 1,
     "browser-local Town seat creation",
   );
+  // Let the creation's reply land before the fixture refreshes the store.
+  await settle();
   const browserLocalCreate = [...calls]
     .reverse()
     .find(({ method }) => method === "tab.create")!;
@@ -6242,6 +6251,7 @@ async function run() {
       () => spacesMore()?.getAttribute("aria-expanded") === "false",
       "direct Spaces Back closes More first",
     );
+    await settle();
     check(
       window.location.pathname === "/spaces",
       `direct Spaces Back left for ${window.location.pathname} while More was open`,
@@ -6292,7 +6302,7 @@ async function run() {
     ];
     await until(() => deskRows().length >= 2, "Desk Agents rows");
     deskRows()[0]?.click();
-    await new Promise((resolve) => window.setTimeout(resolve, 1500));
+    await clock.advance(1500);
     check(
       Boolean(document.querySelector(".desk.has-reading")),
       `Desk reading pane did not open: rail=${Boolean(document.querySelector(".world-context-rail.has-inspector"))} layoutContext=${Boolean(document.querySelector(".world-view-layout.has-context"))} floating=${document.querySelectorAll('[role="dialog"][aria-label$=" Inspector"]').length} inspector=${document.querySelectorAll(".workspace-inspector").length} rows=${deskRows().length} error=${document.querySelector(".desk-error")?.textContent ?? ""} width=${window.innerWidth}`,
@@ -6307,7 +6317,7 @@ async function run() {
         cancelable: true,
       }),
     );
-    await new Promise((resolve) => window.setTimeout(resolve, 900));
+    await clock.advance(900);
     const readingRow = document.querySelector<HTMLElement>(
       ".desk-row.is-reading",
     );
@@ -6325,7 +6335,7 @@ async function run() {
         cancelable: true,
       }),
     );
-    await new Promise((resolve) => window.setTimeout(resolve, 900));
+    await clock.advance(900);
     const deskActive = document.activeElement;
     check(
       Boolean(deskActive?.closest(".desk")) && !deskActive?.closest(".xterm"),
@@ -6620,7 +6630,7 @@ async function run() {
       readTerminalComposerDraft(resumeDraftKey) === "",
       "runtime replacement did not retire the old Message draft",
     );
-    await new Promise((resolve) => window.setTimeout(resolve, 500));
+    await clock.advance(500);
     check(
       !document.querySelector(".world-selection-panel"),
       "retiring an open Inspector left its stale identity profile selected",

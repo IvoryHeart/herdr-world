@@ -1,3 +1,4 @@
+import { clock } from "./testing/installRunningTestClock";
 import { useRef, useState } from "react";
 import { flushSync } from "react-dom";
 import { createRoot } from "react-dom/client";
@@ -25,7 +26,7 @@ const failures: string[] = [];
 const check = (condition: boolean, message: string) => {
   if (!condition) failures.push(message);
 };
-const settle = () => new Promise((resolve) => setTimeout(resolve, 25));
+const settle = () => clock.advance(25);
 async function until(predicate: () => boolean, label: string) {
   for (let i = 0; i < 160; i++) {
     if (predicate()) return;

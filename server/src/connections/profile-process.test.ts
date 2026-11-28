@@ -269,13 +269,13 @@ function bridgeListeningPort(stream: ReadableStream<Uint8Array>) {
 }
 
 async function waitForHealth(port: number): Promise<void> {
-  for (let attempt = 0; attempt < 120; attempt += 1) {
+  for (let attempt = 0; attempt < 300; attempt += 1) {
     try {
       if ((await fixtureFetch(`http://127.0.0.1:${port}/health`)).ok) return;
     } catch {
       // Process may still be binding.
     }
-    await Bun.sleep(25);
+    await Bun.sleep(10);
   }
   throw new Error("profile process fixture did not become healthy");
 }
@@ -1130,7 +1130,8 @@ test("production routing bootstraps only a verified empty session and serializes
       }
       if (request.method === "workspace.create") {
         mutations.push(request.params ?? {});
-        await Bun.sleep(20);
+        // Yield so the competing browser's request can arrive mid-create.
+        await new Promise((resolve) => setImmediate(resolve));
         workspaces = [{ workspace_id: "w1" }];
         return {
           type: "workspace_created",

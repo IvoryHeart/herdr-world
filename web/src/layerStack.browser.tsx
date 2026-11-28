@@ -1,3 +1,4 @@
+import { clock } from "./testing/installRunningTestClock";
 import { createRoot } from "react-dom/client";
 import { flushSync } from "react-dom";
 import { StrictMode, useState } from "react";
@@ -33,7 +34,7 @@ const failures: string[] = [];
 const check = (condition: boolean, message: string) => {
   if (!condition) failures.push(`${location.search}: ${message}`);
 };
-const settle = () => new Promise((resolve) => setTimeout(resolve, 120));
+const settle = () => clock.advance(120);
 const input = async (method: string, body: Record<string, unknown>) => {
   const response = await fetch("/input", {
     method: "POST",
@@ -245,7 +246,12 @@ async function escape(times = 1) {
   await settle();
 }
 async function back() {
+  // The traversal is the browser's own: wait for its popstate.
+  const landed = new Promise((resolve) =>
+    addEventListener("popstate", resolve, { once: true }),
+  );
   history.back();
+  await landed;
   await settle();
 }
 const menu = () => $('[role="menu"][aria-label="Window actions"]');
@@ -255,8 +261,9 @@ const menuTrigger = () =>
   $('button[aria-label="More actions for builder window"]');
 
 async function run() {
-  const deadline = performance.now() + 5_000;
-  while (!textarea() && performance.now() < deadline) await settle();
+  await clock
+    .until(() => Boolean(textarea()), "xterm did not mount", 5_000)
+    .catch(() => {});
   check(Boolean(textarea()), "xterm did not mount");
 
   // The owner's report: a dropdown over the terminal must close when the

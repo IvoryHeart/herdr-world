@@ -1,3 +1,4 @@
+import { clock } from "../../testing/installRunningTestClock";
 import { flushSync } from "react-dom";
 import { createRoot } from "react-dom/client";
 import "../../styles/tokens.css";
@@ -22,15 +23,15 @@ const failures: string[] = [];
 const check = (condition: boolean, message: string) => {
   if (!condition) failures.push(message);
 };
-const settle = (ms = 80) => new Promise((resolve) => setTimeout(resolve, ms));
+const settle = (ms = 80) => clock.advance(ms);
 async function until(condition: () => boolean, message: string, ms = 3000) {
-  const end = Date.now() + ms;
-  while (Date.now() < end) {
-    if (condition()) return true;
-    await settle(30);
+  try {
+    await clock.until(condition, message, ms);
+    return true;
+  } catch {
+    failures.push(message);
+    return false;
   }
-  failures.push(message);
-  return false;
 }
 const $ = <T extends Element = HTMLElement>(
   selector: string,
@@ -249,20 +250,31 @@ const near = (a: number, b: number) => Math.abs(a - b) < 1;
 async function checkFrameTheme(frame: HTMLIFrameElement) {
   const media = frame.contentWindow?.matchMedia("(prefers-color-scheme: dark)");
   if (!media) return check(false, "the workbench frame can be read");
-  const themeIs = (theme: "dark" | "light") =>
-    until(
-      () => media.matches === (theme === "dark"),
-      `the workbench frame prefers World's ${theme} theme`,
-    );
+  // Wait on the change event VS Code listens for, never on `matches`:
+  // reading it before the frame's rendering update reports the change takes
+  // the change, and the event never fires.
+  // Start from the theme the frame does not prefer yet (World's default is
+  // dark), so each step is a real change.
+  const order = media.matches
+    ? (["light", "dark"] as const)
+    : (["dark", "light"] as const);
   let changes = 0;
   media.addEventListener("change", () => changes++);
-  document.documentElement.dataset.theme = "dark";
-  await themeIs("dark");
-  document.documentElement.dataset.theme = "light";
-  await themeIs("light");
-  await until(() => changes > 0, "VS Code hears World's theme change");
-  document.documentElement.dataset.theme = "dark";
-  await themeIs("dark");
+  for (const theme of order) {
+    const before = changes;
+    document.documentElement.dataset.theme = theme;
+    if (
+      !(await until(
+        () => changes > before,
+        `VS Code hears World's ${theme} theme change`,
+      ))
+    )
+      return;
+    check(
+      media.matches === (theme === "dark"),
+      `the workbench frame prefers World's ${theme} theme`,
+    );
+  }
 }
 
 async function run() {

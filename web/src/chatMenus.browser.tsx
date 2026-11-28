@@ -1,3 +1,4 @@
+import { clock } from "./testing/installRunningTestClock";
 import { act, createElement as h } from "react";
 import { createRoot } from "react-dom/client";
 import "./styles/tokens.css";
@@ -18,7 +19,7 @@ const failures: string[] = [];
 const check = (condition: unknown, message: string) => {
   if (!condition) failures.push(message);
 };
-const sleep = (ms: number) => new Promise((done) => setTimeout(done, ms));
+const sleep = (ms: number) => clock.advance(ms);
 
 const modelMenu: PendingPrompt = {
   question: ["Select model"],

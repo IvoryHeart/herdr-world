@@ -1,3 +1,4 @@
+import { clock } from "./testing/installRunningTestClock";
 import { useState } from "react";
 import { createRoot } from "react-dom/client";
 import { bridge, type ConnectionClient } from "./api";
@@ -12,7 +13,7 @@ const failures: string[] = [];
 const check = (condition: unknown, message: string) => {
   if (!condition) failures.push(message);
 };
-const settle = (ms = 100) => new Promise((resolve) => setTimeout(resolve, ms));
+const settle = (ms = 100) => clock.advance(ms);
 const fingerprint = "a".repeat(64);
 const subject = {
   connectionId: "alpha",

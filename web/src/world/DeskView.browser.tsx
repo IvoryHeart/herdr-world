@@ -1,3 +1,4 @@
+import { clock } from "../testing/installRunningTestClock";
 import { checkDeskRevealHook } from "./testing/deskRevealHookAcceptance";
 import { checkDeskOtherHosts } from "./testing/deskOtherHostsAcceptance";
 import { bridge } from "../api";
@@ -23,7 +24,7 @@ const failures: string[] = [];
 const check = (condition: boolean, message: string) => {
   if (!condition) failures.push(message);
 };
-const settle = (ms = 80) => new Promise((resolve) => setTimeout(resolve, ms));
+const settle = (ms = 80) => clock.advance(ms);
 
 function agent(id: string, fingerprint: string): WorldLeafObject {
   return {

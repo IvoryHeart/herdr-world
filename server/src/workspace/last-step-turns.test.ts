@@ -1,4 +1,4 @@
-import { describe, expect, test } from "bun:test";
+import { describe, expect, jest, test } from "bun:test";
 import { createLastStepTurnTracker } from "./last-step-turns";
 
 async function flushTransitions() {
@@ -179,17 +179,23 @@ describe("last-step turn tracking", () => {
       transitionDebounceMs: 20,
     });
 
-    tracker.handleHerdrEvent(status("p1", "w1", "working"));
-    tracker.handleHerdrEvent(status("p1", "w1", "idle"));
-    await new Promise((resolve) => setTimeout(resolve, 30));
-    expect(captures).toEqual([]);
-    expect(completions).toEqual([]);
+    jest.useFakeTimers();
+    try {
+      tracker.handleHerdrEvent(status("p1", "w1", "working"));
+      tracker.handleHerdrEvent(status("p1", "w1", "idle"));
+      jest.advanceTimersByTime(30);
+      await flushTransitions();
+      expect(captures).toEqual([]);
+      expect(completions).toEqual([]);
 
-    tracker.handleHerdrEvent(status("p1", "w1", "working"));
-    await new Promise((resolve) => setTimeout(resolve, 30));
-    await flushTransitions();
-    expect(captures).toEqual(["w1"]);
-    await tracker.stop();
+      tracker.handleHerdrEvent(status("p1", "w1", "working"));
+      jest.advanceTimersByTime(30);
+      await flushTransitions();
+      expect(captures).toEqual(["w1"]);
+      await tracker.stop();
+    } finally {
+      jest.useRealTimers();
+    }
   });
 
   test("coalesces queued edges while one workspace snapshot is in flight", async () => {

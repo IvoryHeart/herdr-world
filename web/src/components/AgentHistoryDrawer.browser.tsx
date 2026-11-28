@@ -1,3 +1,4 @@
+import { clock } from "../testing/installRunningTestClock";
 import { createRoot } from "react-dom/client";
 import { bridge } from "../api";
 import { __storeTesting, store } from "../store";
@@ -17,7 +18,7 @@ function check(condition: boolean, message: string) {
   if (!condition) failures.push(message);
 }
 async function settle() {
-  await new Promise((resolve) => setTimeout(resolve, 80));
+  await clock.advance(80);
 }
 
 async function run() {

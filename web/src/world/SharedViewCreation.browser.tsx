@@ -1,3 +1,4 @@
+import { clock } from "../testing/installRunningTestClock";
 import { createRoot } from "react-dom/client";
 import { flushSync } from "react-dom";
 import { bridge, type ConnectionClient, type TerminalPush } from "../api";
@@ -41,7 +42,7 @@ window.addEventListener("unhandledrejection", (event) =>
 function check(condition: unknown, message: string) {
   if (!condition) failures.push(message);
 }
-const settle = () => new Promise((resolve) => setTimeout(resolve, 40));
+const settle = () => clock.advance(40);
 async function until(
   condition: () => unknown,
   message: string,
@@ -628,7 +629,12 @@ async function run() {
       document.querySelector<HTMLElement>(
         ".workspace-inspector .world-inspector-chat-wait",
       );
-    // Cross the real timer boundary and retain the same announcer throughout.
+    // Cross the loader's timer boundary on test time (it reads Date.now,
+    // which the clock does not move) and retain the same announcer throughout.
+    const realDateNow = Date.now;
+    const dateBase = realDateNow();
+    const clockBase = clock.now();
+    Date.now = () => dateBase + clock.now() - clockBase;
     const timedHost = document.createElement("div");
     document.body.append(timedHost);
     const timedRoot = createRoot(timedHost);
@@ -651,6 +657,7 @@ async function run() {
       () => timedStatus.textContent === "Still waiting for Chat",
       "The elapsed wait updates its live announcement",
     );
+    Date.now = realDateNow;
     check(
       timedHost.querySelector('[role="status"]') === timedStatus &&
         !timedStatus.closest('[aria-busy="true"]'),

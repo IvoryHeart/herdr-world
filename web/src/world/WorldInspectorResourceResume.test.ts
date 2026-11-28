@@ -251,9 +251,11 @@ if (process.env.WORLD_RESOURCE_RESUME_DOM_TEST !== "1") {
       onResourceFocus() {},
       onTerminalPortalChange() {},
     };
+    // Let what the fakes resolved, and React's work on it, run: a few macrotask turns.
     const settle = async () => {
       await act(async () => {
-        await new Promise((resolve) => setTimeout(resolve, 20));
+        for (let turn = 0; turn < 4; turn++)
+          await new Promise((resolve) => setImmediate(resolve));
       });
     };
     const rows = () =>

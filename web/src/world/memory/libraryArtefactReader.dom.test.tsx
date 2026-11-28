@@ -375,6 +375,8 @@ if (process.env.HERDR_WORLD_LIBRARY_DOM_TEST !== "1") {
       leaves: [],
     } as unknown as WorldObject;
     const read: string[] = [];
+    // Each read is held until the test lets it answer.
+    const gates: (() => void)[] = [];
     let running = 0;
     let most = 0;
     setArtefactShelfClientForTests({
@@ -382,7 +384,7 @@ if (process.env.HERDR_WORLD_LIBRARY_DOM_TEST !== "1") {
         read.push(target.connection_id);
         running += 1;
         most = Math.max(most, running);
-        await new Promise((resolve) => setTimeout(resolve, 5));
+        await new Promise<void>((resolve) => gates.push(resolve));
         running -= 1;
         return {
           connection_id: target.connection_id,
@@ -403,13 +405,19 @@ if (process.env.HERDR_WORLD_LIBRARY_DOM_TEST !== "1") {
     }
     const root = createRoot(document.createElement("div"));
     await act(async () => root.render(<Publisher />));
-    for (let index = 0; index < 10 && read.length < 5; index++)
-      await act(async () => {
-        await new Promise((resolve) => setTimeout(resolve, 10));
-      });
-    await act(async () => {
-      await new Promise((resolve) => setTimeout(resolve, 10));
-    });
+    const until = async (done: () => boolean) => {
+      while (!done())
+        await act(async () => {
+          await new Promise((resolve) => setTimeout(resolve, 0));
+        });
+    };
+    // A few at a time: the first reads wait for an answer, the rest queue.
+    await until(() => read.length >= 4);
+    expect(read).toHaveLength(4);
+    gates.shift()!();
+    await until(() => read.length === 5);
+    while (gates.length) gates.shift()!();
+    await until(() => libraryHosts().length === 1);
     expect(read.sort()).toEqual(["c1", "c2", "c3", "c4", "c5"]);
     expect(most).toBeLessThanOrEqual(4);
     expect(libraryHosts().map((one) => one.connection_id)).toEqual(["c5"]);

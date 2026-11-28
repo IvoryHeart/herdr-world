@@ -77,7 +77,8 @@ function fakeHerdr(connectionId: string, panes: Pane[]) {
           isCurrent: () => host.current,
           async call(method, params, _timeout, beforeSend) {
             beforeSend?.();
-            if (host.replyDelay) await Bun.sleep(host.replyDelay);
+            if (host.replyDelay)
+              await new Promise((resolve) => setImmediate(resolve));
             if (method === "pane.list") {
               host.reading.open();
               if (host.listGate) await host.listGate.opened;

@@ -1,3 +1,4 @@
+import { clock } from "../testing/installRunningTestClock";
 import { createRoot } from "react-dom/client";
 import { flushSync } from "react-dom";
 import { bridge } from "../api";
@@ -29,7 +30,6 @@ const failures: string[] = [];
 const check = (condition: boolean, message: string) => {
   if (!condition) failures.push(message);
 };
-const sleep = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
 window.addEventListener("error", (event) => failures.push(String(event.error)));
 const consoleError = console.error;
 console.error = (...args: unknown[]) => {
@@ -87,13 +87,14 @@ async function scout(
   until: (leaf: WorldLeafObject) => boolean,
   what: string,
 ): Promise<WorldLeafObject & { kind: "agent" }> {
-  for (let attempt = 0; attempt < 100; attempt++) {
+  for (let attempt = 0; attempt < 300; attempt++) {
     const found = (await world()).leaves.find(
       (leaf) => leaf.kind === "agent" && leaf.agentName === "scout",
     );
     if (found && until(found))
       return found as WorldLeafObject & { kind: "agent" };
-    await sleep(30);
+    // Core's answer arrives over real sockets: a short real tick per look.
+    await new Promise((resolve) => clock.real.setTimeout(resolve, 10));
   }
   throw new Error(`scout never became ${what}`);
 }
@@ -210,14 +211,14 @@ async function run() {
 
   // 2. A glance shorter than the dwell is not looking.
   show(leaf);
-  await sleep(CORE_LOOK_DWELL_MS / 3);
+  await clock.advance(CORE_LOOK_DWELL_MS / 3);
   show(null);
-  await sleep(CORE_LOOK_DWELL_MS);
+  await clock.advance(CORE_LOOK_DWELL_MS);
   check(seenCalls().length === 0, "a passing glance shares nothing");
 
   // 3. Both peeks stay drawn: one write for turn 1, then idle everywhere.
   show(leaf);
-  await sleep(CORE_LOOK_DWELL_MS + 200);
+  await clock.advance(CORE_LOOK_DWELL_MS + 200);
   check(
     seenCalls().length === 1 &&
       JSON.stringify(seenCalls()[0]!.params) ===
@@ -238,7 +239,7 @@ async function run() {
   await post("/app", { action: "unread" });
   leaf = await scout((l) => l.status === "done", "done again");
   show(leaf);
-  await sleep(CORE_LOOK_DWELL_MS + 200);
+  await clock.advance(CORE_LOOK_DWELL_MS + 200);
   check(
     seenCalls().length === 1,
     `World kept the app's unread: ${seenCalls().length} writes (${foregroundEvents.join(",")}) ${rpcErrors.join("; ")}`,
@@ -264,7 +265,7 @@ async function run() {
   pinButton("town")?.click();
   leaf = await scout((l) => l.pane.favourite === true, "pinned");
   show(leaf);
-  await sleep(50);
+  await clock.advance(50);
   check(
     [...document.querySelectorAll('[aria-label="Unpin"]')].length === 2,
     "both peeks show the pin",
@@ -292,7 +293,7 @@ async function run() {
   pinButton("board")?.click();
   leaf = await scout((l) => l.pane.favourite !== true, "unpinned");
   show(leaf);
-  await sleep(50);
+  await clock.advance(50);
   check(
     pinWrites().length === 2 && pinWrites()[1]!.params.favourite === false,
     `one unpin write: ${JSON.stringify(pinWrites())}`,
@@ -301,7 +302,7 @@ async function run() {
     [...document.querySelectorAll('[aria-label="Pin"]')].length === 2,
     "both peeks show it unpinned",
   );
-  await sleep(50);
+  await clock.advance(50);
   check(
     coreDesk().length === 0 && !saved.desk_pins[desk],
     `Town's desk is unpinned: ${JSON.stringify(saved)}`,
@@ -309,7 +310,7 @@ async function run() {
   await post("/app", { action: "pin" });
   leaf = await scout((l) => l.pane.favourite === true, "pinned in the app");
   show(leaf);
-  await sleep(50);
+  await clock.advance(50);
   check(
     [...document.querySelectorAll('[aria-label="Unpin"]')].length === 2 &&
       pinWrites().length === 2,
@@ -322,13 +323,13 @@ async function run() {
 
   // 7. Looking again later raises seen again.
   show(null);
-  await sleep(20);
+  await clock.advance(20);
   show(leaf);
-  await sleep(CORE_LOOK_DWELL_MS + 200);
+  await clock.advance(CORE_LOOK_DWELL_MS + 200);
   check(seenCalls().length === 2, "a new look shares the turn again");
   leaf = await scout((l) => l.status === "idle", "idle again");
   show(leaf);
-  await sleep(50);
+  await clock.advance(50);
 }
 
 void run()

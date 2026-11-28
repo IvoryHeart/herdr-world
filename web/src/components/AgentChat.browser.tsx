@@ -1,3 +1,4 @@
+import { clock } from "../testing/installRunningTestClock";
 import { flushSync } from "react-dom";
 import { createRoot } from "react-dom/client";
 import { bridge, type BridgeControlMsg } from "../api";
@@ -25,12 +26,21 @@ import "./WorkspaceInspectorFrame.css";
 import "./WorkspaceInspectorHost.css";
 import "../world/windows/windows.css";
 
+// Wall-clock time follows the test clock, so durations the page shows from
+// Date.now move with the time the fixture advances.
+{
+  const realNow = Date.now.bind(Date);
+  const wallStart = realNow();
+  const testStart = performance.now();
+  Date.now = () => wallStart + (performance.now() - testStart);
+}
+
 const failures: string[] = [];
 function check(condition: boolean, message: string) {
   if (!condition) failures.push(message);
 }
 async function settle() {
-  await new Promise((resolve) => setTimeout(resolve, 80));
+  await clock.advance(80);
 }
 /**
  * An upload's answer reaches its chip through async body parsing and a
@@ -38,7 +48,9 @@ async function settle() {
  * bounded, for the state the next check reads.
  */
 async function settleUntil(condition: () => boolean) {
-  for (let i = 0; i < 40 && !condition(); i++) await settle();
+  await clock
+    .until(condition, "upload state did not settle", 3200)
+    .catch(() => {});
 }
 
 type Messages = NonNullable<Conversation["messages"]>;
@@ -489,7 +501,7 @@ async function run() {
     );
 
     // No timers: nothing rereads until the service says it changed.
-    await new Promise((resolve) => setTimeout(resolve, 600));
+    await clock.advance(600);
     check(reads() === 1, "Chat must not poll");
     push("another-pane");
     await settle();
@@ -1492,7 +1504,7 @@ async function run() {
       );
       waited += 100
     )
-      await new Promise((resolve) => setTimeout(resolve, 100));
+      await clock.advance(100);
     const now = container.querySelector(".agent-chat-now");
     check(
       now?.querySelector(".agent-chat-state-word")?.textContent === "Working" &&
@@ -1576,7 +1588,7 @@ async function run() {
     );
     // An Esc another handler used does not arm Stop, and the note to press
     // again lasts only as long as a second Esc would stop.
-    await new Promise((resolve) => setTimeout(resolve, 800));
+    await clock.advance(800);
     list.addEventListener("keydown", (event) => event.preventDefault(), {
       once: true,
     });
@@ -1592,7 +1604,7 @@ async function run() {
     );
     await settle();
     check(escapes() === 2, "An Esc already handled must not count");
-    await new Promise((resolve) => setTimeout(resolve, 800));
+    await clock.advance(800);
     check(
       !(
         container.querySelector(".agent-chat-now-note")?.textContent ?? ""
@@ -1903,7 +1915,7 @@ async function run() {
         });
         order.push(id, `${id}-reply`);
         push();
-        await new Promise((resolve) => setTimeout(resolve, 40));
+        await clock.advance(40);
       }
       await settle();
       await settle();
@@ -2188,7 +2200,7 @@ async function run() {
         tries < 50 && !container.querySelector(".agent-history-chat pre");
         tries += 1
       )
-        await new Promise((resolve) => setTimeout(resolve, 100));
+        await clock.advance(100);
       await settle();
       check(
         !!container.querySelector(".agent-history-chat pre"),
@@ -2515,7 +2527,7 @@ async function run() {
           !container.querySelector(".agent-history-chat-markdown p");
           tries += 1
         )
-          await new Promise((resolve) => setTimeout(resolve, 100));
+          await clock.advance(100);
         await settle();
         const text = container.querySelector<HTMLElement>(
           ".agent-history-chat-markdown p",

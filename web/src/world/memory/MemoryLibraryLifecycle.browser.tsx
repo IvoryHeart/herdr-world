@@ -1,3 +1,4 @@
+import { clock } from "../../testing/installRunningTestClock";
 import { createRoot, type Root } from "react-dom/client";
 import "../../styles/tokens.css";
 import "../../styles/base.css";
@@ -179,7 +180,7 @@ function call(
     };
     if (hold.has(action))
       held.push({ ...entry, release: settle, fail: reject });
-    else setTimeout(settle, 5);
+    else void clock.advance(5).then(settle);
   });
 }
 
@@ -206,19 +207,15 @@ const byText = (selector: string, text: string | RegExp) =>
       : text.test(el.textContent ?? ""),
   );
 const content = () => $(".memory-content")?.textContent ?? "";
-const tick = () => new Promise((resolve) => setTimeout(resolve, 60));
+const tick = () => clock.advance(60);
 
 async function waitFor<T>(
   read: () => T,
   message: string,
 ): Promise<NonNullable<T>> {
-  const until = performance.now() + 6_000;
-  for (;;) {
-    const value = read();
-    if (value) return value as NonNullable<T>;
-    if (performance.now() > until) throw new Error(message);
-    await new Promise((resolve) => setTimeout(resolve, 20));
-  }
+  let value: T;
+  await clock.until(() => Boolean((value = read())), message, 6_000);
+  return value! as NonNullable<T>;
 }
 
 function type(el: HTMLInputElement | HTMLTextAreaElement, value: string) {

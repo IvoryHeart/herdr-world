@@ -1,3 +1,4 @@
+import { clock } from "./testing/installRunningTestClock";
 import { checkAnnotationUX } from "./annotations.browser";
 import { worldLocalStorage } from "./browserStorage";
 import { flushSync } from "react-dom";
@@ -25,7 +26,7 @@ const failures: string[] = [];
 const check = (condition: boolean, message: string) => {
   if (!condition) failures.push(message);
 };
-const settle = () => new Promise((resolve) => setTimeout(resolve, 40));
+const settle = () => clock.advance(40);
 async function until(predicate: () => unknown, label: string) {
   void fetch("/event", { method: "POST", body: label });
   for (let i = 0; i < 150; i++) {

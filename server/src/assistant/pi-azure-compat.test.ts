@@ -351,7 +351,8 @@ test("legacy Azure catalog preserves both IDs and custom providers without comma
       expect(JSON.stringify(catalog)).not.toContain("!touch");
       expect(await driver.catalog(source)).toEqual(catalog);
     }
-    await new Promise((resolve) => setTimeout(resolve, 25));
+    for (let turn = 0; turn < 50; turn++)
+      await new Promise((resolve) => setImmediate(resolve));
     expect(existsSync(sentinel)).toBe(false);
     expect(
       [f.authPath, f.sharedAuthPath, f.modelsPath].map((path) =>

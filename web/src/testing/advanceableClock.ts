@@ -15,6 +15,9 @@ export function installAdvanceableClock() {
     { due: number; callback: () => void; real: number }
   >();
   const monotonic = () => performance.now() + skew;
+  // Wall time follows the same reading, so both move by exactly the same
+  // amount: integer Date.now() drifts up to 1 ms against performance.now().
+  const wallOrigin = Date.now() - performance.now();
   const fire = (id: number) => {
     const timer = timers.get(id);
     if (!timer) return;
@@ -23,7 +26,7 @@ export function installAdvanceableClock() {
     timer.callback();
   };
   const restore = setClockForTests({
-    now: () => Date.now() + skew,
+    now: () => wallOrigin + monotonic(),
     monotonic,
     setTimeout(callback, delayMs = 0) {
       const id = nextId++;

@@ -1,3 +1,4 @@
+import { clock } from "../testing/installRunningTestClock";
 import { createRoot } from "react-dom/client";
 import { bridge } from "../api";
 import { publishedHostGrouping } from "../../../shared/hostGrouping";
@@ -240,17 +241,20 @@ async function run() {
   const root = document.createElement("div");
   document.body.append(root);
   createRoot(root).render(<WorldFoundationApp />);
-  for (let attempt = 0; attempt < 400; attempt++) {
-    const renderer = window.__HERDR_TOWN_RENDERER__;
-    if (
-      renderer?.ready &&
-      !renderer.flying &&
-      document.querySelectorAll(".town-room-plaque").length > 0
+  await clock
+    .until(
+      () => {
+        const renderer = window.__HERDR_TOWN_RENDERER__;
+        return !!(
+          renderer?.ready &&
+          !renderer.flying &&
+          document.querySelectorAll(".town-room-plaque").length > 0
+        );
+      },
+      "Town never drew the owner topology",
+      20_000,
     )
-      return;
-    await new Promise((resolve) => setTimeout(resolve, 50));
-  }
-  failures.push("Town never drew the owner topology");
+    .catch((error) => failures.push(String(error.message ?? error)));
 }
 
 void run()
