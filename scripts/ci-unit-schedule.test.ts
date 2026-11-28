@@ -27,7 +27,7 @@ test("packing static/web work after units preserves the proven unit schedule", (
       },
     },
     steps: [
-      ...job.steps,
+      ...job.steps.map((step, index) => ({ ...step, id: `unit-${index}` })),
       { run: "bun run check:static" },
       { run: "bun scripts/ci-tests.ts web 1/2" },
     ],

@@ -29,11 +29,24 @@ core control partition and memory/time packing from #1478 onto the padded
 reservations and hard resource envelope. Refill a worker only while its reservation
 fits; cancellation stops admission and drains every started part.
 
+Use measured whole-part durations from run 46147624726 rather than checker-only
+estimates, accounting for the diagnostic control in initial placement as well as
+refinement. Keep every padded memory reservation. Combined runners publish their
+actual lane outcomes independently; Delivery also requires the runner verdicts,
+so one web timeout cannot impersonate unit/static/security failures or hide a
+setup/artifact failure. The 41-context uiScale file runs in disjoint browser-only
+case groups, with a complement for future names and separate JUnit/retry receipts,
+under the unchanged file deadline. The unit executor remains unchanged.
+
 A parent-owned file watchdog observes atomic worker markers in the existing run
 temporary folder. Native file events and parent timers stay outside fake clocks
 and Bun parallel worker contexts. It covers evaluation and all hooks, and names
 the file before failing the batch. A regression proves each phase with stopped
-clocks in sequential and parallel modes. The watchdog preserves the exact child
+clocks in sequential and parallel modes. A deadline or cancellation retires the
+owned POSIX process group, including nested test and Chrome descendants; a pipe
+closure regression verifies that the supervisor cannot exit leaving them alive.
+Fixture completion receipts work even when Bun's agent reporter hides pass lines.
+The watchdog preserves the exact child
 command, environment inputs and scheduling arguments; only that wrapper is removed
 when comparing scheduling code. No twenty-pair executor or assertion is removed.
 
@@ -42,3 +55,8 @@ Retain the light behaviour renderer and production renderer for pixel/performanc
 checks. Short polling dwells are also removed. Four real-runtime absence checks remain explicitly explained; no test is
 skipped or given a longer timeout to pass. Phase summaries retain native input and
 frame work instead of charging unfinished work to a later phase.
+
+Snapshot projection yields through an injected native task-turn port rather than
+the elapsed-time scheduler. Manual fixture time may stay stopped while I/O makes
+progress; lease validation still follows the yield. Real snapshot regressions
+cover stopped scheduling and retirement during a held construction turn.

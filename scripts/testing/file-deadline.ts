@@ -127,12 +127,15 @@ export function spawnTestBatch(
     console.error(
       `[test-file-timeout] ${file} exceeded ${limit} ms (real time)`,
     );
-    child.kill("SIGKILL");
+    signalBatch("SIGKILL");
   });
   let child: ReturnType<typeof Bun.spawn>;
   try {
     child = Bun.spawn(command, {
       ...options,
+      // The wrapper owns all test/Chrome descendants, including a nested World
+      // runner. A deadline or cancellation must not orphan them on local hosts.
+      detached: process.platform !== "win32",
       env: {
         ...(options?.env || process.env),
         [FILE_DEADLINES_ENV]: directory,
@@ -143,8 +146,16 @@ export function spawnTestBatch(
     rmSync(directory, { recursive: true, force: true });
     throw error;
   }
+  function signalBatch(signal: NodeJS.Signals) {
+    if (process.platform === "win32") return child.kill(signal);
+    try {
+      process.kill(-child.pid, signal);
+    } catch (error) {
+      if ((error as NodeJS.ErrnoException).code !== "ESRCH") throw error;
+    }
+  }
   return {
-    kill: (signal: NodeJS.Signals) => child.kill(signal),
+    kill: signalBatch,
     exited: child.exited
       .then((code) => (timedOut ? 124 : code))
       .finally(() => {

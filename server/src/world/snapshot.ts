@@ -42,7 +42,7 @@ import type { ConnectionId } from "../connections/types";
 import type { WorldWatchlist } from "./watchlist";
 import type { WorldRuntimeStatus } from "./runtime-registry";
 import type { WorldHost } from "../../../shared/hosts";
-import { systemClock, systemScheduler, type Scheduler } from "../service/clock";
+import * as timing from "../service/clock";
 import { settleSnapshotObservations } from "./snapshot-deadline";
 const MAX_WORKSPACES = 512;
 const MAX_TABS = 2_048;
@@ -147,7 +147,7 @@ export class WorldSnapshotService<Runtime extends RuntimeWithOperations> {
 
   constructor(
     private readonly registry: Registry<Runtime>,
-    private readonly now: () => number = systemClock.now,
+    private readonly now: () => number = timing.systemClock.now,
     private readonly onLateObservation?: (
       connectionId: string,
       generation: number,
@@ -160,7 +160,8 @@ export class WorldSnapshotService<Runtime extends RuntimeWithOperations> {
     private readonly onFreshObservation?: observation.Fresh,
     private readonly onCompleteObservation?: observation.Complete,
     incarnation?: string,
-    private readonly scheduler: Scheduler = systemScheduler,
+    private readonly scheduler: timing.Scheduler = timing.systemScheduler,
+    private readonly taskTurn: timing.TaskTurn = timing.systemTaskTurn,
   ) {
     this.observation = new WorldObservation(incarnation);
   }
@@ -570,9 +571,7 @@ export class WorldSnapshotService<Runtime extends RuntimeWithOperations> {
       // Break that microtask chain before host projection/digest work so native
       // terminal input and socket replies get an ordinary event-loop turn.
       // Revalidate the lease after yielding before publishing any topology.
-      await new Promise<void>((resolve) => {
-        this.scheduler.schedule(resolve, 0);
-      });
+      await this.taskTurn();
       if (!this.current(work)) {
         outcome = { error: "connection changed during snapshot" };
       } else if (!this.admitted(work)) {

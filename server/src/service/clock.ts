@@ -21,6 +21,11 @@ export type Scheduler = {
   schedule(callback: () => void, delayMs: number): { cancel(): void };
 };
 
+/** Yield to native input/I/O without waiting for elapsed fixture time. */
+export type TaskTurn = () => Promise<void>;
+export const systemTaskTurn: TaskTurn = () =>
+  new Promise<void>((resolve) => setImmediate(resolve));
+
 export const systemClock: Clock = {
   now: () => Date.now(),
   monotonic: () => performance.now(),

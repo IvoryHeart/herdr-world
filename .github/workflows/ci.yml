@@ -244,26 +244,18 @@ jobs:
               if: steps.unit-plan.outputs.build == 'true'
               run: bun run build
             - name: Run affected non-browser tests
+              id: units
               if: needs.validation-scope.outputs.unit_comparison != 'true'
               run: bun scripts/ci-tests.ts unit ${{ matrix.shard }}/4
             - name: Require twenty serial and parallel unit comparisons
+              id: comparison
               if: needs.validation-scope.outputs.unit_comparison == 'true'
               run: bun scripts/ci-unit-comparison.ts run ${{ matrix.shard }}/4
-            - name: Retain unit JUnit, comparison inventory and timings
-              if: always()
-              uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7
-              with:
-                  name: unit-evidence-${{ matrix.shard }}-${{ github.run_attempt }}
-                  path: |
-                      .agents/delivery/unit-*.xml
-                      .agents/delivery/unit-comparison
-                  include-hidden-files: true
-                  if-no-files-found: warn
-                  retention-days: 7
             - name: Fetch history for static ratchets
               if: ${{ !cancelled() && matrix.group != '' }}
               run: git fetch --filter=blob:none --unshallow origin
             - name: Run static repository checks
+              id: static
               if: ${{ !cancelled() && matrix.group != '' }}
               env:
                   HERDR_WORLD_RATCHET_TARGET: ${{ github.event.pull_request.base.sha || github.event.merge_group.base_sha }}
@@ -278,6 +270,7 @@ jobs:
                   if-no-files-found: error
 
             - name: Audit shipped dependencies
+              id: security
               timeout-minutes: 10
               if: ${{ !cancelled() && matrix.group == 'repository' }}
               run: bun run security:check
@@ -290,6 +283,7 @@ jobs:
               if: ${{ !cancelled() && matrix.web != 0 && needs.validation-scope.outputs.world == 'true' && toJSON(fromJSON(needs.validation-scope.outputs.selection).web) != '[]' }}
               run: bun scripts/test-chrome.ts "$HOME/.cache/herdr-test-chrome"
             - name: Run web browser suites
+              id: web
               timeout-minutes: 15
               if: ${{ !cancelled() && matrix.web != 0 && needs.validation-scope.outputs.world == 'true' && toJSON(fromJSON(needs.validation-scope.outputs.selection).web) != '[]' }}
               env:
@@ -308,6 +302,26 @@ jobs:
                   if-no-files-found: warn
                   retention-days: 7
 
+            - name: Record independent lane results
+              if: always()
+              env:
+                  UNIT_RESULT: ${{ steps.units.outcome == 'skipped' && steps.comparison.outcome || steps.units.outcome }}
+                  STATIC_RESULT: ${{ steps.static.outcome || 'skipped' }}
+                  SECURITY_RESULT: ${{ steps.security.outcome || 'skipped' }}
+                  WEB_RESULT: ${{ steps.web.outcome || 'skipped' }}
+              run: bun scripts/ci-runner-results.ts record ${{ matrix.shard }}
+            - name: Retain unit JUnit, comparison inventory and timings
+              if: always()
+              uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7
+              with:
+                  name: unit-evidence-${{ matrix.shard }}-${{ github.run_attempt }}
+                  path: |
+                      .agents/delivery/unit-*.xml
+                      .agents/delivery/unit-comparison
+                      .agents/delivery/runner-results
+                  include-hidden-files: true
+                  if-no-files-found: warn
+                  retention-days: 7
             - name: Summarize retry evidence
               if: always()
               continue-on-error: true
@@ -409,17 +423,28 @@ jobs:
               run: echo "Validation mode is $VALIDATION_MODE"
               env:
                   VALIDATION_MODE: ${{ needs.validation-scope.outputs.mode }}
+            - name: Download independent runner results
+              if: always() && needs.unit-tests.result != 'skipped'
+              uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8
+              with:
+                  pattern: unit-evidence-*-${{ github.run_attempt }}
+                  path: .agents/delivery/runner-evidence
+            - name: Aggregate independent runner results
+              id: runner-results
+              if: always() && needs.unit-tests.result != 'skipped'
+              run: bun scripts/ci-runner-results.ts aggregate .agents/delivery/runner-evidence
             - name: Run full repository check
               if: needs.validation-scope.outputs.mode == 'full'
               env:
                   VALIDATION_MODE: full
                   SCOPE_RESULT: ${{ needs.validation-scope.result }}
                   DESCRIPTION_RESULT: ${{ steps.description.outcome || 'skipped' }}
-                  SECURITY_RESULT: ${{ needs.validation-scope.outputs.mode == 'docs' && needs.static.result || needs.unit-tests.result }}
-                  STATIC_RESULT: ${{ needs.validation-scope.outputs.mode == 'docs' && needs.static.result || needs.unit-tests.result }}
-                  UNIT_RESULT: ${{ needs.unit-tests.result }}
+                  SECURITY_RESULT: ${{ needs.validation-scope.outputs.mode == 'docs' && needs.static.result || steps.runner-results.outputs.security || 'skipped' }}
+                  STATIC_RESULT: ${{ needs.validation-scope.outputs.mode == 'docs' && needs.static.result || steps.runner-results.outputs.static || 'skipped' }}
+                  COMBINED_RESULT: ${{ needs.unit-tests.result }}
+                  UNIT_RESULT: ${{ steps.runner-results.outputs.unit || 'skipped' }}
                   WORLD_RESULT: ${{ needs.world-browser.result }}
-                  WEB_RESULT: ${{ needs.validation-scope.outputs.world == 'true' && toJSON(fromJSON(needs.validation-scope.outputs.selection).web) != '[]' && needs.unit-tests.result || 'skipped' }}
+                  WEB_RESULT: ${{ steps.runner-results.outputs.web || 'skipped' }}
                   BEHAVIORAL_RESULT: ${{ needs.behavioral.result }}
               run: bun scripts/ci-delivery-result.ts
             - name: Verify applicable or reused results
@@ -428,11 +453,12 @@ jobs:
                   VALIDATION_MODE: ${{ needs.validation-scope.outputs.mode }}
                   SCOPE_RESULT: ${{ needs.validation-scope.result }}
                   DESCRIPTION_RESULT: ${{ steps.description.outcome || 'skipped' }}
-                  SECURITY_RESULT: ${{ needs.validation-scope.outputs.mode == 'docs' && needs.static.result || needs.unit-tests.result }}
-                  STATIC_RESULT: ${{ needs.validation-scope.outputs.mode == 'docs' && needs.static.result || needs.unit-tests.result }}
-                  UNIT_RESULT: ${{ needs.unit-tests.result }}
+                  SECURITY_RESULT: ${{ needs.validation-scope.outputs.mode == 'docs' && needs.static.result || steps.runner-results.outputs.security || 'skipped' }}
+                  STATIC_RESULT: ${{ needs.validation-scope.outputs.mode == 'docs' && needs.static.result || steps.runner-results.outputs.static || 'skipped' }}
+                  COMBINED_RESULT: ${{ needs.unit-tests.result }}
+                  UNIT_RESULT: ${{ steps.runner-results.outputs.unit || 'skipped' }}
                   WORLD_RESULT: ${{ needs.world-browser.result }}
-                  WEB_RESULT: ${{ needs.validation-scope.outputs.world == 'true' && toJSON(fromJSON(needs.validation-scope.outputs.selection).web) != '[]' && needs.unit-tests.result || 'skipped' }}
+                  WEB_RESULT: ${{ steps.runner-results.outputs.web || 'skipped' }}
                   BEHAVIORAL_RESULT: ${{ needs.behavioral.result }}
               run: bun scripts/ci-delivery-result.ts
             - name: Report run timings

@@ -2,8 +2,9 @@ import { herdrRuntimeFixture } from "../adapters/testing/runtime";
 import { expect, test } from "bun:test";
 import { WorldSnapshotService } from "./snapshot";
 import type { ConnectionStatus } from "../connections/types";
+import type { Scheduler } from "../service/clock";
 
-function fixture() {
+function fixture(scheduler?: Scheduler) {
   let generation = 1,
     leases = 0;
   const raw = {
@@ -21,7 +22,7 @@ function fixture() {
       call: async (method: string) => raw[method as keyof typeof raw],
     }),
   };
-  const service = new WorldSnapshotService({
+  const registry = {
     list: (): ConnectionStatus[] => [
       {
         id: "alpha",
@@ -32,11 +33,22 @@ function fixture() {
         generation,
       },
     ],
-    readyRuntimeLease: (connectionId) => {
+    readyRuntimeLease: (connectionId: string) => {
       leases++;
       return { connectionId, generation, runtime, isCurrent: () => true };
     },
-  });
+  };
+  const service = new WorldSnapshotService(
+    registry,
+    undefined,
+    undefined,
+    undefined,
+    undefined,
+    undefined,
+    undefined,
+    undefined,
+    scheduler,
+  );
   return {
     service,
     leases: () => leases,
@@ -45,6 +57,22 @@ function fixture() {
     },
   };
 }
+
+test("a snapshot yields a task turn without depending on manually advanced time", async () => {
+  const delays: number[] = [];
+  const { service } = fixture({
+    schedule(_callback, delayMs) {
+      delays.push(delayMs);
+      // A stopped scheduler deliberately never calls its callbacks.
+      if (delayMs === 0)
+        throw new Error("a task turn must not await fixture time");
+      return { cancel() {} };
+    },
+  });
+  const snapshot = await service.snapshot();
+  expect(snapshot.connections[0]!.actionable).toBe(true);
+  expect(delays).toEqual([20_000]);
+});
 
 test("real snapshot projections reuse identity and digest only the actual admitted projection", async () => {
   const { service, replace } = fixture();

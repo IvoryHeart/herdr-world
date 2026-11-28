@@ -71,7 +71,7 @@ try {
     [
       process.execPath,
       ...(ciWeb
-        ? [join(import.meta.dir, "ci-tests.ts"), "web", ciWeb]
+        ? [join(import.meta.dir, "ci-web-tests.ts"), ciWeb]
         : [join(import.meta.dir, "run-tests.ts"), ...args]),
     ],
     {

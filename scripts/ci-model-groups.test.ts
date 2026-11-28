@@ -12,35 +12,58 @@ import { resolve } from "node:path";
 import { retainGroupResources, runModelGroup } from "./ci-model-groups";
 import {
   MODEL_GROUP_RESERVE_BYTES,
-  modelGroupWaves,
   modelPartMemoryBytes,
   verificationGroup,
   verificationGroups,
+  MODEL_GROUP_MEMORY_MIB,
+  MODEL_GROUP_WORKERS,
 } from "./ci-model-plan";
 import limits from "../tools/quint/model-resources.json";
 import { readVerificationResources } from "./verification-resources";
 
+function initialAdmission(indices: number[]) {
+  let memory = 0;
+  const admitted: number[] = [];
+  for (const index of indices) {
+    memory += modelPartMemoryBytes(index) / 2 ** 20;
+    if (
+      admitted.length === MODEL_GROUP_WORKERS ||
+      memory > MODEL_GROUP_MEMORY_MIB
+    )
+      break;
+    admitted.push(index);
+  }
+  return admitted;
+}
+
 test("the production group runs four parts concurrently and omits only validated cache hits", async () => {
   const root = await mkdtemp(resolve(tmpdir(), "packed-model-pool-"));
   try {
-    // Exercise a four-part wave after a real cache hit, independently of which
-    // runner owns that wave in the current measured packing.
-    const group =
-      verificationGroups.findIndex((indices) =>
-        modelGroupWaves(indices.slice(1)).some((wave) => wave.length === 4),
-      ) + 1;
-    const indices = verificationGroup(group);
-    await mkdir(
-      resolve(root, `.agents/verification/runs/ci-shard-${indices[0]}-reused`),
-      { recursive: true },
-    );
-    await writeFile(
-      resolve(
-        root,
-        `.agents/verification/runs/ci-shard-${indices[0]}-reused/manifest.json`,
+    // Cached prefixes may remove heavy parts. Exercise a real four-part
+    // admission after those hits, independently of the current runner packing.
+    const candidates = verificationGroups.flatMap((indices, group) =>
+      indices.flatMap((_, prefix) =>
+        initialAdmission(indices.slice(prefix)).length === 4 && prefix > 0
+          ? [{ group: group + 1, prefix }]
+          : [],
       ),
-      "{}",
     );
+    expect(candidates.length).toBeGreaterThan(0);
+    const { group, prefix } = candidates[0]!;
+    const indices = verificationGroup(group);
+    for (const index of indices.slice(0, prefix)) {
+      await mkdir(
+        resolve(root, `.agents/verification/runs/ci-shard-${index}-reused`),
+        { recursive: true },
+      );
+      await writeFile(
+        resolve(
+          root,
+          `.agents/verification/runs/ci-shard-${index}-reused/manifest.json`,
+        ),
+        "{}",
+      );
+    }
     const started: number[] = [];
     let active = 0;
     let peak = 0;
@@ -60,20 +83,19 @@ test("the production group runs four parts concurrently and omits only validated
     expect(peak).toBe(4);
     expect(active).toBe(0);
     expect(started.sort((a, b) => a - b)).toEqual(
-      indices.slice(1).sort((a, b) => a - b),
+      indices.slice(prefix).sort((a, b) => a - b),
     );
   } finally {
     await rm(root, { recursive: true, force: true });
   }
 });
 
-test("actual group admission drains each memory-bounded wave before refilling slots", async () => {
+test("actual group admission preserves queue order and memory bounds while refilling slots", async () => {
   const root = await mkdtemp(resolve(tmpdir(), "packed-model-admission-"));
   try {
     for (let group = 1; group <= 4; group++) {
       const started: number[] = [];
       const active = new Set<number>();
-      const waves = modelGroupWaves(verificationGroup(group));
       await runModelGroup(
         root,
         group,
@@ -97,7 +119,7 @@ test("actual group admission drains each memory-bounded wave before refilling sl
           }
         },
       );
-      expect(started).toEqual(waves.flat());
+      expect(started).toEqual(verificationGroup(group));
       expect(active.size).toBe(0);
     }
   } finally {
@@ -110,7 +132,7 @@ test("failure and cancellation stop later memory waves and drain started parts",
   try {
     for (const cancel of [false, true]) {
       const control = new AbortController();
-      const first = modelGroupWaves(verificationGroup(4))[0]!;
+      const first = initialAdmission(verificationGroup(4));
       const started: number[] = [];
       let active = 0;
       const failure = new Error("synthetic model failure");

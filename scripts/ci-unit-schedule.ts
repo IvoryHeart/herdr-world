@@ -30,6 +30,9 @@ export function unitSchedule(job: UnitJob) {
   }
   const steps = schedule.steps as Array<{ run?: string }> | undefined;
   if (steps) {
+    // Step IDs only expose verdicts to later reporting steps. They are not
+    // execution inputs; conditions/commands referencing them still are.
+    for (const step of steps) delete (step as Record<string, unknown>).id;
     const last = steps.findLastIndex((step) =>
       /^bun scripts\/(?:ci-tests\.ts unit|ci-unit-comparison\.ts run) /.test(
         step.run || "",

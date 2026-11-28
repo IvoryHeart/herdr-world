@@ -51,7 +51,9 @@ workers only when their padded reservations fit: each reservation rounds 125% of
 the recorded peak up to 64 MiB, with 256 MiB reserved for group overhead. Cache
 misses use the same admission rule. Failure or cancellation stops admission and
 drains started work. The hard 4 GiB, zero-swap cgroup and four-CPU quota remain
-authoritative; estimates cannot establish hosted fit.
+authoritative; estimates cannot establish hosted fit. Packing uses complete part
+durations from hosted run 46147624726, including replay and evidence publication,
+and includes group 1's diagnostic overhead during initial placement and refinement.
 World's six runners balance individual case times across three logical queues,
 admitting at most two isolated browser contexts in one Chrome per runner. Cases over 50 seconds
 are split into independent fixtures with their assertions retained.
@@ -71,6 +73,14 @@ negative control runs once on group 1 in full mode or when its tooling changes.
 Static checks never retry. `check:changed` remains an explicit local affected
 check and `check:delivery` an explicit complete local gate. Neither is a push hook.
 `check:source` is a local compatibility command, not a release gate.
+
+Each combined runner records separate unit, static, security and web outcomes in
+its summary and `unit-evidence-*` artifact, even after another lane fails. Delivery
+requires all four receipts, checks the actual lane verdicts and also requires the
+combined runners themselves to succeed. Setup or artifact failures cannot pass.
+The large `uiScale` browser table runs in five disjoint groups under the unchanged
+120-second file deadline, each retaining its JUnit/retry report. The last group
+also owns future case names. This browser-only schedule leaves units unchanged.
 `check:pr-body <file> <base-ref>` validates the exact committed PR description in
 CI and before handoff. `check:dead` is read-only unless given `--prune`.
 `check:privacy --range <base-ref> <head-ref>` scans committed additions; the hook

@@ -379,6 +379,26 @@ test("Delivery evidence conditions reference only declared dependencies", () => 
   }
 });
 
+test("combined runner evidence is retained after every lane and required by Delivery", () => {
+  const steps = workflow.jobs["unit-tests"].steps;
+  const receipt = steps.findIndex(
+    (step) => step.name === "Record independent lane results",
+  );
+  const upload = steps.findIndex(
+    (step) =>
+      step.name === "Retain unit JUnit, comparison inventory and timings",
+  );
+  expect(receipt).toBeGreaterThan(steps.findIndex((step) => step.id === "web"));
+  expect(upload).toBeGreaterThan(receipt);
+  expect(steps[receipt]!.if).toBe("always()");
+  expect(steps[upload]!.if).toBe("always()");
+  const aggregate = workflow.jobs.delivery.steps.find(
+    (step) => step.id === "runner-results",
+  )!;
+  expect(aggregate.if).toBe("always() && needs.unit-tests.result != 'skipped'");
+  expect(aggregate["continue-on-error"]).toBeUndefined();
+});
+
 test("flaky reporting uses only a daily schedule or manual default-branch run", async () => {
   const tracker = Bun.YAML.parse(
     await Bun.file(".github/workflows/flaky-tests.yml").text(),
@@ -529,13 +549,13 @@ test("delivery checks the combined lanes, current audit and PR description", () 
       SCOPE_RESULT: "${{ needs.validation-scope.result }}",
       DESCRIPTION_RESULT: "${{ steps.description.outcome || 'skipped' }}",
       SECURITY_RESULT:
-        "${{ needs.validation-scope.outputs.mode == 'docs' && needs.static.result || needs.unit-tests.result }}",
+        "${{ needs.validation-scope.outputs.mode == 'docs' && needs.static.result || steps.runner-results.outputs.security || 'skipped' }}",
       STATIC_RESULT:
-        "${{ needs.validation-scope.outputs.mode == 'docs' && needs.static.result || needs.unit-tests.result }}",
-      UNIT_RESULT: "${{ needs.unit-tests.result }}",
+        "${{ needs.validation-scope.outputs.mode == 'docs' && needs.static.result || steps.runner-results.outputs.static || 'skipped' }}",
+      COMBINED_RESULT: "${{ needs.unit-tests.result }}",
+      UNIT_RESULT: "${{ steps.runner-results.outputs.unit || 'skipped' }}",
       WORLD_RESULT: "${{ needs.world-browser.result }}",
-      WEB_RESULT:
-        "${{ needs.validation-scope.outputs.world == 'true' && toJSON(fromJSON(needs.validation-scope.outputs.selection).web) != '[]' && needs.unit-tests.result || 'skipped' }}",
+      WEB_RESULT: "${{ steps.runner-results.outputs.web || 'skipped' }}",
       BEHAVIORAL_RESULT: "${{ needs.behavioral.result }}",
     });
 });
@@ -642,7 +662,7 @@ test("CI exposes the protected delivery gate and runs the complete repository ch
       VALIDATION_MODE: "full",
       SCOPE_RESULT: "${{ needs.validation-scope.result }}",
       STATIC_RESULT:
-        "${{ needs.validation-scope.outputs.mode == 'docs' && needs.static.result || needs.unit-tests.result }}",
+        "${{ needs.validation-scope.outputs.mode == 'docs' && needs.static.result || steps.runner-results.outputs.static || 'skipped' }}",
       WORLD_RESULT: "${{ needs.world-browser.result }}",
     },
   });
@@ -925,8 +945,9 @@ test("World shards and packed web suites retain their partitions and failure evi
     env: { HERDR_TEST_PARALLEL: "2", HERDR_TEST_MAX_CONCURRENCY: "2" },
   });
   expect(
-    packed.steps.find((step) =>
-      step.uses?.startsWith("actions/upload-artifact@"),
+    packed.steps.find(
+      (step) =>
+        step.name === "Retain unit JUnit, comparison inventory and timings",
     ),
   ).toMatchObject({ if: "always()" });
 });

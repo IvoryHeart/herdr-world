@@ -29,7 +29,7 @@ test("live audit blocks the protected delivery result, release publication and P
   );
   expect(required.env).toMatchObject({
     SECURITY_RESULT:
-      "${{ needs.validation-scope.outputs.mode == 'docs' && needs.static.result || needs.unit-tests.result }}",
+      "${{ needs.validation-scope.outputs.mode == 'docs' && needs.static.result || steps.runner-results.outputs.security || 'skipped' }}",
   });
   expect(required.run).toBe("bun scripts/ci-delivery-result.ts");
   for (const [path, job] of [

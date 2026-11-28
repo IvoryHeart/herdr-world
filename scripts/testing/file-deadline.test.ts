@@ -1,5 +1,5 @@
 import { expect, jest, test } from "bun:test";
-import { rmSync, utimesSync, writeFileSync } from "node:fs";
+import { readFileSync, rmSync, utimesSync, writeFileSync } from "node:fs";
 import { mkdtemp, readdir, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
@@ -196,6 +196,7 @@ test("healthy sequential files can outlive the first file's deadline", async () 
 test("the loader publishes once and injected cleanup preserves source lines", async () => {
   const directory = await mkdtemp(join(tmpdir(), "deadline-source-lines-"));
   const file = join(directory, "source-lines.test.ts");
+  const completed = join(directory, "registration-completed");
   try {
     await writeFile(
       join(directory, "marker-observer.ts"),
@@ -210,16 +211,23 @@ export const published = statSync(marker).ino;
     await writeFile(
       file,
       `import { expect, test } from "bun:test";
-import { statSync } from "node:fs";
+import { statSync, writeFileSync } from "node:fs";
 import { marker, published } from "./marker-observer";
-test("one registration", () => expect(statSync(marker).ino).toBe(published));
+test("one registration", () => { expect(statSync(marker).ino).toBe(published); writeFileSync(${JSON.stringify(completed)}, "registered once"); });
 test("stack location", () => { throw new Error("stack-location-probe"); });
 `,
     );
     const child = Bun.spawn(
       [process.execPath, join(import.meta.dir, "../run-tests.ts"), file],
       {
-        env: { ...process.env, HERDR_TEST_EXCLUDE_WORLD_BROWSER: "1" },
+        env: {
+          ...process.env,
+          // Bun suppresses passing-test output in agent mode. Prove completion
+          // through a fixture receipt rather than depending on reporter text.
+          CLAUDECODE: "1",
+          AGENT: "1",
+          HERDR_TEST_EXCLUDE_WORLD_BROWSER: "1",
+        },
         stdout: "pipe",
         stderr: "pipe",
       },
@@ -230,7 +238,7 @@ test("stack location", () => { throw new Error("stack-location-probe"); });
       new Response(child.stderr).text(),
     ]);
     expect(code).toBe(1);
-    expect(stderr).toContain("(pass) one registration");
+    expect(await Bun.file(completed).text()).toBe("registered once");
     expect(stderr).toContain(`${file}:5:`);
   } finally {
     await rm(directory, { recursive: true, force: true });
@@ -249,10 +257,11 @@ test.each(
     const directory = await mkdtemp(join(tmpdir(), "file-deadline-"));
     const file = join(directory, "hung.test.ts");
     const passing = join(directory, "a-passing.test.ts");
+    const completed = join(directory, "passing-completed");
     try {
       await writeFile(
         passing,
-        'import { jest, test } from "bun:test"; jest.useFakeTimers(); jest.setSystemTime(0); test("passes first", () => {});',
+        `import { jest, test } from "bun:test"; import { writeFileSync } from "node:fs"; jest.useFakeTimers(); jest.setSystemTime(0); test("passes first", () => writeFileSync(${JSON.stringify(completed)}, "passed first"));`,
       );
       await writeFile(
         join(directory, "hung-import.ts"),
@@ -281,6 +290,8 @@ ${phase === "afterAll" ? "afterAll(hang);" : ""}
         {
           env: {
             ...process.env,
+            CLAUDECODE: "1",
+            AGENT: "1",
             HERDR_TEST_EXCLUDE_WORLD_BROWSER: "1",
             HERDR_TEST_FILE_TIMEOUT_MS: "100",
           },
@@ -298,7 +309,7 @@ ${phase === "afterAll" ? "afterAll(hang);" : ""}
         ]);
         expect(code).toBe(124);
         expect(stderr).toContain(`[test-file-timeout] ${file} exceeded 100 ms`);
-        expect(stderr).toContain("(pass) passes first");
+        expect(await Bun.file(completed).text()).toBe("passed first");
         expect(stderr).not.toContain(`[test-file-timeout] ${passing}`);
       } finally {
         clearTimeout(supervisor);
@@ -321,6 +332,79 @@ test("a batch that cannot start releases its deadline registry", async () => {
       }),
     ).toThrow();
     expect(await readdir(directory)).toEqual([]);
+  } finally {
+    await rm(directory, { recursive: true, force: true });
+  }
+});
+
+test("a file deadline retires descendants and closes inherited output pipes", async () => {
+  const directory = await mkdtemp(join(tmpdir(), "deadline-descendants-"));
+  const pidFile = join(directory, "descendant.pid");
+  const fixture = join(directory, "fixture.ts");
+  const supervisor = join(directory, "supervisor.ts");
+  let forced = false;
+  const killDescendant = () => {
+    try {
+      const pid = Number(readFileSync(pidFile, "utf8"));
+      // Never interpret an empty/malformed fixture receipt as a process group.
+      if (Number.isSafeInteger(pid) && pid > 1) process.kill(pid, "SIGKILL");
+    } catch (error) {
+      if (
+        !["ENOENT", "ESRCH"].includes(
+          (error as NodeJS.ErrnoException).code || "",
+        )
+      )
+        throw error;
+    }
+  };
+  try {
+    await writeFile(
+      fixture,
+      `
+import { renameSync, writeFileSync } from "node:fs";
+import { fileDeadline } from ${JSON.stringify(join(import.meta.dir, "file-deadline.ts"))};
+const descendant = Bun.spawn([process.execPath, "-e", 'import { createServer } from "node:net"; createServer().listen(0, "127.0.0.1", () => console.log("ready"));'], { stdout: "pipe", stderr: "inherit" });
+await descendant.stdout.getReader().read();
+writeFileSync(${JSON.stringify(pidFile + ".tmp")}, String(descendant.pid));
+renameSync(${JSON.stringify(pidFile + ".tmp")}, ${JSON.stringify(pidFile)});
+fileDeadline("synthetic-hung.test.ts");
+await descendant.exited;
+`,
+    );
+    await writeFile(
+      supervisor,
+      `
+import { spawnTestBatch } from ${JSON.stringify(join(import.meta.dir, "file-deadline.ts"))};
+const batch = spawnTestBatch([process.execPath, ${JSON.stringify(fixture)}], { env: { ...process.env, HERDR_TEST_FILE_TIMEOUT_MS: "100" }, stdout: "inherit", stderr: "inherit" });
+process.exit(await batch.exited);
+`,
+    );
+    const child = Bun.spawn([process.execPath, supervisor], {
+      env: { ...process.env, HERDR_TEST_FILE_TIMEOUT_MS: "100" },
+      stdout: "pipe",
+      stderr: "pipe",
+    });
+    const deadline = setTimeout(() => {
+      forced = true;
+      killDescendant();
+      child.kill("SIGKILL");
+    }, 1500);
+    try {
+      const [code, , stderr] = await Promise.all([
+        child.exited,
+        new Response(child.stdout).text(),
+        new Response(child.stderr).text(),
+      ]);
+      expect(stderr).toContain(
+        "[test-file-timeout] synthetic-hung.test.ts exceeded 100 ms",
+      );
+      expect(code).toBe(124);
+      expect(forced).toBe(false);
+    } finally {
+      clearTimeout(deadline);
+      killDescendant();
+      child.kill("SIGKILL");
+    }
   } finally {
     await rm(directory, { recursive: true, force: true });
   }

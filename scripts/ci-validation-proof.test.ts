@@ -59,6 +59,7 @@ test("real delivery publishes scoped proof only after all applicable results pas
         SECURITY_RESULT: "success",
         STATIC_RESULT: staticResult,
         UNIT_RESULT: "success",
+        COMBINED_RESULT: "success",
         WEB_RESULT: "skipped",
         WORLD_RESULT: "skipped",
         BEHAVIORAL_RESULT: "skipped",

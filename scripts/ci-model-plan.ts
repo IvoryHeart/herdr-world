@@ -23,13 +23,13 @@ export const verificationJobs = verificationModels.flatMap((model) => {
   return parts.map((part) => ({ model, part, id: `${model}-${part}` }));
 });
 
-// Resource-step seconds from clean main run 46077711273 (2026-11-27); the
-// three core control parts split that run's two (188 s and 115 s) evenly.
+// Whole-part seconds from run 46147624726 (2026-11-28), including replay,
+// controls and evidence publication. Checker-only estimates underpacked group 1.
 // Stable part IDs remain cache owners, independent of runner grouping.
 /** @internal */
 export const modelPartSeconds = [
-  31, 108, 101, 101, 101, 32, 119, 56, 96, 94, 39, 89, 21, 42, 25, 27, 23, 19,
-  12, 15, 15, 11, 28, 19, 15, 31, 60,
+  82, 136, 113, 131, 100, 41, 208, 50, 81, 162, 68, 76, 47, 70, 54, 42, 60, 51,
+  23, 24, 22, 20, 32, 26, 21, 74, 138,
 ];
 
 /**
@@ -155,8 +155,9 @@ export const verificationGroups = (() => {
     let soonest = Infinity;
     groups.forEach((group, candidate) => {
       const { seconds } = simulateModelGroup(longestFirst([...group, index]));
-      if (seconds < soonest) {
-        soonest = seconds;
+      const total = seconds + (candidate === 0 ? 18 : 0);
+      if (total < soonest) {
+        soonest = total;
         best = candidate;
       }
     });

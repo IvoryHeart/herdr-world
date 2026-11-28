@@ -156,9 +156,9 @@ describe("WorldSnapshotService", () => {
     await service.snapshot();
     now = 20_000;
     let controlRan = false;
-    const control = setTimeout(() => {
+    const control = setImmediate(() => {
       controlRan = true;
-    }, 0);
+    });
     try {
       const result = await service.snapshot();
       expect(controlRan).toBe(true);
@@ -172,31 +172,48 @@ describe("WorldSnapshotService", () => {
         ),
       ).toBe(true);
     } finally {
-      clearTimeout(control);
+      clearImmediate(control);
     }
   });
 
   test("a host retired during its construction turn cannot publish actionable topology", async () => {
     let current = true;
     const host = runtime("Synthetic");
-    const service = new WorldSnapshotService<Runtime>({
-      list: () => [status("synthetic")],
-      readyRuntimeLease: (connectionId) => ({
-        connectionId,
-        generation: 1,
-        runtime: host,
-        isCurrent: () => current,
-      }),
-    });
-    const retirement = setTimeout(() => {
-      current = false;
-    }, 0);
+    const construction = Promise.withResolvers<void>();
+    const resume = Promise.withResolvers<void>();
+    const service = new WorldSnapshotService<Runtime>(
+      {
+        list: () => [status("synthetic")],
+        readyRuntimeLease: (connectionId) => ({
+          connectionId,
+          generation: 1,
+          runtime: host,
+          isCurrent: () => current,
+        }),
+      },
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+      () => {
+        construction.resolve();
+        return resume.promise;
+      },
+    );
+    const pending = service.snapshot();
     try {
-      const result = await service.snapshot();
+      await construction.promise;
+      current = false;
+      resume.resolve();
+      const result = await pending;
       expect(result.connections[0]?.actionable).toBe(false);
       expect(result.connections[0]?.snapshot).toBe(null);
     } finally {
-      clearTimeout(retirement);
+      resume.resolve();
     }
   });
 

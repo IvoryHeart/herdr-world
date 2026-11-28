@@ -60,6 +60,11 @@ but pixel, animation and native performance checks SHALL retain their real rende
 - **THEN** a parent-owned real-time file deadline SHALL fail and name that file
 - **AND** the failure SHALL NOT depend on the stopped clock
 
+#### Scenario: One combined runner lane fails
+- **WHEN** a unit or browser batch fails or reaches its hard file deadline
+- **THEN** unrelated static, security and browser steps SHALL still execute unless the run is cancelled
+- **AND** Delivery SHALL retain each lane's actual verdict and require both its evidence and the combined runner verdict
+
 #### Scenario: Memory-bounded model execution
 - **WHEN** a group admits another immutable model part, including after cache reuse
 - **THEN** all concurrent padded peak reservations and the supervisor reserve SHALL fit the existing hard memory envelope

@@ -60,6 +60,11 @@
 
 ## Usage reference
 
+- Capture readiness stays pending during camera flights/glides, camera changes,
+  topology transitions and roof motion. Ambient actors and weather do not hold
+  readiness. The acknowledged draw owns the fence; a prior scene cannot certify
+  a screenshot taken during a later camera move.
+
 - **Town** is the default view (`/town`); the root URL opens it too.
   Each host is a building, each workspace a room, each tab a team table and each
   pane a seat. Rooms resize as tabs open and close; expanded rooms stay expanded
