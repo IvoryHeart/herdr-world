@@ -1,5 +1,37 @@
 # Herdr World agent guide
 
+## How World works
+
+World is one object. The service derives it from the sources of record, every view only displays it, and every change goes back through it to its source. Design: [`openspec/changes/world-one-object/`](openspec/changes/world-one-object/design.md); code map: [world-model notes](openspec/specs/world-model/notes.md).
+
+**Sources of record.** Each fact has one owner, and the owner wins when World disagrees; [sources.md](openspec/changes/world-one-object/sources.md) lists every fact:
+
+- Runtimes: the Herdr TUI owns rooms (workspaces), tabs and panes with their names, order and cwd, plus agent kind and status; herdr-core owns terminals and their labels.
+- Git and forges: branches, status, diffs, worktrees, pull requests and checks.
+- Harness files: transcripts, running sessions, harness settings, skills, memory, usage and login.
+- Deployments: other local World instances and releases. Integrations: their rows, Jira, the Vault's secrets, weather.
+- World's own stores: `world.sqlite` (Board, colours, pins, groups, interest, profiles, Town Master, asks, Bin, agent records, core rooms in `core_topology`, history), `settings.json` (repository, worktree and UI settings), `connections.json` (host profiles).
+
+**Views only display it.** Town, Desk, Board, Spaces and the CLI read the published object: the service derives it once and serves it as `world.snapshot` under one revision, each browser holds one replica, and the CLI reads it on the service. A view never keeps its own copy, derives a fact itself (a name, colour, room, grouping, status) or writes to a runtime or store around World. Per-browser presentation (camera, zoom, selection, open windows, drafts) is not a World fact; if another view, browser or the CLI must agree on it, it is one.
+
+**The write path.**
+
+1. Command: the view sends `world.command` with the entity (connection ID, runtime generation, entity ID), the field, the value it shows and the new value.
+2. Check: World refuses an unknown entity, an offline or stale host, a changed generation, or a name that changed since the view showed it; otherwise it records the command.
+3. Send: a World-owned fact is committed to its store; a runtime fact is sent on that entity's own connection and generation, never another.
+4. Observe: a store commit is its own observation. A runtime acknowledgement only moves the host's epoch; World takes the value from the first read that started after it.
+5. Publish: the new revision reaches every view in every browser and the CLI.
+
+Until then the pending value sits in the browser replica, shared by all its views. Every command and its outcome is a history entry in `ledger_changes`.
+
+Example: a room's name is owned by Herdr (or by `core_topology` for a core room). Renaming it in Town calls `renameRoomThroughWorld` → `world.command` → `workspace.rename` on that room's connection → the next read sees the new name → every view shows it. A new shared setting lives in `settings.json` (listed in `server/src/storage/catalog.ts`), is published in `world.snapshot` and changes through a `world.command`, as "Group runtimes" does (`server/src/world/setting-commands.ts`); never in browser storage.
+
+**Where things are.** Derivation, revision and epoch fence: `server/src/world/snapshot.ts`, shared derivations in `shared/` (`shared/hostGrouping.ts`). Commands: `server/src/world/commands.ts`, `server/src/service/world-commands.ts`. History: `server/src/world/world-ledger.ts`. Browser replica and pending values: `web/src/world/runtimeStore.ts`, `web/src/world/worldReplica.ts`, `web/src/world/worldCommands.ts`. Model: `quint/world-write-path.qnt`. Cross-view test (one snapshot; every view and the CLI agree): `server/src/world/world-cross-view.test.ts`.
+
+**Migration status.** The move is under way, one fact per step, in [tasks.md](openspec/changes/world-one-object/tasks.md). A fact is on the World path when its step is ticked there and views change it only through `world.command`. So far: grouping (also in the cross-view test) and room renames. Agent and tab names, colours, pins, status, order and Spaces' own refresh still have view-side derivation (`web/src/world/worldObject.ts`) or direct runtime writes (`web/src/store.ts`); never add to them.
+
+**When you change something.** New state joins the World object and its source of record, not a view: derive it on the service, publish it in `world.snapshot`, write it through a World command and add it to the cross-view test. A fix that works in one view only is not a fix.
+
 ## Hard rules
 
 - Never commit or push to `main`. For PR delivery, open a ready PR and stop; merge only when a maintainer explicitly asks.
@@ -10,7 +42,7 @@
 - Scan committed additions with `bun run check:privacy` before any push. Never copy material from `.agents/` into tracked paths without that scan; keep owner-only research in gitignored `research-local/`. Privacy CI checks each PR change once; the hook scans every pushed ref.
 - Local-first, trusted-single-user: LAN binding, authentication, uploads, shell/terminal operations and update installation are security-sensitive.
 - Storage catalog rule: changes that add or alter persisted data (a table, data-folder file, browser storage key or Board document field) must list it in `server/src/storage/catalog.ts` with its owner, identity and limit; prefer an existing store; a new table or data file needs the owner's approval in the mandate; never automatically trim user data.
-- World is one unified object. It is derived from the sources of record (the runtimes, git, harness files, deployments, integrations, World's own stores and any other files it reads) and given to the views (Town, Desk, Board, Spaces, CLI) to display. A change made in any view goes through World to its source of record, and a change at a source reaches every view through World. Views never keep their own copy of World state, never derive the same fact (a name, colour, room, grouping) in their own code, and never write to a runtime or store around World. New state joins the World object and its source of record, not a view. A fix that works in one view only is not a fix.
+- World is one object: views display it and write through it, never around it; see [How World works](#how-world-works). A fix that works in one view only is not a fix.
 - Qualify downstream operations by immutable connection ID and runtime generation; never fall back to another connection.
 - Aggregate observation is bounded and read-only; failed-host cached topology is stale and non-actionable.
 - Keep the browser on one World origin; never restore bridge Host, Origin or cross-origin CSP configuration. Sole exception: IDE pages may frame VS Code's webview origin (`https://*.vscode-cdn.net`).
