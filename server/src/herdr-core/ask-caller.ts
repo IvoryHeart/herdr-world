@@ -114,9 +114,11 @@ function cliHost(
         (row) => row.pane_id === address,
       );
       const workspaceId = text(pane.workspace_id, 256);
+      const tabId = text(pane.tab_id, 256);
       const harness = text(pane.agent, 64);
       const name = text(agent?.name);
       return {
+        ...(tabId ? { tab_id: tabId } : {}),
         ...(workspaceId ? { workspace_id: workspaceId } : {}),
         ...(harness ? { agent: harness } : {}),
         ...(name ? { name } : {}),

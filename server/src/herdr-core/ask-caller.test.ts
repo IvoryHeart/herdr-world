@@ -519,7 +519,7 @@ describe("a core asker's recipient (M5)", () => {
       expect(
         await recipients.authorize(
           { kind: "agent", actor: { ...actor, label: "x" } },
-          { recipient, owner_only: false } as never,
+          { actor, recipient, owner_only: false } as never,
         ),
       ).toBe("refused");
       await w.dispose();
@@ -589,7 +589,7 @@ describe("a core asker's recipient (M5)", () => {
         },
       )
     ).actor;
-    const ask = { recipient, owner_only: false } as never;
+    const ask = { actor, recipient, owner_only: false } as never;
     expect(
       await recipients.authorize({ kind: "agent", actor: peer }, ask),
     ).toBe("allowed");

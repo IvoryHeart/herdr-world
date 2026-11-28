@@ -30,6 +30,9 @@
 - `server/src/world/ask-peers.test.ts`
 - `web/src/world/NeedsYouSiblingQuestions.dom.test.ts`
 - `server/src/world/ask-recipient.ts`
+- `server/src/world/ask-delivery-types.ts` (stable self-answer ownership and exact original-recipient checks)
+- `server/src/world/answer-record.ts`, `server/src/world/answer-dispatch.ts`
+- `server/src/world/answer-dispatch.test.ts`, `server/src/world/world-cli-location.test.ts` (self-answer refusal after moves)
 - `server/src/storage/answer-delivery-crash.test.ts`
 - `server/src/agent/answer*`
 - `server/src/world/owner-alert-connection.ts` (which Herdr connection alerts for a herdr-core or unplaced asker)
@@ -40,5 +43,8 @@
 **Pitfalls:**
 
 - Saved answers and delivery acknowledgements retain their exact asker.
+- A moved terminal still cannot answer its own question. Self-answer refusal
+  follows its verified connection and terminal; delivery and acknowledgement
+  retain the stricter captured recipient checks.
 - A herdr-core default host makes the Herdr connection manager report the core
   ID as its default; never use `defaultId()` as an alert target (#1156).

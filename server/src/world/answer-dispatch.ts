@@ -4,7 +4,7 @@ import { CoreRpcError } from "../herdr-core/client";
 import {
   ANSWER_DELIVERY_VERB,
   herdrRecipient,
-  originalAsker,
+  isQuestionAsker,
   sameRecipient,
 } from "./ask-delivery-types";
 import type { LedgerAsk, LedgerStore } from "./world-ledger";
@@ -57,7 +57,7 @@ export function createAnswerDispatcher(deps: {
         (actor.kind === "owner" ||
           (!ask.owner_only &&
             actor.actor.verified &&
-            !originalAsker(ask.recipient, actor.actor))),
+            !isQuestionAsker(ask, actor.actor))),
     );
   };
   const driver: EffectDriver = {
