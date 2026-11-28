@@ -778,7 +778,7 @@ test("accepted behavioral evidence stays unfiltered whenever its protected depen
   const verify = job.steps.find(
     (step) =>
       step.run ===
-      "bun run verification:resources --system --shard=${{ matrix.shard }}/26",
+      "bun run verification:resources --system --shard=${{ matrix.shard }}/27",
   )!;
   expect(verify).toBeDefined();
   expect(verify.if).toBe("steps.reuse.outputs.reused != 'true'");

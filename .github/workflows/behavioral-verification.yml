@@ -42,11 +42,11 @@ jobs:
           bun run verification:notices:check
 
   shards:
-    name: Behavioral models (${{ matrix.shard }}/26)
+    name: Behavioral models (${{ matrix.shard }}/27)
     strategy:
       fail-fast: false
       matrix:
-        shard: [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23, 24, 25, 26]
+        shard: [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23, 24, 25, 26, 27]
     runs-on: ubuntu-24.04
     timeout-minutes: 20
     steps:
@@ -90,7 +90,7 @@ jobs:
         run: bun run verification:setup
       - name: Run all accepted models within enforced resource limits
         if: steps.reuse.outputs.reused != 'true'
-        run: bun run verification:resources --system --shard=${{ matrix.shard }}/26
+        run: bun run verification:resources --system --shard=${{ matrix.shard }}/27
       - name: Exercise a failing candidate and verify retained diagnostics
         if: steps.reuse.outputs.reused != 'true'
         run: bun run verification:diagnostic-control
