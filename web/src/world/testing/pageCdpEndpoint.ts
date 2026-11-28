@@ -1,4 +1,3 @@
-import { SHARED_CHROME_ENV } from "../../testing/chromeBrowser";
 import type { ChromePage } from "../../testing/sharedChrome";
 
 /**
@@ -11,7 +10,7 @@ import type { ChromePage } from "../../testing/sharedChrome";
 export async function pageCdpEndpoint(
   page: ChromePage,
 ): Promise<{ url: string; stop(): void }> {
-  const shared = Bun.env[SHARED_CHROME_ENV];
+  const shared = page.sharedEndpoint;
   if (shared) {
     const { targetInfo } = await page.command("Target.getTargetInfo");
     return {

@@ -13,8 +13,9 @@ import {
 
 /**
  * The one place test code starts Chrome (AGENTS.md: one shared browser per
- * job). A runner launches it once and passes its DevTools endpoint to every
- * test process in `HERDR_TEST_CHROME_WS`; a test file run on its own launches
+ * job). A runner launches it once (one per four CPUs on a bigger machine,
+ * `sharedChromeCount`) and passes its DevTools endpoints to every test
+ * process in `HERDR_TEST_CHROME_WS`; a test file run on its own launches
  * one for its process instead (`sharedChrome.ts`). Every case then opens its
  * own browser context (`Target.createBrowserContext`: separate cookies,
  * storage, cache and permissions) with one page, sized by emulation rather
@@ -295,6 +296,8 @@ export type PageOptions = {
 };
 
 export type ChromePage = {
+  /** The DevTools endpoint of the runner's shared Chrome this page is in. */
+  sharedEndpoint?: string;
   /** CDP command on this case's page; `deadlineMs` for long measurements. */
   command(
     method: string,
@@ -443,29 +446,34 @@ export async function openPage(
       `Browser condition timed out: ${expression}; page: ${JSON.stringify(page)}`,
     );
   };
+  // A case's page starts on about:blank. Its first navigation replaces that
+  // entry, so the app's history starts there, as in a Chrome launched on that
+  // address: `history.back()` from the first view must not leave it.
+  let first = true;
   const navigate = async (url: string) => {
     const loaded = Promise.withResolvers<void>();
     const off = on("Page.loadEventFired", () => loaded.resolve());
     try {
-      const result = await command("Page.navigate", { url });
-      if (result?.errorText)
-        throw new Error(`Navigation failed: ${result.errorText}`);
+      if (first) {
+        first = false;
+        await command("Runtime.evaluate", {
+          expression: `location.replace(${JSON.stringify(url)})`,
+        });
+      } else {
+        const result = await command("Page.navigate", { url });
+        if (result?.errorText)
+          throw new Error(`Navigation failed: ${result.errorText}`);
+      }
       await withBrowserDeadline(loaded.promise, `Load ${url}`, 30_000);
+      const reached = await evaluate("location.href");
+      if (String(reached).startsWith("chrome-error:"))
+        throw new Error(`Navigation failed: ${url}`);
     } finally {
       off();
     }
   };
   await command("Runtime.enable");
   await command("Page.enable");
-  // A case's page starts on about:blank. Drop that entry once its first page
-  // has loaded its document (the commit event itself can come before the
-  // browser records the entry), so the app's history starts there, as in a
-  // Chrome launched on that address: `history.back()` from the first view
-  // must not leave it.
-  const offFirstDocument = on("Page.domContentEventFired", () => {
-    offFirstDocument();
-    void command("Page.resetNavigationHistory").catch(() => {});
-  });
   // Only one window holds real focus; every case behaves as the focused page.
   await command("Emulation.setFocusEmulationEnabled", { enabled: true });
   await command("Emulation.setDeviceMetricsOverride", {
@@ -507,15 +515,57 @@ export async function openPage(
 }
 
 /**
- * A runner's shared Chrome: launched before the tests and published to them
- * in `HERDR_TEST_CHROME_WS`. Returns the variables to pass and the stop.
+ * The CPUs one shared Chrome serves. Its browser and GPU processes serve
+ * every page in it, so on a big machine several Chromes keep those processes
+ * from becoming the queue; a CI job's four CPUs still get one.
+ */
+const CPUS_PER_SHARED_CHROME = 4;
+
+/** How many shared Chromes a runner starts for this job. */
+export function sharedChromeCount(cpus = jobCpus()) {
+  return Math.max(1, Math.floor(cpus / CPUS_PER_SHARED_CHROME));
+}
+
+/**
+ * The runner's shared Chromes: `HERDR_TEST_CHROME_WS` holds one DevTools
+ * endpoint per Chrome, space-separated.
+ */
+export function sharedChromeEndpoints(
+  env: Record<string, string | undefined> = Bun.env,
+): string[] {
+  return env[SHARED_CHROME_ENV]?.split(" ").filter(Boolean) ?? [];
+}
+
+/**
+ * A runner's shared Chromes, `count` of them: launched before the tests and
+ * published to them in `HERDR_TEST_CHROME_WS`. Returns the variables to pass
+ * and the stop.
  */
 export async function startSharedChrome(
   env?: Record<string, string | undefined>,
+  count = sharedChromeCount(),
 ): Promise<{
   env: Record<string, string>;
   stop(): Promise<void>;
 }> {
-  const chrome = await launchChrome([], env);
-  return { env: { [SHARED_CHROME_ENV]: chrome.endpoint }, stop: chrome.stop };
+  const launched = await Promise.allSettled(
+    Array.from({ length: count }, () => launchChrome([], env)),
+  );
+  const chromes = launched.flatMap((result) =>
+    result.status === "fulfilled" ? [result.value] : [],
+  );
+  const stop = async () => {
+    await Promise.all(chromes.map((chrome) => chrome.stop()));
+  };
+  const failed = launched.find((result) => result.status === "rejected");
+  if (failed) {
+    await stop();
+    throw (failed as PromiseRejectedResult).reason;
+  }
+  return {
+    env: {
+      [SHARED_CHROME_ENV]: chromes.map((chrome) => chrome.endpoint).join(" "),
+    },
+    stop,
+  };
 }

@@ -305,7 +305,7 @@ if (import.meta.main) {
         "scripts/run-tests.ts",
         ...chrome,
         `--parallel=${webBrowserWorkers()}`,
-        `--max-concurrency=${webBrowserPages()}`,
+        `--max-concurrency=${webBrowserPages(Math.min(webBrowserWorkers(), chrome.length))}`,
         "--reporter=junit",
         `--reporter-outfile=${xml("web")}`,
       ],

@@ -8,15 +8,15 @@ import {
   type LaunchedChrome,
   openPage,
   type PageOptions,
-  SHARED_CHROME_ENV,
+  sharedChromeEndpoints,
 } from "./chromeBrowser";
 
 export { chromeBinary, type ChromePage, type PageOptions };
 
 /**
- * The browser a test file's cases open their pages in: the runner's shared
- * Chrome (`HERDR_TEST_CHROME_WS`, one per job), or, for a file run on its
- * own, one Chrome for this test process. Each case gets its own browser
+ * The browser a test file's cases open their pages in: a runner's shared
+ * Chrome (`HERDR_TEST_CHROME_WS`: one per job, or one per four CPUs), or,
+ * for a file run on its own, one Chrome for this test process. Each case gets its own browser
  * context and page (`chromeBrowser.ts`), so cases stay isolated while sharing
  * the browser's start-up cost.
  */
@@ -28,8 +28,14 @@ type Shared = {
 
 const browsers = new Map<string, Promise<Shared>>();
 
-async function start(launchFlags: readonly string[]): Promise<Shared> {
-  const endpoint = launchFlags.length ? undefined : Bun.env[SHARED_CHROME_ENV];
+// Pages take the runner's Chromes in turn, each worker from its own offset
+// (Bun numbers `--parallel` workers from 1 in `BUN_TEST_WORKER_ID`).
+let nextShared = Math.max(0, Number(Bun.env.BUN_TEST_WORKER_ID) - 1 || 0);
+
+async function start(
+  launchFlags: readonly string[],
+  endpoint: string | undefined,
+): Promise<Shared> {
   const own = endpoint ? undefined : await launchChrome(launchFlags);
   const browser = await connectBrowser(endpoint ?? own!.endpoint);
   const exited = (
@@ -63,13 +69,18 @@ export async function openChromePage(
   options: PageOptions & { launchFlags?: readonly string[] } = {},
 ): Promise<ChromePage> {
   const flags = options.launchFlags ?? [];
-  const key = flags.join(" ");
+  const endpoints = flags.length ? [] : sharedChromeEndpoints();
+  const endpoint = endpoints.length
+    ? endpoints[nextShared++ % endpoints.length]
+    : undefined;
+  const key = endpoint ?? flags.join(" ");
   let started = browsers.get(key);
   if (!started) {
-    started = start(flags);
+    started = start(flags, endpoint);
     browsers.set(key, started);
     started.catch(() => browsers.delete(key));
   }
   const shared = await started;
-  return openPage(shared.browser, shared.exited, options);
+  const page = await openPage(shared.browser, shared.exited, options);
+  return endpoint ? Object.assign(page, { sharedEndpoint: endpoint }) : page;
 }

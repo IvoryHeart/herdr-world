@@ -152,7 +152,7 @@ function plan(selection: Affected) {
           "scripts/run-tests.ts",
           ...chrome,
           `--parallel=${webBrowserWorkers()}`,
-          `--max-concurrency=${webBrowserPages()}`,
+          `--max-concurrency=${webBrowserPages(Math.min(webBrowserWorkers(), chrome.length))}`,
         ],
       ],
     });

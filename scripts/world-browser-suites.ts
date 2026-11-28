@@ -106,16 +106,18 @@ export const webBrowserSuites = [
   "server/src/ide/webview-origin.browser.test.ts",
 ];
 /**
- * Concurrent cases of a web browser suite share one Chrome with a browser
- * context per case (`web/src/testing/sharedChrome.ts`) and mostly wait on the
- * page, so they run up to one page per core.
+ * Concurrent cases of a web browser suite share the run's Chromes (one per
+ * four CPUs) with a browser context per case (`web/src/testing/sharedChrome.ts`) and mostly wait on the
+ * page, so the run holds up to one page per core: `workers` test files at a
+ * time share those pages.
  */
-export function webBrowserPages() {
-  return availableParallelism();
+export function webBrowserPages(workers = 1) {
+  return Math.max(2, Math.ceil(availableParallelism() / workers));
 }
 /**
- * Local web browser lane workers: each runs its files one after another with
- * its own Chrome, so more cores take more workers (two on a four-core runner).
+ * Local web browser lane workers: each runs its files one after another, in
+ * the run's shared Chromes, so more cores take more workers (two on a
+ * four-core runner).
  */
 export function webBrowserWorkers() {
   return Math.max(2, Math.min(4, Math.floor(availableParallelism() / 4)));
