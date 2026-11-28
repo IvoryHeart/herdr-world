@@ -4,6 +4,7 @@ export type BindingPolicy =
   | "board-string"
   | "appearance"
   | "tab-colour"
+  | "desk-pin"
   | "interest"
   | "desk"
   | "watchlist";
@@ -94,6 +95,14 @@ export const bindingPolicies = {
     lifetime: "clear",
   },
   "tab-colour": {
+    listingMove: true,
+    close: true,
+    notFound: false,
+    listingAbsence: true,
+    lifetime: "clear",
+  },
+  /** A Town desk pin closes with its tab, as `tab-colour` does (task 7.1). */
+  "desk-pin": {
     listingMove: true,
     close: true,
     notFound: false,

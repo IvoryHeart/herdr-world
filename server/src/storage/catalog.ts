@@ -59,9 +59,9 @@ world.sqlite|board_strings|Connections between cards|board|key (string id)|sourc
 world.sqlite|board_shapes|Canvas drawings|board|key (shape id)|source|BOARD_SHAPE_LIMITS|server/src/storage/world-board.ts
 world.sqlite|board_elements|Canvas source links, images and text|board|key (element id)|source|BOARD_ELEMENT_LIMITS|server/src/storage/world-board.ts
 world.sqlite|board_anchors board_offsets board_pinned board_folded|Canvas placement, pins and folds|board|key (native card/connection)|source|BOARD_LIMITS layout; 2000000-byte document|server/src/storage/world-board.ts
-world.sqlite|board_colors|Host/workspace/tab colours|appearance|key (native card/host)|source|BOARD_LIMITS layout|server/src/storage/world-board.ts
-world.sqlite|board_appearance|Captured terminal appearance|appearance|key (connection + kind + native id)|source|BOARD_LIMITS appearance|server/src/storage/world-board.ts
-world.sqlite|board_desk_pins|Town pinned desks|town|key (tab)|source|BOARD_LIMITS layout|server/src/storage/world-board.ts
+world.sqlite|board_colors|Host/workspace/tab colours; a closed tab's row stays hidden under ["closed", revision, key]|appearance|key (native card/host)|source|BOARD_LIMITS layout (closed rows outside it; never trimmed)|server/src/storage/world-board.ts
+world.sqlite|board_appearance|Captured terminal appearance; a gone terminal's row stays hidden under ["closed", revision, key]|appearance|key (connection + kind + native id)|source|BOARD_LIMITS appearance (closed rows outside it; never trimmed)|server/src/storage/world-board.ts
+world.sqlite|board_desk_pins|Town pinned desks; a closed tab's pin stays hidden under ["closed", revision, key]|town|key (tab)|source|BOARD_LIMITS layout (closed rows outside it; never trimmed)|server/src/storage/world-board.ts
 world.sqlite|board_room_pins|Town room spots|town|key (workspace)|source|BOARD_LIMITS layout|server/src/storage/world-board.ts
 world.sqlite|board_interest board_group_interest|Agent/group mute and focus|interest|key (terminal/group)|source|BOARD_LIMITS interest|server/src/storage/world-board.ts
 world.sqlite|board_spawns|Retained parent/child spawn captures|groups|key (position)|source|RELATION_LIMITS|server/src/storage/world-board.ts

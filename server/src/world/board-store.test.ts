@@ -91,6 +91,11 @@ describe("Board store", () => {
         },
       ]),
     ).toThrow("unknown operation");
+    expect(() =>
+      clientBoardOps([
+        { op: "card.color", key: '["closed",3,"alpha:w2"]', color: "red" },
+      ]),
+    ).toThrow("closed key");
     // The service's record applies only while the end names that host, pane
     // and a witnessed terminal, and survives a restart.
     const record = (
@@ -834,7 +839,7 @@ describe("Board store", () => {
     });
   });
 
-  test("a closed tab's colour goes; a plain key only when no workspace holds it", () => {
+  test("a closed tab's colour and pin close; a plain key only when no workspace holds it", () => {
     const store = new BoardStore(path);
     store.patch([
       { op: "card.color", key: "alpha:w1:t1", color: "teal" },
@@ -843,13 +848,20 @@ describe("Board store", () => {
     ]);
     store.patch([{ op: "desk.pin", key: "alpha:w1:t1", cell: null }]);
     expect(tabClosedOps(store.get(), "alpha", "w1:t1", true)).toEqual([
-      { op: "card.color", key: "alpha:w1:t1", color: null },
-      { op: "desk.unpin", key: "alpha:w1:t1" },
+      { op: "tab.close", keys: ["alpha:w1:t1"] },
     ]);
     // Older Herdr: tab w2 closed while workspace w2 still exists.
     expect(tabClosedOps(store.get(), "alpha", "w2", false)).toEqual([
-      { op: "card.color", key: "alpha:tab:w2", color: null },
+      { op: "tab.close", keys: ["alpha:tab:w2"] },
     ]);
+    const closed = store.patch(
+      tabClosedOps(store.get(), "alpha", "w1:t1", true),
+    );
+    expect(closed.layout.colors["alpha:w1:t1"]).toBeUndefined();
+    expect(closed.layout.desk_pins["alpha:w1:t1"]).toBeUndefined();
+    expect(() =>
+      clientBoardOps([{ op: "tab.close", keys: ["alpha:w2"] }]),
+    ).toThrow("unknown operation");
   });
 
   test("a conditional detach applies only while the end still names the checked target", () => {

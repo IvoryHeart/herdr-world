@@ -14,9 +14,10 @@ type Host = {
 
 /**
  * What Board's saved state does after Herdr closes something on a host's
- * current runtime: a closed tab's colour and desk pin go, and mute or focus
- * records for terminals that are gone go. Appearance is reclaimed only when
- * a complete current native read proves all its terminal witnesses are gone.
+ * current runtime: a closed tab's colour and desk pin close (World keeps them
+ * under a closed key, hidden), and mute or focus records for terminals that
+ * are gone go. Appearance closes only when a complete current native read
+ * proves all its terminal witnesses are gone.
  */
 export function afterHerdrClose(
   board: BoardStorePort,
