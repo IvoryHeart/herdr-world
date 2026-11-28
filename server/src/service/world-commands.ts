@@ -13,6 +13,7 @@ import {
   type WorldCommandInput,
 } from "../world/commands";
 import type { LedgerChange, LedgerStore } from "../world/world-ledger";
+import type { createAgentRecords } from "../world/agent-records";
 import {
   createSettingCommands,
   settingCommandSummary,
@@ -43,6 +44,8 @@ export function composeWorldPublication(
       list(): readonly GroupingProfile[];
       coreList(): readonly GroupingProfile[];
     };
+    /** World's agents, attributed in each reply (world-agent-identity). */
+    agents?: Pick<ReturnType<typeof createAgentRecords>, "publish">;
   },
 ) {
   const uiSettings = createUiSettingsRpcHandler({
@@ -80,6 +83,9 @@ export function composeWorldPublication(
           ),
         })
       : undefined,
+    ...(deps.agents
+      ? { attribute: (connections) => deps.agents!.publish(connections) }
+      : {}),
   });
   const settingCommands = createSettingCommands({
     now: deps.now,

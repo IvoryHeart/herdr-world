@@ -168,6 +168,7 @@ test("declareData is an inert feature declaration seam", () => {
     feature: "fixture",
     name: "fixture",
     kind: "fact" as const,
+    owner: "world" as const,
     validate: (body: unknown) => body,
     limit: null,
     lifetime: "native" as const,

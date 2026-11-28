@@ -10,6 +10,7 @@ const policies = [
   "board-string",
   "appearance",
   "tab-colour",
+  "desk-pin",
   "interest",
 ] as const;
 export const fence: BindingFence = {
@@ -95,7 +96,7 @@ test("authoritative absence is declared per kind and must name the current targe
             fresh &&
               native_id === "pane-a" &&
               (via === "close"
-                ? ["board-string", "tab-colour"].includes(policy)
+                ? ["board-string", "tab-colour", "desk-pin"].includes(policy)
                 : policy === "board-string"),
           );
           expect(result.target).toBeNull();

@@ -5,6 +5,8 @@ import {
   emptyBoardDocument,
   type BoardDocument,
   type BoardOp,
+  closedBoardKey,
+  isClosedBoardKey,
 } from "../world/board-store";
 import { boardBindingCaptures } from "../world/board-bindings";
 import type { createBindingWriter } from "./world-bindings";
@@ -37,6 +39,31 @@ export const boardTables = [
   "elements",
 ] as const;
 type Family = (typeof boardTables)[number];
+type Closing = Partial<Record<"colors" | "desk_pins" | "appearance", string[]>>;
+/** Rows the operations close, as opposed to a user removing them. */
+function closingRows(before: BoardDocument, ops: readonly BoardOp[]): Closing {
+  const closing: Required<Closing> = {
+    colors: [],
+    desk_pins: [],
+    appearance: [],
+  };
+  for (const op of ops) {
+    if (op.op === "tab.close")
+      for (const key of op.keys) {
+        if (before.layout.colors[key]) closing.colors.push(key);
+        if (before.layout.desk_pins[key]) closing.desk_pins.push(key);
+      }
+    if (op.op === "appearance.prune")
+      for (const key of op.keys) {
+        const record = before.appearance?.[key];
+        if (!record) continue;
+        closing.appearance.push(key);
+        if (record.color_key && before.layout.colors[record.color_key])
+          closing.colors.push(record.color_key);
+      }
+  }
+  return closing;
+}
 type Row = {
   key: string;
   position: number;
@@ -71,7 +98,9 @@ export function readBoard(db: Database): BoardDocument | null {
       db
         .query(`SELECT key,body FROM board_${family} ORDER BY position,key`)
         .all() as Pick<Row, "key" | "body">[]
-    ).map((row) => [row.key, JSON.parse(row.body)] as const);
+    )
+      .filter((row) => !isClosedBoardKey(row.key))
+      .map((row) => [row.key, JSON.parse(row.body)] as const);
   const doc = emptyBoardDocument();
   doc.revision = meta.revision;
   const elements = rows("elements").map(([, body]) => body);
@@ -101,6 +130,7 @@ export function writeBoard(
   bindings: ReturnType<typeof createBindingWriter>,
   at: number,
   previous: BoardDocument | null = null,
+  closing: Closing = {},
 ) {
   if (!Number.isSafeInteger(next.revision) || next.revision < 0)
     throw new Error("invalid Board revision");
@@ -164,11 +194,22 @@ export function writeBoard(
     entries: readonly (readonly [string, unknown])[],
   ) {
     const keep = new Set(entries.map(([key]) => key));
+    const closed = new Set(
+      family === "colors" || family === "desk_pins" || family === "appearance"
+        ? (closing[family] ?? [])
+        : [],
+    );
     for (const row of db.query(`SELECT key FROM board_${family}`).all() as {
       key: string;
-    }[])
-      if (!keep.has(row.key))
-        db.query(`DELETE FROM board_${family} WHERE key=?`).run(row.key);
+    }[]) {
+      if (keep.has(row.key) || isClosedBoardKey(row.key)) continue;
+      if (closed.has(row.key))
+        db.query(`UPDATE board_${family} SET key=? WHERE key=?`).run(
+          closedBoardKey(next.revision, row.key),
+          row.key,
+        );
+      else db.query(`DELETE FROM board_${family} WHERE key=?`).run(row.key);
+    }
     const put =
       db.query(`INSERT INTO board_${family}(key,position,row_revision,body,record_id,binding_id) VALUES(?,?,?,?,?,?)
    ON CONFLICT(key) DO UPDATE SET position=excluded.position,row_revision=excluded.row_revision,body=excluded.body,record_id=excluded.record_id,binding_id=excluded.binding_id
@@ -278,7 +319,15 @@ export function executeBoardOperation(
   const model = new BoardStore(
     {
       read: () => before,
-      commit: (next) => writeBoard(db, next, bindings, at, before),
+      commit: (next) =>
+        writeBoard(
+          db,
+          next,
+          bindings,
+          at,
+          before,
+          closingRows(before, operation.ops),
+        ),
     },
     { now: () => at },
   );

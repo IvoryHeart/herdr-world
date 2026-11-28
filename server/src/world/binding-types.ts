@@ -4,9 +4,11 @@ export type BindingPolicy =
   | "board-string"
   | "appearance"
   | "tab-colour"
+  | "desk-pin"
   | "interest"
   | "desk"
-  | "watchlist";
+  | "watchlist"
+  | "seat";
 export type BindingIdentity = {
   adapter: string;
   instance: string;
@@ -95,6 +97,26 @@ export const bindingPolicies = {
   },
   "tab-colour": {
     listingMove: true,
+    close: true,
+    notFound: false,
+    listingAbsence: true,
+    lifetime: "clear",
+  },
+  /** A Town desk pin closes with its tab, as `tab-colour` does (task 7.1). */
+  "desk-pin": {
+    listingMove: true,
+    close: true,
+    notFound: false,
+    listingAbsence: true,
+    lifetime: "clear",
+  },
+  /**
+   * An agent's seat (world-agent-identity design §2): the witnessed terminal
+   * in a current, complete listing. It never moves by listing; it ends when
+   * the terminal closes or no longer runs the agent's harness.
+   */
+  seat: {
+    listingMove: false,
     close: true,
     notFound: false,
     listingAbsence: true,

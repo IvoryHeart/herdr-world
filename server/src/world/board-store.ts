@@ -41,6 +41,7 @@ import {
   type GroupOp,
 } from "./board-groups";
 import { existsSync, readFileSync, renameSync } from "node:fs";
+import { bindingPolicies } from "./binding-types";
 import { replaceDataFile } from "../config/data-paths";
 import { RECIPIENT_MAX, type ObservedAgent } from "./board-recipient";
 import { cardKey, tabCardKey } from "../../../shared/terminalColor";
@@ -90,6 +91,17 @@ export type * from "./board-types";
  * carry what the browser showed in the pane (`observed`); it is taken out
  * and returned for this save only, never stored.
  */
+/**
+ * Closing a tab or losing a terminal never deletes its colour, desk pin or
+ * appearance (world-agent-identity task 7.1). The row stays in its own table
+ * under `["closed", <revision>, <key>]`: the Board revision that closed it is
+ * a number, so no card key or appearance key (strings only) can take it, and a
+ * reused tab or pane ID writes a new live row. Closed rows are never read into
+ * the Board document, so views never see them and Board limits never count them.
+ */
+export const closedBoardKey = (revision: number, key: string) =>
+  JSON.stringify(["closed", revision, key]);
+export const isClosedBoardKey = (key: string) => key.startsWith('["closed",');
 export function clientBoardOps(
   ops: unknown,
   document?: BoardDocument,
@@ -101,6 +113,8 @@ export function clientBoardOps(
   const observed = new Map<string, ObservedAgent>();
   const clean = ops.map((op) => {
     if (!isObject(op)) fail("op must be an object");
+    if (typeof op.key === "string" && isClosedBoardKey(op.key))
+      fail("a closed key is not a card key");
     if (
       op.op === "card.color" &&
       Object.values(document?.appearance ?? {}).some(
@@ -111,6 +125,7 @@ export function clientBoardOps(
     if (
       op.op === "agent.rehome" ||
       op.op === "appearance.prune" ||
+      op.op === "tab.close" ||
       op.op === "appearance.restore" ||
       op.op === "appearance.relocate" ||
       op.op === "appearance.set" ||
@@ -749,6 +764,12 @@ function applyOp(
     case "appearance.prune":
       pruneAppearances(next, op.keys);
       return;
+    case "tab.close":
+      for (const key of keys(op.keys, "closed tab keys")) {
+        delete next.layout.colors[key];
+        delete next.layout.desk_pins[key];
+      }
+      return;
     case "appearance.restore":
       restoreAppearance(next, op.key, op.record);
       return;
@@ -976,14 +997,12 @@ export function tabClosedOps(
 ): BoardOp[] {
   const keys = [cardKey(connectionId, `tab:${tabId}`)];
   if (workspaceAbsent) keys.push(cardKey(connectionId, tabId));
-  return keys.flatMap((key): BoardOp[] => [
-    ...(document.layout.colors[key]
-      ? [{ op: "card.color" as const, key, color: null }]
-      : []),
-    ...(document.layout.desk_pins[key]
-      ? [{ op: "desk.unpin" as const, key }]
-      : []),
-  ]);
+  const saved = keys.filter(
+    (key) =>
+      document.layout.colors[key] ||
+      (bindingPolicies["desk-pin"].close && document.layout.desk_pins[key]),
+  );
+  return saved.length ? [{ op: "tab.close", keys: saved }] : [];
 }
 
 // Moved out so this module stays within the size ratchet; importers keep it.

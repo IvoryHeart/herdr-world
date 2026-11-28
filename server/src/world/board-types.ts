@@ -117,6 +117,11 @@ export type BoardOp =
   | { op: "element.put"; element: BoardElementInput; rev?: number }
   | { op: "element.delete"; id: string; rev: number }
   | { op: "appearance.prune"; keys: string[] }
+  /**
+   * Service only: a closed tab's colour and desk pin leave the document; the
+   * World store keeps each row under a closed key (`world-board.ts`).
+   */
+  | { op: "tab.close"; keys: string[] }
   | { op: "appearance.set"; target: AppearanceTarget; fields: AppearanceFields }
   | {
       op: "appearance.relocate";

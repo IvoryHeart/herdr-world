@@ -260,7 +260,8 @@ export function restoreAppearance(
   } else if (document.appearance) delete document.appearance[key];
 }
 
-/** Internal GC uses only complete current absence, admitted at one document revision. */
+/** Internal close on complete current absence, admitted at one document revision.
+ * The World store keeps the removed rows under a closed key (task 7.1). */
 export function pruneAppearances(
   document: AppearanceDocument,
   keys: string[],

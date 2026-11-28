@@ -19,7 +19,7 @@ function absentOps(
     .map(([key]) => key);
   return keys.length ? [{ op: "appearance.prune", keys }] : [];
 }
-/** Propose absence candidates; cached snapshots alone cannot authorize deletion. */
+/** Propose absence candidates; cached snapshots alone cannot authorize closing. */
 export function snapshotAppearancePruneOps(
   document: BoardDocument,
   result: WorldSnapshotResult,
@@ -134,7 +134,8 @@ async function currentTerminals(
     ? bindingPaneTerminals(result.panes)
     : null;
 }
-/** A live complete native list proves terminal absence; a moving terminal remains retained. */
+/** A live complete native list proves terminal absence; a moving terminal remains retained.
+ * Closing keeps the rows under a closed key in the World store (world-board.ts). */
 export async function pruneGoneAppearance(
   board: BoardStorePort,
   connectionId: string,

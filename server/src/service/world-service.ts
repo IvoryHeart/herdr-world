@@ -4,6 +4,7 @@ import { composeFeatures } from "../features/compose";
 import { featureKernel } from "../features/contract";
 import { findHerdrBinary } from "../herdr/bootstrap";
 import { composeWorldPublication } from "./world-commands";
+import { createAgentRecords } from "../world/agent-records";
 import { createCoreInstall } from "../herdr-core/install";
 import { createSharedTerminalMarks } from "./terminal-mark-service";
 import { randomUUID } from "node:crypto";
@@ -465,6 +466,18 @@ async function compose(
     send: (socket, control) =>
       safeSend(socket, JSON.stringify({ control }), "world-focused-changed"),
   });
+  // World's agent records, resolved from each complete listing of either
+  // runtime and published beside topology (world-agent-identity).
+  const agentRecords = createAgentRecords({
+    port: () => storage.agents,
+    adapter: (id) => (connectionManager.has(id) ? "herdr" : "herdr-core"),
+    isCurrent: (id, generation) => {
+      const lease = observedConnections.readyRuntimeLease(id);
+      return !!lease && lease.generation === generation && lease.isCurrent();
+    },
+    publish: () => publication.publishWorld(),
+    log: (message) => logger.warn(message),
+  });
   worldSnapshots = new WorldSnapshotService(
     observedConnections,
     () => clock.now(),
@@ -483,6 +496,7 @@ async function compose(
     (...args) => {
       // Both runtimes: a held agent that ended by itself leaves the bin.
       bin.registry.observeComplete(...args);
+      agentRecords.observeComplete(args[0], args[1], args[2]);
       features!
         .get(apartmentsKey)
         .complete(
@@ -494,6 +508,7 @@ async function compose(
     serviceIncarnation,
   );
   const publication = composeWorldPublication({
+    agents: agentRecords,
     settings,
     broadcast,
     now: () => clock.now(),

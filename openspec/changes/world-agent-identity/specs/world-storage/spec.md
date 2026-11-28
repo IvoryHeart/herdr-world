@@ -2,12 +2,12 @@
 
 ### Requirement: Durable agent records and conversation history
 
-World SHALL store each agent as an `agent` entity in the single-model entities table, its owned facts in the facts table, and its seat in `world_bindings`.
+World SHALL store each agent as an `agent` entity in the single-model `entities` table, its fields in the `facts` table, and its seat in `world_bindings`. Each field SHALL have one owner, declared once in the storage catalog: `world` for a value World owns, or the observing adapter for a last-known value World keeps; rows SHALL NOT carry an owner of their own. Agent IDs SHALL belong to one World instance. These two tables SHALL be the only tables the agent record adds.
 
 #### Scenario: Conversation storage and retention
 
 - **WHEN** World stores agent records or conversation history
-- **THEN** Every conversation an agent has run SHALL be a row in `agent_conversations` with the agent ID, host, harness, conversation ID, first and last seen times, and source. The current conversation SHALL be one of those rows. Agent records and conversation history SHALL NOT be trimmed automatically. Each table and fact kind SHALL be listed in the storage catalog with its owner, identity and limit.
+- **THEN** Every conversation an agent has run SHALL be one item of the agent's `conversation` fact, keyed by harness and conversation ID, with its host, first and last seen times and source. The current conversation SHALL name one of those items. Agent records and conversation history SHALL NOT be trimmed automatically. Each table and fact kind SHALL be listed in the storage catalog with its owner, identity and limit.
 
 #### Scenario: Agent has many conversations
 - **WHEN** an agent has run many conversations over months
@@ -17,13 +17,33 @@ World SHALL store each agent as an `agent` entity in the single-model entities t
 - **WHEN** an agent ends
 - **THEN** its entity, facts and history remain readable and are not reused by a new agent
 
+### Requirement: Agent record writers and history
+
+Only the World command executor (World-owned fields and End) and the agent resolver (observed fields and new agents) SHALL write agent records. Only commands SHALL record history entries; an observed label or conversation update SHALL record none.
+
+#### Scenario: Observed rename
+- **WHEN** the runtime reports a new folder or a new conversation for an agent
+- **THEN** the resolver updates the observed fields and no history entry is written
+
 ### Requirement: One store for agent and place appearance
 
-World SHALL keep each agent's name, colour, look, status text and placement as fields of its agent entity, and each host's, room's and tab's own colour, spot and status text as fields of a place entity, in the single-model facts table. These SHALL replace the `board_colors` and `board_appearance` stores and the Town desk and room pin stores once their rows are copied. No view SHALL keep a second copy of these fields. Closing or losing a terminal SHALL NOT delete its colour, look or status text.
+World SHALL keep each agent's name, colour, look, status text and placement as fields of its agent entity, and each host's, room's and tab's own colour, spot and status text as fields of a place entity, in the single-model facts table. These SHALL replace the `board_colors` and `board_appearance` stores and the Town desk and room pin stores once their rows are copied. No view SHALL keep a second copy of these fields.
 
 #### Scenario: Terminal closes
 - **WHEN** an agent's terminal closes and the agent becomes away
 - **THEN** its colour, look and status text stay on its record and show again when it is resumed
+
+### Requirement: Closing hides appearance instead of deleting it
+
+Closing or losing a terminal, or closing a tab, SHALL NOT delete its colour, look, status text or desk pin. The row SHALL move, in its own table, to a closed key that no live key can take, SHALL be hidden from every view, SHALL NOT count toward the layout or appearance limits, and SHALL NOT be trimmed. A reused tab or pane ID SHALL NOT show or overwrite it.
+
+#### Scenario: Reused tab ID
+- **WHEN** a tab with a chosen colour closes and a new tab later gets the same native ID
+- **THEN** the old colour row is kept under its closed key, hidden, and not shown on the new tab
+
+#### Scenario: Recoloured after reuse
+- **WHEN** a coloured, pinned tab closes, a new tab gets the same native ID, and the user colours and pins the new tab
+- **THEN** the new tab's colour and pin are stored as new live rows and the closed rows keep their old values
 
 ### Requirement: Lossless migration of agent facts
 
@@ -56,4 +76,8 @@ The upgrade SHALL add agent storage without changing existing rows, after the us
 
 #### Scenario: Rollback
 - **WHEN** the user rolls back to the previous release
-- **THEN** the named pre-upgrade snapshot restores every old row unchanged
+- **THEN** the older release refuses the newer `world.sqlite` and names the pre-upgrade snapshot, which restores every old row unchanged; the newer file stays beside it
+
+#### Scenario: Rolling back a retirement
+- **WHEN** a release that retired a table is rolled back
+- **THEN** its `retired_*` tables are renamed back to their names and every row is where the older release left it

@@ -6,6 +6,7 @@ import { runCoreVerification } from "./herdr-core-verification";
 import { runSeenVerification } from "./herdr-core-seen";
 import { runMoveVerification } from "./agent-move-verification";
 import { runWritePathVerification } from "./world-write-path-verification";
+import { runAgentIdentityVerification } from "./agent-identity-verification";
 import { runIdeLifecycleVerification } from "./ide-lifecycle-verification";
 import { replayEffectRecovery } from "./effect-recovery";
 import { verificationModels } from "./models";
@@ -702,6 +703,7 @@ export async function runReviewedQuintModels(
         "ide-lifecycle": runIdeLifecycleVerification,
         "agent-move": runMoveVerification,
         "world-write-path": runWritePathVerification,
+        "agent-identity": runAgentIdentityVerification,
       } as const;
       if (item.name in composed) {
         const { name } = item;

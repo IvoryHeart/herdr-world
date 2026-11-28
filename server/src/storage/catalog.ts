@@ -17,13 +17,19 @@ export type CatalogEntry = {
   code: string;
 };
 
-/** Declarative seam for later feature-owned fact/record kinds; no registration,
- * persistence, migrations, pruning or synchronization happens here.
+/** Declarative seam for feature-owned fact/record kinds; no registration,
+ * persistence, migrations, pruning or synchronization happens here. Each
+ * field names its one owner: `world` for a value World owns, `observed` for a
+ * last-known value World keeps from `source` (a runtime or harness). When a
+ * source takes a field over, this declaration changes once.
  */
 export function declareData<T>(declaration: {
   feature: string;
   name: string;
   kind: "fact" | "record";
+  owner: "world" | "observed";
+  /** Where an observed value comes from. */
+  source?: string;
   validate(body: unknown): T;
   limit: number | null;
   lifetime: "clear" | "drop" | "needs-home" | "native";
@@ -50,7 +56,9 @@ world.sqlite|replay_changes|Ordered reconnect replay window|effects|seq|derived|
 world.sqlite|sqlite_sequence|SQLite AUTOINCREMENT high-water marks|storage|name|derived|one per AUTOINCREMENT table|server/src/storage/world-schema.ts
 world.sqlite|imports|Completed legacy imports|storage|name|source|none — user decides|server/src/storage/world-schema.ts
 world.sqlite|world_ids|Issued identities, never reused|identity|id|source|none — user decides|server/src/storage/world-ids.ts
-world.sqlite|world_bindings|Evidence-backed World/runtime identity links|identity|id; record_id + slot|source|none — user decides|server/src/storage/world-bindings.ts
+world.sqlite|world_bindings|Evidence-backed World/runtime identity links, including each agent's seat|identity|id; record_id + slot|source|none — user decides|server/src/storage/world-bindings.ts
+world.sqlite|entities|One row per World agent; ended_at marks the end, the row stays|agents|id (World ID, a-…)|source|none — never trimmed; the user decides|server/src/storage/agent-store.ts
+world.sqlite|facts|Agent fields, one row per field and item; each field's one owner is declared with declareData (agentFields)|agents|entity_id + field + item|source|4096 bytes per value; none — never trimmed|server/src/storage/agent-store.ts
 world.sqlite|world_binding_legacy|Legacy Board capture identity mapping|identity|key|source|none — user decides|server/src/storage/legacy-bindings.ts
 world.sqlite|world_binding_sync|Legacy Board binding synchronization marker|identity|singleton|source|1|server/src/storage/legacy-bindings.ts
 world.sqlite|board_meta|Board revision and optional family flags|board|singleton|source|1|server/src/storage/world-board.ts
@@ -59,9 +67,9 @@ world.sqlite|board_strings|Connections between cards|board|key (string id)|sourc
 world.sqlite|board_shapes|Canvas drawings|board|key (shape id)|source|BOARD_SHAPE_LIMITS|server/src/storage/world-board.ts
 world.sqlite|board_elements|Canvas source links, images and text|board|key (element id)|source|BOARD_ELEMENT_LIMITS|server/src/storage/world-board.ts
 world.sqlite|board_anchors board_offsets board_pinned board_folded|Canvas placement, pins and folds|board|key (native card/connection)|source|BOARD_LIMITS layout; 2000000-byte document|server/src/storage/world-board.ts
-world.sqlite|board_colors|Host/workspace/tab colours|appearance|key (native card/host)|source|BOARD_LIMITS layout|server/src/storage/world-board.ts
-world.sqlite|board_appearance|Captured terminal appearance|appearance|key (connection + kind + native id)|source|BOARD_LIMITS appearance|server/src/storage/world-board.ts
-world.sqlite|board_desk_pins|Town pinned desks|town|key (tab)|source|BOARD_LIMITS layout|server/src/storage/world-board.ts
+world.sqlite|board_colors|Host/workspace/tab colours; a closed tab's row stays hidden under ["closed", revision, key]|appearance|key (native card/host)|source|BOARD_LIMITS layout (closed rows outside it; never trimmed)|server/src/storage/world-board.ts
+world.sqlite|board_appearance|Captured terminal appearance; a gone terminal's row stays hidden under ["closed", revision, key]|appearance|key (connection + kind + native id)|source|BOARD_LIMITS appearance (closed rows outside it; never trimmed)|server/src/storage/world-board.ts
+world.sqlite|board_desk_pins|Town pinned desks; a closed tab's pin stays hidden under ["closed", revision, key]|town|key (tab)|source|BOARD_LIMITS layout (closed rows outside it; never trimmed)|server/src/storage/world-board.ts
 world.sqlite|board_room_pins|Town room spots|town|key (workspace)|source|BOARD_LIMITS layout|server/src/storage/world-board.ts
 world.sqlite|board_interest board_group_interest|Agent/group mute and focus|interest|key (terminal/group)|source|BOARD_LIMITS interest|server/src/storage/world-board.ts
 world.sqlite|board_spawns|Retained parent/child spawn captures|groups|key (position)|source|RELATION_LIMITS|server/src/storage/world-board.ts

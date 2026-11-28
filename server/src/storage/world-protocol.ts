@@ -131,6 +131,10 @@ export type StorageRequest =
       type: "apartments";
       operation: import("./apartments").ApartmentOperation;
     }
+  | {
+      type: "agents";
+      operation: import("./agent-store").AgentStoreOperation;
+    }
   | { type: "profiles"; operation: import("./world-profiles").ProfileOperation }
   | { type: "binding"; operation: import("./world-bindings").BindingOperation }
   | { type: "write"; write: LedgerWrite }
@@ -238,6 +242,7 @@ export type WorldLedgerStorage = {
   runtimeStatus: import("./runtime-status").RuntimeStatusPort;
   coreTopology: import("./core-topology").CoreTopologyPort;
   apartments: import("./apartments").ApartmentsPort;
+  agents: import("./agent-store").AgentsPort;
   profiles: import("../agent/profile-store").ProfileStorePort;
   bindings: import("./world-bindings").WorldBindings;
   ids: import("./world-ids").WorldIds;
@@ -278,6 +283,7 @@ export type StorageSnapshot = {
   runtimeStatus?: Record<string, import("./runtime-status").AutoSyncRunStatus>;
   coreTopology?: import("./core-topology").CoreTopologyDocument[];
   apartments?: import("../../../shared/apartments").ApartmentResident[];
+  agents?: import("../world/agent-resolver").AgentRecord[];
   profiles?: import("../agent/profile-store").ProfilesDocument;
   document: LedgerDocument;
   attention: AttentionEntry[];

@@ -25,6 +25,7 @@ import { coreTopologyMigration } from "./core-topology";
 import { apartmentSessionsMigration, apartmentsMigration } from "./apartments";
 import { worldProfilesMigration } from "./world-profiles";
 import { worldBindingsMigration } from "./world-bindings";
+import { agentStoreMigration } from "./agent-store";
 import { assertSafeDataPath } from "../config/data-paths";
 import { systemClock } from "../service/clock";
 import { migrateLegacyCompletionReviews } from "./legacy-review-migration";
@@ -110,6 +111,7 @@ export const worldMigrations = [
   apartmentsMigration,
   apartmentSessionsMigration,
   worldBoardElementsMigration,
+  agentStoreMigration,
 ] as const;
 
 /** A consistent private rollback copy before any noninitial migration. */

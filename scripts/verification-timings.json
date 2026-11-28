@@ -30,7 +30,8 @@
     "runtime-control": 35.33,
     "ranger-recovery": 16.17,
     "ranger-authority": 17.69,
-    "connection-registry": 12.68
+    "connection-registry": 12.68,
+    "agent-identity": 33.1
   },
-  "note": "Measured on a fast hosted runner; slower runners took about 1.55x as long (run 45317710455). ide-lifecycle is its one-check-at-a-time time before #1346; it and herdr-core-runtime each own a dedicated shard, so their weights do not move other models. agent-move (added with #1184) and world-write-path (added with #1406) keep their local measurements until a hosted run measures them. Weights affect scheduling only; every model keeps its bounds, replay and controls."
+  "note": "Measured on a fast hosted runner; slower runners took about 1.55x as long (run 45317710455). ide-lifecycle is its one-check-at-a-time time before #1346; it and herdr-core-runtime each own a dedicated shard, so their weights do not move other models. agent-move (added with #1184), world-write-path (added with #1406) and agent-identity (added with #1489) keep their local measurements until a hosted run measures them. Weights affect scheduling only; every model keeps its bounds, replay and controls."
 }

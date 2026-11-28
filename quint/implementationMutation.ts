@@ -48,6 +48,8 @@ export type ImplementationFault =
   | "move-no-settle"
   | "write-cas"
   | "write-settle-publish"
+  | "identity-end"
+  | "identity-conflict"
   | "ide-queue"
   | "ide-start-epoch";
 export async function mutateImplementation(
@@ -88,6 +90,7 @@ export async function mutateImplementation(
     ],
     "ide-lifecycle": ["ide-queue", "ide-start-epoch"],
     "world-write-path": ["primary", "write-cas", "write-settle-publish"],
+    "agent-identity": ["primary", "identity-end", "identity-conflict"],
     "effect-recovery": [
       "primary",
       "effect-authorization",
@@ -126,6 +129,7 @@ export async function mutateImplementation(
     "herdr-core-seen": "web/src/world/coreShared.ts",
     "agent-move": "server/src/world/agent-move.ts",
     "world-write-path": "server/src/world/snapshot.ts",
+    "agent-identity": "server/src/world/agent-resolver.ts",
     "ide-lifecycle": "server/src/ide/instances.ts",
     "binding-resolution": "server/src/world/binding-resolution.ts",
     "observation-base": "server/src/world/observation-v1.ts",
@@ -170,7 +174,9 @@ export async function mutateImplementation(
                         ? "web/src/world/createdTerminalAdmission.ts"
                         : name === "world-write-path" && fault === "write-cas"
                           ? "server/src/world/commands.ts"
-                          : owners[name];
+                          : name === "agent-identity" && fault === "primary"
+                            ? "server/src/world/agent-records.ts"
+                            : owners[name];
   const original = await readFile(resolve(root, owner), "utf8");
   let contents: string;
   if (name === "claude-tap-lock") {
@@ -323,6 +329,29 @@ export async function mutateImplementation(
       "write-settle-publish": [
         "if (changed || settled) this.revision += 1;",
         "if (changed) this.revision += 1;",
+      ],
+    };
+    const [guard, replacement] = guards[fault]!;
+    assert.equal(original.split(guard).length, 2, `${fault} target changed`);
+    contents = original.replace(guard, replacement);
+  } else if (name === "agent-identity") {
+    const guards: Record<string, [string, string]> = {
+      // An ambiguous listing (a terminal shown twice) still updates what
+      // each reply derives, so a held agent shows live.
+      primary: [
+        "if (!observation || agentObservationAmbiguous(observation)) {",
+        "if (!observation) {",
+      ],
+      // A closed terminal leaves every agent away, even one with nothing
+      // to resume, so it never ends.
+      "identity-end": [
+        'type: agent.conversation ? "leave" : "end",',
+        'type: "leave" as const,',
+      ],
+      // Two live agents claiming one conversation are not in conflict.
+      "identity-conflict": [
+        "(claims.get(agent.conversation) ?? 0) > 1",
+        "(claims.get(agent.conversation) ?? 0) > 2",
       ],
     };
     const [guard, replacement] = guards[fault]!;
@@ -603,7 +632,9 @@ export async function mutateImplementation(
                     ? "quint/observation-subjects.ts"
                     : name === "world-write-path"
                       ? "quint/world-write-path.ts"
-                      : owner,
+                      : name === "agent-identity"
+                        ? "quint/agent-identity.ts"
+                        : owner,
       ),
     ],
     target: "bun",
