@@ -4,15 +4,13 @@
 
 World is one object. The service derives it from the sources of record, every view only displays it, and every change goes back through it to its source. Design: [`openspec/changes/world-one-object/`](openspec/changes/world-one-object/design.md); code map: [world-model notes](openspec/specs/world-model/notes.md).
 
-**Sources of record.** Each fact has one owner, and the owner wins when World disagrees; [sources.md](openspec/changes/world-one-object/sources.md) lists every fact. Every system outside World is an integration; some are built in and always available, others are connected when needed:
+**Sources of record.** Each fact has one owner, and the owner wins when World disagrees; [sources.md](openspec/changes/world-one-object/sources.md) lists every fact. Every external system is an integration. Some are available by default, others are connected when needed:
 
-- Herdr TUI (runtime, built in): its workspaces (rooms), tabs and panes with their names, order and cwd, plus agent kind and status.
-- herdr-core (runtime, built in): its terminals and their labels; its rooms and tabs live in World's `core_topology` store.
-- More runtimes will be added. Each is its own integration and owns its own entities; never assume Herdr TUI and herdr-core are the only two.
-- Git and forges (built in): branches, status, diffs, worktrees, pull requests and checks.
-- Harness files (built in): transcripts, running sessions, harness settings, skills, memory, usage and login.
-- Deployments (built in): other local World instances and releases.
-- Connected integrations, for example Jira (the issues and bugs assigned to you); their secrets live in the Vault.
+- Available by default:
+  - Runtimes. Each runtime (today the Herdr TUI and herdr-core; more may come) is its own integration and owns its own entities; never assume a fixed set. The Herdr TUI owns its workspaces (rooms), tabs and panes with their names, order and cwd, plus agent kind and status; herdr-core owns its terminals and their labels, while its rooms and tabs live in World's `core_topology` store.
+  - Git and forges: branches, status, diffs, worktrees, pull requests and checks.
+  - Harness files of every supported harness (`server/src/agent/chat-harnesses.ts`): transcripts, running sessions, harness settings, skills, memory, usage and login.
+- Further integrations: Jira (the issues and bugs assigned to you), deployments (other local World instances and releases) and the rest; their secrets live in the Vault.
 - World's own stores: World owns the facts no integration owns (Board, colours, pins, groups, profiles, asks, history and more) in `world.sqlite`, `settings.json` and `connections.json`. `server/src/storage/catalog.ts` lists every table, file and key.
 
 **Views only display it.** Town, Desk, Board, Spaces and the CLI read the published object: the service derives it once and serves it as `world.snapshot` under one revision, each browser holds one replica, and the CLI reads it on the service. A view never keeps its own copy, derives a fact itself (a name, colour, room, grouping, status) or writes to a runtime or store around World. Per-browser presentation (camera, zoom, selection, open windows, drafts) is not a World fact; if another view, browser or the CLI must agree on it, it is one.
@@ -31,7 +29,7 @@ Example: a room's name is owned by the Herdr TUI (or by `core_topology` for a he
 
 **Where things are.** Derivation, revision and epoch fence: `server/src/world/snapshot.ts`, shared derivations in `shared/` (`shared/hostGrouping.ts`). Commands: `server/src/world/commands.ts`, `server/src/service/world-commands.ts`. History: `server/src/world/world-ledger.ts`. Browser replica and pending values: `web/src/world/runtimeStore.ts`, `web/src/world/worldReplica.ts`, `web/src/world/worldCommands.ts`. Model: `quint/world-write-path.qnt`. Cross-view test (one snapshot; every view and the CLI agree): `server/src/world/world-cross-view.test.ts`.
 
-**Migration status.** The move is under way, one fact per step, in [tasks.md](openspec/changes/world-one-object/tasks.md). A fact is on the World path when its step is ticked there and views change it only through `world.command`. So far: grouping (also in the cross-view test) and room renames. Agent and tab names, colours, pins, status, order and Spaces' own refresh still have view-side derivation (`web/src/world/worldObject.ts`) or direct runtime writes (`web/src/store.ts`); never add to them. This section follows the migration: a PR that moves a fact onto the World path, or changes a source, store or path named here, updates this section in the same PR.
+**Migration status.** The move is under way, one fact per step; [tasks.md](openspec/changes/world-one-object/tasks.md) is the only status, so this guide keeps no list of finished steps. A fact is on the World path when its step is ticked there and views change it only through `world.command`; until then its view-side derivation or direct runtime write is legacy, and you never add to it. Every World-as-one step PR ticks its step in tasks.md and, if the step changes how agents must work, updates this section in the same PR.
 
 **When you change something.** New state joins the World object and its source of record, not a view: derive it on the service, publish it in `world.snapshot`, write it through a World command and add it to the cross-view test. A fix that works in one view only is not a fix.
 
@@ -46,6 +44,7 @@ Example: a room's name is owned by the Herdr TUI (or by `core_topology` for a he
 - Local-first, trusted-single-user: LAN binding, authentication, uploads, shell/terminal operations and update installation are security-sensitive.
 - Storage catalog rule: changes that add or alter persisted data (a table, data-folder file, browser storage key or Board document field) must list it in `server/src/storage/catalog.ts` with its owner, identity and limit; prefer an existing store; a new table or data file needs the owner's approval in the mandate; never automatically trim user data.
 - World is one object: views display it and write through it, never around it; see [How World works](#how-world-works). A fix that works in one view only is not a fix.
+- Harness work covers every supported harness (`server/src/agent/chat-harnesses.ts`). A harness that can't support a feature is marked planned or not supported, with the reason. Never build for Claude and Codex alone.
 - Qualify downstream operations by immutable connection ID and runtime generation; never fall back to another connection.
 - Aggregate observation is bounded and read-only; failed-host cached topology is stale and non-actionable.
 - Keep the browser on one World origin; never restore bridge Host, Origin or cross-origin CSP configuration. Sole exception: IDE pages may frame VS Code's webview origin (`https://*.vscode-cdn.net`).
