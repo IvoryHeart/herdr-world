@@ -6,7 +6,8 @@ This supplements Q29; independent mapping review and CI acceptance remain requir
 
 Allowed: one immutable answer and reference-only opaque intent commit together;
 new verified original source/terminal/session binding; pending during outages;
-same-run re-resolution only on the same original binding;
+same-run re-resolution only on the same original binding; after a World restart,
+re-resolution only with the continuity proof below;
 claim, current authorization/version/binding checks, durable dispatching, guarded
 Chat input, and an honest native receipt. CLI output can settle exact receipt
 only as the verified original asker, after stdout succeeds. Owner resend/close
@@ -19,10 +20,18 @@ or another connection; generic queued Chat/terminal input; automatic opaque repl
 a stale decision/receipt settling a newer attempt; interpreting a queued native
 receipt as agent execution or model reading; using a synthetic receiver's dedupe
 as a Herdr guarantee.
-World restart with old/missing recipient authority also forbids submission:
-native IDs and session labels are not native runtime continuity proof. An owner
-duplicate decision cannot bypass this rule. Unsent work resolves not-sent,
-possible sends remain uncertain, and manual close retains the actual history.
+World restart with old/missing recipient authority forbids submission unless
+continuity is proved at each resolve (#1451). Herdr TUI needs the same connection,
+pane and terminal and the same harness-reported session before and after the
+foreground check, plus the captured conversation scheme and session fingerprint.
+herdr-core needs the same core terminal (address, creation time) and the
+session Claude Code's own live process record names now, saved as the
+recipient's session fingerprint and reread before and after the send is fenced;
+PIDs, names, launch arguments, native IDs or session labels alone are not proof
+(`/clear` keeps the launch command), a harness without that record stays
+refused, and legacy core tokens stay refused. An owner duplicate decision cannot bypass this rule. Unsent
+work without proof resolves not-sent, possible sends remain uncertain, and manual
+close retains the actual history.
 
 `answer-transitions.test.ts` covers the finite user-decision matrix across pending,
 claimed, dispatching, uncertain, refused, delivered and cancelled states, including
@@ -47,11 +56,15 @@ The Linux-specific caller test does not establish verification on other platform
 processes before claim, after claim, before a native effect, after a native effect,
 and after its receipt. It uses the production Chat source, temporary SQLite
 worker and a synthetic external receiver that records every prompt without
-deduplicating. A pre-send claim is released and then refused without current-run
-authority; a possible send remains uncertain and does not replay. Same-run actual
+deduplicating. A pre-send claim is released and, because the recovering World proves
+the same pane, terminal and harness session (#1451), sent once; a possible send
+remains uncertain and does not replay. Same-run actual
 Chat consumers retain normal sending. `world/effect-restart.test.ts` adds distinct
-actual managers with recycled generations and native/session values, plus explicit
-retry, old-record refusal and receipt/history controls. Native CI repeats these schedules and the schema
+actual managers with recycled generations and native/session values across every
+pre-restart phase: the proven same session delivers once, a replaced session
+types nothing, and explicit retry reaches only the proven session, with
+receipt/history controls. `answer-foreground.test.ts` and `herdr-core/ask-caller.test.ts`
+repeat the same/different matrix on TUI and core. Native CI repeats these schedules and the schema
 transition tests. These are finite process-fault schedules, not power-loss or
 all-schedule proofs.
 

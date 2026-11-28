@@ -96,15 +96,18 @@ for (const compiled of [false, true]) {
           expect(code, error).toBe(0);
           expect(JSON.parse(output).answer).toBe("Stored fixture answer");
           const messages = received(directory);
+          // Nothing was possibly sent before the crash, and the recovering
+          // World proves the same pane, terminal and session (#1451), so an
+          // unsent answer is sent once; a possible send is never replayed.
           expect(messages).toHaveLength(
-            phase === "after-effect" || delivered ? 1 : 0,
+            possible && phase !== "after-effect" ? 0 : 1,
           );
           if (messages.length)
             expect(messages[0]).toBe(
               "Answer to q-native:\nQuestion: Proceed with the fixture?\nAnswer from owner: Stored fixture answer",
             );
           expect(JSON.parse(output).state).toBe(
-            possible ? "uncertain" : delivered ? "delivered" : "refused",
+            possible ? "uncertain" : "delivered",
           );
         },
       },

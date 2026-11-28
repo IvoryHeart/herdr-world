@@ -15,3 +15,9 @@
 - [x] 3.1 Route the shared Town/Board peek sender and review prefill through the foreground guard without changing key/Enter behavior or direct Terminal authority.
 - [x] 3.2 Offer Not sent with Copy, retain refused review drafts and add a safe preview refusal switch.
 - [x] 3.3 Pass caller/service and desktop/phone recovery regressions and quick typecheck; update contracts and consumer mappings. The full verification gate remains a delivery requirement.
+
+## Follow-up #1451 (saved answers across a World restart)
+
+- [x] 4.1 Prove the original harness session after a World restart on Herdr TUI and herdr-core at recording, dispatch and input; refuse everything else with a plain reason. Core proof is the session Claude's own live process record names now, saved with the question; PIDs, names and launch arguments never count.
+- [x] 4.2 Keep possible sends uncertain without automatic replay; an explicit Send again reaches only a proven session.
+- [x] 4.3 Pass restart/session matrices on both runtimes, a desktop and phone Reception > Outbox fixture and quick typecheck; update contracts, help and consumer mappings.

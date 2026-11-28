@@ -10,6 +10,7 @@ Issue #1437 demonstrated an ask answer being typed into bash after its agent exi
 - Preserve qualified terminal/runtime authority and no-replay handling for refused or uncertain sends. Show plain Not sent reasons and saved-answer recovery.
 - Document the limit of a shell started inside a live harness and the missing-information fallback.
 - Follow-up #1447: Town/Board peek replies and review-feedback prefill opt into that same check and offer Copy on refusal. Review drafts survive a refusal; prefill never adds a submit key. The owner dropped pointer delivery, resume, wrapper and launch changes from #1447.
+- Follow-up #1451: after a World restart, a saved or newly given answer is sent only after World proves the original harness session still runs at the captured terminal (for example `claude --resume`); other sessions get Not sent with Copy answer and ask get, and possible sends are never replayed.
 
 ## Capabilities
 

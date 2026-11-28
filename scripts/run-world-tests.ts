@@ -51,6 +51,8 @@ try {
   await buildWorldBrowserBundle("HostsFilter", directory);
   if (files.some((path) => path.includes("AnswerDeliveries.browser")))
     await buildWorldBrowserBundle("AnswerDeliveries", directory);
+  if (files.some((path) => path.includes("AnswerContinuity.browser")))
+    await buildWorldBrowserBundle("AnswerContinuity", directory);
   if (files.some((path) => path.includes("ProductionContexts"))) {
     await buildWorldBrowserBundle("ProductionContexts", directory);
   }

@@ -68,6 +68,11 @@ export type CoreCliHost = {
   ): CorePreparedDelivery | null;
   /** The live program at `address` (`tN`) on this core, or null. */
   occupant(address: string): CoreCliOccupant | null;
+  /**
+   * `coreSessionProof` for the session the foreground at `address` runs
+   * now, read from the harness's own process record; null when unproved.
+   */
+  sessionProof?(address: string): Promise<string | null>;
   /** World's read-model row for it: room, harness and name. */
   describe(address: string): Promise<{
     tab_id?: string;

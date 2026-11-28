@@ -44,6 +44,11 @@ export type CoreAnswerRecipient = {
   pid: number;
   foreground: { pid: number; name: string };
   reported: { scheme: "herdr-core-occupant-v1"; fingerprint: string };
+  /**
+   * `coreSessionProof` at capture: the only evidence that lets a later World
+   * run deliver. Absent when the asker named no session on its command line.
+   */
+  session?: { scheme: "herdr-core-session-v1"; fingerprint: string };
   captured_at: number;
   service_incarnation: string;
   connection_generation: number;
@@ -114,7 +119,11 @@ function validCoreRecipient(
       typeof value.foreground?.name === "string" &&
       value.reported?.scheme === "herdr-core-occupant-v1" &&
       typeof value.reported.fingerprint === "string" &&
-      HEX64.test(value.reported.fingerprint),
+      HEX64.test(value.reported.fingerprint) &&
+      (value.session === undefined ||
+        (value.session?.scheme === "herdr-core-session-v1" &&
+          typeof value.session.fingerprint === "string" &&
+          HEX64.test(value.session.fingerprint))),
   );
 }
 export function herdrRecipient(
@@ -289,12 +298,15 @@ export function isAnswerIntent(value: unknown): value is AnswerIntent {
         "pid",
         "foreground",
         "reported",
+        "session",
         "captured_at",
         "service_incarnation",
         "connection_generation",
       ]) &&
       fields(recipient.reported, ["scheme", "fingerprint"]) &&
       fields(recipient.foreground, ["pid", "name"]) &&
+      (!("session" in recipient) ||
+        fields(recipient.session, ["scheme", "fingerprint"])) &&
       validCoreRecipient(recipient as AnswerRecipient) &&
       Number.isSafeInteger(recipient.captured_at) &&
       Number.isSafeInteger(recipient.connection_generation) &&

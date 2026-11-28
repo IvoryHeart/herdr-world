@@ -13,14 +13,19 @@ import { openWorldLedger } from "../storage/world-storage";
 import { createAttentionDispatcher } from "./attention-dispatch";
 import { createAnswerDispatcher } from "./answer-dispatch";
 import { createAnswerRecorder } from "./answer-record";
-import { createAskRecipients, type AnswerLease } from "./ask-recipient";
+import {
+  createAskRecipients,
+  RESTART_UNPROVED,
+  type AnswerLease,
+} from "./ask-recipient";
 import { askSessionFingerprint } from "./world-cli-actor";
 
 const cleanups: (() => Promise<void>)[] = [];
 afterEach(async () => {
   for (const cleanup of cleanups.splice(0).reverse()) await cleanup();
 });
-const native = {
+/** The pane as Herdr reports it while `session` runs there. */
+const paneWith = (session: string) => ({
   pane_id: "w1:p1",
   terminal_id: "terminal-one",
   agent: "claude",
@@ -28,10 +33,15 @@ const native = {
     source: "fixture",
     agent: "claude",
     kind: "id",
-    value: "session-one",
+    value: session,
   },
-};
+});
+const native = paneWith("session-one");
 const fingerprint = askSessionFingerprint(native.agent_session)!;
+const conversationWith = (session: string): Conversation => ({
+  ...conversation,
+  session_fingerprint: askSessionFingerprint(paneWith(session).agent_session)!,
+});
 const conversation: Conversation = {
   status: "ok",
   unavailable: null,
@@ -53,7 +63,11 @@ const conversation: Conversation = {
   pending_prompt: null,
 };
 type Runtime = ConnectionRuntime & AnswerLease["runtime"];
-async function receiver() {
+/** `session`: the harness session at the original pane in this World run. */
+async function receiver(session = "session-one") {
+  const native = paneWith(session),
+    conversation = conversationWith(session),
+    fingerprint = conversation.session_fingerprint!;
   const sends: string[] = [];
   const reads: string[] = [];
   const call: AnswerLease["runtime"]["tui"]["call"] = async (
@@ -147,7 +161,8 @@ async function receiver() {
   return { manager, sends, reads };
 }
 type Receiver = Awaited<ReturnType<typeof receiver>>;
-async function fixture(kind: "alert" | "answer") {
+/** `question`: the ask stays open until `answer()` after a restart. */
+async function fixture(kind: "alert" | "answer" | "question") {
   const root = mkdtempSync(join(tmpdir(), "effect-restart-"));
   const paths = {
     database: join(root, "world.sqlite"),
@@ -231,7 +246,7 @@ async function fixture(kind: "alert" | "answer") {
       log() {},
     };
     const dispatcher =
-      kind === "answer"
+      kind !== "alert"
         ? createAnswerDispatcher({ ...deps, recipients: recipients(runtime) })
         : createAttentionDispatcher({
             ...deps,
@@ -260,12 +275,26 @@ async function fixture(kind: "alert" | "answer") {
   return {
     original,
     effect,
+    async answer(runtime: Receiver) {
+      await createAnswerRecorder({
+        ledger: () => storage.ledger,
+        recipients: recipients(runtime),
+        now: clock.now,
+      })("q-restart", "Yes", { kind: "owner" });
+      now += 10_000;
+    },
+    /** The plain reason Reception shows for the current attempt. */
+    reason: async () =>
+      (await storage.outbox.forRecord("q-restart"))[0]!.evidence?.reason,
     dispatch,
     recipients,
     get storage() {
       return storage;
     },
-    async restart(legacy?: "missing-authority" | "missing-contract") {
+    async restart(
+      legacy?: "missing-authority" | "missing-contract",
+      session = "session-one",
+    ) {
       const prior = storage.incarnation;
       await storage.close();
       await original.manager.stopAll();
@@ -283,7 +312,7 @@ async function fixture(kind: "alert" | "answer") {
       }
       storage = await openWorldLedger(paths, storagePorts);
       now += 1_000_000;
-      const replacement = await receiver();
+      const replacement = await receiver(session);
       expect(storage.incarnation).not.toBe(prior);
       expect(replacement.manager.readyRuntimeLease("studio")!.generation).toBe(
         actor.connection_generation,
@@ -337,63 +366,103 @@ for (const kind of ["alert", "answer"] as const) {
     expect((await f.effect())!.receipt).toEqual(receipt);
   });
   for (const phase of ["pending", "claimed", "dispatching"] as const)
-    test(`${kind}: ${phase} survives SQLite reopen without sending to recycled-generation replacement`, async () => {
-      const f = await fixture(kind);
-      if (phase !== "pending") await f.pause(phase);
-      const replacement = await f.restart();
-      await f.dispatch(replacement);
-      expect(replacement.sends).toEqual([]);
-      expect(await f.effect()).toMatchObject({
-        state: phase === "dispatching" ? "uncertain" : "refused",
-        ever_dispatched: phase === "dispatching",
-        not_sent: phase !== "dispatching",
+    for (const session of ["session-one", "session-two"])
+      test(`${kind}: ${phase} survives SQLite reopen with ${session === "session-one" ? "the original" : "a different"} session at the recycled generation`, async () => {
+        const f = await fixture(kind);
+        if (phase !== "pending") await f.pause(phase);
+        const replacement = await f.restart(undefined, session);
+        await f.dispatch(replacement);
+        // Only a saved answer whose original harness session is proved again
+        // reaches Sent. Alerts, other sessions and possible sends never do.
+        const proven =
+          kind === "answer" &&
+          session === "session-one" &&
+          phase !== "dispatching";
+        expect(replacement.sends).toEqual(proven ? ["pane.send_text"] : []);
+        expect(await f.effect()).toMatchObject({
+          state: proven
+            ? "delivered"
+            : phase === "dispatching"
+              ? "uncertain"
+              : "refused",
+          ever_dispatched: proven || phase === "dispatching",
+          not_sent: !proven && phase !== "dispatching",
+        });
+        if (kind === "answer" && !proven && phase !== "dispatching")
+          expect(await f.reason()).toBe(RESTART_UNPROVED);
+        expect(f.storage.ledger.ask("q-restart")?.answer?.text).toBe(
+          kind === "answer" ? "Yes" : undefined,
+        );
+        if (phase !== "pending") {
+          const history = await f.storage.outbox.forRecord("q-restart");
+          expect(history[0]!.attempt).toBeGreaterThanOrEqual(1);
+          if (kind === "answer")
+            expect(history[0]!.attempts?.length).toBeGreaterThanOrEqual(1);
+        }
+        // A refused or possibly sent answer is never replayed later.
+        await f.dispatch(replacement);
+        expect(replacement.sends).toEqual(proven ? ["pane.send_text"] : []);
       });
-      expect(f.storage.ledger.ask("q-restart")).toBeDefined();
-      if (phase !== "pending") {
-        const history = await f.storage.outbox.forRecord("q-restart");
-        expect(history[0]!.attempt).toBeGreaterThanOrEqual(1);
-        if (kind === "answer")
-          expect(history[0]!.attempts?.length).toBeGreaterThanOrEqual(1);
-      }
-    });
 }
 
-test("an explicit duplicate decision cannot authorize an old saved-answer recipient", async () => {
-  const f = await fixture("answer");
-  await f.pause("dispatching");
-  const replacement = await f.restart();
-  const before = (await f.effect())!;
-  await f.storage.effects.transition({
-    action: "decide",
-    id: before.id,
-    attempt: before.attempt,
-    actor: { kind: "browser", subject: "synthetic-owner", evidence: {} },
-    reason: "Allow possible duplicate",
+for (const session of ["session-one", "session-two"])
+  test(`a question open across a restart is answered to ${session === "session-one" ? "the resumed original" : "no different"} session`, async () => {
+    const f = await fixture("question");
+    const replacement = await f.restart(undefined, session);
+    await f.answer(replacement);
+    await f.dispatch(replacement);
+    const proven = session === "session-one";
+    expect(replacement.sends).toEqual(proven ? ["pane.send_text"] : []);
+    expect(await f.effect()).toMatchObject({
+      state: proven ? "delivered" : "refused",
+      not_sent: !proven,
+    });
+    if (!proven) expect(await f.reason()).toBe(RESTART_UNPROVED);
+    expect(f.storage.ledger.ask("q-restart")?.answer?.text).toBe("Yes");
   });
-  await f.dispatch(replacement);
-  expect(replacement.sends).toEqual([]);
-  expect(await f.effect()).toMatchObject({
-    state: "uncertain",
-    ever_dispatched: true,
-    not_sent: false,
+
+for (const session of ["session-one", "session-two"])
+  test(`an explicit duplicate decision after a restart sends only to ${session === "session-one" ? "the proven original" : "no different"} session`, async () => {
+    const f = await fixture("answer");
+    await f.pause("dispatching");
+    const replacement = await f.restart(undefined, session);
+    await f.dispatch(replacement);
+    // A possible earlier send is never repeated on its own.
+    expect(replacement.sends).toEqual([]);
+    const before = (await f.effect())!;
+    expect(before.state).toBe("uncertain");
+    await f.storage.effects.transition({
+      action: "decide",
+      id: before.id,
+      attempt: before.attempt,
+      actor: { kind: "browser", subject: "synthetic-owner", evidence: {} },
+      reason: "Allow possible duplicate",
+    });
+    await f.dispatch(replacement);
+    const proven = session === "session-one";
+    expect(replacement.sends).toEqual(proven ? ["pane.send_text"] : []);
+    expect(await f.effect()).toMatchObject({
+      state: proven ? "delivered" : "uncertain",
+      ever_dispatched: true,
+    });
+    expect((await f.effect())!.decisions).toHaveLength(1);
+    if (proven) return;
+    const after = (await f.effect())!;
+    await f.storage.effects.transition({
+      action: "decide",
+      outcome: "close",
+      id: after.id,
+      attempt: after.attempt,
+      actor: { kind: "browser", subject: "synthetic-owner", evidence: {} },
+      reason: "Close tracking without claiming reversal",
+    });
+    expect(await f.effect()).toMatchObject({
+      state: "cancelled",
+      ever_dispatched: true,
+      not_sent: false,
+    });
+    expect((await f.effect())!.decisions).toHaveLength(2);
   });
-  expect((await f.effect())!.decisions).toHaveLength(1);
-  const after = (await f.effect())!;
-  await f.storage.effects.transition({
-    action: "decide",
-    outcome: "close",
-    id: after.id,
-    attempt: after.attempt,
-    actor: { kind: "browser", subject: "synthetic-owner", evidence: {} },
-    reason: "Close tracking without claiming reversal",
-  });
-  expect(await f.effect()).toMatchObject({
-    state: "cancelled",
-    ever_dispatched: true,
-    not_sent: false,
-  });
-  expect((await f.effect())!.decisions).toHaveLength(2);
-});
 
 for (const legacy of ["missing-authority", "missing-contract"] as const)
   test(`legacy alert ${legacy}: reopening never grants new World-run authority`, async () => {

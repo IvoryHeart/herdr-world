@@ -1,9 +1,10 @@
 import { CoreOperationFence } from "./fence";
-import { coreOccupantFingerprint } from "./occupant";
+import { coreOccupantFingerprint, coreSessionProof } from "./occupant";
 export { coreOccupantFingerprint } from "./occupant";
 import type { ReadyRuntimeLease } from "../connections/manager";
 import type { CoreConnectionRuntime } from "./runtime";
 import type { CoreHost } from "./host";
+import type { AgentSessionFileAccess } from "../agent/session-file-access";
 import type {
   CoreCallerSource,
   CoreCliHost,
@@ -19,6 +20,13 @@ type CoreConnections = {
     ): ReadyRuntimeLease<CoreConnectionRuntime> | null;
   };
   host(connectionId: string): Pick<CoreHost, "destination"> | null;
+  /** The generation's host access, for the harness's own session record. */
+  hostRuntime?(lease: ReadyRuntimeLease<CoreConnectionRuntime>): {
+    agentSessionFiles?: Pick<
+      AgentSessionFileAccess,
+      "findClaudeSessionForProcess"
+    >;
+  };
 };
 
 function text(value: unknown, max = 100): string | undefined {
@@ -31,8 +39,23 @@ function text(value: unknown, max = 100): string | undefined {
 function cliHost(
   lease: ReadyRuntimeLease<CoreConnectionRuntime>,
   local: boolean,
+  sessionFiles: () => Pick<
+    AgentSessionFileAccess,
+    "findClaudeSessionForProcess"
+  > | null,
 ): CoreCliHost {
   const runtime = lease.runtime;
+  const foregroundOf = (address: string) => {
+    const record = runtime.core.terminal(address);
+    const foreground = record?.foreground as
+      | { pid?: unknown; name?: unknown }
+      | undefined;
+    return record &&
+      typeof foreground?.pid === "number" &&
+      typeof foreground.name === "string"
+      ? { record, pid: foreground.pid, name: foreground.name }
+      : null;
+  };
   return {
     connection_id: lease.connectionId,
     generation: lease.generation,
@@ -73,6 +96,27 @@ function cliHost(
           : {}),
         fingerprint,
       };
+    },
+    sessionProof: async (address) => {
+      // Only Claude keeps a live record of the session a process runs now;
+      // a launch command or open file does not follow an in-process switch.
+      const coreId = runtime.core.epoch?.coreId;
+      const before = foregroundOf(address);
+      const files = coreId && before?.name === "claude" ? sessionFiles() : null;
+      if (!coreId || !before || !files) return null;
+      const session = await (
+        files.findClaudeSessionForProcess?.(before.pid) ?? null
+      )?.catch(() => null);
+      const after = foregroundOf(address);
+      if (
+        !lease.isCurrent() ||
+        runtime.core.epoch?.coreId !== coreId ||
+        after?.pid !== before.pid ||
+        after.name !== before.name ||
+        after.record.created_ms !== before.record.created_ms
+      )
+        return null;
+      return coreSessionProof(coreId, before.record, before.name, session);
     },
     delivery: (address, fingerprint, foreground) => {
       if (!runtime.offers("terminal.send")) return null;
@@ -153,7 +197,14 @@ export function coreCallerSource(
         const lease = services.manager.readyRuntimeLease(id);
         if (!lease?.isCurrent()) return [];
         const host = services.host(id);
-        return [cliHost(lease, Boolean(host) && !host!.destination)];
+        const files = () => {
+          try {
+            return services.hostRuntime?.(lease).agentSessionFiles ?? null;
+          } catch {
+            return null;
+          }
+        };
+        return [cliHost(lease, Boolean(host) && !host!.destination, files)];
       });
     },
   };

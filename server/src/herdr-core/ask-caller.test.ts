@@ -5,7 +5,7 @@ import { mkdtempSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { BoardStore } from "../world/board-store";
-import { createAskRecipients } from "../world/ask-recipient";
+import { createAskRecipients, RESTART_UNPROVED } from "../world/ask-recipient";
 import {
   ANSWER_DELIVERY_VERB,
   isAnswerIntent,
@@ -40,8 +40,14 @@ import { coreWorld, until } from "./testing/core-world";
 
 type World = Awaited<ReturnType<typeof coreWorld>>;
 const worlds: World[] = [];
+/**
+ * Claude's own process records (`sessions/<pid>.json`): the session each
+ * synthetic Claude process runs now, rewritten on `/clear` and `/resume`.
+ */
+const claudeSessions = new Map<number, string>();
 afterEach(async () => {
   for (const w of worlds.splice(0)) await w.dispose();
+  claudeSessions.clear();
 });
 async function world(id = "box") {
   const w = await coreWorld();
@@ -63,6 +69,12 @@ function source(
           value === id ? w.core.manager.readyRuntimeLease(id) : null,
       },
       host: () => (remote ? { destination: "dev@example.test" } : {}),
+      hostRuntime: () => ({
+        agentSessionFiles: {
+          findClaudeSessionForProcess: async (pid: number) =>
+            claudeSessions.get(pid) ?? null,
+        },
+      }),
     })),
   );
   return {
@@ -84,19 +96,19 @@ const locator =
   (roots: readonly number[]): CallerProcess[] | null =>
     chain.some((entry) => roots.includes(entry.pid)) ? chain : null;
 
-const agentFields = (pid: number) => ({
-  argv: ["/opt/example/bin/claude"],
+const agentFields = (pid: number, args: string[] = []) => ({
+  argv: ["/opt/example/bin/claude", ...args],
   pid,
   foreground: {
     pid,
     name: "claude",
-    argv: ["/opt/example/bin/claude"],
+    argv: ["/opt/example/bin/claude", ...args],
     cwd: "/tmp/example",
   },
 });
 
-async function agent(w: World, pid: number, id = "box") {
-  const address = w.fake.create(agentFields(pid));
+async function agent(w: World, pid: number, id = "box", args: string[] = []) {
+  const address = w.fake.create(agentFields(pid, args));
   w.fake.report(address, { state: "working", app: "claude-code" });
   await until(
     () =>
@@ -301,8 +313,8 @@ describe("a core asker's recipient (M5)", () => {
       incarnation: "run-1",
       core: () => cores,
     });
-  async function asker(w: World, pid: number) {
-    const address = await agent(w, pid);
+  async function asker(w: World, pid: number, args: string[] = []) {
+    const address = await agent(w, pid, "box", args);
     const cores = source([{ w, id: "box" }]);
     const { actor } = await identifyCaller(
       NO_TUI,
@@ -539,18 +551,115 @@ describe("a core asker's recipient (M5)", () => {
         recipient,
       ),
     ).toMatchObject({ state: "ended" });
+    // A program with no session record cannot prove itself later.
+    expect(recipient.session).toBeUndefined();
     expect(
       await recipientsFor(cores).resolve({
         ...recipient,
         service_incarnation: "run-0",
       }),
-    ).toMatchObject({ state: "unconfirmed" });
+    ).toEqual({ state: "unconfirmed", reason: RESTART_UNPROVED });
     w.fake.finish(address);
     await w.settle();
     expect(await recipients.resolve(recipient)).toEqual({
       state: "ended",
       reason: "The original terminal ended; use ask get",
     });
+  });
+
+  test("after a World restart only the session Claude's own record names now proves the asker", async () => {
+    const original = "00000000-0000-4000-8000-0000000000a1";
+    const different = "00000000-0000-4000-8000-0000000000b2";
+    const w = await world();
+    claudeSessions.set(49_001, original);
+    const { address, actor, cores } = await asker(w, 49_001, [
+      "--session-id",
+      original,
+    ]);
+    const recipient = (await recipientsFor(cores).capture(
+      actor,
+    )) as CoreAnswerRecipient;
+    expect(recipient.session).toMatchObject({
+      scheme: "herdr-core-session-v1",
+    });
+    const intent = (value: unknown) => ({
+      verb: ANSWER_DELIVERY_VERB.name,
+      version: 1,
+      origin: "world.ask.answer",
+      params: { ask_id: "q1", answer_occurrence: "a1" },
+      actor: { kind: "owner" },
+      condition: { awaiting_delivery: true, recipient: value },
+    });
+    expect(isAnswerIntent(intent(recipient))).toBe(true);
+    expect(
+      isAnswerIntent(
+        intent({ ...recipient, session: { ...recipient.session, x: 1 } }),
+      ),
+    ).toBe(false);
+    const earlier = { ...recipient, service_incarnation: "run-0" };
+    const restarted = recipientsFor(cores);
+    expect(await restarted.resolve(earlier)).toMatchObject({
+      state: "attached",
+      restarted: true,
+    });
+    // An earlier recipient without session evidence is not proof.
+    const unproved = { ...earlier };
+    delete unproved.session;
+    expect(await restarted.resolve(unproved)).toEqual({
+      state: "unconfirmed",
+      reason: RESTART_UNPROVED,
+    });
+    const refused = async () =>
+      expect(await restarted.resolve(earlier)).toEqual({
+        state: "unconfirmed",
+        reason: RESTART_UNPROVED,
+      });
+    // `/clear` (or `/resume <other>`) switches the session in place: the
+    // launch command, PIDs and name stay those of the original asker.
+    claudeSessions.set(49_001, different);
+    await refused();
+    // No readable record is no proof, whatever the launch command names.
+    claudeSessions.delete(49_001);
+    await refused();
+    const foreground = (pid: number, ...args: string[]) => {
+      w.fake.foreground(address, {
+        pid,
+        name: "claude",
+        argv: ["/opt/example/bin/claude", ...args],
+        cwd: "/tmp/example",
+      });
+      return w.settle();
+    };
+    // A different session that reuses the terminal and foreground PIDs and
+    // the executable name is another asker.
+    for (const args of [
+      ["--resume", different],
+      ["--resume", original, "--fork-session"],
+      ["--continue"],
+      [],
+    ]) {
+      claudeSessions.set(49_001, different);
+      await foreground(49_001, ...args);
+      await refused();
+    }
+    // `claude --resume` of the original session, as a new process, is the
+    // asker once its own record names that session.
+    claudeSessions.set(49_777, original);
+    await foreground(49_777, "--resume", original);
+    expect(await restarted.resolve(earlier)).toMatchObject({
+      state: "attached",
+      restarted: true,
+    });
+    // Another harness, even one naming the same id, keeps no Claude record.
+    w.fake.foreground(address, {
+      pid: 49_778,
+      name: "codex",
+      argv: ["codex", "resume", original],
+      cwd: "/tmp/example",
+    });
+    claudeSessions.set(49_778, original);
+    await w.settle();
+    await refused();
   });
 
   test("a retired runtime captures nothing and resolves as offline", async () => {

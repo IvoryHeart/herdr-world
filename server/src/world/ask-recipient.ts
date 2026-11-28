@@ -18,6 +18,7 @@ import {
   paneActor,
   type CoreCallerSource,
   type CoreCliHost,
+  type CoreCliOccupant,
   type CorePreparedDelivery,
 } from "./world-cli-actor";
 import type { CliActor, LedgerAsk } from "./world-ledger";
@@ -67,12 +68,16 @@ export type RecipientResolution =
       core?: false;
       lease: AnswerLease;
       conversation: Conversation;
+      /** Saved by an earlier World run; continuity was proved just now. */
+      restarted?: true;
     }
   | {
       state: "attached";
       kind: "core";
       core?: false;
       lease: CorePreparedDelivery;
+      /** Saved by an earlier World run; continuity was proved just now. */
+      restarted?: true;
     }
   | { state: "unresolved" | "ended" | "unconfirmed"; reason: string };
 const chatScheme = (value: Conversation) =>
@@ -81,6 +86,13 @@ const chatScheme = (value: Conversation) =>
     : value.session_binding === "title" && value.agent === "codex"
       ? "codex-title-v1"
       : null;
+/**
+ * Refusal for an answer saved before a World restart whose asker World could
+ * not prove is the same harness session. The answer stays readable.
+ * @internal Exported for restart regression tests.
+ */
+export const RESTART_UNPROVED =
+  "World restarted and couldn't prove the agent that asked is still the same session; answer not sent, use ask get";
 const host = (lease: AnswerLease) => ({
   connection_id: lease.connectionId,
   generation: lease.generation,
@@ -123,18 +135,24 @@ export function createAskRecipients(deps: {
     const occupant = host.occupant(address);
     return occupant && host.isCurrent() ? occupant : null;
   }
-  function captureCore(actor: CliActor): CoreAnswerRecipient | undefined {
+  async function captureCore(
+    actor: CliActor,
+  ): Promise<CoreAnswerRecipient | undefined> {
     const host = coreHost(actor.connection_id!);
     if (!host || host.generation !== actor.connection_generation) return;
-    const occupant = coreOccupant(host, actor.pane_id!);
-    if (
-      !occupant ||
-      !occupant.foreground ||
-      foregroundInputRefusal(occupant.foreground) ||
-      actor.terminal_id !== actor.pane_id ||
-      occupant.fingerprint !== actor.agent_session_fingerprint
-    )
-      return;
+    const valid = (value: CoreCliOccupant | null) =>
+      value &&
+      value.foreground &&
+      !foregroundInputRefusal(value.foreground) &&
+      actor.terminal_id === actor.pane_id &&
+      value.fingerprint === actor.agent_session_fingerprint
+        ? value
+        : null;
+    if (!valid(coreOccupant(host, actor.pane_id!))) return;
+    const session = (await host.sessionProof?.(actor.pane_id!)) ?? null;
+    // The asker must still be the program the session record was read for.
+    const occupant = valid(coreOccupant(host, actor.pane_id!));
+    if (!occupant?.foreground) return;
     const recipient: CoreAnswerRecipient = {
       adapter: "herdr-core",
       connection_id: host.connection_id,
@@ -150,6 +168,14 @@ export function createAskRecipients(deps: {
         scheme: "herdr-core-occupant-v1",
         fingerprint: occupant.fingerprint,
       },
+      ...(session
+        ? {
+            session: {
+              scheme: "herdr-core-session-v1" as const,
+              fingerprint: session,
+            },
+          }
+        : {}),
       captured_at: deps.clock.now(),
       service_incarnation: deps.incarnation,
       connection_generation: host.generation,
@@ -161,7 +187,10 @@ export function createAskRecipients(deps: {
   /**
    * A core asker's current binding and its fenced native-send capability.
    */
-  function resolveCore(recipient: CoreAnswerRecipient): RecipientResolution {
+  async function resolveCore(
+    recipient: CoreAnswerRecipient,
+    restarted: boolean,
+  ): Promise<RecipientResolution> {
     if (!coreSource()?.has(recipient.connection_id))
       return {
         state: "ended",
@@ -178,7 +207,9 @@ export function createAskRecipients(deps: {
         state: "ended",
         reason: "The original herdr-core was replaced; use ask get",
       };
-    if (host.generation !== recipient.connection_generation)
+    // Within one World run a reconnect still retires the binding. After a
+    // restart the generation restarts too; session identity below decides.
+    if (!restarted && host.generation !== recipient.connection_generation)
       return {
         state: "unconfirmed",
         reason: "The original core connection retired; use ask get",
@@ -197,13 +228,36 @@ export function createAskRecipients(deps: {
     const reason = foregroundInputRefusal(occupant.foreground);
     if (reason)
       return { state: "unconfirmed", reason: `Agent not attached. ${reason}` };
+    // The occupant fingerprint holds a per-run counter, and PIDs, names and
+    // launch commands can outlive the session (`/clear` switches in place).
+    // Across a restart only the session the harness's own record names now,
+    // at the same core terminal, proves the asker, read before and after the
+    // send is fenced; without it the answer stays with ask get.
+    const proved = async () =>
+      Boolean(recipient.session) &&
+      (await host.sessionProof?.(recipient.pane_id)) ===
+        recipient.session!.fingerprint;
+    if (
+      restarted &&
+      (occupant.foreground.name !== recipient.foreground.name ||
+        !(await proved()))
+    )
+      return { state: "unconfirmed", reason: RESTART_UNPROVED };
+    // Delivery re-checks the occupant fingerprint read before the await.
     const delivery = host.delivery?.(
       recipient.pane_id,
       occupant.fingerprint,
       occupant.foreground,
     );
+    if (delivery && restarted && !(await proved()))
+      return { state: "unconfirmed", reason: RESTART_UNPROVED };
     return delivery
-      ? { state: "attached", kind: "core", lease: delivery }
+      ? {
+          state: "attached",
+          kind: "core",
+          lease: delivery,
+          ...(restarted ? { restarted: true as const } : {}),
+        }
       : {
           state: "unconfirmed",
           reason:
@@ -272,7 +326,14 @@ export function createAskRecipients(deps: {
         state: "unconfirmed",
         reason: "No verified original recipient binding; use ask get",
       };
-    if (recipient.service_incarnation !== deps.incarnation)
+    // An answer saved by an earlier World run is re-captured only after the
+    // original harness and session are proved below; nothing else inherits it.
+    const restarted = recipient.service_incarnation !== deps.incarnation;
+    if (
+      restarted &&
+      recipient.adapter === "herdr-core" &&
+      !("core_id" in recipient)
+    )
       return {
         state: "unconfirmed",
         reason:
@@ -288,7 +349,7 @@ export function createAskRecipients(deps: {
         state: "ended",
         reason: "The original connection was removed; use ask get",
       };
-    if ("core_id" in recipient) return resolveCore(recipient);
+    if ("core_id" in recipient) return resolveCore(recipient, restarted);
     if (recipient.adapter === "herdr-core") {
       const core = coreConnections();
       const lease = core?.readyRuntimeLease(recipient.connection_id);
@@ -360,6 +421,10 @@ export function createAskRecipients(deps: {
         state: "unconfirmed",
         reason: "The asking session changed; answer not sent, use ask get",
       };
+    // Across a restart the pane, terminal and harness-reported session must
+    // all be the original asker's (`claude --resume` keeps its session id).
+    if (restarted && !originalAsker(recipient, native.actor))
+      return { state: "unconfirmed", reason: RESTART_UNPROVED };
     const source = lease.runtime.agentSessions?.conversation;
     if (!source || lease.runtime.remotePlatform === "windows")
       return {
@@ -394,6 +459,14 @@ export function createAskRecipients(deps: {
         state: "unresolved",
         reason: "The original conversation is not readable yet",
       };
+    // The conversation World will send to must be the captured one; the
+    // send itself rechecks this session fingerprint just before input.
+    if (
+      restarted &&
+      (chatScheme(conversation) !== recipient.conversation.scheme ||
+        conversation.session_fingerprint !== recipient.conversation.fingerprint)
+    )
+      return { state: "unconfirmed", reason: RESTART_UNPROVED };
     try {
       await checkTuiForeground(host(lease).call, recipient.pane_id);
     } catch (error) {
@@ -417,13 +490,16 @@ export function createAskRecipients(deps: {
       };
     if (
       after.state !== "present" ||
-      after.actor.terminal_id !== recipient.terminal_id
+      after.actor.terminal_id !== recipient.terminal_id ||
+      (restarted && !originalAsker(recipient, after.actor))
     )
       return {
         state: "unconfirmed",
         reason: "The asking session changed during checks; use ask get",
       };
-    return { state: "attached", lease, conversation };
+    return restarted
+      ? { state: "attached", lease, conversation, restarted: true }
+      : { state: "attached", lease, conversation };
   }
   async function authorize(
     actor: AnswerActor,
@@ -479,10 +555,11 @@ export function createAskRecipients(deps: {
     capture,
     resolve,
     authorize,
-    fence(recipient: AnswerRecipient | null | undefined) {
+    /** `proven`: this run's resolve proved an earlier run's asker. */
+    fence(recipient: AnswerRecipient | null | undefined, proven = false) {
       if (
         !validRecipient(recipient) ||
-        recipient.service_incarnation !== deps.incarnation
+        (recipient.service_incarnation !== deps.incarnation && !proven)
       )
         return;
       if ("core_id" in recipient) {
@@ -510,10 +587,11 @@ export function createAskRecipients(deps: {
       recipient: AnswerRecipient,
       lease: AnswerLease,
       info: Record<string, unknown>,
+      proven = false,
     ) {
       return (
         recipient.adapter === "herdr" &&
-        recipient.service_incarnation === deps.incarnation &&
+        (recipient.service_incarnation === deps.incarnation || proven) &&
         lease.isCurrent() &&
         info.pane_id === recipient.pane_id &&
         info.terminal_id === recipient.terminal_id

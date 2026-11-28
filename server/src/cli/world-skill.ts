@@ -120,6 +120,9 @@ Targets are on your own host; add --connection ID for another one.
          Older, unverified and unsupported asks keep answers for ask get.
          An owner answer may end with "Attached files:" and one absolute path
          per line: files the owner attached, stored temporarily; open them.
+         After a World restart an answer is sent only if World proves your
+         original session still runs in that terminal (claude --resume
+         keeps it); otherwise it stays saved for ask get.
          Possible pane sends are never retried automatically. The owner can
          close delivery or authorize a possible duplicate in Reception.
          Successful stdout output acknowledges the exact answer as its verified

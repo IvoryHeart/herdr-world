@@ -143,6 +143,16 @@ stays `π Running tests`. Click **Change task**: it becomes `π Review results`.
 Reload to leave the preview. This checks title display; the snapshot activity
 and conversation-identity regressions check service admission and refresh.
 
+To see saved ask answers across a World restart without live agents, open
+`/?answerContinuityFixture`. The testing-only page removes its parameter at once
+and makes no runtime calls. Click the Reception **✉2** letter to open the Outbox,
+then **Restart World**: Atlas resumed its own session and shows `1 answer · Sent`;
+Beacon now runs a different session, so its card stays **Not sent** with
+**Copy answer**, the full `herdr-world ask get` command and `Beacon: 0 answers`.
+**Check again** changes nothing. Reload to leave. The restart proof itself is
+exercised by `server/src/world/answer-foreground.test.ts` and
+`server/src/world/effect-restart.test.ts`.
+
 World's event traces and renderer counters exist only in development builds:
 `bun run dev:web`, or a production-style build with
 `HERDR_WORLD_BUILD_DEVTOOLS=1 bun run build:web`. In such a build, Board's

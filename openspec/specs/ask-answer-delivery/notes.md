@@ -20,7 +20,8 @@
 - `server/src/adapters/agent-input.test.ts`
 - `server/src/adapters/herdr-runtime.ts`, `server/src/connections/runtime.ts`
 - `server/src/herdr-core/harness.ts`, `server/src/herdr-core/harness.test.ts`
-- `server/src/herdr-core/ask-caller.ts`
+- `server/src/herdr-core/ask-caller.ts` (`sessionProof`: reads the live Claude process record for the restart proof)
+- `server/src/herdr-core/occupant.ts` (`coreSessionProof`: hashes the current harness session for the restart proof)
 - `web/src/world/town/AnswerDeliveries.tsx`, `web/src/world/town/AnswerDeliveries.test.ts`
 - `web/src/world/town/answerOutbox.ts`, `web/src/world/town/answerOutbox.test.ts`
 - `web/src/world/town/TownSummaryPanel.tsx`
@@ -59,6 +60,8 @@
 - `server/src/world/owner-alert-connection.test.ts`
 - `server/src/world/world-cli-asks.ts`, `server/src/world/attention-dispatch.ts`
 - `server/src/herdr-core/ask-caller.test.ts`
+- `server/src/world/effect-restart.test.ts` (answers and questions across a World restart)
+- `web/src/testing/AnswerContinuityFixture.tsx`, `web/src/world/AnswerContinuity.browser.tsx`, `web/src/world/AnswerContinuity.browser.test.ts` (`?answerContinuityFixture` restart preview)
 
 **Pitfalls:**
 
@@ -78,3 +81,7 @@ Children and MCP helpers are ignored. A shell started inside a live harness is a
 In Reception > Outbox, **Not sent** names the refused program category in plain words. **Copy answer** copies the saved owner answer; the full `herdr-world ask get <id>` command reads it later. **Put in Terminal composer** opens that terminal's draft on desktop or phone and preserves existing text. It sends nothing; the owner reviews and sends explicitly. Refused deliveries and possible sends are never automatically replayed. Neither runtime makes the final OS foreground check and typing one indivisible operation.
 
 The phone core Terminal keeps its Send controls open; desktop draft recovery opens them on request.
+
+## Answers across a World restart
+
+A saved answer, or one given to a question open across a World restart, is sent only after World proves the original harness session still runs at the captured terminal. `ask-recipient.ts` repeats the proof at answer recording, the dispatch fence and the final input guard. Herdr TUI needs the same connection, pane, terminal and harness-reported session plus an unchanged conversation fingerprint, so `claude --resume` in the same pane qualifies. herdr-core needs the same core terminal and the session Claude Code's own live process record (`sessions/<pid>.json`) names now, read by `sessionProof` in `server/src/herdr-core/ask-caller.ts` and hashed by `coreSessionProof` in `server/src/herdr-core/occupant.ts` (saved as the core recipient's `session` with the question). So `claude --resume <id>` there qualifies, while `/clear` or `/resume <other>` in the same process does not; PIDs, names and launch arguments are not proof, and Codex, other harnesses and a Claude without a readable record stay Not sent. Otherwise Reception > Outbox shows Not sent with a plain restart reason, Copy answer and `herdr-world ask get <id>`. Possible sends from before the restart stay uncertain and are never replayed; Send again reaches only a proven session. `/?answerContinuityFixture` previews both outcomes with synthetic agents.
