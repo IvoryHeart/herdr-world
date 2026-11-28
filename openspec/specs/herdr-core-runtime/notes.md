@@ -8,6 +8,14 @@
 
 **Code:**
 
+- `server/src/herdr-core/topology.ts`, `server/src/herdr-core/topology.test.ts`,
+  `server/src/herdr-core/world-read-model.test.ts` (shared room/tab projection)
+- `server/src/herdr-core/mirror.ts`, `server/src/herdr-core/runtime.ts`,
+  `server/src/herdr-core/client.ts` (observation, document events and framed RPC)
+- `server/src/herdr-core/operations.ts`, `server/src/herdr-core/operations.test.ts`
+  (launch placement)
+- `server/src/herdr-core/layout.ts`, `server/src/storage/core-topology.ts`,
+  `server/src/storage/catalog.ts` (legacy layout and migration metadata)
 - `server/src/herdr-core/delivery.ts`, `server/src/herdr-core/delivery.test.ts`
 - `server/src/herdr-core/native-send.test.ts`
 - `server/src/herdr-core/recipient.ts`
@@ -146,6 +154,36 @@ no control for it. Platform and harness limits apply across the table.
   releases for drift without changing your installed runtime.
   Release-walk acceptance pins **0.1.22** for repeatable runtime downloads and
   receipts; install previews and fake release fixtures use the same baseline.
+
+### Shared Herdr app layout: approved design, implementation pending
+
+The [shared-layout design](app-layout-design.md) records the owner's 2026-11-27
+decision: World is a peer of the desktop app. It supersedes M1/M2's independent
+core room arrangement. The active
+[placement change](../../changes/core-app-placement-contract/proposal.md)
+tracks three PRs: this design, then observation, then writes/migration. This PR
+changes no runtime behavior; the room/move descriptions below still describe
+the existing implementation until those follow-on PRs land.
+
+The machine-local `herdr-app` document supplies spaces, names, tabs and pane
+membership. Its exact schema comes from
+[`mirror::Document`](https://github.com/herdrdev/herdr-app/blob/1180a5cec3b8bd4dfebf4a9b217ab8cb59a96ffa/src/mirror.rs)
+and [`layout::Node`](https://github.com/herdrdev/herdr-app/blob/1180a5cec3b8bd4dfebf4a9b217ab8cb59a96ffa/src/layout.rs),
+not labels. `herdr.space`/`herdr.tab` are adoption hints for terminals without a
+pane; the app creates missing IDs. `where` is an output caption only, never a
+room-name input. The installed `herdr-app --skill` was unavailable; its
+[pinned skill source](https://github.com/herdrdev/herdr-app/blob/1180a5cec3b8bd4dfebf4a9b217ab8cb59a96ffa/src/SKILL.md)
+and implementation were checked instead. The design cites adoption, naming,
+versioned document RPC and event sources separately.
+
+Without a document, the owner's Android observation establishes one group per
+working folder, named after that folder, including separate crew worktrees.
+Parentage does not nest those groups. The dispatcher needs no change. The write
+step will publish the requested **Crew** space and adopt its desks with
+`keep:true`; existing document placement always wins over migration candidates.
+Q8 remains open for real desktop/phone rendering and before/after Town, Board
+and phone evidence. Label readback alone cannot close it. No phone screenshots
+or runtime acceptance are claimed by this design-only PR.
 
 ### Runtime limits
 
