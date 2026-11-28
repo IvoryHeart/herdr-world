@@ -67,12 +67,16 @@ export type RecipientResolution =
       core?: false;
       lease: AnswerLease;
       conversation: Conversation;
+      /** Saved by an earlier World run; continuity was proved just now. */
+      restarted?: true;
     }
   | {
       state: "attached";
       kind: "core";
       core?: false;
       lease: CorePreparedDelivery;
+      /** Saved by an earlier World run; continuity was proved just now. */
+      restarted?: true;
     }
   | { state: "unresolved" | "ended" | "unconfirmed"; reason: string };
 const chatScheme = (value: Conversation) =>
@@ -81,6 +85,13 @@ const chatScheme = (value: Conversation) =>
     : value.session_binding === "title" && value.agent === "codex"
       ? "codex-title-v1"
       : null;
+/**
+ * Refusal for an answer saved before a World restart whose asker World could
+ * not prove is the same harness session. The answer stays readable.
+ * @internal Exported for restart regression tests.
+ */
+export const RESTART_UNPROVED =
+  "World restarted and couldn't prove the agent that asked is still the same session; answer not sent, use ask get";
 const host = (lease: AnswerLease) => ({
   connection_id: lease.connectionId,
   generation: lease.generation,
@@ -161,7 +172,10 @@ export function createAskRecipients(deps: {
   /**
    * A core asker's current binding and its fenced native-send capability.
    */
-  function resolveCore(recipient: CoreAnswerRecipient): RecipientResolution {
+  function resolveCore(
+    recipient: CoreAnswerRecipient,
+    restarted: boolean,
+  ): RecipientResolution {
     if (!coreSource()?.has(recipient.connection_id))
       return {
         state: "ended",
@@ -178,7 +192,9 @@ export function createAskRecipients(deps: {
         state: "ended",
         reason: "The original herdr-core was replaced; use ask get",
       };
-    if (host.generation !== recipient.connection_generation)
+    // Within one World run a reconnect still retires the binding. After a
+    // restart the generation restarts too; process identity below decides.
+    if (!restarted && host.generation !== recipient.connection_generation)
       return {
         state: "unconfirmed",
         reason: "The original core connection retired; use ask get",
@@ -197,13 +213,28 @@ export function createAskRecipients(deps: {
     const reason = foregroundInputRefusal(occupant.foreground);
     if (reason)
       return { state: "unconfirmed", reason: `Agent not attached. ${reason}` };
+    // Core reports no durable session id, and the occupant fingerprint holds
+    // a per-run counter. Across a restart only the same core, terminal
+    // process and foreground harness process (pid and name) prove the asker.
+    if (
+      restarted &&
+      (occupant.pid !== recipient.pid ||
+        occupant.foreground.pid !== recipient.foreground.pid ||
+        occupant.foreground.name !== recipient.foreground.name)
+    )
+      return { state: "unconfirmed", reason: RESTART_UNPROVED };
     const delivery = host.delivery?.(
       recipient.pane_id,
       occupant.fingerprint,
       occupant.foreground,
     );
     return delivery
-      ? { state: "attached", kind: "core", lease: delivery }
+      ? {
+          state: "attached",
+          kind: "core",
+          lease: delivery,
+          ...(restarted ? { restarted: true as const } : {}),
+        }
       : {
           state: "unconfirmed",
           reason:
@@ -272,7 +303,14 @@ export function createAskRecipients(deps: {
         state: "unconfirmed",
         reason: "No verified original recipient binding; use ask get",
       };
-    if (recipient.service_incarnation !== deps.incarnation)
+    // An answer saved by an earlier World run is re-captured only after the
+    // original harness and session are proved below; nothing else inherits it.
+    const restarted = recipient.service_incarnation !== deps.incarnation;
+    if (
+      restarted &&
+      recipient.adapter === "herdr-core" &&
+      !("core_id" in recipient)
+    )
       return {
         state: "unconfirmed",
         reason:
@@ -288,7 +326,7 @@ export function createAskRecipients(deps: {
         state: "ended",
         reason: "The original connection was removed; use ask get",
       };
-    if ("core_id" in recipient) return resolveCore(recipient);
+    if ("core_id" in recipient) return resolveCore(recipient, restarted);
     if (recipient.adapter === "herdr-core") {
       const core = coreConnections();
       const lease = core?.readyRuntimeLease(recipient.connection_id);
@@ -360,6 +398,10 @@ export function createAskRecipients(deps: {
         state: "unconfirmed",
         reason: "The asking session changed; answer not sent, use ask get",
       };
+    // Across a restart the pane, terminal and harness-reported session must
+    // all be the original asker's (`claude --resume` keeps its session id).
+    if (restarted && !originalAsker(recipient, native.actor))
+      return { state: "unconfirmed", reason: RESTART_UNPROVED };
     const source = lease.runtime.agentSessions?.conversation;
     if (!source || lease.runtime.remotePlatform === "windows")
       return {
@@ -394,6 +436,14 @@ export function createAskRecipients(deps: {
         state: "unresolved",
         reason: "The original conversation is not readable yet",
       };
+    // The conversation World will send to must be the captured one; the
+    // send itself rechecks this session fingerprint just before input.
+    if (
+      restarted &&
+      (chatScheme(conversation) !== recipient.conversation.scheme ||
+        conversation.session_fingerprint !== recipient.conversation.fingerprint)
+    )
+      return { state: "unconfirmed", reason: RESTART_UNPROVED };
     try {
       await checkTuiForeground(host(lease).call, recipient.pane_id);
     } catch (error) {
@@ -417,13 +467,16 @@ export function createAskRecipients(deps: {
       };
     if (
       after.state !== "present" ||
-      after.actor.terminal_id !== recipient.terminal_id
+      after.actor.terminal_id !== recipient.terminal_id ||
+      (restarted && !originalAsker(recipient, after.actor))
     )
       return {
         state: "unconfirmed",
         reason: "The asking session changed during checks; use ask get",
       };
-    return { state: "attached", lease, conversation };
+    return restarted
+      ? { state: "attached", lease, conversation, restarted: true }
+      : { state: "attached", lease, conversation };
   }
   async function authorize(
     actor: AnswerActor,
@@ -479,10 +532,11 @@ export function createAskRecipients(deps: {
     capture,
     resolve,
     authorize,
-    fence(recipient: AnswerRecipient | null | undefined) {
+    /** `proven`: this run's resolve proved an earlier run's asker. */
+    fence(recipient: AnswerRecipient | null | undefined, proven = false) {
       if (
         !validRecipient(recipient) ||
-        recipient.service_incarnation !== deps.incarnation
+        (recipient.service_incarnation !== deps.incarnation && !proven)
       )
         return;
       if ("core_id" in recipient) {
@@ -510,10 +564,11 @@ export function createAskRecipients(deps: {
       recipient: AnswerRecipient,
       lease: AnswerLease,
       info: Record<string, unknown>,
+      proven = false,
     ) {
       return (
         recipient.adapter === "herdr" &&
-        recipient.service_incarnation === deps.incarnation &&
+        (recipient.service_incarnation === deps.incarnation || proven) &&
         lease.isCurrent() &&
         info.pane_id === recipient.pane_id &&
         info.terminal_id === recipient.terminal_id

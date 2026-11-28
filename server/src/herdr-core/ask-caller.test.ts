@@ -5,7 +5,7 @@ import { mkdtempSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { BoardStore } from "../world/board-store";
-import { createAskRecipients } from "../world/ask-recipient";
+import { createAskRecipients, RESTART_UNPROVED } from "../world/ask-recipient";
 import {
   ANSWER_DELIVERY_VERB,
   isAnswerIntent,
@@ -539,12 +539,31 @@ describe("a core asker's recipient (M5)", () => {
         recipient,
       ),
     ).toMatchObject({ state: "ended" });
+    // An earlier World run's recipient attaches again only for the same core,
+    // terminal process and foreground harness process.
     expect(
       await recipientsFor(cores).resolve({
         ...recipient,
         service_incarnation: "run-0",
       }),
-    ).toMatchObject({ state: "unconfirmed" });
+    ).toMatchObject({ state: "attached", restarted: true });
+    for (const changed of [
+      { pid: recipient.pid + 1 },
+      {
+        foreground: {
+          ...recipient.foreground,
+          pid: recipient.foreground.pid + 1,
+        },
+      },
+      { foreground: { ...recipient.foreground, name: "codex" } },
+    ])
+      expect(
+        await recipientsFor(cores).resolve({
+          ...recipient,
+          ...changed,
+          service_incarnation: "run-0",
+        }),
+      ).toEqual({ state: "unconfirmed", reason: RESTART_UNPROVED });
     w.fake.finish(address);
     await w.settle();
     expect(await recipients.resolve(recipient)).toEqual({

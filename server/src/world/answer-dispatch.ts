@@ -75,7 +75,10 @@ export function createAnswerDispatcher(deps: {
       );
       bindings.set(entry.id, binding);
       if (binding.state !== "attached") return binding;
-      const fence = deps.recipients.fence(entry.intent?.condition.recipient);
+      const fence = deps.recipients.fence(
+        entry.intent?.condition.recipient,
+        "restarted" in binding && binding.restarted === true,
+      );
       if (
         !fence ||
         fence.generation !== binding.lease.generation ||
@@ -215,7 +218,12 @@ export function createAnswerDispatcher(deps: {
             guard: (info) =>
               actorAllowed(entry) &&
               (!marked || context.guard()) &&
-              deps.recipients.guard(recipient, binding.lease, info),
+              deps.recipients.guard(
+                recipient,
+                binding.lease,
+                info,
+                binding.restarted === true,
+              ),
             submitted: (fingerprint) => {
               confirmed =
                 fingerprint === binding.conversation.session_fingerprint!;

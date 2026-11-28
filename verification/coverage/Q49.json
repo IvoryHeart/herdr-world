@@ -16,7 +16,7 @@
   ],
   "acceptedDelivery": "https://github.com/IvoryHeart/herdr-world/pull/549",
   "technique": "bounded-model-and-real-sqlite-crash-matrix",
-  "assessment": "M5 holds actual runner checkpoints and reopens real SQLite with a durable synthetic receiver; named source/compiled SIGKILL cases cover every recovery-matrix row. P8 drives wall deadlines and sleep deterministically. Separate actual ConnectionManager lifetimes plus SQLite reopen and recycled native/session values check Herdr driver restart refusal, same-run sends, legacy authority refusal and retained uncertainty/history.",
+  "assessment": "M5 holds actual runner checkpoints and reopens real SQLite with a durable synthetic receiver; named source/compiled SIGKILL cases cover every recovery-matrix row. P8 drives wall deadlines and sleep deterministically. Separate actual ConnectionManager lifetimes plus SQLite reopen and recycled native/session values check Herdr driver restart refusal without continuity proof, a single send to a proven same session after restart (#1451), same-run sends, legacy authority refusal and retained uncertainty/history.",
   "status": "modeled",
   "remaining": "Independent model, replay, consumer and query-contract acceptance is pending this PR review. Native filesystem/power loss, source deduplication and external run execution remain outside the bounded proof; the real source/compiled and existing Chat consumer tests remain required.",
   "requiredChecks": ["bun run check", "bun run verification:gate"],

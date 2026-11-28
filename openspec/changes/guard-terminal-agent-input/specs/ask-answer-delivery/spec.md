@@ -23,7 +23,7 @@ Immediately before typing an ask question or answer, World SHALL check only the 
 
 #### Scenario: Agent restarts
 
-- **WHEN** a resumed, restarted, different or unknown agent executable now runs at the same qualified terminal
+- **WHEN** a resumed, restarted, different or unknown agent executable now runs at the same qualified terminal while World keeps running
 - **THEN** the basename check allows input unless the leader is in a refused category
 - **AND** it does not require original-session evidence or hash foreground PIDs
 
@@ -42,6 +42,27 @@ Immediately before typing an ask question or answer, World SHALL check only the 
 
 - **WHEN** World observes a foreground or qualified-runtime change while core holds input
 - **THEN** World cancels the held send and never automatically replays a possible send
+
+### Requirement: Saved answers survive a proven World restart
+
+When World restarts with a saved answer waiting or a question still open, it SHALL deliver that answer only after proving that the original harness session still runs at the captured terminal. On Herdr TUI the proof SHALL be the same connection, pane and terminal, the same harness-reported session, and the same conversation scheme and session fingerprint, checked before and after the foreground check. On herdr-core it SHALL be the same core, terminal process and foreground leader process and name; a recycled generation is accepted only with this proof. The proof SHALL repeat at answer recording, at dispatch and before input, and SHALL add no stored state.
+
+#### Scenario: Original session resumes after a World restart
+
+- **WHEN** World restarts and the same harness session, for example after `claude --resume` in the same terminal, still runs where the agent asked
+- **THEN** an answer saved before the restart, or given to a question open across it, is sent once and shows Sent
+
+#### Scenario: Different or unproved session after a World restart
+
+- **WHEN** another session, process or harness now runs at the captured terminal, or the runtime cannot supply the proof
+- **THEN** World types nothing and shows Not sent with a plain restart reason, Copy answer and the full `herdr-world ask get <id>` command
+- **AND** a later check or program change never revives that delivery
+
+#### Scenario: Possible send before the restart
+
+- **WHEN** World stopped while a send may have reached the terminal
+- **THEN** the delivery stays uncertain and is never replayed automatically
+- **AND** an owner's explicit Send again sends once only to a proven original session and to nothing else
 
 ## MODIFIED Requirements
 
@@ -64,6 +85,7 @@ World SHALL retain the original qualified terminal and answering authority, and 
 
 - **WHEN** the original terminal ended or its qualified runtime was replaced
 - **THEN** no fallback or replay targets another terminal or connection, and ask get retains the answer
+- **AND** after a World restart, only a proven original harness session at the captured terminal may receive the answer
 
 #### Scenario: Owner-only authority remains owner-only
 
