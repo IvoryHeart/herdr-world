@@ -283,7 +283,9 @@ bridge.connection = (...args) => {
         pendingInputs.add(admitted);
         void admitted
           .finally(() => pendingInputs.delete(admitted))
-          .catch(() => {});
+          .catch((error) =>
+            failures.push(`Admitted input RPC: ${String(error)}`),
+          );
       }
       return promise;
     },

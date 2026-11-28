@@ -156,10 +156,11 @@ its two-second sample and 100 ms key cadence retain every original assertion.
 Capture readiness waits for camera/topology/roof settling as well as materialization;
 ambient animation continues and stale receipts still fail without saving an image.
 Layout, scrolling and media-query checks explicitly await native frames after
-stepping test time. Browser-wide traces have exclusive admission. Native work-count cases share the
-bounded contexts with real rendering/input; the separate latency-trend workflow
-measures delays on a quiet runner. Cases share up to eight contexts locally,
-bounded by the available cores. Pointer
+stepping test time. Browser-wide traces and native-input acceptance have exclusive admission.
+The latter retains its five-second RPC deadline: parallel SwiftShader work under
+CPU contention can starve replies past it. Ordinary behaviour cases share up to
+eight contexts locally, bounded by available cores; the separate latency-trend
+workflow measures delays on a quiet runner. Pointer
 fixtures use native per-page touch emulation, retaining actual CSS media queries.
 
 Run `bun run test:timings` for isolated sequential static, unit, World browser,

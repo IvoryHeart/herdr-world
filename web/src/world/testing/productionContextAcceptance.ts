@@ -564,10 +564,10 @@ export function registerProductionContextTests(group: ProductionContextGroup) {
               (Bun.env.WORLD_TRACE_PREFIX ? "&trace=1" : ""),
           ],
           { stdout: "ignore", stderr: Bun.file(dir + "/browser.log") },
-          // Only CDP tracing is browser-wide. Native rendering and work-count
-          // assertions remain real in independent case-owned contexts; quiet
-          // latency measurements belong to the dedicated trend workflow.
-          { exclusive: traceTimeline },
+          // Native input keeps its existing 5s RPC bound. Concurrent
+          // SwiftShader work can starve those replies beyond that bound;
+          // preserve isolation instead of extending the deadline.
+          { exclusive: traceTimeline || view !== "uncertain" },
         );
         await browser.start();
         // Keep both observation/render phases and the deliberate 20-second stall
