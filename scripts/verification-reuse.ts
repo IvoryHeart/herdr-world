@@ -12,7 +12,7 @@ import manifest from "../package.json";
  * byte-identical inputs: every model part's CI cache key (model, adapters,
  * replay, verification tooling, seeds, Bun/Node/Java and platform) and the
  * gate's own command. Any change is a miss and runs the whole gate again.
- * HERDR_VERIFICATION_FRESH=1 always runs it.
+ * HERDR_VERIFICATION_FRESH=1 always runs it. @internal
  */
 export async function verificationGateKey(
   root: string,
