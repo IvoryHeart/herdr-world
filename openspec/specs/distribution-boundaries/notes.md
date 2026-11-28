@@ -104,6 +104,13 @@
 - `.githooks/`
 - `site/`
 
+- `scripts/verification-process.ts`, `scripts/verification-process.test.ts`, `scripts/verification-process.sanity.test.ts`, `scripts/testing/manual-clock.ts`, `scripts/testing/verification-process.fixture.ts` (injected time/process supervision and two native port sanity checks)
+- `scripts/run-performance-tests.ts`, `scripts/run-performance-tests.test.ts`, `web/src/world/town/TownFrameBudget.browser.test.ts` (three serial quiet runs retaining native frame/raster budgets)
+- `server/src/service/testing/services.ts`, `server/src/service/testing/services.test.ts`, `server/src/service/world-ask-peers.test.ts` (private test discovery and explicitly shared scratch registries)
+- `web/src/world/ConcurrentContexts.test.ts`, `web/src/world/browserInput.worker.ts`, `web/src/world/testing/scriptedInput.ts`, `web/src/world/testing/scriptedInput.test.ts`, `web/src/world/testing/productionContextAcceptance.ts` (finite delivery-driven functional input; original timed producer retained for native latency)
+- `server/src/agent/herdr-conversation.ts`, `server/src/agent/conversation-deadlines.ts`, `server/src/agent/conversation-send-race.test.ts`, `server/src/service/clock.ts` (local deadline clocks and observable delivery completion)
+- `server/src/usage/collector.test.ts` (deterministic inventory timestamps and mtimes)
+
 **Tests:**
 
 - `scripts/pages-features.test.ts`

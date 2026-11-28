@@ -23,7 +23,9 @@ development ports. Tests never use your data folder: the test preload sets
 starts World with its own `HOME` unsets it. To test the service end to end, start
 it in the test's own process with `startTestService`
 ([test services](../server/src/service/testing/services.ts)), which gives it its own
-folder. Spawn `server/src/index.ts` only for what needs a real process: signals and
+folder and registry. Tests that exercise peers pass one explicit scratch
+`HERDR_WORLD_INSTANCE_REGISTRY_DIR` to both services; platform state roots alone
+do not enable sharing. Spawn `server/src/index.ts` only for what needs a real process: signals and
 exit codes, the lock between processes, a home folder of its own, or fakes on
 `PATH`. A test that saves source settings should switch the GitHub source off
 first, because `gh` keeps its own state in the process's home folder.
@@ -103,6 +105,21 @@ connections stay in each preview's own folder. Reports expire after 45
 seconds without renewal, and stale reports have no open link. See the
 [Shipyard API guide](shipyard-api.md#local-instance-registry) for bounds and CLI
 try commands. No discovery probes or additional servers are started by Shipyard.
+
+## Native performance checks
+
+`bun run test:performance` runs the existing Town frame/raster budget suite three
+times with the pinned Chrome and SwiftShader, serially. CI measures on Ubuntu
+24.04 with the pinned Bun and Chrome versions. Each run requires a quiet
+CPU admission check; a busy machine fails setup instead of producing a budget
+verdict. All three runs must pass, with no retry or averaging away a failure.
+Functional production-context and concurrent-context fixtures send a finite sequence of 16 native key
+pairs per phase, gated by actual delivery. The latency workflow retains the
+original independent 75 ms producer and requires quiet admission before it runs;
+a slow functional phase no longer creates a growing backlog of timed input.
+The World latency workflow runs this lane alongside its existing measurements,
+without adding a runner job. Ordinary World case shards retain behaviour and
+bounded-work checks. No budget value, assertion or case is removed.
 
 ## Waiting in tests
 

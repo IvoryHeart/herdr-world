@@ -20,3 +20,11 @@
 - [x] 4.2 Migrate fixed fixture waits, explain remaining real-runtime absence checks, and add stopped-clock file watchdog regressions plus phase summaries.
 - [ ] 4.3 Complete local delivery and record timing, assertion/skip inventory, threshold changes and unresolved performance limits in the PR.
 - [ ] 4.4 FirstMate independently verifies green hosted execution, literal job start offsets and the six-minute wall target before merge.
+
+## 5. Root causes (#1487)
+
+- [x] 5.1 Reproduce each in-scope report against the stacked target under CPU pressure; name proven causes and distinguish CI-rework evidence.
+- [x] 5.2 Introduce deterministic checker process/time ports and preserve two native sanity checks; seal service registries and usage fixture time.
+- [x] 5.3 Separate intact native budgets into three quiet pinned performance runs and document testing guidance.
+- [ ] 5.4 Complete twenty pressure runs per fixed file, quality/threshold comparison, required local checks and the stacked PR handoff.
+- [ ] 5.5 Dispatcher verifies three green hosted runs and independent review; repeat main reproduction after #1484 merges.

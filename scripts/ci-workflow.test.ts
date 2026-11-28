@@ -849,6 +849,7 @@ test("the latency trend measures the trend suites on quiet runners and reports w
   });
   expect(trend.on.schedule).toEqual([{ cron: "53 3 * * *" }]);
   const measure = trend.jobs.measure!;
+  expect(measure["runs-on"]).toBe("ubuntu-24.04");
   expect(
     (measure.strategy?.matrix?.suites ?? [])
       .flatMap((pair) => pair.split(" "))
@@ -860,7 +861,7 @@ test("the latency trend measures the trend suites on quiet runners and reports w
   const measured = runs.find((run) =>
     run.includes("for suite in $WORLD_LATENCY_SUITES"),
   )!;
-  expect(measured).toContain("bun scripts/wait-for-quiet.ts");
+  expect(measured).toContain("bun scripts/wait-for-quiet.ts --required");
   expect(measured.indexOf("bun scripts/wait-for-quiet.ts")).toBeLessThan(
     measured.indexOf("bun scripts/run-world-tests.ts"),
   );

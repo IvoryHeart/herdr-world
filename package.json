@@ -61,6 +61,7 @@
     "format:check": "biome format .",
     "lint": "oxlint . && bun scripts/test-portability.ts && bun scripts/check-has-selectors.ts",
     "test": "bun scripts/run-browser-tests.ts",
+    "test:performance": "bun scripts/run-performance-tests.ts",
     "test:timings": "bun scripts/test-timings.ts",
     "test:world": "bun scripts/run-world-tests.ts",
     "test:quick": "bun scripts/run-tests.ts --path-ignore-patterns '**/{uiScale,mobileTerminal,filePreviewNavigation,TerminalThemeDialog,VisualPreview,ThemedSelect,ThemedSelect.browser,HerdrSetupCard}.test.ts'",

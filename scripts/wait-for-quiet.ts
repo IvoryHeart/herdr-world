@@ -62,6 +62,8 @@ if (import.meta.main) {
   console.info(
     result.quiet
       ? `[quiet] idle for 3 s after ${result.seconds} s (${last.join(", ")} idle)`
-      : `[quiet] still busy after ${result.seconds} s (${last.join(", ")} idle); measuring anyway`,
+      : `[quiet] still busy after ${result.seconds} s (${last.join(", ")} idle); ${process.argv.includes("--required") ? "measurement refused" : "measuring anyway"}`,
   );
+  if (!result.quiet && process.argv.includes("--required"))
+    process.exitCode = 1;
 }

@@ -1,4 +1,5 @@
-import { afterAll, beforeAll, describe, expect, jest, test } from "bun:test";
+import { ManualClock } from "../../../scripts/testing/manual-clock";
+import { afterAll, beforeAll, describe, expect, test } from "bun:test";
 import {
   appendFile,
   chmod,
@@ -644,31 +645,35 @@ describe("rev1's probes", () => {
   test("a check that ends after the agent exits still reaches the browser", async () => {
     const shown = await transcript("shown-v");
     const { state, call } = fakeHerdr(claude(shown));
-    jest.useFakeTimers();
+    const clock = new ManualClock();
+    const endedSignal = Promise.withResolvers<void>();
+    let source: ReturnType<typeof createHerdrConversationSource> | undefined;
     try {
       let ended = false;
-      const source = createHerdrConversationSource({
+      source = createHerdrConversationSource({
         herdrCall: call,
         files: localAgentSessionFiles,
         context: createAgentSessionResolverContext(),
         cache: createSessionProjectionCache(localAgentSessionFiles),
+        clock,
+        scheduler: clock,
         onDeliveriesChanged: () => {
           ended = true;
+          endedSignal.resolve();
         },
       });
       await sendTo(source);
       // The agent exits: Herdr sees no agent in the pane.
       state.current = { pane_id: "w1:p1" };
       const before = await source.identity({ pane_id: "w1:p1" });
-      jest.advanceTimersByTime(DELIVERY_CHECK_MS + 2000);
-      for (let tick = 0; tick < 5000 && !ended; tick += 1)
-        await new Promise((resolve) => setImmediate(resolve));
+      clock.advance(DELIVERY_CHECK_MS + 2000);
+      await endedSignal.promise;
       expect(ended).toBe(true);
       const after = await source.identity({ pane_id: "w1:p1" });
       expect(after.key).not.toBe(before.key);
-      source.dispose();
     } finally {
-      jest.useRealTimers();
+      source?.dispose();
+      expect(clock.pending).toBe(0);
     }
   });
 });
@@ -691,28 +696,32 @@ describe("when Chat can no longer check", () => {
     const shown = await transcript("shown-s");
     const { call } = fakeHerdr(claude(shown));
     let changed = 0;
-    jest.useFakeTimers();
+    const clock = new ManualClock();
+    const changedSignal = Promise.withResolvers<void>();
+    let source: ReturnType<typeof createHerdrConversationSource> | undefined;
     try {
-      const source = createHerdrConversationSource({
+      source = createHerdrConversationSource({
         herdrCall: call,
         files: localAgentSessionFiles,
         context: createAgentSessionResolverContext(),
         cache: createSessionProjectionCache(localAgentSessionFiles),
+        clock,
+        scheduler: clock,
         onDeliveriesChanged: () => {
           changed += 1;
+          changedSignal.resolve();
         },
       });
       await sendTo(source);
-      jest.advanceTimersByTime(DELIVERY_CHECK_MS + 2000);
-      for (let tick = 0; tick < 5000 && changed === 0; tick += 1)
-        await new Promise((resolve) => setImmediate(resolve));
+      clock.advance(DELIVERY_CHECK_MS + 2000);
+      await changedSignal.promise;
       expect(changed).toBe(1);
       expect(
         (await source.read({ pane_id: "w1:p1" })).deliveries,
       ).toMatchObject([{ state: "unverified" }]);
-      source.dispose();
     } finally {
-      jest.useRealTimers();
+      source?.dispose();
+      expect(clock.pending).toBe(0);
     }
   });
 

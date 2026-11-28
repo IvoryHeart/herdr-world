@@ -11,6 +11,7 @@ import {
   assertWorldBrowserInventory,
   selectWorldBrowserShard,
   worldBrowserSuites,
+  worldPerformanceSuites,
   worldBrowserCasePlan,
 } from "./world-browser-suites";
 import timings from "./world-browser-timings.json";
@@ -24,7 +25,9 @@ import {
 
 // Named suites narrow the shard, or select whole files without --shard.
 const allArgs = process.argv.slice(2);
-const named = allArgs.filter((arg) => worldBrowserSuites.includes(arg));
+const named = allArgs.filter((arg) =>
+  [...worldBrowserSuites, ...worldPerformanceSuites].includes(arg),
+);
 const args = allArgs.filter((arg) => !named.includes(arg));
 const shardArg = args.find((arg) => arg.startsWith("--shard="));
 const shard = shardArg?.slice("--shard=".length);
@@ -38,7 +41,11 @@ if (
 }
 const shardFiles = selectWorldBrowserShard(shard);
 const files = named.length
-  ? named.filter((file) => shardFiles.includes(file))
+  ? named.filter(
+      (file) =>
+        shardFiles.includes(file) ||
+        (!shard && worldPerformanceSuites.includes(file)),
+    )
   : shardFiles;
 const testArgs = args.filter((arg) => arg !== shardArg);
 await assertWorldBrowserInventory();

@@ -34,6 +34,7 @@ on:
             - scripts/latency-trend.ts
             - scripts/wait-for-quiet.ts
             - scripts/test-chrome.ts
+            - scripts/run-performance-tests.ts
             - .github/workflows/world-latency-trend.yml
     pull_request:
         types: [labeled, synchronize]
@@ -62,6 +63,7 @@ on:
             - scripts/latency-trend.ts
             - scripts/wait-for-quiet.ts
             - scripts/test-chrome.ts
+            - scripts/run-performance-tests.ts
             - .github/workflows/world-latency-trend.yml
     schedule:
         - cron: "53 3 * * *"
@@ -79,7 +81,7 @@ jobs:
     measure:
         name: Measure ${{ matrix.suites }}
         if: github.event_name != 'pull_request' || (contains(github.event.pull_request.labels.*.name, 'latency-trend') && (github.event.action != 'labeled' || github.event.label.name == 'latency-trend'))
-        runs-on: ubuntu-latest
+        runs-on: ubuntu-24.04
         timeout-minutes: 20
         strategy:
             fail-fast: false
@@ -115,10 +117,13 @@ jobs:
                   set -euo pipefail
                   mkdir -p "$RUNNER_TEMP/latency"
                   for suite in $WORLD_LATENCY_SUITES; do
-                    bun scripts/wait-for-quiet.ts
+                    bun scripts/wait-for-quiet.ts --required
                     WORLD_LATENCY_TREND_FILE="$RUNNER_TEMP/latency/$suite.jsonl" \
                       bun scripts/run-world-tests.ts "web/src/world/$suite.test.ts" --parallel=1 --max-concurrency=1
                   done
+            - name: Three quiet native frame-budget runs
+              if: contains(matrix.suites, 'ConcurrentContexts')
+              run: bun run test:performance
             - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7
               with:
                   name: latency-${{ strategy.job-index }}

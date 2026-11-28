@@ -55,15 +55,24 @@ export async function installTestChrome(
   return chrome;
 }
 
-/** Match CI on Linux x64; explicit browser overrides remain available. @internal */
+/** Match CI on Linux x64; explicit paths must still report the reviewed pin. @internal */
 export async function localTestChrome(
   env = process.env,
   platform = process.platform,
   arch = process.arch,
   install = installTestChrome,
   sandbox = localChromeSandbox,
+  version = (chrome: string) =>
+    Bun.spawnSync([chrome, "--version"]).stdout.toString().trim(),
 ) {
-  if (env.CHROME_BIN) return env.CHROME_BIN;
+  if (env.CHROME_BIN) {
+    const actual = version(env.CHROME_BIN);
+    if (!actual.endsWith(` ${pin.version}`))
+      throw new Error(
+        `CHROME_BIN reports ${actual}, expected pinned Chrome ${pin.version}`,
+      );
+    return env.CHROME_BIN;
+  }
   if (platform !== "linux" || arch !== "x64") return undefined;
   return sandbox(
     await install(

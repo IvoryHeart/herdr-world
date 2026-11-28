@@ -16,7 +16,7 @@ import {
 /**
  * Owner questions across World instances (#1152): two Worlds attached to one
  * synthetic runtime (the same Herdr socket paths), with different data folders
- * and the default per-user registry. The World the CLI reached holds the
+ * and one explicitly shared scratch registry. The World the CLI reached holds the
  * question; the other shows it in Needs you and answers or dismisses it there,
  * exactly once.
  */
@@ -54,8 +54,7 @@ async function worlds(runtime: "shared" | "separate" = "shared") {
   });
   const start = async (name: string, sockets: ReturnType<typeof socket>) => {
     const started = await startTestService(join(root, name), sockets, {
-      XDG_STATE_HOME: join(root, "state"),
-      LOCALAPPDATA: join(root, "local"),
+      HERDR_WORLD_INSTANCE_REGISTRY_DIR: join(root, "instances"),
     });
     running.push(started);
     await started.connected;

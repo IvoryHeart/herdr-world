@@ -78,3 +78,32 @@ Snapshot projection yields through an injected native task-turn port rather than
 the elapsed-time scheduler. Manual fixture time may stay stopped while I/O makes
 progress; lease validation still follows the yield. Real snapshot regressions
 cover stopped scheduling and retirement during a held construction turn.
+
+## Root-cause testing (#1487)
+
+Checker supervision takes process and time ports. Logic cases use a resistant
+fake group with inherited pipes and a manually advanced clock; two native port
+sanity cases retain stdout/status and real process-group drain evidence. Runtime
+startup is observed before advancing a simulated timeout. Usage inventory fixtures
+set timestamps and mtimes explicitly instead of racing file creation against a
+module-evaluation timestamp. Test discovery stays within each case's folder unless
+peers explicitly select one scratch registry, on every platform.
+
+Chat delivery deadlines likewise use the injected clock/scheduler and await an
+observable completion callback instead of a fixed number of IO turns. The shared
+scheduler retains optional unref so the production process lifetime is unchanged.
+
+The native Town frame/raster suite moves intact from behaviour shards to the
+existing latency workflow's performance lane. Three serial runs must each pass
+quiet CPU admission and every original budget; no retry or averaging hides failure.
+The workflow remains advisory and adds no runner job. Explicit browser paths must
+report the reviewed Chrome version before fixtures start.
+
+The dense production-context reproduction exposed a positive feedback loop:
+independent real-time input continues for longer on slower rendering, generating
+an increasingly large RPC backlog. Functional production/concurrent runs use 16 ordered native key
+pairs per phase through the same CDP/Bridge boundary and retain every assertion,
+work ceiling and the 5,000 ms RPC deadline. Unit tests control completion and
+failure with promises. Latency/tracing retains the original independent 75 ms
+producer; latency CI requires quiet admission. This changes workload scheduling,
+without removing the native workload or substituting a product/view workaround.

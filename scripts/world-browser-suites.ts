@@ -17,6 +17,11 @@ export const worldLatencyTrendSuites = [
   "ConcurrentContexts",
 ].map((name) => `web/src/world/${name}.test.ts`);
 
+/** Native frame/raster budgets run repeatedly on a quiet pinned setup. */
+export const worldPerformanceSuites = [
+  "web/src/world/town/TownFrameBudget.browser.test.ts",
+];
+
 // Opt-in report suites share the browser queue but never join protected shards.
 export const reportBrowserSuites = [
   "scripts/town-golden.browser.test.ts",
@@ -47,7 +52,9 @@ export function discoverWorldBrowserSuites(
     .map((path) => `web/src/world/${path}`);
 }
 
-export const worldBrowserSuites = discoverWorldBrowserSuites();
+export const worldBrowserSuites = discoverWorldBrowserSuites().filter(
+  (file) => !worldPerformanceSuites.includes(file),
+);
 export const worldBrowserCasePlan = planWorldBrowserCases(
   worldBrowserSuites,
   timings.cases,
@@ -74,7 +81,10 @@ export const worldBrowserParallelSuites = [
   "windows/WindowFrame",
   "windows/WorldPanel",
 ].map((name) => `web/src/world/${name}.test.ts`);
-export const worldBrowserIgnorePattern = ignorePattern(worldBrowserSuites);
+export const worldBrowserIgnorePattern = ignorePattern([
+  ...worldBrowserSuites,
+  ...worldPerformanceSuites,
+]);
 
 /**
  * Chrome-driven suites outside World. CI runs them in their own job of the
@@ -108,6 +118,7 @@ export const webBrowserSuites = [
 /** Everything the browser workflow runs, for repository validation to skip. */
 export const browserWorkflowIgnorePattern = ignorePattern([
   ...worldBrowserSuites,
+  ...worldPerformanceSuites,
   ...webBrowserSuites,
 ]);
 
@@ -136,7 +147,7 @@ export function selectWorldBrowserShard(shard?: string): string[] {
 
 export async function assertWorldBrowserInventory(
   root = process.cwd(),
-  suites = worldBrowserSuites,
+  suites = [...worldBrowserSuites, ...worldPerformanceSuites],
 ) {
   const actual: string[] = [];
   for await (const path of new Bun.Glob("**/*.test.{ts,tsx}").scan({
@@ -198,7 +209,12 @@ export function includesBrowserSuites(
 ): boolean {
   return includesSuites(
     args,
-    [...webBrowserSuites, ...worldBrowserSuites, ...reportBrowserSuites],
+    [
+      ...webBrowserSuites,
+      ...worldBrowserSuites,
+      ...worldPerformanceSuites,
+      ...reportBrowserSuites,
+    ],
     root,
   );
 }

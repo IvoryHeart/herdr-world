@@ -1,3 +1,4 @@
+import { nativeInputMode, SCRIPTED_INPUT_COUNT } from "./scriptedInput";
 import {
   launchTestBrowser,
   type TestBrowser,
@@ -82,6 +83,10 @@ export function registerProductionContextTests(group: ProductionContextGroup) {
       let stalledResponseVerified = false;
       let basedRefreshVerified = false;
       const admission = new WorldSnapshotAdmission();
+      // A wall-clock producer adds more work the slower a machine gets. Keep
+      // that native cadence in the quiet latency lane; behaviour has a finite
+      // completion-driven workload through the same native input/RPC boundary.
+      const inputMode = nativeInputMode(Bun.env);
       const diagnostic = Boolean(Bun.env.WORLD_TRACE_PREFIX);
       const traceTimeline = diagnostic && Bun.env.WORLD_TIMINGS_ONLY !== "1";
       const serviceTasks: { stage: string; beginAt: number; endAt: number }[] =
@@ -297,6 +302,7 @@ export function registerProductionContextTests(group: ProductionContextGroup) {
             ).json()) as { type: string; webSocketDebuggerUrl: string }[];
             await command({
               action: "start",
+              inputMode,
               timings: diagnostic,
               profile: Bun.env.WORLD_PROFILE === "1",
               slowdown: Number(Bun.env.WORLD_CPU_RATE ?? 1),
@@ -659,6 +665,11 @@ export function registerProductionContextTests(group: ProductionContextGroup) {
             ),
           ).toBe(true);
           expect(observed.acknowledgements).toHaveLength(sent.length);
+          if (inputMode === "scripted")
+            for (const stage of ["initial", "refresh"])
+              expect(
+                sent.filter((input) => input.phase === stage),
+              ).toHaveLength(SCRIPTED_INPUT_COUNT);
           const intents = new Map(
             inputs.map((input, index) => [input.id, sent[index]!]),
           );

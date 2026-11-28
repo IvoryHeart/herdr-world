@@ -75,3 +75,32 @@ but pixel, animation and native performance checks SHALL retain their real rende
 - **THEN** all concurrent padded peak reservations and the supervisor reserve SHALL fit the existing hard memory envelope
 - **AND** failure or cancellation SHALL stop admission and drain all started work
 - **AND** splitting core controls SHALL retain every maintained fault exactly once
+
+### Requirement: Deterministic and sealed test boundaries
+
+Maintained tests SHALL retain every scenario, assertion and budget while testing
+logic through fake process, server and browser ports and injected time. Native
+sanity journeys SHALL be short and independent. Each case SHALL own a temporary
+folder and isolated registry and ports. Local Linux x64 and CI browser gates SHALL
+use the reviewed Chrome pin, including explicitly selected executable paths.
+
+#### Scenario: A checker deadline expires
+- **WHEN** a logic test exercises checker timeout or cancellation
+- **THEN** it SHALL advance an injected scheduler and observe group termination and pipe drain without racing operating-system process startup
+- **AND** native sanity checks SHALL retain real output/status and process-group cleanup evidence
+
+#### Scenario: Test services discover peers
+- **WHEN** a service test creates independent services
+- **THEN** each SHALL use its own scratch registry even when platform state roots are supplied
+- **AND** peer tests SHALL opt into a common scratch registry explicitly
+
+#### Scenario: Native performance measurement
+- **WHEN** frame or raster budgets execute
+- **THEN** a separate performance lane SHALL retain their original cases, assertions and limits on the pinned browser and quiet setup
+- **AND** every one of three serial measurements SHALL pass, without retry or averaging away failure
+- **AND** a busy setup SHALL refuse measurement
+
+#### Scenario: A behaviour phase runs slowly
+- **WHEN** a production-context functional phase takes longer under CPU pressure
+- **THEN** its finite native input workload SHALL be gated by delivery rather than grow with elapsed time
+- **AND** the original independent input cadence SHALL remain in the quiet latency lane with all RPC deadlines and workload assertions retained
