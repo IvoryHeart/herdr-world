@@ -26,7 +26,7 @@ import { WorktreeLocationDialog } from "./WorktreeLocationDialog";
 import { WorktreeOpenDialog } from "./WorktreeOpenDialog";
 import { WorkspaceAutoSyncDialog } from "./WorkspaceAutoSyncDialog";
 import { worktreeCreationSource } from "../worktree";
-import { WorktreeLifecycleDialog } from "./WorktreeLifecycleDialog";
+import { LazyWorktreeLifecycleDialog } from "./LazyWorktreeLifecycleDialog";
 import { isWorkspacePinned } from "../workspacePins";
 import {
   workspaceDisplayName,
@@ -289,7 +289,7 @@ export function ContextMenu({
     />
   );
   const lifecycleDialog = (
-    <WorktreeLifecycleDialog
+    <LazyWorktreeLifecycleDialog
       open={!!lifecycleWorkspaceId}
       workspaceId={lifecycleWorkspaceId}
       onClose={() => setLifecycleWorkspaceId(null)}

@@ -71,7 +71,7 @@ import {
   type WindowArrangementControl,
 } from "./WindowArrangementMenu";
 import { WorktreeHooksDialog } from "./WorktreeHooksDialog";
-import { WorktreeLifecycleDialog } from "./WorktreeLifecycleDialog";
+import { LazyWorktreeLifecycleDialog } from "./LazyWorktreeLifecycleDialog";
 import { WorktreeLocationDialog } from "./WorktreeLocationDialog";
 import { WorktreeOpenDialog } from "./WorktreeOpenDialog";
 import { worktreeCommandActions } from "./worktreeCommandActions";
@@ -1353,7 +1353,7 @@ function OwnedCommandCombobox({
         workspaceId={locationWorkspaceId}
         onClose={() => setLocationWorkspaceId(null)}
       />
-      <WorktreeLifecycleDialog
+      <LazyWorktreeLifecycleDialog
         open={operationalShortcutsEnabled && !!lifecycleWorkspaceId}
         workspaceId={lifecycleWorkspaceId}
         onClose={() => setLifecycleWorkspaceId(null)}

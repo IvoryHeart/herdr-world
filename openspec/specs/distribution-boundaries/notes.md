@@ -29,7 +29,9 @@
 - `docs/evidence/`
 - `web/*.html`
 - `web/*.test.ts`
-- `web/vite.config.ts`
+- `web/vite.config.ts` (one `world-startup` chunk for app modules that Town's first load shares with lazy views; no public source maps, because they would exceed the asset budget and carry the builder's folders; `bun scripts/web-bundle-report.ts` builds hidden maps locally)
+- `web/src/world/startupImports.test.ts` (Desk, the Groups body, Apartments and worktree dialogs stay out of Town's first load)
+- `web/src/world/groups/GroupsWindow.tsx`, `web/src/world/groups/GroupsBody.tsx`, `web/src/world/apartments/ApartmentsHost.tsx`, `web/src/components/LazyWorktreeLifecycleDialog.tsx` (load on first open)
 - `web/public/`
 - `server/src/features/`
 - `server/src/features/contract.ts`
