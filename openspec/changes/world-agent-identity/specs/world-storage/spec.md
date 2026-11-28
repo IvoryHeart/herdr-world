@@ -19,11 +19,19 @@ World SHALL store each agent as an `agent` entity in the single-model `entities`
 
 ### Requirement: One store for agent and place appearance
 
-World SHALL keep each agent's name, colour, look, status text and placement as fields of its agent entity, and each host's, room's and tab's own colour, spot and status text as fields of a place entity, in the single-model facts table. These SHALL replace the `board_colors` and `board_appearance` stores and the Town desk and room pin stores once their rows are copied. No view SHALL keep a second copy of these fields. Closing or losing a terminal, or closing a tab, SHALL NOT delete its colour, look, status text or desk pin; the row SHALL be kept and hidden, and a reused tab or pane ID SHALL NOT show it.
+World SHALL keep each agent's name, colour, look, status text and placement as fields of its agent entity, and each host's, room's and tab's own colour, spot and status text as fields of a place entity, in the single-model facts table. These SHALL replace the `board_colors` and `board_appearance` stores and the Town desk and room pin stores once their rows are copied. No view SHALL keep a second copy of these fields.
 
 #### Scenario: Terminal closes
 - **WHEN** an agent's terminal closes and the agent becomes away
 - **THEN** its colour, look and status text stay on its record and show again when it is resumed
+
+### Requirement: Closing hides appearance instead of deleting it
+
+Closing or losing a terminal, or closing a tab, SHALL NOT delete its colour, look, status text or desk pin; the row SHALL be kept and hidden, and a reused tab or pane ID SHALL NOT show it.
+
+#### Scenario: Reused tab ID
+- **WHEN** a tab with a chosen colour closes and a new tab later gets the same native ID
+- **THEN** the old colour row is kept, hidden, and not shown on the new tab
 
 ### Requirement: Lossless migration of agent facts
 
