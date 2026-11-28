@@ -146,6 +146,7 @@ test.skipIf(!chrome)(
           server.url.href,
         ],
         { stdout: "ignore", stderr: Bun.file(log) },
+        { exclusive: true },
       );
       await child.start();
       const ready = await waitForBrowserFixture(

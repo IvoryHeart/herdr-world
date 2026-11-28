@@ -16,6 +16,7 @@ import { chromeRenderingFlags } from "./chromeRendering";
 import { connectCapture } from "./connectCapture";
 import { captureScene, resizeCapture } from "./captureScene";
 import { captureResumeViewports } from "./resumeVisualCapture";
+import { sharedBrowserBuild } from "./sharedBrowserBuild";
 
 export function registerCaptureReadinessTests() {
   const chrome =
@@ -82,7 +83,7 @@ export function registerCaptureReadinessTests() {
       let child: TestBrowser | undefined;
       let connection: Awaited<ReturnType<typeof connectCapture>> | undefined;
       try {
-        const build = await Bun.build({
+        const build = await sharedBrowserBuild(import.meta.path, {
           entrypoints: [join(import.meta.dir, "CaptureReadiness.browser.tsx")],
           outdir: dir,
           target: "browser",

@@ -29,3 +29,32 @@ test("closing after a slot transfer refuses admission before context creation", 
   capacity.close();
   await expect(transferred).rejects.toThrow("Browser closed");
 });
+
+test("browser-wide tracing drains earlier contexts and blocks later contexts in FIFO order", async () => {
+  const capacity = browserCapacity(2);
+  const first = await capacity.acquire();
+  const other = await capacity.acquire();
+  const order: string[] = [];
+  const trace = capacity.acquire(true).then((release) => {
+    order.push("trace");
+    return release;
+  });
+  const later = capacity.acquire().then((release) => {
+    order.push("later");
+    return release;
+  });
+  first();
+  await Promise.resolve();
+  expect(order).toEqual([]);
+  other();
+  const endTrace = await trace;
+  expect(order).toEqual(["trace"]);
+  endTrace();
+  (await later)();
+  expect(order).toEqual(["trace", "later"]);
+  const end = await capacity.acquire(true);
+  const rejected = capacity.acquire(true);
+  capacity.close();
+  await expect(rejected).rejects.toThrow("Browser closed");
+  end();
+});

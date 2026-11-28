@@ -1,8 +1,17 @@
 /** Town renderer counters for development tools and browser tests (townRenderer.ts). */
-import type { ViewTrace } from "../devtools/flag";
+import { DEVTOOLS, type ViewTrace } from "../devtools/flag";
 import { worldRendererCountersEnabled } from "../devtools/renderer";
 import type { TownLevel } from "./townCamera";
 import type { TownPlaceKey } from "./townPlaces";
+
+/** Record startup failure in development traces and browser diagnostics. */
+export function townRendererFailed(error: unknown, trace: ViewTrace) {
+  if (DEVTOOLS)
+    trace.record("error", { where: "renderer", message: String(error) });
+  if (window.__HERDR_TOWN_RENDERER__)
+    window.__HERDR_TOWN_RENDERER__.lastError =
+      error instanceof Error ? error.message.slice(0, 160) : "renderer failed";
+}
 
 /** Why Town drew a frame and what it asked for next (development trace). */
 export type TownFrameTrace = {

@@ -318,14 +318,17 @@ export function installTestClock(
       ).__herdrTestWait?.();
       const end = now + limit;
       if (!running) await runTimers();
+      let steps = 0;
       while (!done()) {
         if (settled >= end) throw new Error(message);
         await progress();
         // Browser layout/ResizeObserver and GPU presentation are native events.
-        // A manual fixture drives logical time, then lets the browser present
-        // that state before reading an observable condition again.
+        // Batch logical frames before asking for native presentation. Tying
+        // each 16 ms test step to a real frame made fake deadlines real waits.
+        // Task/microtask ordering still holds within every logical frame.
         if (
           !running &&
+          ++steps % 8 === 0 &&
           typeof window !== "undefined" &&
           target === window &&
           real.requestAnimationFrame

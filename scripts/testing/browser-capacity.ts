@@ -4,26 +4,36 @@ export function browserCapacity(limit: number) {
     throw new Error("Invalid browser capacity");
   let active = 0,
     closed = false;
-  const waiting: { resolve(): void; reject(error: Error): void }[] = [];
+  const waiting: {
+    size: number;
+    resolve(): void;
+    reject(error: Error): void;
+  }[] = [];
+  const drain = () => {
+    while (!closed && waiting.length && active + waiting[0]!.size <= limit) {
+      const next = waiting.shift()!;
+      active += next.size;
+      next.resolve();
+    }
+  };
   return {
-    async acquire() {
+    async acquire(exclusive = false) {
       if (closed) throw new Error("Browser closed");
-      if (active === limit)
-        await new Promise<void>((resolve, reject) =>
-          waiting.push({ resolve, reject }),
-        );
-      else active++;
+      const size = exclusive ? limit : 1;
+      await new Promise<void>((resolve, reject) => {
+        waiting.push({ size, resolve, reject });
+        drain();
+      });
       if (closed) {
-        active--;
+        active -= size;
         throw new Error("Browser closed");
       }
       let released = false;
       return () => {
         if (released) return;
         released = true;
-        const next = waiting.shift();
-        if (next) next.resolve();
-        else active--;
+        active -= size;
+        drain();
       };
     },
     close() {

@@ -134,6 +134,7 @@ test.skipIf(!chrome).each(["home-pan", "zoom", "desk-pan", "composer"])(
           server.url.href,
         ],
         { stdout: "ignore", stderr: Bun.file(log) },
+        { exclusive: true },
       );
       await child.start();
       await waitForBrowserFixture(

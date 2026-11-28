@@ -32,7 +32,9 @@ import { createTownTopology } from "./townRendererTopology";
 import type { TownSceneFrame, TownSceneState } from "./scene/townSceneDiff";
 import { diagnostics, type TownFrameTrace } from "./townDiagnostics";
 export type { TownFrameTrace } from "./townDiagnostics";
-import { DEVTOOLS, type ViewTrace } from "../devtools/flag";
+export { townRendererFailed } from "./townDiagnostics";
+import { DEVTOOLS } from "../devtools/flag";
+import { createTownRaster } from "./townRenderSurface";
 
 import {
   TownActors,
@@ -151,18 +153,6 @@ const kindOf = (agent: OfficeAgent) => {
 export const nextTownTask = () =>
   new Promise<void>((resolve) => window.setTimeout(resolve, 0));
 
-/**
- * Record a renderer that failed to start: in the devtools trace (development
- * builds only) and for browser checks.
- */
-export function townRendererFailed(error: unknown, trace: ViewTrace) {
-  if (DEVTOOLS)
-    trace.record("error", { where: "renderer", message: String(error) });
-  if (window.__HERDR_TOWN_RENDERER__)
-    window.__HERDR_TOWN_RENDERER__.lastError =
-      error instanceof Error ? error.message.slice(0, 160) : "renderer failed";
-}
-
 export async function createTownRenderer(
   element: HTMLElement,
   onFrame: (camera: TownCamera, level: TownLevel) => void,
@@ -227,6 +217,7 @@ export async function createTownRenderer(
   canvas.style.display = "block";
   canvas.style.touchAction = "none";
   element.replaceChildren(canvas);
+  const surface = createTownRaster();
 
   await nextTownTask();
   const sprites = buildTownSprites();
@@ -742,12 +733,16 @@ export async function createTownRenderer(
       // Animation due now renders, unless typing has paused it.
       !(animated && frames?.motionAllowed && ambient.next === clock);
     forced = false;
-    if (!onlyFilling || now - lastRender >= TOWN_FILL_RENDER_MS) {
-      lighting.render(townSkyIsClear(sky));
-      app.renderer.render(app.stage);
-      lastRender = now;
-    }
-    onDrawn?.(materializing);
+    const render = !onlyFilling || now - lastRender >= TOWN_FILL_RENDER_MS;
+    surface.draw(
+      render,
+      () => {
+        lighting.render(townSkyIsClear(sky));
+        app.renderer.render(app.stage);
+      },
+      () => onDrawn?.(materializing),
+    );
+    if (render) lastRender = now;
     stats.level = level;
     stats.zoom = camera.z;
     stats.camera = { x: camera.x, y: camera.y, ...camera.bounds };
@@ -979,6 +974,7 @@ export async function createTownRenderer(
     destroy() {
       if (disposed) return;
       disposed = true;
+      surface.destroy();
       cancelAmbient();
       dragEffects.clear();
       motion.removeEventListener("change", onMotion);

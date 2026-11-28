@@ -242,6 +242,7 @@ export async function browserSession(
     const context = contexts.get(id);
     if (!context) return;
     contexts.delete(id);
+    const teardownStarted = performance.now();
     let verdict = code;
     try {
       const snapshot = await context.page
@@ -276,6 +277,7 @@ export async function browserSession(
         url: context.url,
         launchMs,
         totalMs: performance.now() - context.started,
+        teardownMs: performance.now() - teardownStarted,
         ...context.phases,
       };
       appendFileSync(
@@ -308,6 +310,7 @@ export async function browserSession(
         start?: string;
         build?: BuildRequest;
         focusEmulation?: boolean;
+        exclusive?: boolean;
         tls?: boolean;
         proxyServer?: string;
         proxyBypassList?: string;
@@ -376,7 +379,7 @@ export async function browserSession(
         return Response.json({});
       }
       const began = performance.now();
-      const release = await slots.acquire();
+      const release = await slots.acquire(data.exclusive);
       const admitted = performance.now();
       const args = data.args!;
       const browserContextId = await browser
@@ -599,6 +602,8 @@ export async function launchTestBrowser(
   _options?: unknown,
   mode: {
     focusEmulation?: boolean;
+    /** Browser-wide tracing must not observe another case's tabs. */
+    exclusive?: boolean;
     proxyServer?: string;
     proxyBypassList?: string;
   } = {},

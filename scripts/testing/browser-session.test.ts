@@ -45,7 +45,11 @@ test("case teardown disposes its context once and waits for acknowledgement", as
   try {
     process.env.HERDR_TEST_BROWSER = server.url.href;
     process.env.HERDR_TEST_BROWSER_TOKEN = "test-session";
-    const handle = await launchTestBrowser(["chrome", "about:blank"]);
+    const handle = await launchTestBrowser(
+      ["chrome", "about:blank"],
+      undefined,
+      { exclusive: true },
+    );
     await handle.start();
     await handle.start();
     expect(handle.devtoolsPort).toBe("1234");
@@ -57,7 +61,10 @@ test("case teardown disposes its context once and waits for acknowledgement", as
     expect(await handle.exited).toBe(0);
     expect(handle.exitCode).toBe(0);
     expect(requests).toHaveLength(4);
-    expect(requests).toContainEqual({ args: ["chrome", "about:blank"] });
+    expect(requests).toContainEqual({
+      args: ["chrome", "about:blank"],
+      exclusive: true,
+    });
     expect(requests).toContainEqual({ watch: "case-a" });
     expect(requests).toContainEqual({ start: "case-a" });
     expect(requests).toContainEqual({ context: "case-a" });

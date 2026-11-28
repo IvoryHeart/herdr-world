@@ -32,6 +32,7 @@
 - `web/src/world/town/townQuietWork.ts`
 - `web/src/world/town/useTownQuiet.ts`
 - `web/src/world/town/townRendererActors.ts`
+- `web/src/world/town/townRenderSurface.ts` submits raster work immediately in production; `web/src/world/testing/townRenderSurface.ts` coalesces manual-clock fixture submissions on native frames, keeping the real scene, camera, diagnostics and draw acknowledgements.
 - `web/src/world/town/TownWorldLayer.tsx`, `web/src/world/town/TownStepBubble.tsx`, `web/src/world/town/TownBoard.tsx`; plaques: `web/src/world/town/TownRoomPlaque.tsx`, `web/src/world/town/townPlaqueCard.ts` (one open card); runtime icons: `web/src/world/town/TownRuntimeIcon.tsx`, `web/src/world/town/TownRoomOverviewCard.tsx` (a room's overview card, its icon a press of its own), `web/src/world/town/townMoveMenu.ts` (menu words)
 - `web/src/world/town/townLayout.ts`; civic row on every form factor (#1351): `web/src/world/town/townLots.ts`, `web/src/world/town/townLibraryLot.ts`, `web/src/world/town/townObservatoryLot.ts`; the library and observatory signs (a phone hangs the library's below the observatory's, right of the center plaque): `web/src/world/town/townCivicSigns.ts`; places: `web/src/world/town/townPlaces.ts`, `web/src/world/PlaceWindow.tsx`
 - Bin and bus: `web/src/world/town/TownBusLayer.tsx` (the next trip's route report, the bus's speed and distance plate), `web/src/world/town/townBus.ts` (`townTourRouteM`, `townBusSign`, metres per pixel; `townBinStopOf`/`townBinStopAt`, the drop stop as a building corner), `web/src/world/town/townBinDrop.ts` and `TownCanvas.tsx` (the stop a drag was dropped on, kept as the bin entry's `stop` in `shared/bin.ts`), `web/src/world/town/townBusDrive.ts` (`townBusTimeline`, `townBusLeft`), `web/src/world/bin/binStore.ts` (`binBusClock`, the countdown labels); tests `townBus.test.ts`, `townBusCountdown.dom.test.ts`, `web/src/world/bin/binStore.test.ts`
@@ -39,6 +40,7 @@
 
 **Tests:**
 
+- `web/src/world/testing/townRenderSurface.test.ts` (native submission, coalescing and disposal); `web/src/world/testing/testClock.test.ts` (timer/task/frame ordering).
 - `web/src/world/town/TownCanvas.test.ts`, `web/src/world/town/TownCanvas.fold.test.ts`
 - `web/src/world/town/townLayout.test.ts`; places: `web/src/world/town/townPlaces.test.ts`, `web/src/world/town/townPlaces.browser.ts` (TownCanvas `places` cases); town center ring: `web/src/world/town/townCenterBuildings.dom.test.ts`
 - `web/src/world/town/townReceptionFilter.test.ts`

@@ -143,6 +143,12 @@ Immutable fixture bundles are built once per job and reused across cases;
 same downloaded Chrome pin as CI when `CHROME_BIN` is unset, preserving the
 sandbox through the host's installed Chrome AppArmor profile when needed.
 
+Manual-clock Town fixtures step the real scene and camera on injected frames.
+Their raster port submits the latest state once per native frame and acknowledges
+only the actual draw; scene budgets and gap diagnostics still run every step.
+Production submits every requested raster immediately. Native frame-budget and
+transport performance fixtures retain the production renderer and clock.
+
 Run `bun run test:timings` for isolated sequential static, unit, World browser,
 web browser and verification measurements. It acquires the machine check slot
 before `/usr/bin/time`, so queue delay is reported separately from lane work.
