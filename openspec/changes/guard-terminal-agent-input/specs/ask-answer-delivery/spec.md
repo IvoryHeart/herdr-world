@@ -45,7 +45,7 @@ Immediately before typing an ask question or answer, World SHALL check only the 
 
 ### Requirement: Saved answers survive a proven World restart
 
-When World restarts with a saved answer waiting or a question still open, it SHALL deliver that answer only after proving that the original harness session still runs at the captured terminal. On Herdr TUI the proof SHALL be the same connection, pane and terminal, the same harness-reported session, and the same conversation scheme and session fingerprint, checked before and after the foreground check. On herdr-core it SHALL be the same core, terminal process and foreground leader process and name; a recycled generation is accepted only with this proof. The proof SHALL repeat at answer recording, at dispatch and before input, and SHALL add no stored state.
+When World restarts with a saved answer waiting or a question still open, it SHALL deliver that answer only after proving that the original harness session still runs at the captured terminal. On Herdr TUI the proof SHALL be the same connection, pane and terminal, the same harness-reported session, and the same conversation scheme and session fingerprint, checked before and after the foreground check. On herdr-core it SHALL be the same core and terminal (address and creation time) and the same harness and harness session ID that the foreground program names on its command line (Claude `--session-id`, `--resume` or `-r`, not `--fork-session`; Codex `resume`), recorded with the question as a session fingerprint; a recycled generation is accepted only with this proof. Process IDs, executable names and per-run occupancy counters SHALL NOT count as proof, and a program that names no session SHALL NOT receive the answer after a restart. The proof SHALL repeat at answer recording, at dispatch and before input.
 
 #### Scenario: Original session resumes after a World restart
 
@@ -54,7 +54,7 @@ When World restarts with a saved answer waiting or a question still open, it SHA
 
 #### Scenario: Different or unproved session after a World restart
 
-- **WHEN** another session, process or harness now runs at the captured terminal, or the runtime cannot supply the proof
+- **WHEN** another session or harness now runs at the captured terminal, even one reusing the original process IDs and executable name, or the runtime cannot supply the proof
 - **THEN** World types nothing and shows Not sent with a plain restart reason, Copy answer and the full `herdr-world ask get <id>` command
 - **AND** a later check or program change never revives that delivery
 

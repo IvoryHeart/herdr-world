@@ -1,5 +1,5 @@
 import { CoreOperationFence } from "./fence";
-import { coreOccupantFingerprint } from "./occupant";
+import { coreOccupantFingerprint, coreSessionProof } from "./occupant";
 export { coreOccupantFingerprint } from "./occupant";
 import type { ReadyRuntimeLease } from "../connections/manager";
 import type { CoreConnectionRuntime } from "./runtime";
@@ -72,6 +72,10 @@ function cliHost(
             }
           : {}),
         fingerprint,
+        ...(() => {
+          const session = coreSessionProof(coreId, record, foreground);
+          return session ? { session } : {};
+        })(),
       };
     },
     delivery: (address, fingerprint, foreground) => {

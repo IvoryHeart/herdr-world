@@ -18,6 +18,6 @@
 
 ## Follow-up #1451 (saved answers across a World restart)
 
-- [x] 4.1 Prove the original harness session after a World restart on Herdr TUI and herdr-core at recording, dispatch and input; refuse everything else with a plain reason and no stored state.
+- [x] 4.1 Prove the original harness session after a World restart on Herdr TUI and herdr-core at recording, dispatch and input; refuse everything else with a plain reason. Core proof is the harness session ID on the foreground command line, saved with the question; PIDs and names never count.
 - [x] 4.2 Keep possible sends uncertain without automatic replay; an explicit Send again reaches only a proven session.
 - [x] 4.3 Pass restart/session matrices on both runtimes, a desktop and phone Reception > Outbox fixture and quick typecheck; update contracts, help and consumer mappings.

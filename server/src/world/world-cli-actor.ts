@@ -40,6 +40,8 @@ export type CoreCliOccupant = {
   foreground?: { pid: number; name: string; argv?: string[] };
   /** `coreOccupantFingerprint`: core, address, pid, argv, template. */
   fingerprint: string;
+  /** `coreSessionProof`: the harness session the foreground program names. */
+  session?: string;
 };
 
 export type CorePreparedDelivery = {

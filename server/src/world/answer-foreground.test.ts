@@ -19,6 +19,8 @@ afterEach(async () => {
 
 /** A World run before the current one, over the same stores and runtime. */
 const EARLIER_RUN = "synthetic-earlier-run";
+const ORIGINAL_SESSION = "00000000-0000-4000-8000-0000000000a1";
+const OTHER_SESSION = "00000000-0000-4000-8000-0000000000b2";
 
 async function fixture(
   runtime: "core" | "tui",
@@ -202,15 +204,27 @@ async function fixture(
       recipients: recipientsFor(EARLIER_RUN),
       now: f.clock.now,
     }),
-    /** Another harness session takes the asker's terminal. */
+    /**
+     * Another harness session takes the asker's terminal; on core it reuses
+     * the foreground PID and executable name.
+     */
     replaceSession() {
       if (runtime === "core")
         world.fake.foreground(terminal, {
-          pid: 7100,
+          pid: 6000,
           name: "claude",
-          argv: ["claude"],
+          argv: ["claude", "--resume", OTHER_SESSION],
         });
       else f.info.agent_session.value = `${f.info.agent_session.value}-other`;
+    },
+    /** `claude --resume` of the original session, as a new process. */
+    resumeSession() {
+      if (runtime === "core")
+        world.fake.foreground(terminal, {
+          pid: 7200,
+          name: "claude",
+          argv: ["claude", "--resume", ORIGINAL_SESSION],
+        });
     },
     async check(kind?: string) {
       const entry = (await f.storage.outbox.forRecord("q-foreground")).find(
@@ -323,14 +337,38 @@ test("TUI without foreground information retains saved-answer delivery", async (
   expect(f.prompts).toHaveLength(1);
 });
 
+test("core: a program that names no session gets no saved answer after a World restart", async () => {
+  const f = await fixture("core", undefined, true);
+  await f.answer(f.recordEarlier);
+  await f.world.settle();
+  await f.dispatcher.wake();
+  const entry = (await f.f.storage.outbox.forRecord("q-foreground")).find(
+    (e) => e.kind === "world.ask.deliver-answer",
+  )!;
+  expect(entry.state).toBe("refused");
+  expect(entry.evidence?.reason).toBe(RESTART_UNPROVED);
+  expect(f.world.fake.deliveredInput).toHaveLength(0);
+});
+
 for (const runtime of ["core", "tui"] as const)
   for (const when of ["before", "after"] as const)
-    for (const same of [true, false])
-      test(`${runtime}: an answer ${when === "before" ? "saved before" : "given after"} a World restart reaches ${same ? "only the proven original" : "no replacement"} session`, async () => {
-        const f = await fixture(runtime, undefined, true);
+    for (const session of runtime === "core"
+      ? (["kept", "resumed", "different"] as const)
+      : (["kept", "different"] as const))
+      test(`${runtime}: an answer ${when === "before" ? "saved before" : "given after"} a World restart reaches ${session === "different" ? "no replacement" : `only the proven original (${session})`} session`, async () => {
+        const same = session !== "different";
+        const f = await fixture(
+          runtime,
+          {
+            name: "claude",
+            argv: ["claude", "--session-id", ORIGINAL_SESSION],
+          },
+          true,
+        );
         if (when === "before") await f.answer(f.recordEarlier);
         // World restarts; the runtime and its generation number carry on.
-        if (!same) f.replaceSession();
+        if (session === "different") f.replaceSession();
+        if (session === "resumed") f.resumeSession();
         await f.world.settle();
         if (when === "after") await f.answer();
         await f.dispatcher.wake();

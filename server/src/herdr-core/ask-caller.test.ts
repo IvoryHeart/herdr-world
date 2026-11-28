@@ -84,19 +84,19 @@ const locator =
   (roots: readonly number[]): CallerProcess[] | null =>
     chain.some((entry) => roots.includes(entry.pid)) ? chain : null;
 
-const agentFields = (pid: number) => ({
-  argv: ["/opt/example/bin/claude"],
+const agentFields = (pid: number, args: string[] = []) => ({
+  argv: ["/opt/example/bin/claude", ...args],
   pid,
   foreground: {
     pid,
     name: "claude",
-    argv: ["/opt/example/bin/claude"],
+    argv: ["/opt/example/bin/claude", ...args],
     cwd: "/tmp/example",
   },
 });
 
-async function agent(w: World, pid: number, id = "box") {
-  const address = w.fake.create(agentFields(pid));
+async function agent(w: World, pid: number, id = "box", args: string[] = []) {
+  const address = w.fake.create(agentFields(pid, args));
   w.fake.report(address, { state: "working", app: "claude-code" });
   await until(
     () =>
@@ -301,8 +301,8 @@ describe("a core asker's recipient (M5)", () => {
       incarnation: "run-1",
       core: () => cores,
     });
-  async function asker(w: World, pid: number) {
-    const address = await agent(w, pid);
+  async function asker(w: World, pid: number, args: string[] = []) {
+    const address = await agent(w, pid, "box", args);
     const cores = source([{ w, id: "box" }]);
     const { actor } = await identifyCaller(
       NO_TUI,
@@ -539,36 +539,103 @@ describe("a core asker's recipient (M5)", () => {
         recipient,
       ),
     ).toMatchObject({ state: "ended" });
-    // An earlier World run's recipient attaches again only for the same core,
-    // terminal process and foreground harness process.
+    // A program that names no harness session cannot prove itself later.
+    expect(recipient.session).toBeUndefined();
     expect(
       await recipientsFor(cores).resolve({
         ...recipient,
         service_incarnation: "run-0",
       }),
-    ).toMatchObject({ state: "attached", restarted: true });
-    for (const changed of [
-      { pid: recipient.pid + 1 },
-      {
-        foreground: {
-          ...recipient.foreground,
-          pid: recipient.foreground.pid + 1,
-        },
-      },
-      { foreground: { ...recipient.foreground, name: "codex" } },
-    ])
-      expect(
-        await recipientsFor(cores).resolve({
-          ...recipient,
-          ...changed,
-          service_incarnation: "run-0",
-        }),
-      ).toEqual({ state: "unconfirmed", reason: RESTART_UNPROVED });
+    ).toEqual({ state: "unconfirmed", reason: RESTART_UNPROVED });
     w.fake.finish(address);
     await w.settle();
     expect(await recipients.resolve(recipient)).toEqual({
       state: "ended",
       reason: "The original terminal ended; use ask get",
+    });
+  });
+
+  test("after a World restart only the session the program names proves the asker", async () => {
+    const original = "00000000-0000-4000-8000-0000000000a1";
+    const different = "00000000-0000-4000-8000-0000000000b2";
+    const w = await world();
+    const { address, actor, cores } = await asker(w, 49_001, [
+      "--session-id",
+      original,
+    ]);
+    const recipient = (await recipientsFor(cores).capture(
+      actor,
+    )) as CoreAnswerRecipient;
+    expect(recipient.session).toMatchObject({
+      scheme: "herdr-core-session-v1",
+    });
+    const intent = (value: unknown) => ({
+      verb: ANSWER_DELIVERY_VERB.name,
+      version: 1,
+      origin: "world.ask.answer",
+      params: { ask_id: "q1", answer_occurrence: "a1" },
+      actor: { kind: "owner" },
+      condition: { awaiting_delivery: true, recipient: value },
+    });
+    expect(isAnswerIntent(intent(recipient))).toBe(true);
+    expect(
+      isAnswerIntent(
+        intent({ ...recipient, session: { ...recipient.session, x: 1 } }),
+      ),
+    ).toBe(false);
+    const earlier = { ...recipient, service_incarnation: "run-0" };
+    const restarted = recipientsFor(cores);
+    expect(await restarted.resolve(earlier)).toMatchObject({
+      state: "attached",
+      restarted: true,
+    });
+    // An earlier recipient without session evidence is not proof.
+    const unproved = { ...earlier };
+    delete unproved.session;
+    expect(await restarted.resolve(unproved)).toEqual({
+      state: "unconfirmed",
+      reason: RESTART_UNPROVED,
+    });
+    const foreground = (pid: number, ...args: string[]) => {
+      w.fake.foreground(address, {
+        pid,
+        name: "claude",
+        argv: ["/opt/example/bin/claude", ...args],
+        cwd: "/tmp/example",
+      });
+      return w.settle();
+    };
+    // A different session that reuses the terminal and foreground PIDs and
+    // the executable name is another asker.
+    for (const args of [
+      ["--resume", different],
+      ["--resume", original, "--fork-session"],
+      ["--continue"],
+      [],
+    ]) {
+      await foreground(49_001, ...args);
+      expect(await restarted.resolve(earlier)).toEqual({
+        state: "unconfirmed",
+        reason: RESTART_UNPROVED,
+      });
+    }
+    // `claude --resume` of the original session, as a new process, is the asker.
+    await foreground(49_777, "--resume", original);
+    expect(await restarted.resolve(earlier)).toMatchObject({
+      state: "attached",
+      restarted: true,
+    });
+    // Another harness naming the same id is not.
+    w.fake.foreground(address, {
+      pid: 49_778,
+      name: "codex",
+      argv: ["codex", "resume", original],
+      cwd: "/tmp/example",
+    });
+    await w.settle();
+    expect(await restarted.resolve(earlier)).toEqual({
+      state: "unconfirmed",
+      reason: RESTART_UNPROVED,
     });
   });
 

@@ -21,6 +21,7 @@
 - `server/src/adapters/herdr-runtime.ts`, `server/src/connections/runtime.ts`
 - `server/src/herdr-core/harness.ts`, `server/src/herdr-core/harness.test.ts`
 - `server/src/herdr-core/ask-caller.ts`
+- `server/src/herdr-core/occupant.ts` (`coreSessionProof`: core session evidence that survives a World restart)
 - `web/src/world/town/AnswerDeliveries.tsx`, `web/src/world/town/AnswerDeliveries.test.ts`
 - `web/src/world/town/answerOutbox.ts`, `web/src/world/town/answerOutbox.test.ts`
 - `web/src/world/town/TownSummaryPanel.tsx`
@@ -83,4 +84,4 @@ The phone core Terminal keeps its Send controls open; desktop draft recovery ope
 
 ## Answers across a World restart
 
-A saved answer, or one given to a question open across a World restart, is sent only after World proves the original harness session still runs at the captured terminal. `ask-recipient.ts` repeats the proof at answer recording, the dispatch fence and the final input guard; nothing new is stored. Herdr TUI needs the same connection, pane, terminal and harness-reported session plus an unchanged conversation fingerprint, so `claude --resume` in the same pane qualifies. herdr-core needs the same core, terminal process and foreground leader; core has no durable session ID, so a resume that started a new process stays Not sent. Otherwise Reception > Outbox shows Not sent with a plain restart reason, Copy answer and `herdr-world ask get <id>`. Possible sends from before the restart stay uncertain and are never replayed; Send again reaches only a proven session. `/?answerContinuityFixture` previews both outcomes with synthetic agents.
+A saved answer, or one given to a question open across a World restart, is sent only after World proves the original harness session still runs at the captured terminal. `ask-recipient.ts` repeats the proof at answer recording, the dispatch fence and the final input guard. Herdr TUI needs the same connection, pane, terminal and harness-reported session plus an unchanged conversation fingerprint, so `claude --resume` in the same pane qualifies. herdr-core needs the same core terminal and the same harness session ID on the foreground program's command line (`coreSessionProof` in `server/src/herdr-core/occupant.ts`, saved as the core recipient's `session` with the question), so `claude --resume <id>` there qualifies; PIDs and names are not proof, and a program that names no session stays Not sent. Otherwise Reception > Outbox shows Not sent with a plain restart reason, Copy answer and `herdr-world ask get <id>`. Possible sends from before the restart stay uncertain and are never replayed; Send again reaches only a proven session. `/?answerContinuityFixture` previews both outcomes with synthetic agents.

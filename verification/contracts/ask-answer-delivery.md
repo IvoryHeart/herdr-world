@@ -24,9 +24,11 @@ World restart with old/missing recipient authority forbids submission unless
 continuity is proved at each resolve (#1451). Herdr TUI needs the same connection,
 pane and terminal and the same harness-reported session before and after the
 foreground check, plus the captured conversation scheme and session fingerprint.
-herdr-core needs the same core and the same terminal process, foreground leader
-PID and name; native IDs or session labels alone are not proof, and legacy core
-tokens stay refused. An owner duplicate decision cannot bypass this rule. Unsent
+herdr-core needs the same core terminal (address, creation time) and the same
+harness session ID on the foreground command line, saved as the recipient's
+session fingerprint; PIDs, names, native IDs or session labels alone are not
+proof, a program naming no session stays refused, and legacy core tokens stay
+refused. An owner duplicate decision cannot bypass this rule. Unsent
 work without proof resolves not-sent, possible sends remain uncertain, and manual
 close retains the actual history.
 
@@ -53,8 +55,9 @@ The Linux-specific caller test does not establish verification on other platform
 processes before claim, after claim, before a native effect, after a native effect,
 and after its receipt. It uses the production Chat source, temporary SQLite
 worker and a synthetic external receiver that records every prompt without
-deduplicating. A pre-send claim is released and then refused without current-run
-authority; a possible send remains uncertain and does not replay. Same-run actual
+deduplicating. A pre-send claim is released and, because the recovering World proves
+the same pane, terminal and harness session (#1451), sent once; a possible send
+remains uncertain and does not replay. Same-run actual
 Chat consumers retain normal sending. `world/effect-restart.test.ts` adds distinct
 actual managers with recycled generations and native/session values across every
 pre-restart phase: the proven same session delivers once, a replaced session

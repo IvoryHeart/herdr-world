@@ -161,6 +161,14 @@ export function createAskRecipients(deps: {
         scheme: "herdr-core-occupant-v1",
         fingerprint: occupant.fingerprint,
       },
+      ...(occupant.session
+        ? {
+            session: {
+              scheme: "herdr-core-session-v1" as const,
+              fingerprint: occupant.session,
+            },
+          }
+        : {}),
       captured_at: deps.clock.now(),
       service_incarnation: deps.incarnation,
       connection_generation: host.generation,
@@ -193,7 +201,7 @@ export function createAskRecipients(deps: {
         reason: "The original herdr-core was replaced; use ask get",
       };
     // Within one World run a reconnect still retires the binding. After a
-    // restart the generation restarts too; process identity below decides.
+    // restart the generation restarts too; session identity below decides.
     if (!restarted && host.generation !== recipient.connection_generation)
       return {
         state: "unconfirmed",
@@ -213,13 +221,14 @@ export function createAskRecipients(deps: {
     const reason = foregroundInputRefusal(occupant.foreground);
     if (reason)
       return { state: "unconfirmed", reason: `Agent not attached. ${reason}` };
-    // Core reports no durable session id, and the occupant fingerprint holds
-    // a per-run counter. Across a restart only the same core, terminal
-    // process and foreground harness process (pid and name) prove the asker.
+    // The occupant fingerprint holds a per-run counter, and PIDs and names
+    // can be reused by another session. Across a restart only the harness
+    // session id the program was started or resumed with, at the same core
+    // terminal, proves the asker; without one the answer stays with ask get.
     if (
       restarted &&
-      (occupant.pid !== recipient.pid ||
-        occupant.foreground.pid !== recipient.foreground.pid ||
+      (!recipient.session ||
+        occupant.session !== recipient.session.fingerprint ||
         occupant.foreground.name !== recipient.foreground.name)
     )
       return { state: "unconfirmed", reason: RESTART_UNPROVED };
