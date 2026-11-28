@@ -173,6 +173,12 @@ test.skipIf(!chrome)(
       // through the page's own session: `Target.sendMessageToTarget` out,
       // `Target.receivedMessageFromTarget` back in.
       let dispatch: (message: any) => void = () => {};
+      const contextWaiters: Array<() => void> = [];
+      const contextCreated = () =>
+        new Promise<void>((resolve) => contextWaiters.push(resolve));
+      const eventWaiters: Array<() => void> = [];
+      const browserEvent = () =>
+        new Promise<void>((resolve) => eventWaiters.push(resolve));
       const { cdp, receive, close } = createPreviewCdp((raw) => {
         const request = JSON.parse(raw);
         const { sessionId, ...body } = request;
@@ -235,6 +241,8 @@ test.skipIf(!chrome)(
       };
       dispatch = (message) => {
         receive(message);
+        if (message.method)
+          for (const changed of eventWaiters.splice(0)) changed();
         if (message.method === "Target.detachedFromTarget") {
           for (const [frameId, context] of contexts) {
             if (context.sessionId === message.params.sessionId)
@@ -298,11 +306,13 @@ test.skipIf(!chrome)(
         if (
           message.method === "Runtime.executionContextCreated" &&
           message.params.context.auxData?.isDefault
-        )
+        ) {
           contexts.set(message.params.context.auxData.frameId, {
             id: message.params.context.id,
             sessionId: message.sessionId,
           });
+          for (const created of contextWaiters.splice(0)) created();
+        }
       };
       preview.on("Target.receivedMessageFromTarget", (event) =>
         dispatch({ ...JSON.parse(event.message), sessionId: event.sessionId }),
@@ -314,6 +324,18 @@ test.skipIf(!chrome)(
         "Runtime.executionContextCreated",
       ])
         preview.on(method, (params) => dispatch({ method, params }));
+      for (const method of [
+        "Page.frameNavigated",
+        "Page.frameAttached",
+        "Page.frameDetached",
+        "Page.domContentEventFired",
+        "Page.loadEventFired",
+        "Page.frameStoppedLoading",
+        "Runtime.executionContextDestroyed",
+      ])
+        preview.on(method, () => {
+          for (const changed of eventWaiters.splice(0)) changed();
+        });
       preview.exited.catch(close);
       const screenshot = async (name: string) => {
         const directory = Bun.env.HERDR_WORLD_TEST_SCREENSHOTS;
@@ -348,11 +370,40 @@ test.skipIf(!chrome)(
         evaluate(
           "(async () => { for (let turn = 0; turn < 50; turn++) await new Promise((resolve) => { const channel = new MessageChannel(); channel.port1.onmessage = resolve; channel.port2.postMessage(0); }); })()",
         );
+      // Re-check the expression only when something changed: the top page
+      // reports a DOM or document-state change or a load (a capture listener
+      // also hears the preview frame's load, since the sandboxed frame runs no
+      // script of its own), or the browser sends an event (a navigation,
+      // frame, context or load). While the paused canary frame holds the
+      // page's promise tasks, the browser events still arrive.
+      const pageChange = () =>
+        evaluate(
+          `new Promise((resolve) => {
+            const changed = () => {
+              observer.disconnect();
+              document.removeEventListener("readystatechange", changed);
+              document.removeEventListener("load", changed, true);
+              resolve(true);
+            };
+            const observer = new MutationObserver(changed);
+            observer.observe(document, {
+              subtree: true,
+              childList: true,
+              attributes: true,
+              characterData: true,
+            });
+            document.addEventListener("readystatechange", changed);
+            document.addEventListener("load", changed, true);
+          })`,
+        ).catch(() => {});
       const wait = async (expression: string, contextId?: FrameContext) => {
         await withBrowserDeadline(
           (async () => {
-            while (!(await evaluate(expression, contextId)))
-              await Bun.sleep(10);
+            for (;;) {
+              const change = Promise.race([browserEvent(), pageChange()]);
+              if (await evaluate(expression, contextId)) return;
+              await change;
+            }
           })(),
           expression,
         );
@@ -395,6 +446,7 @@ test.skipIf(!chrome)(
         await withBrowserDeadline(
           (async () => {
             while (!context) {
+              const created = contextCreated();
               for (const candidate of contexts.values()) {
                 const url = await evaluate("location.href", candidate).catch(
                   () => "",
@@ -407,7 +459,8 @@ test.skipIf(!chrome)(
                   break;
                 }
               }
-              if (!context) await Bun.sleep(10);
+              // A frame's document gets a new execution context: wait for it.
+              if (!context) await created;
             }
           })(),
           "HTML frame context",

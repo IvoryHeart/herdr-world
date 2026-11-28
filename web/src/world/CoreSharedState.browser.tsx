@@ -87,14 +87,18 @@ async function scout(
   until: (leaf: WorldLeafObject) => boolean,
   what: string,
 ): Promise<WorldLeafObject & { kind: "agent" }> {
-  for (let attempt = 0; attempt < 300; attempt++) {
+  // Core's answer arrives over real sockets: look again after each refresh
+  // round trip and real rendering frame, until a real deadline.
+  const end = clock.real.now() + 3_000;
+  while (clock.real.now() < end) {
     const found = (await world()).leaves.find(
       (leaf) => leaf.kind === "agent" && leaf.agentName === "scout",
     );
     if (found && until(found))
       return found as WorldLeafObject & { kind: "agent" };
-    // Core's answer arrives over real sockets: a short real tick per look.
-    await new Promise((resolve) => clock.real.setTimeout(resolve, 10));
+    await new Promise<void>((resolve) =>
+      clock.real.requestAnimationFrame!(() => resolve()),
+    );
   }
   throw new Error(`scout never became ${what}`);
 }

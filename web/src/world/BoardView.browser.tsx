@@ -205,7 +205,7 @@ const check = (condition: boolean, message: string) => {
   if (!condition) failures.push(current ? `${current}: ${message}` : message);
 };
 /** Let `ms` of test time pass: timers fire and frames draw. */
-const settle = (ms = 50) => clock.advance(ms);
+const advanceTime = (ms = 50) => clock.advance(ms);
 /** Advance test time until the condition holds (at most tries × 50 ms). */
 const waitFor = (condition: () => boolean, message: string, tries = 200) =>
   clock.until(condition, message, tries * 50);
@@ -671,7 +671,7 @@ const emptySpot = () => {
 const bringIntoView = async (el: () => Element) => {
   for (let i = 0; i < 12 && boardEl().classList.contains("board-far"); i++) {
     host.querySelector<HTMLButtonElement>('[aria-label="Zoom in"]')!.click();
-    await settle(30);
+    await advanceTime(30);
   }
   const r = el().getBoundingClientRect();
   const dx = innerWidth / 2 - (r.left + r.width / 2);
@@ -680,7 +680,7 @@ const bringIntoView = async (el: () => Element) => {
   pointer(boardEl(), "pointerdown", from.x, from.y, 10);
   pointer(boardEl(), "pointermove", from.x + dx / 2, from.y + dy / 2, 10);
   pointer(boardEl(), "pointermove", from.x + dx, from.y + dy, 10);
-  await settle(200);
+  await advanceTime(200);
   pointer(boardEl(), "pointerup", from.x + dx, from.y + dy, 10);
   await rest();
 };
@@ -725,7 +725,7 @@ async function fresh() {
   // The previous board first: unmounted, and its pending saves and timers
   // finished, so nothing it does lands in the next scenario's document.
   root.render(<></>);
-  await settle(2000);
+  await advanceTime(2000);
   // Kept drafts live for the page, beyond any one Board: a scenario that
   // failed after keeping one must not show it to the next.
   __boardDraftsTesting.clear();
@@ -1050,14 +1050,14 @@ const scenarios: [name: string, run: () => Promise<void>][] = [
         `150 merged pull requests group by day, newest open (${days.map((day) => day.textContent)})`,
       );
       days[1]!.click();
-      await settle(50);
+      await advanceTime(50);
       check(
         merged.querySelectorAll(".work-card").length === 60 &&
           !merged.querySelector(".work-card-facts"),
         "opening a day shows its compact cards",
       );
       for (const day of days.slice(2)) day.click();
-      await settle(50);
+      await advanceTime(50);
       check(
         days.reduce(
           (count, day) =>
@@ -1096,12 +1096,12 @@ const scenarios: [name: string, run: () => Promise<void>][] = [
           '.work-lens [role="tab"]:nth-child(1)',
         )!
         .click();
-      await settle(100);
+      await advanceTime(100);
       const before = selected.length;
       host
         .querySelector<HTMLButtonElement>(".work-card-agents button")!
         .click();
-      await settle(100);
+      await advanceTime(100);
       check(
         selected.slice(before).includes("leaf:studio:w1:p1"),
         `the linked agent is selected on Board (${selected.slice(before)})`,
@@ -1115,7 +1115,7 @@ const scenarios: [name: string, run: () => Promise<void>][] = [
       window.dispatchEvent(
         new KeyboardEvent("keydown", { key: "Escape", bubbles: true }),
       );
-      await settle(100);
+      await advanceTime(100);
       check(!host.querySelector(".work-lens"), "Escape closes the lens");
     },
   ],
@@ -1164,7 +1164,7 @@ const scenarios: [name: string, run: () => Promise<void>][] = [
           (entry) => entry.textContent === text,
         )!;
       button(ready, "Merge…").click();
-      await settle(50);
+      await advanceTime(50);
       check(
         ready.querySelector(".pr-card-sheet p")?.textContent ===
           "Merge #43 into main with a merge commit. Head 3333333 must still be the head. The branch is kept." &&
@@ -1190,7 +1190,7 @@ const scenarios: [name: string, run: () => Promise<void>][] = [
         `merge sends the head seen; a refusal is GitHub's words (${JSON.stringify(verbPosts)})`,
       );
       button(ready, "Details").click();
-      await settle(50);
+      await advanceTime(50);
       check(
         ready.querySelectorAll('[aria-label="Readiness"] li[data-state="pass"]')
           .length === 5,
@@ -1216,7 +1216,7 @@ const scenarios: [name: string, run: () => Promise<void>][] = [
         "details preserve the head's distance behind main",
       );
       button(ready, "Close…").click();
-      await settle(50);
+      await advanceTime(50);
       check(
         ready.querySelector(".pr-card-sheet p")?.textContent ===
           "Close #43 without merging. The branch is kept." &&
@@ -1224,14 +1224,14 @@ const scenarios: [name: string, run: () => Promise<void>][] = [
         "closing asks first, with an optional comment",
       );
       button(ready, "Cancel").click();
-      await settle(50);
+      await advanceTime(50);
       check(
         !ready.querySelector(".pr-card-sheet") && verbPosts.length === 1,
         "cancel runs nothing",
       );
       // A push while the merge sheet is open withdraws it.
       button(ready, "Merge…").click();
-      await settle(50);
+      await advanceTime(50);
       head43 = prHead("9");
       await worldSourcesStore.refresh(true);
       await waitFor(
@@ -1249,7 +1249,7 @@ const scenarios: [name: string, run: () => Promise<void>][] = [
       window.dispatchEvent(
         new KeyboardEvent("keydown", { key: "Escape", bubbles: true }),
       );
-      await settle(100);
+      await advanceTime(100);
     },
   ],
   [
@@ -1299,7 +1299,7 @@ const scenarios: [name: string, run: () => Promise<void>][] = [
       ];
       askLedger.revision++;
       await sharedAsksStore().refresh();
-      await settle(100);
+      await advanceTime(100);
       check(
         Boolean(host.querySelector('[data-world-ask="q-board"]')),
         "Board shows ? on the asking pane's card",
@@ -1307,7 +1307,7 @@ const scenarios: [name: string, run: () => Promise<void>][] = [
       askLedger.asks[0]!.withdrawn = { at: Date.now() };
       askLedger.revision++;
       await sharedAsksStore().refresh();
-      await settle(100);
+      await advanceTime(100);
       check(
         !host.querySelector('[data-world-ask="q-board"]'),
         "withdrawal clears Board's question mark",
@@ -1350,7 +1350,7 @@ const scenarios: [name: string, run: () => Promise<void>][] = [
         host
           .querySelector<HTMLButtonElement>('[aria-label="Zoom in"]')!
           .click();
-      await settle(100);
+      await advanceTime(100);
 
       // Drag a workspace: its tabs follow, and the board comes to rest.
       const ws = card("studio:w2")!;
@@ -1360,9 +1360,9 @@ const scenarios: [name: string, run: () => Promise<void>][] = [
       pointer(ws, "pointerdown", from.x, from.y);
       for (let step = 1; step <= 10; step++) {
         pointer(ws, "pointermove", from.x + step * 12, from.y + step * 8);
-        await settle(16);
+        await advanceTime(16);
       }
-      await settle(200);
+      await advanceTime(200);
       pointer(ws, "pointerup", from.x + 120, from.y + 80);
       // About a second at 60 frames a second; more frames means it never settles.
       const restFrames = await rest();
@@ -1528,7 +1528,7 @@ const scenarios: [name: string, run: () => Promise<void>][] = [
         .querySelector<HTMLButtonElement>('[aria-label="Fold web-app"]')!
         .click();
       await waitFor(() => !card("studio:w1:t1"), "folding hid the tabs");
-      await settle(100);
+      await advanceTime(100);
       check(
         host.querySelectorAll(".board-tree").length === 9,
         "folding removes the folded tabs' lines at once",
@@ -1599,7 +1599,7 @@ const scenarios: [name: string, run: () => Promise<void>][] = [
         pointer(boardEl(), "pointerup", spot.x, spot.y, 7 + i, {
           primary: true,
         });
-        await settle(300);
+        await advanceTime(300);
       }
       await waitFor(
         () => saved.notes.length === 1,
@@ -1622,7 +1622,7 @@ const scenarios: [name: string, run: () => Promise<void>][] = [
       // Focusing a note (a phone keyboard) can scroll the board; it never stays scrolled.
       boardEl().scrollTop = 80;
       boardEl().dispatchEvent(new Event("scroll"));
-      await settle(50);
+      await advanceTime(50);
       check(boardEl().scrollTop === 0, "the board never stays scrolled");
       await waitFor(() => Boolean(card(noteKey)), "the note is on the board");
 
@@ -1641,7 +1641,7 @@ const scenarios: [name: string, run: () => Promise<void>][] = [
             a.y + ((b.y - a.y) * step) / 6,
             8,
           );
-          await settle(16);
+          await advanceTime(16);
         }
         pointer(handle, "pointerup", b.x, b.y, 8);
       };
@@ -1830,7 +1830,7 @@ const scenarios: [name: string, run: () => Promise<void>][] = [
         "a mouse double-click makes a note",
       );
       (document.activeElement as HTMLElement | null)?.blur();
-      await settle(100);
+      await advanceTime(100);
       {
         // A double-click on a note edits it, rather than making another.
         const all = [...host.querySelectorAll<HTMLElement>(".board-note")];
@@ -1843,7 +1843,7 @@ const scenarios: [name: string, run: () => Promise<void>][] = [
             clientY: c.y,
           }),
         );
-        await settle(100);
+        await advanceTime(100);
         check(
           saved.notes.length === 2,
           "a double-click on a note makes no note",
@@ -1854,7 +1854,7 @@ const scenarios: [name: string, run: () => Promise<void>][] = [
         );
       }
       (document.activeElement as HTMLElement | null)?.blur();
-      await settle(100);
+      await advanceTime(100);
       // The new note is selected and its swatches show their colours.
       const swatch = host.querySelector<HTMLElement>(
         ".board-notebar .board-swatch",
@@ -1873,7 +1873,7 @@ const scenarios: [name: string, run: () => Promise<void>][] = [
       const sc = centre(secondNote);
       pointer(secondNote, "pointerdown", sc.x, sc.y, 14);
       pointer(secondNote, "pointerup", sc.x, sc.y, 14);
-      await settle(50);
+      await advanceTime(50);
       check(
         document.activeElement === secondNote,
         "a tapped note takes the keyboard focus",
@@ -1903,7 +1903,7 @@ const scenarios: [name: string, run: () => Promise<void>][] = [
       pointer(boardEl(), "pointermove", p0.x + 120, p0.y, 42, {
         primary: false,
       });
-      await settle(100);
+      await advanceTime(100);
       check(
         scale() > before3 * 1.5,
         `a new pinch zooms after a stuck finger (${before3} → ${scale()})`,
@@ -1913,7 +1913,7 @@ const scenarios: [name: string, run: () => Promise<void>][] = [
       await rest();
 
       // A reload keeps notes, strings and the layout.
-      await settle(900);
+      await advanceTime(900);
       const wsBefore2 = at("studio:w2")!;
       const beforeReload = boardEl();
       mount(2);
@@ -1976,7 +1976,7 @@ const scenarios: [name: string, run: () => Promise<void>][] = [
           clientY: wc.y,
         }),
       );
-      await settle(100);
+      await advanceTime(100);
       check(
         scaleNow() > wheelBefore,
         `the mouse wheel zooms after the topology comes back (${wheelBefore} → ${scaleNow()})`,
@@ -1987,7 +1987,7 @@ const scenarios: [name: string, run: () => Promise<void>][] = [
       pointer(dragged, "pointerdown", dc.x, dc.y, 13);
       for (let i = 1; i <= 8; i++) {
         pointer(dragged, "pointermove", dc.x + i * 10, dc.y, 13);
-        await settle(16);
+        await advanceTime(16);
       }
       pointer(dragged, "pointerup", dc.x + 80, dc.y, 13);
       await rest();
@@ -2114,7 +2114,7 @@ const scenarios: [name: string, run: () => Promise<void>][] = [
       ]
         .find((b) => b.textContent === "Claude")!
         .click();
-      await settle(30);
+      await advanceTime(30);
       check(
         !submit().disabled,
         "choosing a workspace and an agent enables Start",
@@ -2167,11 +2167,11 @@ const scenarios: [name: string, run: () => Promise<void>][] = [
               host.querySelector<HTMLInputElement>(`${newTab} input`)!,
               name,
             );
-          await settle(30);
+          await advanceTime(30);
           host
             .querySelector<HTMLButtonElement>(`${newTab} [type="submit"]`)!
             .click();
-          await settle(50);
+          await advanceTime(50);
         };
         await pick("Terminal", "Logs");
         check(
@@ -2273,7 +2273,7 @@ const scenarios: [name: string, run: () => Promise<void>][] = [
           () => Boolean(host.querySelector('[aria-label="Colour of review"]')),
           "selecting a tab offers its colours",
         );
-        await settle(100);
+        await advanceTime(100);
         {
           const bar = host
             .querySelector('[aria-label="Colour of review"]')!
@@ -2314,10 +2314,10 @@ const scenarios: [name: string, run: () => Promise<void>][] = [
             host
               .querySelector<HTMLButtonElement>('[aria-label="Zoom out"]')!
               .click();
-            await settle(40);
+            await advanceTime(40);
           }
           await rest();
-          await settle(100);
+          await advanceTime(100);
           const ws = card("studio:w1")!.getBoundingClientRect();
           const a = lastAnchors![id]!;
           check(
@@ -2416,9 +2416,9 @@ const scenarios: [name: string, run: () => Promise<void>][] = [
           pointer(card(tabKey)!, "pointerdown", from.x, from.y);
           for (let step = 1; step <= 12; step++) {
             pointer(card(tabKey)!, "pointermove", from.x, from.y - step * 50);
-            await settle(16);
+            await advanceTime(16);
           }
-          await settle(200);
+          await advanceTime(200);
           pointer(card(tabKey)!, "pointerup", from.x, from.y - 600);
           await rest();
           const now = at(tabKey)!;
@@ -2460,7 +2460,7 @@ const scenarios: [name: string, run: () => Promise<void>][] = [
           "the window header unpins it",
         );
         mount(2, world, null);
-        await settle(50);
+        await advanceTime(50);
       }
     },
   ],
@@ -2522,7 +2522,7 @@ const scenarios: [name: string, run: () => Promise<void>][] = [
               from.y + ((to.y - from.y) * i) / 10,
               17,
             );
-            await settle(16);
+            await advanceTime(16);
           }
         };
         await carry();
@@ -2580,7 +2580,7 @@ const scenarios: [name: string, run: () => Promise<void>][] = [
       [...host.querySelectorAll<HTMLButtonElement>("button")]
         .find((b) => b.textContent === "Group…")!
         .click();
-      await settle(50);
+      await advanceTime(50);
       await bringIntoView(() => card(mate)!);
       const tapAt = centre(card(mate)!.querySelector(".board-label")!);
       pointer(card(mate)!, "pointerdown", tapAt.x, tapAt.y, 18);
@@ -2590,7 +2590,7 @@ const scenarios: [name: string, run: () => Promise<void>][] = [
         "Group… then a tap did not group the tabs",
       );
       mount(2, world, null);
-      await settle(50);
+      await advanceTime(50);
     },
   ],
   [
@@ -2617,7 +2617,7 @@ const scenarios: [name: string, run: () => Promise<void>][] = [
           host
             .querySelector<HTMLButtonElement>('[aria-label="Zoom in"]')!
             .click();
-          await settle(40);
+          await advanceTime(40);
         }
         await rest();
         const moving = card("studio:w2:t2")!;
@@ -2634,7 +2634,7 @@ const scenarios: [name: string, run: () => Promise<void>][] = [
               from.y + ((to.y - from.y) * i) / 10,
               16,
             );
-            await settle(16);
+            await advanceTime(16);
           }
         };
         await dragTo();
@@ -2709,7 +2709,7 @@ const scenarios: [name: string, run: () => Promise<void>][] = [
           from.y + ((to.y - from.y) * i) / 10,
           17,
         );
-        await settle(16);
+        await advanceTime(16);
       }
       check(
         chip.hasAttribute("data-bin-over"),
@@ -2936,12 +2936,12 @@ const scenarios: [name: string, run: () => Promise<void>][] = [
         pointer(ws, "pointerdown", wc.x, wc.y, 31);
         for (let i = 1; i <= 8; i++) {
           pointer(ws, "pointermove", wc.x + i * 25, wc.y - i * 10, 31);
-          await settle(16);
+          await advanceTime(16);
         }
-        await settle(150);
+        await advanceTime(150);
         pointer(ws, "pointerup", wc.x + 200, wc.y - 80, 31);
         await rest();
-        await settle(700);
+        await advanceTime(700);
         check(
           Math.hypot(at(wsKey)!.x - wsBefore.x, at(wsKey)!.y - wsBefore.y) >
             50 &&
@@ -2957,7 +2957,7 @@ const scenarios: [name: string, run: () => Promise<void>][] = [
         const still = async () => {
           for (let i = 0; i < 60; i++) {
             const a = [at(noteKey)!, at(tabKey)!];
-            await settle(100);
+            await advanceTime(100);
             const b = [at(noteKey)!, at(tabKey)!];
             if (
               a.every((p, k) => Math.hypot(p.x - b[k]!.x, p.y - b[k]!.y) < 0.5)
@@ -3023,7 +3023,7 @@ const scenarios: [name: string, run: () => Promise<void>][] = [
       // Another client moves a workspace and folds it: the open board follows,
       // and its own next save keeps that change rather than restoring its old one.
       {
-        await settle(800);
+        await advanceTime(800);
         const key = "studio:w2";
         const was = at(key)!;
         const offset = saved.layout.offsets[key] ?? { x: 0, y: 0 };
@@ -3036,7 +3036,7 @@ const scenarios: [name: string, run: () => Promise<void>][] = [
         ]);
         await store.refresh();
         await rest();
-        await settle(400);
+        await advanceTime(400);
         check(
           Math.abs(at(key)!.x - was.x - 400) < 3,
           "another client's move reaches the open board",
@@ -3081,7 +3081,7 @@ const scenarios: [name: string, run: () => Promise<void>][] = [
           "a note to drop on a card",
         );
         (document.activeElement as HTMLElement | null)?.blur();
-        await settle(100);
+        await advanceTime(100);
         const fresh = saved.notes[saved.notes.length - 1]!;
         const noteEl = card(`note:${fresh.id}`)!;
         const from = centre(noteEl),
@@ -3095,11 +3095,11 @@ const scenarios: [name: string, run: () => Promise<void>][] = [
             from.y + ((to.y - from.y) * i) / 6,
             34,
           );
-          await settle(16);
+          await advanceTime(16);
         }
-        await settle(150);
+        await advanceTime(150);
         pointer(noteEl, "pointerup", to.x, to.y, 34);
-        await settle(300);
+        await advanceTime(300);
         const onCard = () => {
           const notes = [
             ...host.querySelectorAll<HTMLElement>(".board-note"),
@@ -3132,7 +3132,7 @@ const scenarios: [name: string, run: () => Promise<void>][] = [
         check(onCard(), "the dropped note sits on a card");
         (await boardAction('[aria-label="Tidy the board"]')).click();
         await rest();
-        await settle(400);
+        await advanceTime(400);
         // Tidy then fits the board; on a phone that is the overview, which
         // draws notes larger to stay readable. Check close up, at the size
         // notes have and Tidy clears room for.
@@ -3144,7 +3144,7 @@ const scenarios: [name: string, run: () => Promise<void>][] = [
           host
             .querySelector<HTMLButtonElement>('[aria-label="Zoom in"]')!
             .click();
-          await settle(30);
+          await advanceTime(30);
         }
         await rest();
         check(!onCard(), "after Tidy no note sits on a card");
@@ -3208,17 +3208,17 @@ const scenarios: [name: string, run: () => Promise<void>][] = [
         path: { x: number; y: number }[],
       ) => {
         tool(label)!.click();
-        await settle();
+        await advanceTime();
         check(Boolean(pad()), `${label} takes the pointer to draw`);
         const [first, ...rest] = path;
         pointer(pad(), "pointerdown", first!.x, first!.y, 41);
         for (const p of rest) {
           pointer(pad(), "pointermove", p.x, p.y, 41);
-          await settle(16);
+          await advanceTime(16);
         }
         const last = path[path.length - 1]!;
         pointer(pad(), "pointerup", last.x, last.y, 41);
-        await settle();
+        await advanceTime();
       };
 
       // A rectangle, dragged out; Board goes back to Select with it chosen.
@@ -3270,9 +3270,9 @@ const scenarios: [name: string, run: () => Promise<void>][] = [
       );
       // Text, typed where it was placed.
       tool("Text")!.click();
-      await settle();
+      await advanceTime();
       pointer(pad(), "pointerdown", x + 500, y, 41);
-      await settle();
+      await advanceTime();
       const editor =
         host.querySelector<HTMLTextAreaElement>(".board-sketch-edit");
       check(Boolean(editor), "the text tool opens a text box");
@@ -3334,7 +3334,7 @@ const scenarios: [name: string, run: () => Promise<void>][] = [
       pointer(hit(), "pointerdown", x + 1, y + 1, 42);
       pointer(hit(), "pointermove", x + 30, y + 21, 42);
       pointer(hit(), "pointermove", x + 51, y + 41, 42);
-      await settle();
+      await advanceTime();
       pointer(hit(), "pointerup", x + 51, y + 41, 42);
       await waitFor(
         () => shape("rect")!.rev === 2,
@@ -3348,7 +3348,7 @@ const scenarios: [name: string, run: () => Promise<void>][] = [
       const h = centre(handle);
       pointer(handle, "pointerdown", h.x, h.y, 43);
       pointer(handle, "pointermove", h.x + 40, h.y + 30, 43);
-      await settle();
+      await advanceTime();
       pointer(handle, "pointerup", h.x + 40, h.y + 30, 43);
       await waitFor(
         () => shape("rect")!.rev === 3,
@@ -3406,9 +3406,9 @@ const scenarios: [name: string, run: () => Promise<void>][] = [
         },
       ]);
       await store.refresh();
-      await settle();
+      await advanceTime();
       key({ key: "z", ctrlKey: true });
-      await settle(200);
+      await advanceTime(200);
       check(
         shape("rect")!.color === "green",
         "undo leaves a drawing changed elsewhere alone",
@@ -3437,7 +3437,7 @@ const scenarios: [name: string, run: () => Promise<void>][] = [
       host
         .querySelector(`[data-hit="${text.id}"]`)!
         .dispatchEvent(new MouseEvent("dblclick", { bubbles: true }));
-      await settle();
+      await advanceTime();
       check(typing()?.value === "Ship it?", "double-click edits the text");
       apply([
         {
@@ -3452,7 +3452,7 @@ const scenarios: [name: string, run: () => Promise<void>][] = [
         },
       ]);
       await store.refresh();
-      await settle();
+      await advanceTime();
       typeInto(typing()!, "Ship it today");
       typing()!.blur();
       await waitFor(
@@ -3506,7 +3506,7 @@ const scenarios: [name: string, run: () => Promise<void>][] = [
         },
       ]);
       await store.refresh();
-      await settle();
+      await advanceTime();
       const arrowHit = () =>
         host.querySelector<SVGPathElement>(`[data-hit="${onRect.id}"]`)!;
       const [ax, ay, bx, by] = arrowHit()
@@ -3520,7 +3520,7 @@ const scenarios: [name: string, run: () => Promise<void>][] = [
       );
       pointer(arrowHit(), "pointerdown", 400, 400, 44);
       pointer(arrowHit(), "pointermove", 430, 410, 44);
-      await settle();
+      await advanceTime();
       pointer(arrowHit(), "pointerup", 430, 410, 44);
       await waitFor(
         () => !shape("arrow")!.from?.attach,
@@ -3540,9 +3540,9 @@ const scenarios: [name: string, run: () => Promise<void>][] = [
 
       // Escape puts the pen down; a reload shows every drawing.
       tool("Pen")!.click();
-      await settle();
+      await advanceTime();
       key({ key: "Escape" });
-      await settle();
+      await advanceTime();
       check(!pad(), "Escape returns to Select");
       const count = shapes().length;
       mount(++mountKey);
@@ -3749,7 +3749,7 @@ const scenarios: [name: string, run: () => Promise<void>][] = [
           const c = centre(card(`note:${strungNote}`)!);
           pointer(card(`note:${strungNote}`)!, "pointerdown", c.x, c.y, 36);
           pointer(card(`note:${strungNote}`)!, "pointerup", c.x, c.y, 36);
-          await settle(100);
+          await advanceTime(100);
         };
         await tapNote();
         check(sendShown(), "a live strung agent offers Send");
@@ -3767,7 +3767,7 @@ const scenarios: [name: string, run: () => Promise<void>][] = [
             })),
           ),
         );
-        await settle(200);
+        await advanceTime(200);
         await tapNote();
         check(!sendShown(), "a stale host's pane offers no Send");
         check(
@@ -3784,14 +3784,14 @@ const scenarios: [name: string, run: () => Promise<void>][] = [
           2,
           variant((leaf) => (leaf.nativeId === paneId ? null : leaf)),
         );
-        await settle(300);
+        await advanceTime(300);
         check(
           host.querySelectorAll(".board-yarn:not(.board-yarn-temp)").length ===
             strings && Boolean(host.querySelector(".board-yarn-loose")),
           "a string whose target left the board stays drawn, dashed",
         );
         mount(2);
-        await settle(200);
+        await advanceTime(200);
       }
     },
   ],
@@ -3811,7 +3811,7 @@ const scenarios: [name: string, run: () => Promise<void>][] = [
         })),
       );
       mount(2, core);
-      await settle(300);
+      await advanceTime(300);
       check(
         !host.querySelector(".connection-recovery"),
         "a live core host shows no Stale · Reconnect",
@@ -3840,14 +3840,14 @@ const scenarios: [name: string, run: () => Promise<void>][] = [
           })),
         ),
       );
-      await settle(300);
+      await advanceTime(300);
       check(
         host.querySelectorAll(".connection-recovery").length ===
           world.hosts.length && !host.querySelector(".board-zone-add"),
         "a failed core host offers Reconnect instead of New workspace",
       );
       mount(2);
-      await settle(200);
+      await advanceTime(200);
     },
   ],
   [
@@ -3890,7 +3890,7 @@ const scenarios: [name: string, run: () => Promise<void>][] = [
           },
         ]);
         await store.refresh();
-        await settle(100);
+        await advanceTime(100);
         check(
           editor.isConnected && editor.textContent === "My draft",
           "a remote edit leaves the draft alone",
@@ -3911,7 +3911,7 @@ const scenarios: [name: string, run: () => Promise<void>][] = [
         );
         // Switching to another view and back (Board unmounts) keeps the draft.
         root.render(<div />);
-        await settle(50);
+        await advanceTime(50);
         mount(2);
         await waitFor(
           () =>
@@ -3924,7 +3924,7 @@ const scenarios: [name: string, run: () => Promise<void>][] = [
         );
         // A later notice does not take the draft away.
         (await boardAction('[aria-label="Tidy the board"]')).click();
-        await settle(100);
+        await advanceTime(100);
         check(
           Boolean(host.querySelector(".board-unsaved")),
           "the unsaved draft outlasts other notices",
@@ -3957,7 +3957,7 @@ const scenarios: [name: string, run: () => Promise<void>][] = [
         // Deleted elsewhere while being edited: what was typed is kept, and can
         // be saved as a new note.
         (document.activeElement as HTMLElement | null)?.blur();
-        await settle(100);
+        await advanceTime(100);
         const before = saved.notes.length;
         const spot2 = emptySpot();
         boardEl().dispatchEvent(
@@ -4016,11 +4016,11 @@ const scenarios: [name: string, run: () => Promise<void>][] = [
         let release!: () => void;
         holdNextWrite = (go) => (release = go);
         saveNew();
-        await settle(50);
+        await advanceTime(50);
         root.render(<div />);
-        await settle(50);
+        await advanceTime(50);
         release();
-        await settle(100);
+        await advanceTime(100);
         mount(2);
         await waitFor(
           () => saved.notes.some((n) => n.text === "Typed before it vanished"),
@@ -4082,10 +4082,10 @@ const scenarios: [name: string, run: () => Promise<void>][] = [
         ]);
         await store.refresh();
         mount(2);
-        await settle(100);
+        await advanceTime(100);
         for (const answer of heldChecks!) answer("absent");
         heldChecks = null;
-        await settle(200);
+        await advanceTime(200);
         check(
           !saved.strings.find((candidate) => candidate.id === string.id)!
             .detached,
@@ -4105,7 +4105,7 @@ const scenarios: [name: string, run: () => Promise<void>][] = [
         );
         closedPanes.delete(live.nativeId);
         mount(2);
-        await settle(100);
+        await advanceTime(100);
       }
     },
   ],
@@ -4169,7 +4169,7 @@ const scenarios: [name: string, run: () => Promise<void>][] = [
           );
         }
         mount(2);
-        await settle(200);
+        await advanceTime(200);
       }
     },
   ],
@@ -4181,7 +4181,7 @@ scenarios.push([
     boardFollowupsAcceptance({
       host,
       mount,
-      settle,
+      advanceTime,
       waitFor,
       check,
       opened,

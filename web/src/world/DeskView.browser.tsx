@@ -24,7 +24,7 @@ const failures: string[] = [];
 const check = (condition: boolean, message: string) => {
   if (!condition) failures.push(message);
 };
-const settle = (ms = 80) => clock.advance(ms);
+const advanceTime = (ms = 80) => clock.advance(ms);
 
 function agent(id: string, fingerprint: string): WorldLeafObject {
   return {
@@ -224,7 +224,7 @@ async function run() {
       />,
     ),
   );
-  await settle(500);
+  await advanceTime(500);
   check(
     !!card("alpha") && !!card("beta") && !!card("gamma"),
     "all finished agents are in To review",
@@ -237,9 +237,9 @@ async function run() {
   const betaOpen =
     card("beta")?.querySelector<HTMLButtonElement>("button.is-primary");
   betaOpen?.focus();
-  await settle();
+  await advanceTime();
   press(betaOpen!, "e");
-  await settle(200);
+  await advanceTime(200);
   check(!card("beta"), "E marked the focused card (beta) reviewed");
   check(
     card("gamma")?.contains(document.activeElement) === true,
@@ -256,7 +256,7 @@ async function run() {
   revision++;
   for (const callback of deskControls)
     callback({ type: "world_desk_changed", revision });
-  await settle(150);
+  await advanceTime(150);
   check(
     !card("beta"),
     "expiring only the display time does not return the same stop to To review",
@@ -277,20 +277,20 @@ async function run() {
       ...document.querySelectorAll<HTMLButtonElement>(".desk-modes button"),
     ].find((button) => button.textContent?.startsWith(label));
   tab("Reviewed")?.click();
-  await settle(150);
+  await advanceTime(150);
   check(!!card("beta"), "Reviewed lists the stop that was marked");
   tab("Now")?.click();
-  await settle(150);
+  await advanceTime(150);
   undo?.click();
-  await settle(150);
+  await advanceTime(150);
   check(!!card("beta"), "Undo returns the stop to To review");
   const betaMark = [
     ...card("beta")!.querySelectorAll<HTMLButtonElement>("button"),
   ].find((button) => button.textContent?.startsWith("Mark reviewed"))!;
   betaMark.focus();
-  await settle();
+  await advanceTime();
   betaMark.click();
-  await settle(200);
+  await advanceTime(200);
   check(
     card("gamma")?.contains(document.activeElement) === true,
     "Mark reviewed moves DOM focus to the next card after publication removes its focused button",
@@ -305,14 +305,14 @@ async function run() {
   ].find((button) => button.textContent?.startsWith("Mark reviewed"))!;
   alphaMark.focus();
   alphaMark.click();
-  await settle(100);
+  await advanceTime(100);
   const elsewhere = document.createElement("button");
   elsewhere.textContent = "Outside Desk";
   document.body.append(elsewhere);
   elsewhere.focus();
   reviewReply = undefined;
   heldReply.resolve();
-  await settle(150);
+  await advanceTime(150);
   check(
     document.activeElement === elsewhere,
     "a late review save preserves newer focus outside the Desk",
@@ -333,7 +333,7 @@ async function run() {
     },
   );
   elsewhere.remove();
-  await settle(100);
+  await advanceTime(100);
 
   // A second browser sees the same service, without sharing browser storage.
   const secondBrowser = new WorldDeskStore(deskService);
@@ -349,7 +349,7 @@ async function run() {
     stop_id: JSON.parse(handoffId(leaves[0]!, undefined, "observed-alpha"))[1],
     reviewed: true,
   });
-  await settle(150);
+  await advanceTime(150);
   check(
     !card("alpha"),
     "a mark from another browser removes the same stop from To review",
@@ -367,7 +367,7 @@ async function run() {
   revision++;
   for (const callback of deskControls)
     callback({ type: "world_desk_changed", revision });
-  await settle(150);
+  await advanceTime(150);
   check(
     !!card("alpha"),
     "native progress returns a new completed stop to review without a working browser frame",
@@ -387,7 +387,7 @@ async function run() {
   const precedingMark = alphaRecord.reviewed_stop;
   card("alpha")?.focus();
   press(card("alpha")!, "e");
-  await settle();
+  await advanceTime();
   check(
     alphaRecord.reviewed_stop === precedingMark,
     "E cannot mark a new stop against its preceding report",
@@ -398,7 +398,7 @@ async function run() {
   revision++;
   for (const callback of deskControls)
     callback({ type: "world_desk_changed", revision });
-  await settle(150);
+  await advanceTime(150);
   oldStopRead.resolve(
     receiptReply(
       "alpha",
@@ -407,17 +407,17 @@ async function run() {
       "Superseded report must not publish",
     ),
   );
-  await settle(150);
+  await advanceTime(150);
   check(
     alphaMarkButton()?.disabled === true,
-    "a late read from an older stop cannot settle the newest stop",
+    "a late read from an older stop cannot advanceTime the newest stop",
   );
   check(
     !card("alpha")?.textContent?.includes("Superseded report must not publish"),
     "a superseded stop response is fenced before publication",
   );
   latestStopRead.reject(new Error("synthetic receipt refresh failure"));
-  await settle(150);
+  await advanceTime(150);
   check(
     alphaMarkButton()?.disabled === true,
     "one failed refresh cannot make the preceding report current",
@@ -427,10 +427,10 @@ async function run() {
     throw new Error("synthetic repeated receipt failure");
   });
   document.dispatchEvent(new Event("visibilitychange"));
-  await settle(200);
+  await advanceTime(200);
   check(
     alphaMarkButton()?.disabled === false,
-    "an unreadable stop can settle without a report after retry",
+    "an unreadable stop can advanceTime without a report after retry",
   );
   check(
     !card("alpha")?.textContent?.includes("Report from alpha"),
@@ -441,7 +441,7 @@ async function run() {
     receiptReply("alpha", "a".repeat(64), "newest-turn", "Newest stop report"),
   );
   document.dispatchEvent(new Event("visibilitychange"));
-  await settle(200);
+  await advanceTime(200);
   check(
     card("alpha")?.textContent?.includes("Newest stop report") === true,
     "a successful refresh publishes the newest stop report",
@@ -454,7 +454,7 @@ async function run() {
     stop_id: JSON.parse(handoffId(leaves[0]!, undefined, "observed-alpha"))[1],
     reviewed: false,
   });
-  await settle(150);
+  await advanceTime(150);
   check(
     !!card("alpha"),
     "Undo from another browser restores the stop immediately",
@@ -475,7 +475,7 @@ async function run() {
   document
     .querySelector<HTMLButtonElement>('button[aria-label="Filter Desk"]')
     ?.click();
-  await settle(50);
+  await advanceTime(50);
   // The filter narrows the Desk to matching agents.
   const search = document.querySelector<HTMLInputElement>(".desk-search input");
   check(
@@ -488,7 +488,7 @@ async function run() {
   )?.set;
   setValue?.call(search, "gamma");
   search?.dispatchEvent(new Event("input", { bubbles: true }));
-  await settle(150);
+  await advanceTime(150);
   const visible = () =>
     [...document.querySelectorAll<HTMLElement>("[data-desk-card]")]
       .map((element) => element.dataset.deskCard)
@@ -500,14 +500,14 @@ async function run() {
   // The query keeps the box open after a click elsewhere on the Desk, and
   // Escape there still clears it and folds it to its icon.
   card("gamma")?.focus();
-  await settle(50);
+  await advanceTime(50);
   check(
     document.querySelector<HTMLInputElement>(".desk-search input")?.value ===
       "gamma",
     "Desk's filter folded with a query in it",
   );
   press(card("gamma")!, "Escape");
-  await settle(150);
+  await advanceTime(150);
   check(
     !document.querySelector(".desk-search input") && !!card("alpha"),
     `Escape on the Desk did not clear and fold its search (visible: ${visible()})`,
@@ -515,25 +515,25 @@ async function run() {
 
   // Agents lists every agent, including reviewed ones.
   tab("Agents")?.click();
-  await settle(150);
+  await advanceTime(150);
   check(
     document.querySelectorAll(".desk-row").length === 3,
     "Agents lists every agent",
   );
   tab("Now")?.click();
-  await settle(150);
+  await advanceTime(150);
 
   // J moves DOM focus with the highlight, so Enter opens that agent.
   card("alpha")?.focus();
-  await settle();
+  await advanceTime();
   press(card("alpha")!, "j");
-  await settle();
+  await advanceTime();
   check(
     document.activeElement === card("gamma"),
     "J moved DOM focus to the next card",
   );
   press(document.activeElement!, "Enter");
-  await settle();
+  await advanceTime();
   check(
     opened.join(",") === "gamma",
     `Enter opened the focused agent (opened: ${opened.join(",")})`,
@@ -576,14 +576,14 @@ async function run() {
       </>,
     );
   flushSync(() => renderReading("alpha"));
-  await settle(200);
+  await advanceTime(200);
   check(
     !!document.querySelector(".desk.has-reading") &&
       card("alpha")?.classList.contains("is-reading") === true,
     "the card being read is marked in the queue",
   );
   card("alpha")?.focus();
-  await settle();
+  await advanceTime();
   // A streaming terminal in the reading pane must not take focus from here.
   check(
     document.querySelector(".agent-chat textarea") !== null,
@@ -594,7 +594,7 @@ async function run() {
     "terminal autofocus is blocked while focus is in the Desk queue",
   );
   press(card("alpha")!, "j");
-  await settle(300);
+  await advanceTime(300);
   check(
     previewed.join(",") === "gamma",
     `J previewed the next agent (previewed: ${previewed.join(",")})`,
@@ -608,7 +608,7 @@ async function run() {
   press(document.activeElement!, "k");
   press(document.activeElement!, "j");
   press(document.activeElement!, "k");
-  await settle(300);
+  await advanceTime(300);
   check(
     previewed.join(",") === "alpha",
     `rapid moves previewed once, at the final agent (previewed: ${previewed.join(",")})`,
@@ -622,7 +622,7 @@ async function run() {
   previewed.length = 0;
   press(document.activeElement!, "j");
   press(document.activeElement!, "Escape");
-  await settle(300);
+  await advanceTime(300);
   check(closed === 1, "Esc closed the reading pane");
   check(
     previewed.length === 0,
@@ -639,7 +639,7 @@ async function run() {
   check(Boolean(markButton), "a review card offers Mark reviewed");
   markButton?.focus();
   markButton?.click();
-  await settle(200);
+  await advanceTime(200);
   check(
     Boolean(document.activeElement?.closest(".desk")) &&
       terminalFocusBlockedByOverlay(document.activeElement, document),
@@ -650,7 +650,7 @@ async function run() {
   ].find((button) => button.textContent === "Undo");
   undoButton?.focus();
   undoButton?.click();
-  await settle(200);
+  await advanceTime(200);
   check(
     Boolean(document.activeElement?.closest(".desk")),
     `focus stayed in the Desk after clicking Undo (active: ${document.activeElement?.tagName})`,
@@ -659,9 +659,9 @@ async function run() {
   // Marking with E keeps focus inside the guarded Desk.
   const reviewCard = card("gamma") ?? card("alpha");
   reviewCard?.focus();
-  await settle();
+  await advanceTime();
   press(reviewCard!, "e");
-  await settle(200);
+  await advanceTime(200);
   check(
     Boolean(document.activeElement?.closest(".desk")) &&
       terminalFocusBlockedByOverlay(document.activeElement, document),
@@ -672,7 +672,7 @@ async function run() {
   const mark = card("alpha")?.querySelectorAll<HTMLButtonElement>("button")[1];
   mark?.focus();
   const event = press(mark!, "Enter");
-  await settle();
+  await advanceTime();
   check(
     !event.defaultPrevented && opened.length === 1,
     "Enter on a focused button was not taken over by the Desk",
@@ -728,7 +728,7 @@ async function run() {
       />,
     ),
   );
-  await settle(500);
+  await advanceTime(500);
   check(
     Boolean(card("alpha")) && Boolean(card("remote-alpha")) && !card("stale"),
     "aggregate Desk triages both filtered hosts and excludes stale agents",
@@ -745,7 +745,7 @@ async function run() {
   );
   card("alpha")?.focus();
   press(card("alpha")!, "e");
-  await settle(200);
+  await advanceTime(200);
   check(
     !card("alpha") && Boolean(card("remote-alpha")),
     "reviewing one host's stop does not review a colliding pane on another host",
@@ -762,7 +762,7 @@ async function run() {
       />,
     ),
   );
-  await settle(200);
+  await advanceTime(200);
   check(
     Boolean(card("remote-alpha")),
     "host filtering retains the remote Desk card",
@@ -808,7 +808,7 @@ async function run() {
       />,
     ),
   );
-  await settle(500);
+  await advanceTime(500);
   check(
     card("alpha")?.textContent?.includes("Report from alpha") === true,
     "a slow host does not delay another host's receipt or review controls",
@@ -838,7 +838,7 @@ async function run() {
       />,
     ),
   );
-  await settle(200);
+  await advanceTime(200);
   Object.defineProperty(document, "visibilityState", {
     configurable: true,
     value: "hidden",
@@ -849,19 +849,19 @@ async function run() {
     value: "visible",
   });
   document.dispatchEvent(new Event("visibilitychange"));
-  await settle(200);
+  await advanceTime(200);
   check(
     slowCalls.filter((method) => method === "agent_turn.get").length === 1 &&
       slowCalls.filter((method) => method === "pane.read").length === 1,
     "status and visibility changes do not overlap reads on a pending host",
   );
-  await settle(4400);
+  await advanceTime(4400);
   check(
     healthyCalls.filter((method) => method === "pane.read").length >= 2,
     "healthy screen polling continues independently of the slow host",
   );
   releaseSlow();
-  await settle(200);
+  await advanceTime(200);
   const asker = {
     ...agent("asker", "e"),
     kind: "terminal",
@@ -902,7 +902,7 @@ async function run() {
       />,
     ),
   );
-  await settle(300);
+  await advanceTime(300);
   check(
     Boolean(
       document.querySelector('.desk-lane.is-needs [data-world-ask="q-desk"]'),
@@ -917,7 +917,7 @@ async function run() {
   const openedBeforeAnswer = opened.length;
   const requestBefore = needsYouState().request.sequence;
   card("asker")?.querySelector<HTMLButtonElement>("button.is-primary")?.click();
-  await settle(100);
+  await advanceTime(100);
   check(
     needsYouState().open &&
       needsYouState().request.sequence === requestBefore + 1 &&
@@ -936,7 +936,7 @@ async function run() {
   askLedger.asks[0]!.withdrawn = { at: Date.now() };
   askLedger.revision++;
   await sharedAsksStore().refresh();
-  await settle(100);
+  await advanceTime(100);
   check(
     !document.querySelector('[data-world-ask="q-desk"]'),
     "withdrawal clears Desk's question mark",

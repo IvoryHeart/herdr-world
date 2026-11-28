@@ -30,7 +30,7 @@ const check = (value: unknown, expected: unknown, label: string) => {
     failures.push(`${label}: ${JSON.stringify(value)}`);
 };
 // Let React effects and xterm's queued render complete before observing the UI.
-const settle = () =>
+const nextFrames = () =>
   new Promise<void>((resolve) =>
     requestAnimationFrame(() => requestAnimationFrame(() => resolve())),
   );
@@ -39,10 +39,10 @@ const until = async (ready: () => boolean, label = "startup") => {
   const deadline = clock.real.now() + 6_000;
   while (clock.real.now() < deadline) {
     if (ready()) return;
-    await settle();
+    await nextFrames();
   }
   throw new Error(
-    `Terminal links fixture did not settle: ${label}; ${JSON.stringify(calls.slice(-6))}; menu=${document.querySelector("[role=menu]")?.textContent}`,
+    `Terminal links fixture did not nextFrames: ${label}; ${JSON.stringify(calls.slice(-6))}; menu=${document.querySelector("[role=menu]")?.textContent}`,
   );
 };
 const input = async (method: string, params: Record<string, unknown>) => {
@@ -272,7 +272,7 @@ const pushFrame = (rows: string[], token?: string, cursor = "") => {
 const frame = async (rows: string[], linkFrame = true) => {
   term.clearSelection();
   pushFrame(rows, linkFrame ? `frame-${++frameNumber}` : undefined);
-  await settle();
+  await nextFrames();
 };
 const links = (row: number) =>
   new Promise<ILink[]>((done) =>
@@ -308,7 +308,7 @@ const hover = async (row: number, col: number) => {
     ...point(row, col),
     modifiers: 2,
   });
-  await settle();
+  await nextFrames();
 };
 const click = async (row: number, col: number, rehover = true) => {
   if (rehover) await hover(row, col);
@@ -320,7 +320,7 @@ const click = async (row: number, col: number, rehover = true) => {
       clickCount: 1,
       modifiers: 2,
     });
-  await settle();
+  await nextFrames();
 };
 
 const incremental = async (text: string) => {
@@ -334,12 +334,12 @@ const incremental = async (text: string) => {
       full: false,
       bytes: btoa(text),
     });
-  await settle();
+  await nextFrames();
 };
 const previewMenu = async (label: string) => {
   await until(() => !!document.querySelector("[role=menu]"), label);
   document.querySelector<HTMLButtonElement>("[role=menuitem]")!.click();
-  await settle();
+  await nextFrames();
 };
 
 const action = (label: string) =>
@@ -357,7 +357,7 @@ const tap = async (element: Element) => {
     { x: rect.left + rect.width / 2, y: rect.top + rect.height / 2 },
   ]);
   await touch("touchEnd");
-  await settle();
+  await nextFrames();
 };
 let realLongPresses = 0;
 const press = async (row: number, col: number) => {
@@ -382,14 +382,14 @@ const press = async (row: number, col: number) => {
     try {
       await touch("touchStart", [point(row, col)]);
       await until(() => activate !== null, "long-press timer registered");
-      await settle();
+      await nextFrames();
       activate!();
     } finally {
       window.setTimeout = originalSetTimeout;
     }
   }
   await touch("touchEnd");
-  await settle();
+  await nextFrames();
 };
 const done = async () => {
   if (action("Done")) await tap(action("Done")!);
@@ -417,7 +417,7 @@ async function runTouch() {
   ).length;
   for (const scale of [100, 125]) {
     render(scale);
-    await settle();
+    await nextFrames();
     const url = "https://x.test/a?b=c";
     target = null;
     await frame(["", `界e\u0301 ${url}`]);
@@ -477,7 +477,7 @@ async function runTouch() {
   }
   if (viewportSmoke) return;
   render(100);
-  await settle();
+  await nextFrames();
 
   // An agent repaints its spinner several times a second. A URL shown in the
   // text keeps Open link while its own row is unchanged (#227).
@@ -489,7 +489,7 @@ async function runTouch() {
     await press(1, 8);
     for (let tick = 1; tick <= 4; tick++) {
       pushFrame(rows(tick), `spinner-${tick}`);
-      await settle();
+      await nextFrames();
     }
     await until(() => !!action("Open link"), "Open link survives repaints");
     await tap(action("Open link")!);
@@ -507,7 +507,7 @@ async function runTouch() {
     await press(1, 10);
     await until(() => !!action("Open link"), "labelled link offered");
     pushFrame(labelled(1), "spinner-labelled");
-    await settle();
+    await nextFrames();
     await until(
       () => !action("Open link"),
       "a new frame withdraws a labelled link",
@@ -536,7 +536,7 @@ async function runTouch() {
     // Opening it resizes the terminal; Herdr then repaints, as here. A press
     // before that resize lands aims at the old geometry.
     await until(() => resizes() > resized, "the Composer resizes the terminal");
-    await settle();
+    await nextFrames();
     await frame(["", `see ${url} now`]);
     await done();
     await until(
@@ -555,7 +555,7 @@ async function runTouch() {
     );
     await done();
     render(100);
-    await settle();
+    await nextFrames();
   }
   // Explicit frame targets work even without the optional plain-link resolver.
   endpoint.methods.splice(endpoint.methods.indexOf("pane.link.resolve"), 1);
@@ -728,7 +728,7 @@ async function runTouch() {
       url: "https://example.org/test",
       regions: [{ row: 1, start_col: 0, end_col: 23 }],
     });
-    await settle();
+    await nextFrames();
     // A touch selection holds the displayed frame. A URL found in the text
     // stays valid while its row still shows it (#227), so after a frame the
     // late answer is offered only if the held screen still shows that URL,
@@ -775,7 +775,7 @@ async function runTouch() {
         "replacement terminal mounted",
       );
       term = terminals[terminals.length - 1]!;
-      await settle();
+      await nextFrames();
     }
   }
   check(
@@ -893,7 +893,7 @@ async function run() {
       "URL starts current beside a hard status row",
     );
     pushFrame(["working 1", `see ${url} now`], "adjacent-status-repaint");
-    await settle();
+    await nextFrames();
     check(
       link?.target.displayed?.(),
       true,
@@ -910,7 +910,7 @@ async function run() {
   }
   for (const scale of [100, 125]) {
     render(scale);
-    await settle();
+    await nextFrames();
     const url = `https://example.com/${"a".repeat(term.cols * 2)}/guide`;
     const rows = [
       "",
@@ -964,7 +964,7 @@ async function run() {
       check(opened[opened.length - 1], url, `wrapped target at scale ${scale}`);
     }
     await move(term.rows - 1, term.cols - 1);
-    await settle();
+    await nextFrames();
     check(underlined().some(Boolean), false, "leaving clears every link row");
     check(
       (await links(2))[0]?.range.start.x,
@@ -989,7 +989,7 @@ async function run() {
           regions: [{ row: 1, start_col: 0, end_col: url.length - 1 }],
         };
     pushFrame(rows, token);
-    await settle();
+    await nextFrames();
     for (const cursorOnly of [false, true]) {
       const cursor = cursorOnly ? "\x1b[0m\x1b[2;3H\x1b[1 q\x1b[?25h" : "";
       rpcRepaint = (focus) => pushFrame(rows, token, focus ? cursor : "");
@@ -1015,7 +1015,7 @@ async function run() {
         modifiers: 2,
       });
       // Wait for focus's real RPC side effect between down and up.
-      await settle();
+      await nextFrames();
       await input("Input.dispatchMouseEvent", {
         type: "mouseReleased",
         ...point(1, 2),
@@ -1023,7 +1023,7 @@ async function run() {
         clickCount: 1,
         modifiers: 2,
       });
-      await settle();
+      await nextFrames();
       check(
         opened.length,
         count + 1,
@@ -1098,7 +1098,7 @@ async function run() {
       );
     }
     flushSync(() => store.selectPane("other-pane"));
-    await settle();
+    await nextFrames();
     await hover(1, 2);
     const count = opened.length;
     // Emit a real store subscription update during mouse-down, not just RPC output.
@@ -1193,7 +1193,7 @@ async function run() {
     "output preserves captured file menu",
   );
   preview.click();
-  await settle();
+  await nextFrames();
   check(
     previews[previews.length - 1],
     "/tmp/docs/guide.md",
@@ -1229,7 +1229,7 @@ async function run() {
       "keyboard menu navigation",
     );
     (document.activeElement as HTMLButtonElement).click();
-    await settle();
+    await nextFrames();
     const dialog = document.querySelector('[aria-label="Create workspace"]')!;
     check(
       [...dialog.querySelectorAll("input")].map((e) => e.value),
@@ -1241,7 +1241,7 @@ async function run() {
       key: "Escape",
       windowsVirtualKeyCode: 27,
     });
-    await settle();
+    await nextFrames();
   }
 
   await frame(
@@ -1251,7 +1251,7 @@ async function run() {
   await click(1, 1);
   await until(() => !!document.querySelector("[role=menu]"), "OSC8 file menu");
   document.querySelector<HTMLButtonElement>("[role=menuitem]")!.click();
-  await settle();
+  await nextFrames();
   check(
     previews[previews.length - 1],
     "/tmp/docs/guide one.md",
@@ -1286,7 +1286,7 @@ async function run() {
     await move(1, 20);
     await incremental(`\x1b[2;1H\x1b[2K${replacement}`);
     await move(1, 2);
-    await settle();
+    await nextFrames();
     await click(1, 2, false);
     await previewMenu(`${native ? "native" : "custom"} same-row repaint menu`);
     check(
@@ -1312,7 +1312,7 @@ async function run() {
         term.element!.dispatchEvent(
           new WheelEvent("wheel", { bubbles: true, deltaY: 0 }),
         );
-        await settle();
+        await nextFrames();
       }
       const count = opened.length;
       await click(1, 2, false);
@@ -1348,21 +1348,21 @@ async function run() {
   );
   await hover(1, 2);
   await move(2, 2);
-  await settle();
+  await nextFrames();
   finishB({
     url: "https://b.example",
     regions: [{ row: 2, start_col: 0, end_col: 16 }],
   });
-  await settle();
+  await nextFrames();
   finishA({
     url: "https://a.example",
     regions: [{ row: 1, start_col: 0, end_col: 16 }],
   });
-  await settle();
+  await nextFrames();
   heldRows.clear();
   await move(2, 20);
   await move(2, 2);
-  await settle();
+  await nextFrames();
   const beforeOutOfOrderClick = opened.length;
   await click(2, 2, false);
   check(

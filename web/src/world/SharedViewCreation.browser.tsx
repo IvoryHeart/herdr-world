@@ -42,7 +42,7 @@ window.addEventListener("unhandledrejection", (event) =>
 function check(condition: unknown, message: string) {
   if (!condition) failures.push(message);
 }
-const settle = () => clock.advance(40);
+const advanceTime = () => clock.advance(40);
 async function until(
   condition: () => unknown,
   message: string,
@@ -706,7 +706,7 @@ async function run() {
     chatUnavailable = "";
     conversationChanged();
     await worldRuntimeStore.refresh();
-    await settle();
+    await advanceTime();
     check(
       !!document.querySelector('.workspace-inspector[data-view="terminal"]'),
       "After Stay on Terminal a readable Chat does not switch the window",
@@ -725,7 +725,7 @@ async function run() {
       const before = conversationReads;
       conversationChanged();
       await until(() => conversationReads > before, `Recheck ${reason}`);
-      await settle();
+      await advanceTime();
       check(
         !!document.querySelector(
           '.workspace-inspector[data-view="terminal"]',
@@ -757,7 +757,7 @@ async function run() {
       () => completedConversationReads > manualCompleted,
       "Late availability reply",
     );
-    await settle();
+    await advanceTime();
     check(
       !!document.querySelector('.workspace-inspector[data-view="terminal"]') &&
         !waitLine(),
@@ -831,9 +831,9 @@ async function run() {
         "Captured availability read",
       );
       focusedPane(replacement);
-      await settle();
+      await advanceTime();
       focusedPane({ terminal_id: betaPane.terminal_id, agent: betaPane.agent });
-      await settle();
+      await advanceTime();
       const completed = completedConversationReads;
       conversationBarrier = null;
       reply.resolve();
@@ -841,7 +841,7 @@ async function run() {
         () => completedConversationReads > completed,
         "Replaced availability reply",
       );
-      await settle();
+      await advanceTime();
       check(
         !!document.querySelector('.workspace-inspector[data-view="terminal"]'),
         "Replacement/restoration cannot revive an automatic Chat switch",
@@ -937,7 +937,7 @@ async function run() {
         () => !document.querySelector(".workspace-inspector"),
         "the second Back did not return to Town",
       );
-      await settle();
+      await advanceTime();
       check(
         window.location.pathname === townPath &&
           !!document.querySelector(".town-view-shell"),
@@ -1371,7 +1371,7 @@ async function run() {
       );
     zoomedTabId = first.tab_id;
     await store.refresh();
-    await settle();
+    await advanceTime();
     check(
       alpha.attached.has(first.terminal_id),
       "Zooming the sibling detached the pending creation source",
@@ -1413,7 +1413,7 @@ async function run() {
     "Handoff creation dispatch/result counts differ",
   );
   root.unmount();
-  await settle();
+  await advanceTime();
   check(
     [...runtime.values()].every((r) => r.attached.size === 0),
     "Unmount leaked terminal owners",

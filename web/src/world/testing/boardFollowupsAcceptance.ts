@@ -12,7 +12,7 @@ export type PaneMoveCall = {
 export async function boardFollowupsAcceptance({
   host,
   mount,
-  settle,
+  advanceTime,
   waitFor,
   check,
   opened,
@@ -22,7 +22,7 @@ export async function boardFollowupsAcceptance({
 }: {
   host: HTMLElement;
   mount(key: number, world: WorldObject): void;
-  settle(ms?: number): Promise<unknown>;
+  advanceTime(ms?: number): Promise<unknown>;
   waitFor(condition: () => unknown, message: string): Promise<unknown>;
   check(condition: boolean, message: string): void;
   opened: readonly string[];
@@ -48,7 +48,7 @@ export async function boardFollowupsAcceptance({
     host
       .querySelector<HTMLButtonElement>('[aria-label="Board settings"]')!
       .click();
-    await settle();
+    await advanceTime();
     return host.querySelector<HTMLElement>(".board-menu")!;
   };
   const action = (container: ParentNode, label: string) => {
@@ -63,7 +63,7 @@ export async function boardFollowupsAcceptance({
     () => host.querySelectorAll(".board-tab").length === 2,
     "two-pane move fixture mounts",
   );
-  await settle(1000);
+  await advanceTime(1000);
   const next = host.querySelector<HTMLButtonElement>(
     '[aria-label="Next agent needing you"]',
   );
@@ -72,13 +72,13 @@ export async function boardFollowupsAcceptance({
     "Next is visible for a waiting agent",
   );
   next!.click();
-  await settle();
+  await advanceTime();
   check(
     opened[opened.length - 1] === world.leaves[0]!.id,
     "Next opens the waiting agent on its owning host",
   );
   action(await menu(), "Whiteboard");
-  await settle();
+  await advanceTime();
   check(
     board().dataset.surface === "whiteboard" &&
       getComputedStyle(board()).getPropertyValue("--board-ground").trim() ===
@@ -87,7 +87,7 @@ export async function boardFollowupsAcceptance({
   );
   const colors = cardColors();
   action(await menu(), "Status colours…");
-  await settle();
+  await advanceTime();
   const dialog = document.querySelector<HTMLElement>(
     '[role="dialog"][aria-label="Board status colours"]',
   )!;
@@ -100,7 +100,7 @@ export async function boardFollowupsAcceptance({
   )!.set!.call(input, "#ff00aa");
   input.dispatchEvent(new Event("input", { bubbles: true }));
   input.dispatchEvent(new Event("change", { bubbles: true }));
-  await settle();
+  await advanceTime();
   check(
     board().style.getPropertyValue("--s-blocked") === "#ff00aa",
     "status colours update the Board",
@@ -120,19 +120,19 @@ export async function boardFollowupsAcceptance({
     )!
     .click();
   mount(9101, world);
-  await settle(1000);
+  await advanceTime(1000);
   check(
     board().dataset.surface === "whiteboard" &&
       board().style.getPropertyValue("--s-blocked") === "#ff00aa",
     "surface and status choices survive a remount",
   );
   action(await menu(), "Status colours…");
-  await settle();
+  await advanceTime();
   const resetDialog = document.querySelector<HTMLElement>(
     '[aria-label="Board status colours"]',
   )!;
   action(resetDialog, "Reset status colours");
-  await settle();
+  await advanceTime();
   check(
     board().style.getPropertyValue("--s-blocked") === "",
     "reset restores the surface's default status palette",
@@ -143,16 +143,16 @@ export async function boardFollowupsAcceptance({
     )!
     .click();
   action(await menu(), "Blackboard");
-  await settle();
+  await advanceTime();
   check(
     getComputedStyle(board()).getPropertyValue("--board-ground").trim() ===
       "#1c2320",
     "Blackboard has its dark palette",
   );
   action(await menu(), "Follow theme");
-  await settle();
+  await advanceTime();
   action(await menu(), "Help");
-  await settle();
+  await advanceTime();
   check(
     Boolean(document.querySelector('[aria-label="Board help"]')),
     "Board Help opens from its menu",
@@ -178,7 +178,7 @@ export async function boardFollowupsAcceptance({
         clientY: helpBounds.y + 5,
       }),
     );
-  await settle();
+  await advanceTime();
   check(
     board().querySelector<HTMLElement>(".board-world")!.style.transform ===
       cameraBeforeHelp,
@@ -187,14 +187,14 @@ export async function boardFollowupsAcceptance({
   document
     .querySelector<HTMLButtonElement>('[aria-label="Close Board help"]')!
     .click();
-  await settle();
+  await advanceTime();
 
   mount(9102, world);
   await waitFor(
     () => host.querySelectorAll(".board-tab").length === 2,
     "move fixture remounts",
   );
-  await settle(1000);
+  await advanceTime(1000);
   let sourceKey = "synthetic-board:w1:t1";
   let destinationKey = "synthetic-board:w1:t2";
   let paneIndex = 1;
@@ -231,20 +231,20 @@ export async function boardFollowupsAcceptance({
     const start = center(row),
       finish = center(destination());
     pointer(row, "pointerdown", start, touch);
-    if (touch) await settle(HOLD_MS + 10);
+    if (touch) await advanceTime(HOLD_MS + 10);
     else pointer(row, "pointermove", { x: start.x + 10, y: start.y + 10 });
-    await settle();
+    await advanceTime();
     check(
       Boolean(document.querySelector(".board-pane-drag")),
       "pane drag lifts a separate ghost",
     );
     pointer(row, "pointermove", finish, touch);
-    await settle();
+    await advanceTime();
     if (cancel === "escape") {
       window.dispatchEvent(
         new KeyboardEvent("keydown", { key: "Escape", bubbles: true }),
       );
-      await settle();
+      await advanceTime();
       check(
         !document.querySelector(".board-pane-drag"),
         "Escape dismisses the pane drag",
@@ -256,7 +256,7 @@ export async function boardFollowupsAcceptance({
       finish,
       touch,
     );
-    await settle(100);
+    await advanceTime(100);
     check(
       !document.querySelector(".board-pane-drag"),
       "pane drag clears its ghost",
@@ -317,20 +317,20 @@ export async function boardFollowupsAcceptance({
     () => host.querySelectorAll(".board-tab").length === 2,
     "single-pane rooms mount",
   );
-  await settle(1000);
+  await advanceTime(1000);
   await placeCards({
     "synthetic-board:w1": { x: 0, y: 0 },
     "synthetic-board:w2": { x: 280, y: 0 },
     [sourceKey]: { x: 0, y: 150 },
     [destinationKey]: { x: 280, y: 150 },
   });
-  await settle(1000);
+  await advanceTime(1000);
   const fit = host.querySelector<HTMLButtonElement>(
     '[aria-label="Fit everything"]',
   );
   if (fit) fit.click();
   else action(await menu(), "Fit everything");
-  await settle(1000);
+  await advanceTime(1000);
   // Fit starts in workspace overview on a phone; use the real zoom controls
   // to expose both neighbouring tabs before starting their pane gesture.
   for (let i = 0; i < 2; i++) {
@@ -339,7 +339,7 @@ export async function boardFollowupsAcceptance({
     );
     if (zoom) zoom.click();
     else action(await menu(), "Zoom in");
-    await settle(1000);
+    await advanceTime(1000);
   }
   const grip = source().querySelector<HTMLElement>(".board-pane-handle")!;
   const gripCenter = center(grip);
@@ -352,13 +352,13 @@ export async function boardFollowupsAcceptance({
   const start = center(label);
   pointer(label, "pointerdown", start);
   pointer(label, "pointermove", { x: start.x + 30, y: start.y + 30 });
-  await settle();
+  await advanceTime();
   check(
     !document.querySelector(".board-pane-drag"),
     "single-pane card label preserves the card gesture",
   );
   pointer(label, "pointercancel", start);
-  await settle();
+  await advanceTime();
   await drag(false);
   await waitFor(
     () => document.querySelector('[aria-label="Move the room\'s last pane?"]'),
@@ -368,7 +368,7 @@ export async function boardFollowupsAcceptance({
     document.querySelector('[aria-label="Move the room\'s last pane?"]')!,
     "Cancel",
   );
-  await settle();
+  await advanceTime();
   check(
     moves.length === before + 3,
     "cancelling the last-room warning does not retry",
@@ -378,7 +378,7 @@ export async function boardFollowupsAcceptance({
     document.querySelector('[aria-label="Move the room\'s last pane?"]')!,
     "Move pane and close room",
   );
-  await settle(100);
+  await advanceTime(100);
   check(
     moves.length === before + 5 && moves[moves.length - 1]?.allowClose === true,
     "only explicit confirmation permits closing the old room",
@@ -393,10 +393,10 @@ export async function boardFollowupsAcceptance({
     document.querySelector('[aria-label="Move the room\'s last pane?"]')!,
     "Cancel",
   );
-  await settle();
+  await advanceTime();
   check(
     moves.length === before + 6,
     "single-pane touch hold reaches the last-room warning without a confirmed retry",
   );
-  await settle(10_000); // Let the transient move notice expire before visual capture.
+  await advanceTime(10_000); // Let the transient move notice expire before visual capture.
 }

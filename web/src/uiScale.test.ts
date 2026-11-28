@@ -228,7 +228,8 @@ test.skipIf(!chrome).concurrent.each([
         } catch (error) {
           const fixtureResult = await Promise.race([
             promise,
-            Bun.sleep(50).then(() => "fixture still running"),
+            // An already settled fixture wins the race; otherwise it is still running.
+            Promise.resolve("fixture still running"),
           ]);
           throw new Error(
             `${(error as Error).message}; fixture: ${JSON.stringify(fixtureResult)}`,

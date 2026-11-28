@@ -15,7 +15,7 @@ const failures: string[] = [];
 function check(condition: boolean, message: string) {
   if (!condition) failures.push(message);
 }
-async function settle() {
+async function nextFrames() {
   await new Promise<void>((resolve) =>
     requestAnimationFrame(() => requestAnimationFrame(() => resolve())),
   );
@@ -137,7 +137,7 @@ async function run() {
           sidebar.style.width = `${width}px`;
           for (const showBranch of [false, true]) {
             branch.hidden = !showBranch;
-            await settle();
+            await nextFrames();
             const context = `${theme} ${layout} sidebar ${width}px branch=${showBranch}`;
             const gitRect = git.getBoundingClientRect();
             const viewport = treeContent.getBoundingClientRect();
@@ -186,13 +186,13 @@ async function run() {
     workspaceName.textContent = "sample-workspace";
     git.querySelector(".git-ahead")!.remove();
     git.querySelector(".git-behind")!.remove();
-    await settle();
+    await nextFrames();
     check(
       branch.getBoundingClientRect().width >= 30,
       "a branch with a single count must retain readable space",
     );
     sidebar.style.width = "180px";
-    await settle();
+    await nextFrames();
     check(
       git.getBoundingClientRect().height ===
         branch.getBoundingClientRect().height,
@@ -201,7 +201,7 @@ async function run() {
     sidebar.style.width = "480px";
     for (const branchName of ["feature-with-a-long-branch-name", "main"]) {
       branch.textContent = branchName;
-      await settle();
+      await nextFrames();
       check(
         Math.abs(
           git.getBoundingClientRect().right -
@@ -211,7 +211,7 @@ async function run() {
       );
     }
     git.remove();
-    await settle();
+    await nextFrames();
     check(
       row.getBoundingClientRect().height <=
         workspaceName.getBoundingClientRect().height + 8,
@@ -234,25 +234,23 @@ async function run() {
       "zen island must hang flush from the top edge above the revealed topbar",
     );
     island.focus();
-    // The reveal animates transform over 150ms; wait it out before measuring.
-    await Promise.race([
-      new Promise((resolve) =>
-        zenTopbar.addEventListener("transitionend", resolve, { once: true }),
-      ),
-      new Promise((resolve) => setTimeout(resolve, 300)),
-    ]);
+    // The reveal animates transform over 150ms; wait for its transition to
+    // finish (none running: already revealed) before measuring.
+    await Promise.all(
+      zenTopbar.getAnimations().map((animation) => animation.finished),
+    );
     check(
       getComputedStyle(zenTopbar).transform === "none",
       "focusing the zen island must reveal the topbar",
     );
     island.blur();
-    await settle();
+    await nextFrames();
     zen.remove();
     for (const theme of ["dark", "light"]) {
       document.documentElement.dataset.theme = theme;
       for (const layout of ["desktop", "mobile"]) {
         document.documentElement.dataset.layout = layout;
-        await settle();
+        await nextFrames();
         const label = `${theme} ${layout}`;
         const topbarStyle = getComputedStyle(topbar);
         check(
@@ -304,7 +302,7 @@ async function run() {
           ]) {
             stage.style.width = `${width}px`;
             stage.style.height = `${height}px`;
-            await settle();
+            await nextFrames();
             const context = `${label} ${dock} ${width}x${height}`;
             const overlay = width <= 999 || height <= 466;
             check(
@@ -365,7 +363,7 @@ async function run() {
           stage.className = `workspace-stage has-inspector inspector-dock-${dock}`;
           slot.style.cssText =
             dock === "right" ? "width:400px" : "height:300px";
-          await settle();
+          await nextFrames();
           const terminalRect = surface.getBoundingClientRect();
           const inspectorRect = slot.getBoundingClientRect();
           const annotationRect = annotations.getBoundingClientRect();
@@ -388,7 +386,7 @@ async function run() {
           );
           if (width === 1100 && dock === "right") {
             slot.style.width = "360px";
-            await settle();
+            await nextFrames();
             check(
               slot.getBoundingClientRect().width === 360,
               `${context}: peer docking ignored Inspector resize`,

@@ -34,7 +34,7 @@ const failures: string[] = [];
 const check = (condition: boolean, message: string) => {
   if (!condition) failures.push(`${location.search}: ${message}`);
 };
-const settle = () => clock.advance(120);
+const advanceTime = () => clock.advance(120);
 const input = async (method: string, body: Record<string, unknown>) => {
   const response = await fetch("/input", {
     method: "POST",
@@ -225,7 +225,7 @@ async function press(
         clickCount: 1,
       });
   }
-  await settle();
+  await advanceTime();
 }
 // Lower left, clear of the menus anchored at the top right.
 const pressTerminal = () =>
@@ -243,7 +243,7 @@ async function escape(times = 1) {
         code: "Escape",
         windowsVirtualKeyCode: 27,
       });
-  await settle();
+  await advanceTime();
 }
 async function back() {
   // The traversal is the browser's own: wait for its popstate.
@@ -252,7 +252,7 @@ async function back() {
   );
   history.back();
   await landed;
-  await settle();
+  await advanceTime();
 }
 const menu = () => $('[role="menu"][aria-label="Window actions"]');
 const swatches = () => $('.color-swatch-popover [role="group"]');
@@ -435,7 +435,7 @@ async function run() {
         code: "Tab",
         windowsVirtualKeyCode: 9,
       });
-    await settle();
+    await advanceTime();
     check(!select(), "a quick Tab out left the dropdown open");
     // xterm consumes keys in its textarea; Escape still closes the top layer.
     await press($('button[aria-label="Sort order"]'), "dropdown trigger");

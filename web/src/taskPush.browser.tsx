@@ -10,7 +10,7 @@ const failures: string[] = [];
 const check = (condition: boolean, message: string) => {
   if (!condition) failures.push(message);
 };
-const settle = () => clock.advance(50);
+const advanceTime = () => clock.advance(50);
 const originalFetch = window.fetch;
 const calls: Array<{ method: string; body: any }> = [];
 let subscribed = true;
@@ -137,7 +137,7 @@ async function run() {
         .querySelector<HTMLButtonElement>("#settings-tab-notifications")!
         .click(),
     );
-    await settle();
+    await advanceTime();
     check(Boolean(menu), `${theme}: notification configuration missing`);
     for (const animation of menu.getAnimations({ subtree: true }))
       animation.finish();
@@ -162,7 +162,7 @@ async function run() {
     completion.scrollIntoView({ block: "nearest" });
     completion.focus();
     flushSync(() => completion.click());
-    await settle();
+    await advanceTime();
     check(
       completion.getAttribute("aria-checked") === "false",
       `${theme}: completion preference not updated`,
@@ -202,13 +202,13 @@ async function run() {
       );
     }
     flushSync(() => completion.click());
-    await settle();
+    await advanceTime();
   }
   const toggle = document.querySelector<HTMLButtonElement>(
     "button[aria-label='Task notifications']",
   )!;
   flushSync(() => toggle.click());
-  await settle();
+  await advanceTime();
   check(
     calls.slice(-1)[0]?.method === "DELETE" && !subscribed,
     "device was not revoked",

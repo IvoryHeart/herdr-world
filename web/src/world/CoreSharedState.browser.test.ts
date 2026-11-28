@@ -32,11 +32,25 @@ const VIEWPORTS = [
   { name: "portrait", width: 1440, height: 2560, mobile: false },
 ] as const;
 
+/** Status changes the connection manager publishes, for `until`. */
+let statusChanged: () => void = () => {};
+/** Check again on each published connection status, or fail after `ms`. */
 async function until(predicate: () => boolean, ms = 3_000) {
-  const deadline = Date.now() + ms;
-  while (!predicate()) {
-    if (Date.now() > deadline) throw new Error("condition not reached");
-    await Bun.sleep(5);
+  const deadline = Promise.withResolvers<never>();
+  const timer = setTimeout(
+    () => deadline.reject(new Error("condition not reached")),
+    ms,
+  );
+  try {
+    while (!predicate())
+      await Promise.race([
+        new Promise<void>((resolve) => {
+          statusChanged = resolve;
+        }),
+        deadline.promise,
+      ]);
+  } finally {
+    clearTimeout(timer);
   }
 }
 
@@ -47,7 +61,9 @@ async function coreWorld(root: string) {
   const stateDir = join(root, "core", "state");
   const socket = await fake.listen(stateDir, join(root, "core", "run"));
   let invalidate: (id: string) => void = () => {};
-  const manager = new ConnectionManager<CoreConnectionRuntime>("");
+  const manager = new ConnectionManager<CoreConnectionRuntime>("", () =>
+    statusChanged(),
+  );
   const none = {
     list: () => [],
     has: () => false,

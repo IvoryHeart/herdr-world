@@ -24,7 +24,7 @@ const failures: string[] = [];
 const check = (condition: boolean, message: string) => {
   if (!condition) failures.push(message);
 };
-const settle = () => clock.advance(100);
+const advanceTime = () => clock.advance(100);
 
 async function run() {
   const header = document.createElement("div");
@@ -83,7 +83,7 @@ async function run() {
         );
         term.options = terminalFontOptions(compact, scale);
         renderMenu(true);
-        await settle();
+        await advanceTime();
         const menu = document
           .querySelector(".command-popover")!
           .getBoundingClientRect();
@@ -109,7 +109,7 @@ async function run() {
           `${label}: topbar obscured the menu`,
         );
         renderMenu(false);
-        await settle();
+        await advanceTime();
         const screen = container.querySelector(".xterm-screen")!;
         const rect = screen.getBoundingClientRect();
         const cellWidth = rect.width / term.cols;

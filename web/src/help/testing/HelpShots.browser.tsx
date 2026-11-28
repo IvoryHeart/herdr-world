@@ -135,7 +135,7 @@ const frames = async (count: number) => {
 const stats = () => window.__HERDR_TOWN_RENDERER__;
 
 /** Waits until Town's camera and actors stop moving, or `limit` ms pass. */
-async function settle(limit = 8000) {
+async function untilCalm(limit = 8000) {
   const began = performance.now();
   let calm = 0;
   while (performance.now() - began < limit) {
@@ -295,7 +295,7 @@ async function swapTown(runtimes: boolean) {
   runtimesSwapped = runtimes;
   await frames(10);
   while (!stats()?.ready) await frame();
-  await settle(12_000);
+  await untilCalm(12_000);
 }
 
 /**
@@ -365,7 +365,7 @@ const helpShots = {
     );
     if (scene === "town") {
       while (!stats()?.ready) await frame();
-      await settle(12_000);
+      await untilCalm(12_000);
     } else await frames(240);
     // Chat's message buttons show on hover; the picture shows them.
     (document.activeElement as HTMLElement | null)?.blur();
@@ -390,7 +390,7 @@ const helpShots = {
         await frames(20);
       }
       // A camera press (Town's ALL) flies before the control is in view.
-      if (pressed.length && scene === "town") await settle();
+      if (pressed.length && scene === "town") await untilCalm();
     }
     const target = findHelpTarget(control);
     if (!target) return null;

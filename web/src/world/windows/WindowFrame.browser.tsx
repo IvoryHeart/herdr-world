@@ -128,7 +128,7 @@ const failures: string[] = [];
 const check = (condition: boolean, message: string) => {
   if (!condition) failures.push(message);
 };
-const settle = () => clock.advance(40);
+const advanceTime = () => clock.advance(40);
 /**
  * The surface reads its scroll from scroll events, delivered at real frames,
  * and scrolls itself to keep a window in view: wait until two real frames
@@ -240,7 +240,7 @@ async function checkNarrowTownHeaders() {
         </div>,
       ),
     );
-    await settle();
+    await advanceTime();
     const header = host.querySelector<HTMLElement>("header")!;
     const bounds = header.getBoundingClientRect();
     const buttons = host.querySelectorAll<HTMLElement>(
@@ -288,14 +288,14 @@ window.addEventListener("error", (event) => failures.push(event.message));
 async function run() {
   const root = createRoot(document.getElementById("root")!);
   flushSync(() => root.render(<Fixture />));
-  await settle();
+  await advanceTime();
   check(
     Boolean(frame().querySelector('button[aria-label="Minimize A"]')),
     "desktop minimize requires opening a menu",
   );
   const before = geometry();
   frame("B").focus();
-  await settle();
+  await advanceTime();
   check(
     JSON.stringify(geometry()) === JSON.stringify(before),
     "focus moved an unrelated window",
@@ -362,7 +362,7 @@ async function run() {
   frame()
     .querySelector<HTMLButtonElement>('[aria-label="More actions for A"]')!
     .click();
-  await settle();
+  await advanceTime();
   [
     ...document.querySelectorAll<HTMLButtonElement>(
       '[role="menu"][aria-label="Window actions"] button',
@@ -370,12 +370,12 @@ async function run() {
   ]
     .find((button) => button.textContent === "Minimize")!
     .click();
-  await settle();
+  await advanceTime();
   check(!frame(), "minimized window remained visible");
   document
     .querySelector<HTMLButtonElement>(".world-window-switcher-trigger")!
     .click();
-  await settle();
+  await advanceTime();
   const restore = [
     ...document.querySelectorAll<HTMLButtonElement>(
       ".world-window-switcher-menu button",
@@ -386,13 +386,13 @@ async function run() {
     "minimized window lost its switcher entry",
   );
   restore.click();
-  await settle();
+  await advanceTime();
   check(
     Boolean(frame()) && harness.state.windows.A?.maximized === true,
     "switcher failed to restore maximize state",
   );
   frame().querySelector<HTMLButtonElement>('[aria-label="Restore A"]')!.click();
-  await settle();
+  await advanceTime();
   check(
     JSON.stringify(geometry()) === JSON.stringify(snapped),
     "restore forgot the previous snap",
@@ -512,7 +512,7 @@ async function run() {
       })),
     );
   });
-  await settle();
+  await advanceTime();
   // A scrolled canvas remains the movement boundary, while every snap and
   // maximize destination occupies the visible viewport before and after release.
   for (const preset of ["columns", "rows"] as const) {
@@ -527,14 +527,14 @@ async function run() {
       "maximize",
     ] as const) {
       flushSync(() => harness.dispatch({ type: "arrange", preset }));
-      await settle();
+      await advanceTime();
       const surface = document.querySelector<HTMLElement>(
         ".world-window-layer",
       )!;
       surface.scrollLeft = surface.scrollWidth;
       surface.scrollTop = surface.scrollHeight;
       await scrollQuiet(surface);
-      await settle();
+      await advanceTime();
       check(
         preset === "columns" ? surface.scrollLeft > 0 : surface.scrollTop > 0,
         `${preset}: fixture did not scroll`,
@@ -571,7 +571,7 @@ async function run() {
             : harness.size.height / 2);
       pointer(window, "pointermove", x, y);
       await scrollQuiet(surface);
-      await settle();
+      await advanceTime();
       const preview = document.querySelector<HTMLElement>(
         ".world-window-snap-preview",
       );
@@ -592,7 +592,7 @@ async function run() {
         );
       pointer(window, "pointerup", x, y);
       await scrollQuiet(surface);
-      await settle();
+      await advanceTime();
       check(
         sameGeometry(cssGeometry(frame("H")), expected),
         `${preset}/${target}: release disagreed with preview`,
@@ -614,14 +614,14 @@ async function run() {
           startY = bounds.y + 15;
         pointer(handle, "pointerdown", startX, startY);
         pointer(window, "pointermove", startX - 60, startY + 80);
-        await settle();
+        await advanceTime();
         const moved = cssGeometry(frame("H"));
         check(
           !document.querySelector(".world-window-snap-preview"),
           `${preset}/${target}: detaching did not leave the snap target`,
         );
         pointer(window, "pointerup", startX - 60, startY + 80);
-        await settle();
+        await advanceTime();
         check(
           sameGeometry(cssGeometry(frame("H")), moved),
           `${preset}/${target}: detaching lost canvas coordinates`,

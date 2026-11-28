@@ -140,7 +140,7 @@ createRoot(mount).render(
   />,
 );
 
-const settle = async (ms = 0) => {
+const advanceTime = async (ms = 0) => {
   await clock.advance(ms);
   await clock.frame();
 };
@@ -178,7 +178,7 @@ async function menuFor(item: HTMLElement | undefined): Promise<string[]> {
         pointerType: "touch",
       }),
     );
-    await settle(700);
+    await advanceTime(700);
     item.dispatchEvent(
       new PointerEvent("pointerup", {
         ...at,
@@ -191,7 +191,7 @@ async function menuFor(item: HTMLElement | undefined): Promise<string[]> {
       new MouseEvent("contextmenu", { ...at, bubbles: true, cancelable: true }),
     );
   }
-  await settle();
+  await advanceTime();
   const buttons = [
     ...document.querySelectorAll<HTMLButtonElement>(".context-menu-item"),
   ];
@@ -203,12 +203,12 @@ async function menuFor(item: HTMLElement | undefined): Promise<string[]> {
   document.dispatchEvent(
     new KeyboardEvent("keydown", { key: "Escape", bubbles: true }),
   );
-  await settle();
+  await advanceTime();
   return labels;
 }
 
 async function run() {
-  await settle(50);
+  await advanceTime(50);
   check(
     document.documentElement.dataset.layout === (phone ? "mobile" : "desktop"),
     `layout is ${document.documentElement.dataset.layout}, not ${phone ? "mobile" : "desktop"}`,
@@ -259,7 +259,7 @@ async function run() {
   const coreAgent = coreTree?.querySelector<HTMLElement>('[data-pane-id="t1"]');
   check(coreAgent, "the herdr-core agent is not listed");
   coreAgent?.click();
-  await settle();
+  await advanceTime();
   check(
     selected.includes("agent t1"),
     `clicking the herdr-core agent selected ${JSON.stringify(selected)}`,
