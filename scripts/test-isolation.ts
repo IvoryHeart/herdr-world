@@ -26,6 +26,8 @@ const runnerVariables = new Set([
   "HERDR_WORLD_TEST_PHASES",
   // The run's one shared test Chrome (web/src/testing/chromeBrowser.ts).
   "HERDR_TEST_CHROME_WS",
+  // A per-file test limit override (scripts/test-file-timeout.ts).
+  "HERDR_TEST_FILE_TIMEOUT_MS",
   // The CI diagnostics adapter needs these through nested test runners.
   "HERDR_DIAGNOSTIC_CHROME",
   "HERDR_BROWSER_DIAGNOSTICS_DIR",
