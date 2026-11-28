@@ -3,7 +3,7 @@ import assert from "node:assert/strict";
 // Six runners (the full run's sixteen-job cap) each run three logical
 // queues, packed longest case first by recorded CI time.
 const WORLD_BROWSER_SHARDS = 6;
-const WORLD_BROWSER_WORKERS = 3;
+export const WORLD_BROWSER_WORKERS = 3;
 
 export type CaseTimings = Record<string, Record<string, number>>;
 type WorldCaseTask = {

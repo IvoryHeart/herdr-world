@@ -637,11 +637,14 @@ test("the real shard-table graph does not mistake installer test imports for nat
   ).toBe(true);
 });
 
-test("World CI isolates full scenes while keeping lightweight files parallel, with every selected suite once", () => {
+test("World CI runs full scenes in isolated case queues side by side and lightweight files two at a time, with every selected suite once", () => {
   const selection = selectValidation(graph, ["package.json"]);
   const all = { ...selection, world: worldBrowserSuites };
   const batches = ciTestBatches(all, "world");
-  expect(batches.map((batch) => batch.parallel)).toEqual([1, 2]);
+  expect(batches.map(({ parallel, label }) => [parallel, label])).toEqual([
+    [3, "isolated"],
+    [2, "parallel"],
+  ]);
   expect(batches.flatMap((batch) => batch.files).sort()).toEqual(
     [...worldBrowserSuites].sort(),
   );
@@ -669,7 +672,13 @@ test("World CI isolates full scenes while keeping lightweight files parallel, wi
       { ...selection, world: ["web/src/world/NewScene.test.ts"] },
       "world",
     ),
-  ).toEqual([{ files: ["web/src/world/NewScene.test.ts"], parallel: 1 }]);
+  ).toEqual([
+    {
+      files: ["web/src/world/NewScene.test.ts"],
+      parallel: 3,
+      label: "isolated",
+    },
+  ]);
 });
 
 test.each([
@@ -696,7 +705,7 @@ test.each([
         `
 import {appendFileSync} from "node:fs";
 appendFileSync("executions.jsonl", JSON.stringify({args:process.argv.slice(2),label:process.env.HERDR_WORLD_TEST_LABEL})+"\\n");
-if (process.argv.includes("--parallel=${failingBatch === "isolated" ? 1 : 2}") && ${failingPass > 0} && (${runs} === 1 || process.env.HERDR_WORLD_TEST_LABEL?.includes("-pass-${failingPass}-"))) process.exit(7);
+if (process.argv.includes("--parallel=${failingBatch === "isolated" ? 3 : 2}") && ${failingPass > 0} && (${runs} === 1 || process.env.HERDR_WORLD_TEST_LABEL?.includes("-pass-${failingPass}-"))) process.exit(7);
 `,
       );
       const selection = {
@@ -732,10 +741,10 @@ if (process.argv.includes("--parallel=${failingBatch === "isolated" ? 1 : 2}") &
         expected.push({
           args: [
             selection.world[0],
-            "--parallel=1",
+            "--parallel=3",
             "--max-concurrency=1",
             "--retry-flaky=browser",
-            `--flake-report=.agents/delivery/flakes-world-all-${pass}-1-${process.env.GITHUB_RUN_ATTEMPT || "local"}.json`,
+            `--flake-report=.agents/delivery/flakes-world-all-${pass}-3-${process.env.GITHUB_RUN_ATTEMPT || "local"}.json`,
           ],
           label: `${prefix}-isolated`,
         });

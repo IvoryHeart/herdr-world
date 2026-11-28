@@ -72,15 +72,16 @@ test("invalid timing data and worker counts fail closed", () => {
   expect(() => planWorldBrowserCases(["a", "a"], {})).toThrow();
 });
 
-test("the committed case plan budgets serial scenes below three minutes", () => {
+test("the committed case plan budgets each scene queue below three minutes", () => {
   expect(worldBrowserCasePlan).toHaveLength(6);
   for (const workers of worldBrowserCasePlan) {
     expect(workers).toHaveLength(3);
-    // Heavy scenes execute serially: budget the sum of every logical queue,
-    // leaving at least 30 seconds for setup, rather than only its longest queue.
-    expect(
-      workers.flat().reduce((sum, task) => sum + task.seconds, 0),
-    ).toBeLessThan(150);
+    // A shard runs its queues side by side (ci-tests.ts), so its longest
+    // queue sets its time: keep each below 150 s, leaving 30 s for setup.
+    for (const tasks of workers)
+      expect(tasks.reduce((sum, task) => sum + task.seconds, 0)).toBeLessThan(
+        150,
+      );
   }
   for (const cases of Object.values(timings.cases))
     for (const seconds of Object.values(cases))

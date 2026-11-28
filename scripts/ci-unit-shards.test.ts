@@ -17,7 +17,7 @@ test("CI runs four non-browser files at a time without changing case concurrency
     unit: ["scripts/example.test.ts"],
   } as ValidationSelection;
   expect(ciTestBatches(selection, "unit")).toEqual([
-    { files: selection.unit, parallel: 4 },
+    { files: selection.unit, parallel: 4, label: "unit" },
   ]);
 });
 
