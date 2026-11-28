@@ -414,3 +414,13 @@ test("diagnostics adapter launches", async () => {
     expect(result.code).toBe(0);
   },
 );
+
+test("the local hardware-WebGL opt-in reaches browser fixtures", () => {
+  const env = isolatedTestEnv(scratch(), {
+    ...process.env,
+    HERDR_WORLD_TEST_GPU: "1",
+    HERDR_WORLD_TEST_OTHER: "1",
+  });
+  expect(env.HERDR_WORLD_TEST_GPU).toBe("1");
+  expect(env.HERDR_WORLD_TEST_OTHER).toBeUndefined();
+});

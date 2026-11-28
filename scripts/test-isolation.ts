@@ -20,6 +20,8 @@ const runnerVariables = new Set([
   "HERDR_WORLD_TEST_ASSETS",
   "HERDR_WORLD_TEST_LABEL",
   "HERDR_CHROME_WARM",
+  // Local opt-in to hardware WebGL (web/src/world/testing/chromeRendering.ts).
+  "HERDR_WORLD_TEST_GPU",
   // The CI diagnostics adapter needs these through nested test runners.
   "HERDR_DIAGNOSTIC_CHROME",
   "HERDR_BROWSER_DIAGNOSTICS_DIR",
