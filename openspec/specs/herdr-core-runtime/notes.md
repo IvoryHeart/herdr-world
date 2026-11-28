@@ -16,6 +16,10 @@
   (launch placement)
 - `server/src/herdr-core/layout.ts`, `server/src/storage/core-topology.ts`,
   `server/src/storage/catalog.ts` (legacy layout and migration metadata)
+- `server/src/herdr-core/delivery.ts`, `server/src/herdr-core/delivery.test.ts`
+- `server/src/herdr-core/native-send.test.ts`
+- `server/src/herdr-core/recipient.ts`
+
 - `server/src/herdr-core/host-runtime.ts`
 - `server/src/herdr-core/host-runtime.test.ts`
 - `server/src/herdr-core/town-move.ts`
@@ -36,6 +40,8 @@
 - `server/src/world/agent-rehome.ts`
 - `server/src/rpc/agent-move.ts`
 - `shared/agentMove.ts`
+- `web/src/world/town/townRuntimeMove.ts` (handoff request and its toast outcome)
+- `web/src/world/moveBoardRefuses.ts` (`?moveBoardRefuses=1` testing switch)
 - `server/src/herdr-core/shared-state.ts` (`waitsWithoutResult`: started-harness readiness)
 - `server/src/herdr-core/harness-start.test.ts`
 - `server/src/herdr-core/testing/capture-harness-start.ts`
@@ -242,7 +248,13 @@ or runtime acceptance are claimed by this design-only PR.
   Codex keeps one conversation open at a time, so a Codex agent closes first
   and then resumes in the new room; if it doesn't start there it resumes back
   in its own room, and if that fails too the message says which `codex
-  resume` command continues it. A Claude copy that reports a new
+  resume` command continues it. If the Codex agent starts there but the
+  Board refuses its desk, the original has already closed: the toast says it
+  moved and that its desk details stayed behind (colour, pin and links stay
+  on the old desk). Testing switch: open World with `?moveBoardRefuses=1`
+  (the page drops it at once; it lasts until a reload, `=0` turns it off) and
+  every move to another runtime asks the service to refuse its desk rehome
+  (`web/src/world/moveBoardRefuses.ts`). A Claude copy that reports a new
   conversation instead of its own is closed and the move goes the same way.
   Two connections that reach the same Herdr are one runtime: Move to…
   doesn't offer the other's rooms as another runtime, and a move between them
@@ -399,3 +411,7 @@ with source creation/merge dates and current session-qualified links for agent
 attribution. Missing sources never imply zero. Reads refuse unqualified pane/room
 filters, unsupported windows and arbitrary paths. `usage --fixture` runs a
 synthetic example offline, including an owner wait and a usage limit.
+
+## Foreground admission
+
+See [Foreground admission](../ask-answer-delivery/notes.md#foreground-admission) for agent input checks, restarts and wrapper scripts.

@@ -39,6 +39,72 @@ test("P4: every legacy verb × actor equals the independently recorded policy ta
     expect(registeredVerb("rpc", method)!.recovery).toBe("opaque");
 });
 
+// A CallExpression's `call` identifier must appear literally or use a Unicode
+// escape. Keep escape-bearing sources on the parser path, including escaped
+// property identifiers and RPC string literals. This avoids parsing unrelated
+// UI files during the five-second inventory check on parallel CI runners.
+function browserRPCCalls(source: string, tsx = false): string[] {
+  if (!source.includes("call") && !source.includes("\\")) return [];
+  const calls: string[] = [];
+  const ast = parse(source, {
+    sourceType: "module",
+    attachComment: false,
+    plugins: tsx ? ["typescript", "jsx"] : ["typescript"],
+  });
+  const walk = (value: unknown) => {
+    if (!value || typeof value !== "object") return;
+    const node = value as {
+      type?: string;
+      callee?: { type?: string; property?: { name?: string } };
+      arguments?: { type?: string; value?: unknown }[];
+    };
+    // Locations and parser metadata cannot contain call expressions.
+    if (!node.type) return;
+    if (
+      node.type === "CallExpression" &&
+      node.callee?.type === "MemberExpression" &&
+      node.callee.property?.name === "call"
+    ) {
+      const name = node.arguments?.[0];
+      if (
+        name?.type === "StringLiteral" &&
+        typeof name.value === "string" &&
+        /^[a-z_]+\.[a-z_.]+$/.test(name.value)
+      )
+        calls.push(name.value);
+    }
+    for (const child of Object.values(value))
+      if (Array.isArray(child)) child.forEach(walk);
+      else if (child && typeof child === "object") walk(child);
+  };
+  walk(ast);
+  return calls;
+}
+
+test.each([
+  ['rpc.call("world.read")', ["world.read"]],
+  ['rpc /* gap */ . call ("world.read")', ["world.read"]],
+  [String.raw`rpc.c\u0061ll("world.read")`, ["world.read"]],
+  [String.raw`rpc.\u{63}all("world.read")`, ["world.read"]],
+  [String.raw`rpc.c\u0061ll("world.\u0072ead")`, ["world.read"]],
+  ['const node = <div>{rpc.call("world.read")}</div>', ["world.read"]],
+  [
+    'rpc.call("world.read"); rpc.call("world.read")',
+    ["world.read", "world.read"],
+  ],
+  [
+    `// rpc.call("unknown.method")\nconst message = 'rpc.call("unknown.method")'`,
+    [],
+  ],
+  ['rpc.call(dynamic); rpc.call("shortcut"); rpc.other("unknown.method")', []],
+  ["export const unrelated = <div>Read the world</div>", []],
+])(
+  "P4: browser RPC inventory keeps syntax and escapes: %s",
+  (source, expected) => {
+    expect(browserRPCCalls(source, true)).toEqual(expected);
+  },
+);
+
 // Read call expressions, rather than arbitrary string literals (which include
 // notifications, shortcuts and Board op names). Dynamic assistant names are
 // separately enumerated in the baseline and exercised by its existing suites.
@@ -51,42 +117,13 @@ test("P4: every literal browser RPC call is registered", () => {
       /(?:\.test\.|testing\/)/.test(relative)
     )
       continue;
-    const ast = parse(readFileSync(join(root, relative), "utf8"), {
-      sourceType: "module",
-      plugins: relative.endsWith(".tsx")
-        ? ["typescript", "jsx"]
-        : ["typescript"],
-    });
-    const walk = (value: unknown) => {
-      if (!value || typeof value !== "object") return;
-      const node = value as {
-        type?: string;
-        callee?: { type?: string; property?: { name?: string } };
-        arguments?: { type?: string; value?: unknown }[];
-      };
-      if (
-        node.type === "CallExpression" &&
-        node.callee?.type === "MemberExpression" &&
-        node.callee.property?.name === "call"
-      ) {
-        const name = node.arguments?.[0];
-        if (
-          name?.type === "StringLiteral" &&
-          typeof name.value === "string" &&
-          /^[a-z_]+\.[a-z_.]+$/.test(name.value)
-        ) {
-          expect(
-            registeredVerb("rpc", name.value),
-            `${relative}: ${name.value}`,
-          ).toBeDefined();
-          calls++;
-        }
-      }
-      for (const child of Object.values(value))
-        if (Array.isArray(child)) child.forEach(walk);
-        else if (child && typeof child === "object") walk(child);
-    };
-    walk(ast);
+    for (const name of browserRPCCalls(
+      readFileSync(join(root, relative), "utf8"),
+      relative.endsWith(".tsx"),
+    )) {
+      expect(registeredVerb("rpc", name), `${relative}: ${name}`).toBeDefined();
+      calls++;
+    }
   }
   expect(calls).toBeGreaterThan(100);
 });

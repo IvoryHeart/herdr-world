@@ -1,4 +1,5 @@
 import type { ConnectionStatus } from "../connections/types";
+import type { HostGrouping } from "../../../shared/hostGrouping";
 import type { WorldHost } from "../../../shared/hosts";
 
 export type WorldAgentStatus =
@@ -75,6 +76,8 @@ export type WorldSnapshotResult = {
   connections: WorldConnectionSnapshot[];
   /** Host catalogue; runtime topology remains indexed by immutable connection_id. */
   hosts?: WorldHostSnapshot[];
+  /** How every view groups the runtimes, derived under this revision. */
+  host_grouping?: HostGrouping;
 };
 
 export type WorldHostSnapshot = Omit<WorldHost, "runtimes"> & {
@@ -83,4 +86,20 @@ export type WorldHostSnapshot = Omit<WorldHost, "runtimes"> & {
     stale: boolean;
     actionable: boolean;
   })[];
+};
+
+/** World's own published values beside topology, under the same revision. */
+export type WorldPublished = Record<string, unknown>;
+
+/**
+ * World's own values: read after the revision is taken, so a reply's values
+ * are at least that new. `derive` adds, with no await, what follows from the
+ * values and connections that one reply carries, so they match exactly.
+ */
+export type WorldPublication = {
+  values(): Promise<WorldPublished> | WorldPublished;
+  derive?(
+    published: WorldPublished,
+    connections: readonly WorldConnectionSnapshot[],
+  ): WorldPublished;
 };

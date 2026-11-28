@@ -1,17 +1,16 @@
 /**
- * World's "Group runtimes" setting (#1307): one value every view that groups
- * by where agents run follows (runtimeGrouping.ts). It replaced Town's own
+ * World's "Group runtimes" setting (#1307): how Town draws a machine's
+ * runtimes, as one building or one per runtime. Hosts are machines in every
+ * view whatever it says (shared/hostGrouping.ts). The control shows World's published value
+ * (the replica) and changes it through a World command, so every browser
+ * follows the same publication (runtimeGrouping.ts). It replaced Town's own
  * "Town buildings" choice, so its words still find it under that name.
  */
 
 import { Building2 } from "lucide-react";
 import { defineSettings } from "../settings/registry";
-import {
-  type RuntimeGrouping,
-  runtimeGrouping,
-  saveRuntimeGrouping,
-  subscribeRuntimeGrouping,
-} from "./runtimeGrouping";
+import type { RuntimeGrouping } from "../../../shared/hostGrouping";
+import { runtimeGroupingControl } from "./runtimeGrouping";
 
 defineSettings("runtime-grouping", [
   {
@@ -20,7 +19,7 @@ defineSettings("runtime-grouping", [
     category: "system",
     title: "Group runtimes",
     description:
-      "Show a machine's Herdr TUI and herdr-core together, or each runtime apart, in Town, Desk and the navigator",
+      "Draw a machine's Herdr TUI and herdr-core as one Town building, or one building per runtime. Hosts stay machines everywhere",
     words: [
       "town buildings",
       "buildings",
@@ -37,7 +36,7 @@ defineSettings("runtime-grouping", [
     ],
     icon: <Building2 size={15} />,
     scope: "world",
-    subscribe: subscribeRuntimeGrouping,
+    subscribe: runtimeGroupingControl.subscribe,
     control: {
       type: "choice",
       options: [
@@ -52,10 +51,12 @@ defineSettings("runtime-grouping", [
           words: ["separate", "apart", "herdr-core", "herdr-tui"],
         },
       ],
-      get: () => runtimeGrouping(),
+      // World's published grouping.
+      get: () => runtimeGroupingControl.get(),
       set: (_host, value) => {
-        // A refused or unconnected save puts the saved value back.
-        void saveRuntimeGrouping(value as RuntimeGrouping).catch(() => {});
+        // The control keeps showing the published value until World
+        // publishes the change; a failure is reported.
+        runtimeGroupingControl.set(value as RuntimeGrouping);
       },
     },
   },

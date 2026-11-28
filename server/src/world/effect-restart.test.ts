@@ -67,6 +67,18 @@ async function receiver() {
       reads.push(method);
       return { pane: native };
     }
+    if (method === "pane.process_info") {
+      reads.push(method);
+      // Session reports alone cannot establish the original agent foreground.
+      return {
+        process_info: {
+          pane_id: native.pane_id,
+          shell_pid: 5000,
+          foreground_process_group_id: 6000,
+          foreground_processes: [{ pid: 6000, name: native.agent }],
+        },
+      };
+    }
     sends.push(method);
     return { shown: true };
   };

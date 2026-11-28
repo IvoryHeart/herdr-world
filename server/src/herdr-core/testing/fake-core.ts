@@ -71,6 +71,8 @@ export type FakeViewerFrame = {
 export type FakeCoreOptions = {
   /** Synthetic harness status already reported when a run is observed. */
   runStatus?: string;
+  /** A harness that has taken foreground from terminal.run's shell wrapper. */
+  runForeground?: string;
   coreId?: string;
   name?: string;
   version?: string;
@@ -1145,8 +1147,13 @@ export class FakeCore {
             : {}),
           foreground: {
             pid,
-            name: program.split("/").pop() ?? "sh",
-            argv: argv.length ? argv : ["/bin/sh"],
+            name:
+              this.options.runForeground ?? program.split("/").pop() ?? "sh",
+            argv: this.options.runForeground
+              ? [this.options.runForeground]
+              : argv.length
+                ? argv
+                : ["/bin/sh"],
             cwd,
           },
         });

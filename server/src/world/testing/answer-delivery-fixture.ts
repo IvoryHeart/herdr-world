@@ -1,4 +1,5 @@
 import { herdrRuntimeFixture } from "../../adapters/testing/runtime";
+import { createTuiPassThrough } from "../../adapters/herdr-runtime";
 import { existsSync, mkdirSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { createHerdrConversationSource } from "../../agent/herdr-conversation";
@@ -18,6 +19,7 @@ export async function productionAnswerFixture(
   root: string,
   hooks: {
     paneRead?(): Promise<void>;
+    foregroundRead?(): void;
     prompt?(text: string): Promise<void>;
     generation?: number;
   } = {},
@@ -76,15 +78,23 @@ export async function productionAnswerFixture(
       value: path,
     },
   };
+  const foreground = {
+    pane_id: info.pane_id,
+    shell_pid: process.pid,
+    foreground_process_group_id: process.pid + 1000,
+    foreground_processes: [{ pid: process.pid + 1000, name: "claude" }],
+  };
   const call = async (method: string, params: Record<string, unknown> = {}) => {
     if (method === "pane.get") {
       await hooks.paneRead?.();
       return { pane: info };
     }
-    if (method === "pane.process_info")
+    if (method === "pane.process_info") {
+      hooks.foregroundRead?.();
       return {
-        process_info: { pane_id: info.pane_id, shell_pid: process.pid },
+        process_info: foreground,
       };
+    }
     if (method === "notification.show") return { shown: true };
     // An idle composer: no menu where Chat's text goes.
     if (method === "pane.read") return { read: { text: "❯ " } };
@@ -96,7 +106,7 @@ export async function productionAnswerFixture(
     throw new Error(`Unexpected synthetic Herdr method ${method}`);
   };
   const conversation = createHerdrConversationSource({
-    herdrCall: call,
+    herdrCall: createTuiPassThrough("herdr", { call }).call,
     files: localAgentSessionFiles,
     context: createAgentSessionResolverContext(),
     cache: createSessionProjectionCache(localAgentSessionFiles),
@@ -139,6 +149,7 @@ export async function productionAnswerFixture(
     storage,
     dispatcher,
     info,
+    foreground,
     clock,
     scheduler,
     lease,

@@ -1,4 +1,5 @@
 import { afterEach, expect, test } from "bun:test";
+import { deriveHostGrouping } from "../../../../shared/hostGrouping";
 import { bridge } from "../../api";
 import { sharedBoardStore, type BoardOp } from "../board/boardDocument";
 import { NO_TRACE } from "../devtools/flag";
@@ -73,14 +74,18 @@ function setup(mode: "machine" | "runtime") {
   const world = buildWorldObject(connections, "tui");
   const office = createTownBuildings()(
     projectWorldOffice(world, 0),
-    connections.map((connection) => ({
-      id: connection.connectionId,
-      runtime: connection.runtime ?? "herdr",
-      machine: "local",
-      endpoint: connection.connectionId,
-      writable: true,
-    })),
-    mode,
+    deriveHostGrouping(
+      connections.map((connection) => ({
+        id: connection.connectionId,
+        label: connection.connectionId,
+        runtime: connection.runtime ?? "herdr",
+        machine: "local",
+        endpoint: connection.connectionId,
+        writable: true,
+      })),
+      mode,
+      () => false,
+    ),
   );
   const model = townModelFromProjection(office);
   const rooms = [...model.rooms.values()];

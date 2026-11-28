@@ -36,9 +36,8 @@ export type BoardHost = {
 };
 
 /**
- * One zone frame on Board: the runtimes World's "Group runtimes" setting
- * groups together (worldHosts.ts `groupByRuntime`), a machine's or one
- * runtime's. Presentation only: each runtime keeps its own anchor, cards,
+ * One zone frame on Board: one machine's runtimes, as World publishes its
+ * hosts (worldHosts.ts `groupByRuntime`). Presentation only: each runtime keeps its own anchor, cards,
  * colour and actions, qualified by its connection and generation.
  */
 type BoardZone = {

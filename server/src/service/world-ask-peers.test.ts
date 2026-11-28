@@ -3,6 +3,7 @@ import { mkdtempSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { readWorldCliToken } from "../config/session-secret";
+import { useTestTimings } from "../../../shared/testing/timings";
 import { configureServerLogger } from "../utils/logger";
 import {
   askThroughCli,
@@ -21,6 +22,8 @@ import {
  */
 
 beforeAll(() => configureServerLogger("error"));
+// Siblings read each other every few milliseconds.
+useTestTimings();
 afterAll(() => configureServerLogger("info"));
 
 const PASSWORD = "world-service-test-password";
@@ -70,19 +73,28 @@ async function worlds(runtime: "shared" | "separate" = "shared") {
   return { home, sibling };
 }
 
-const asks = async (page: { call(method: string): Promise<any> }) =>
+type World = {
+  started: TestService;
+  page: { call(method: string, params?: unknown): Promise<any> };
+};
+
+const asks = async (page: World["page"]) =>
   ((await page.call("world.asks.get")) as { asks: Ask[] }).asks;
 
-/** Siblings read each other every few seconds; wait for the next read. */
-async function until<T>(read: () => Promise<T>, done: (value: T) => boolean) {
+/** The World's questions once they satisfy `done`, checked after each of its sibling reads. */
+async function until(world: World, done: (list: Ask[]) => boolean) {
   const deadline = Date.now() + 12_000;
   for (;;) {
-    const value = await read();
-    if (done(value)) return value;
+    const read = world.started.service.afterAskPeerReads();
+    const list = await asks(world.page);
+    if (done(list)) return list;
     if (Date.now() > deadline) throw new Error("timed out waiting");
-    await Bun.sleep(100);
+    await read;
   }
 }
+
+/** Two more completed sibling reads: each starts after this call. */
+const twoReads = (world: World) => world.started.service.afterAskPeerReads(2);
 
 async function ask(started: TestService, question: string) {
   const reply = (await (await askThroughCli(started, question)).json()) as {
@@ -100,10 +112,7 @@ test("a question asked in one World is answered from another, exactly once", asy
     sibling.started.service.paths.instanceRegistry,
   );
   const id = await ask(home.started, "Ship the release?");
-  const [shown] = await until(
-    () => asks(sibling.page),
-    (list) => list.length === 1,
-  );
+  const [shown] = await until(sibling, (list) => list.length === 1);
   const peerId = shown!.id;
   expect(peerId).toMatch(new RegExp(`^peer~[a-f0-9]{24}~${id}$`));
   expect(shown!.question).toBe("Ship the release?");
@@ -156,10 +165,7 @@ test("a question asked in one World is answered from another, exactly once", asy
 test("a dismissal from another World closes the question at home", async () => {
   const { home, sibling } = await worlds();
   await ask(home.started, "Keep the old layout?");
-  const [shown] = await until(
-    () => asks(sibling.page),
-    (list) => list.length === 1,
-  );
+  const [shown] = await until(sibling, (list) => list.length === 1);
   await sibling.page.call("world.ask.dismiss", { id: shown!.id });
   expect(await asks(home.page)).toEqual([]);
   expect(await asks(sibling.page)).toEqual([]);
@@ -169,28 +175,22 @@ test("default discovery closes the question in both Worlds when answered in eith
   const { home, sibling } = await worlds();
   for (const answerAt of [home, sibling]) {
     const id = await ask(home.started, "Continue the synthetic check?");
-    const [shown] = await until(
-      () => asks(sibling.page),
-      (list) => list.length === 1,
-    );
+    const [shown] = await until(sibling, (list) => list.length === 1);
     expect((await asks(home.page)).map((entry) => entry.id)).toEqual([id]);
     await answerAt.page.call("world.ask.answer", {
       id: answerAt === home ? id : shown!.id,
       answer: "Continue",
     });
     expect(await asks(home.page)).toEqual([]);
-    await until(
-      () => asks(sibling.page),
-      (list) => list.length === 0,
-    );
+    await until(sibling, (list) => list.length === 0);
   }
 }, 30_000);
 
 test("a World on another runtime does not see the question", async () => {
   const { home, sibling } = await worlds("separate");
   await ask(home.started, "Only for this runtime?");
-  // Give the sibling more than one read.
-  await Bun.sleep(6_000);
+  // The sibling reads the registry, with the home's report in it, twice more.
+  await twoReads(sibling);
   expect(await asks(sibling.page)).toEqual([]);
   expect((await asks(home.page)).map((entry) => entry.question)).toEqual([
     "Only for this runtime?",
@@ -200,15 +200,9 @@ test("a World on another runtime does not see the question", async () => {
 test("when the home stops, its questions leave the other World", async () => {
   const { home, sibling } = await worlds();
   await ask(home.started, "Still there?");
-  const [shown] = await until(
-    () => asks(sibling.page),
-    (list) => list.length === 1,
-  );
+  const [shown] = await until(sibling, (list) => list.length === 1);
   await home.started.service.stop();
-  await until(
-    () => asks(sibling.page),
-    (list) => list.length === 0,
-  );
+  await until(sibling, (list) => list.length === 0);
   await expect(
     sibling.page.call("world.ask.answer", { id: shown!.id, answer: "Yes" }),
   ).rejects.toThrow(/not running/);
@@ -258,10 +252,7 @@ test("a question stays on the runtime it was asked on after its connection is re
   await home.page.call("connections.create", { profile: studio });
   await home.page.call("connections.set_default", { id: "studio" });
   await ask(home.started, "Asked on runtime A?");
-  await until(
-    () => asks(onA.page),
-    (list) => list.length === 1,
-  );
+  await until(onA, (list) => list.length === 1);
 
   // Editing studio to target runtime B does not move the open question.
   // No Herdr listens behind these sockets, and editing the default
@@ -281,8 +272,10 @@ test("a question stays on the runtime it was asked on after its connection is re
     saved.connections.find((entry) => entry.id === "studio")
       ?.control_socket_path,
   ).toBe(sockets("runtime-b").control_socket_path);
-  // Give both Worlds more than one read.
-  await Bun.sleep(6_000);
+  // The home reads once more and republishes its report with runtime B;
+  // then both Worlds read it more than once.
+  await home.started.service.afterAskPeerReads(2);
+  await Promise.all([twoReads(onA), twoReads(onB)]);
   expect((await asks(onA.page)).map((entry) => entry.question)).toEqual([
     "Asked on runtime A?",
   ]);

@@ -77,6 +77,7 @@
     "help:pictures": "HELP_PICTURES=1 bun run test scripts/help-pictures.browser.test.ts",
     "check:pr-body": "bun scripts/check-pr-body.ts",
     "check:privacy": "bun scripts/check-privacy.ts",
+    "check:test-waits": "bun scripts/check-test-waits.ts",
     "check:size": "bun scripts/file-size-ratchet.ts",
     "check:move": "bun scripts/move-check.ts",
     "check": "bun run check:static && bun run test",

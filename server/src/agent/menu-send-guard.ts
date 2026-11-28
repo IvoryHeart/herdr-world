@@ -13,6 +13,7 @@ import {
 } from "./pending-prompt";
 import { isSlashCommand } from "../../../shared/conversationInput";
 import type { HerdrCall } from "./session-types";
+import { withAgentInput, agentInputFailure } from "../adapters/agent-input";
 
 type Refusal = Extract<ConversationSendResult, { status: "refused" }>;
 type SendTarget = Parameters<ConversationSource["send"]>[0];
@@ -237,19 +238,24 @@ export async function submitPrompt(
   call: HerdrCall,
   target: SendTarget,
   dispatched: WeakSet<object>,
+  info: Record<string, unknown> | null = null,
 ): Promise<{ result: unknown } | Refusal> {
   dispatched.add(target);
   try {
     return {
-      result: await call("agent.prompt", {
-        target: target.pane_id,
-        text: target.text,
-      }),
+      result: await withAgentInput(info, () =>
+        call("agent.prompt", {
+          target: target.pane_id,
+          text: target.text,
+        }),
+      ),
     };
   } catch (error) {
     if (
       error instanceof Error &&
-      /^(agent_blocked|agent_not_ready|agent_not_found):/.test(error.message)
+      /^(agent_blocked|agent_not_ready|agent_not_found|agent_input_unavailable):/.test(
+        error.message,
+      )
     )
       dispatched.delete(target);
     if (error instanceof Error && /^agent_blocked:/.test(error.message))
@@ -259,6 +265,8 @@ export async function submitPrompt(
         message:
           "The agent is waiting on a question; answer it first. Nothing was sent.",
       };
+    const admission = agentInputFailure(error);
+    if (admission) return { status: "refused", ...admission };
     throw error;
   }
 }

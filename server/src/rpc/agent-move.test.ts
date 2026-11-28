@@ -1,6 +1,6 @@
 import { expect, test } from "bun:test";
 import type { BridgeRpcContext } from "./context";
-import { handleAgentMoveRpc } from "./agent-move";
+import { boardRefusingRehome, handleAgentMoveRpc } from "./agent-move";
 
 /**
  * A page on a slow link lost its socket mid-move: Bun's send on the closed
@@ -104,4 +104,34 @@ test("following a move World has no record of starts nothing", async () => {
   expect((await send({ ...move, move_id: "bad id!" })).error).toContain(
     "Invalid move ID.",
   );
+});
+
+test("the moveBoardRefuses testing switch refuses only a desk rehome", async () => {
+  const patched: unknown[] = [];
+  const store = {
+    get: () => ({ relations: { spawns: [] } }),
+    patch: async (plan: unknown) => {
+      patched.push(plan);
+      return { revision: 1 };
+    },
+  };
+  const board = boardRefusingRehome(() => store as never)();
+  const address = { connection_id: "a" } as never;
+  await expect(
+    board.patch([{ op: "agent.rehome", from: address, to: address }]),
+  ).rejects.toThrow("the Board refused the change (testing switch)");
+  await expect(
+    board.patch(
+      Object.assign(
+        () => [{ op: "agent.rehome", from: address, to: address }],
+        {
+          retainedBytes: 0,
+        },
+      ) as never,
+    ),
+  ).rejects.toThrow("testing switch");
+  expect(patched).toEqual([]);
+  const spawns = Object.assign(() => null, { retainedBytes: 0 });
+  await board.patch(spawns as never);
+  expect(patched).toEqual([spawns]);
 });

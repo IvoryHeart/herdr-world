@@ -5,6 +5,7 @@ import { existsSync, readFileSync, renameSync } from "node:fs";
 import { replaceDataFile } from "../config/data-paths";
 import type { TerminalRef } from "../../../shared/relations";
 import type { BoardOp } from "./board-store";
+import type { SettingCommandRecord } from "./setting-commands";
 import type { PublishedCommand } from "./commands";
 
 /**
@@ -21,6 +22,8 @@ export type CliActor = {
   verified: boolean;
   connection_id?: string;
   pane_id?: string;
+  /** Current runtime tab at the time this actor was recorded. */
+  tab_id?: string;
   connection_generation?: number;
   workspace_id?: string;
   agent_session_id?: string;
@@ -57,9 +60,10 @@ export type LedgerChange = {
   regroup?: { ref: TerminalRef; members: TerminalRef[] | null };
   /**
    * A World command (world.command): its identity, the value it expected and
-   * asked for, and its state, updated in place until it settles.
+   * asked for, and its state, updated in place until it settles. A setting
+   * command is recorded once, settled, with the value before it.
    */
-  world_command?: PublishedCommand;
+  world_command?: PublishedCommand | SettingCommandRecord;
 };
 
 export type LedgerAsk = {

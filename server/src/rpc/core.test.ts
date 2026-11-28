@@ -143,7 +143,7 @@ describe("world.core.* answers only the core connection it names", () => {
   });
 
   test("a saved generic core profile delivers its role and brief through native send", async () => {
-    const w = await world({ runStatus: "idle" });
+    const w = await world({ runStatus: "idle", runForeground: "pi" });
     const result = await call(
       w,
       "world.core.launch",
@@ -174,6 +174,7 @@ describe("world.core.* answers only the core connection it names", () => {
       expect.objectContaining({
         input:
           "Review carefully\n\nUse these skills when they apply: code-review.\n\nCheck the tests",
+        foreground: "pi",
       }),
     ]);
   });

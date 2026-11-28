@@ -4,6 +4,10 @@ import {
   observationBase,
   sameObservationHost,
 } from "./observationBase";
+import {
+  type HostGrouping,
+  parseHostGrouping,
+} from "../../../shared/hostGrouping";
 import { useSyncExternalStore } from "react";
 import {
   type BridgeControlMsg,
@@ -121,6 +125,11 @@ export type WorldRuntimeState = {
   uiSettings?: WorldUiSettings;
   /** Commands in progress and recently settled. */
   commands?: WorldCommand[];
+  /**
+   * How every view groups the runtimes, derived by World under this
+   * revision (shared/hostGrouping.ts); views never group on their own.
+   */
+  hostGrouping?: HostGrouping;
   error: string | null;
 };
 
@@ -172,6 +181,7 @@ export function parseWorldSnapshotResult(
     connections.push(connection);
   }
   const uiSettings = parseWorldUiSettings(item.ui_settings);
+  const hostGrouping = parseHostGrouping(item.host_grouping);
   return {
     ...(typeof item.service_incarnation === "string"
       ? { serviceIncarnation: item.service_incarnation }
@@ -188,6 +198,7 @@ export function parseWorldSnapshotResult(
         }
       : {}),
     ...(uiSettings ? { uiSettings } : {}),
+    ...(hostGrouping ? { hostGrouping } : {}),
     commands: parseWorldCommands(item.commands),
   };
 }
@@ -701,6 +712,13 @@ export class WorldRuntimeStore {
     this.published = parsed.connections;
     this.adoptedRevision = parsed.revision;
     const connections = this.presented(parsed.connections, parsed.commands);
+    // The same grouping keeps its object, so views reading it do not rerender.
+    if (
+      parsed.hostGrouping &&
+      JSON.stringify(parsed.hostGrouping) ===
+        JSON.stringify(this.state.hostGrouping)
+    )
+      parsed = { ...parsed, hostGrouping: this.state.hostGrouping };
     // Nothing shown changed: views are not asked to render again, but the
     // replica still records the revision it now holds.
     if (
@@ -710,6 +728,7 @@ export class WorldRuntimeStore {
       connections.length === this.state.connections.length &&
       connections.every((c, i) => c === this.state.connections[i]) &&
       JSON.stringify(parsed.hosts) === JSON.stringify(this.state.hosts) &&
+      parsed.hostGrouping === this.state.hostGrouping &&
       JSON.stringify(parsed.commands) === JSON.stringify(this.state.commands)
     ) {
       if (

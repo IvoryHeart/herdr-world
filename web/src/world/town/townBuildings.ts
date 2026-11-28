@@ -1,33 +1,32 @@
 /**
- * Town's buildings stand for machines (#1047, #1198). By default a building
- * is one machine (this computer or one SSH destination), holding the rooms of
- * every runtime World holds there; with World's "Group runtimes" setting
- * (runtimeGrouping.ts, #1307) on "One per runtime" (or
- * `?townBuildings=runtime`) each runtime keeps its own building, as before.
- * Which runtimes share a building is worldHosts.ts `runtimeGroupKey`, the
- * one rule the navigator and Desk group by too.
+ * Town's buildings stand for World's runtime groups (#1047, #1198, #1397). By
+ * default a building is one machine (this computer or one SSH destination),
+ * holding the rooms of every runtime World holds there; with World's "Group
+ * runtimes" setting (#1307) on "One per runtime" each runtime keeps its own
+ * building. Which runtimes share a building is the grouping World publishes
+ * (`host_grouping`, shared/hostGrouping.ts), the same groups the navigator,
+ * Desk, Board, the Hosts control and `herdr-world ls` show; this module only
+ * renders it.
  *
  * Presentation only. A room, desk, pane or agent keeps its own `hostKey`,
  * `workspaceRef`, `tabRef` and pane refs (connection ID and generation): room
  * actions find a room's runtime by them (officeRoomActions.ts
  * `officeSpaceForRoom`), so every action still reaches the runtime that owns
  * it. Which building an item stands in is the separate `buildingKey`, read
- * through `townBuildingOf`; it is set only on copies of a machine's later
- * runtimes' items, and is the machine's first runtime's host key, so a
+ * through `townBuildingOf`; it is set only on copies of a group's later
+ * runtimes' items, and is the group's first runtime's host key, so a
  * building's own lookups (roof colour, reception filter, Add room) still read
  * a real host: that first runtime.
  *
  * Two Herdr TUI connections on one Herdr endpoint (a startup default and a
  * saved profile of the same socket) report the same workspaces; Town shows
- * the rooms of one of them (`endpointViews`): a fixed anchor, the writable
- * one, or another live view while the anchor is down, standing where the
- * anchor's rooms stood and keeping their spots and colours
- * (`placeConnectionId`).
+ * the rooms of the one World publishes as shown: the endpoint's fixed anchor,
+ * or another live view while the anchor is down, standing where the anchor's
+ * rooms stood and keeping their spots and colours (`placeConnectionId`).
+ * A building reads with its published group's name (World chooses it with
+ * the same endpoint decisions), never a name Town picks.
  */
 
-import type { ConnectionSummary } from "../../api";
-import type { State } from "../../store/types";
-import { runtimeGroupKey, runtimeTag, worldHosts } from "../../worldHosts";
 import type {
   HerdrOfficeProjection,
   OfficeAgent,
@@ -37,10 +36,12 @@ import type {
   OfficeReception,
   OfficeRoom,
 } from "../herdrOfficeProjection";
-import type { RuntimeGrouping } from "../runtimeGrouping";
+import type {
+  GroupingRuntime,
+  HostGrouping,
+} from "../../../../shared/hostGrouping";
+import { runtimeTag } from "../../worldHosts";
 import { officeReadModel, setOfficeReadModel } from "../officeReadModel";
-
-export type TownBuildingsMode = RuntimeGrouping;
 
 /** The building an office item stands in: its own host's, unless merged. */
 export const townBuildingOf = (item: {
@@ -48,70 +49,8 @@ export const townBuildingOf = (item: {
   buildingKey?: string;
 }) => item.buildingKey ?? item.hostKey;
 
-/**
- * The "Group runtimes" setting (default: one building per machine), unless
- * the page's `?townBuildings=machine` or `?townBuildings=runtime` names a
- * layout for comparing the two.
- */
-export function townBuildingsMode(
-  search: string,
-  setting: TownBuildingsMode = "machine",
-): TownBuildingsMode {
-  const flag = new URLSearchParams(search).get("townBuildings");
-  if (flag === "runtime") return "runtime";
-  return flag === "machine" || flag === "host" ? "machine" : setting;
-}
-
-/** What Town needs to know of each runtime connection World holds. */
-export type TownRuntime = {
-  id: string;
-  runtime: "herdr" | "herdr-core";
-  /** This computer, or one SSH destination (worldHosts.ts `machine`). */
-  machine: string;
-  /** Equal for connections of one runtime endpoint (worldHosts.ts). */
-  endpoint: string;
-  writable: boolean;
-};
-
-let cachedRuntimes: {
-  connections: State["connections"];
-  coreConnections: State["coreConnections"];
-  runtimes: TownRuntime[];
-} | null = null;
-
-/** Every runtime connection's machine and endpoint (a store selector). */
-export function townRuntimes(
-  state: Pick<State, "connections" | "coreConnections">,
-): TownRuntime[] {
-  if (
-    cachedRuntimes &&
-    cachedRuntimes.connections === state.connections &&
-    cachedRuntimes.coreConnections === state.coreConnections
-  )
-    return cachedRuntimes.runtimes;
-  const profiles = new Map<string, Pick<ConnectionSummary, "read_only">>();
-  for (const each of state.coreConnections ?? []) profiles.set(each.id, each);
-  for (const each of state.connections) profiles.set(each.id, each);
-  const runtimes = worldHosts(state).map((host): TownRuntime => {
-    const profile = profiles.get(host.id) ?? {};
-    return {
-      id: host.id,
-      runtime: host.runtime,
-      machine: host.machine,
-      endpoint: host.endpoint,
-      writable: profile.read_only !== true,
-    };
-  });
-  cachedRuntimes = {
-    connections: state.connections,
-    coreConnections: state.coreConnections,
-    runtimes,
-  };
-  return runtimes;
-}
-
 /** How a room's runtime reads on its plaque, card and in Move menus. */
-export function townRuntimeTag(runtime: TownRuntime["runtime"]) {
+export function townRuntimeTag(runtime: GroupingRuntime) {
   return runtimeTag(runtime);
 }
 
@@ -124,91 +63,44 @@ type Plan = {
    * stands, looks and keeps its rooms' spots as the anchor's did.
    */
   placeOf: Map<string, OfficeHost>;
-  /** Building key by office host key, for a machine's later runtimes. */
+  /** Building key by office host key, for a group's later runtimes. */
   buildingOf: Map<string, string>;
   /** A room's runtime, in buildings of more than one runtime. */
-  tagOf: Map<string, { tag: string; kind: TownRuntime["runtime"] }>;
-  /** Room order offset, so a machine's runtimes' rooms stay apart. */
+  tagOf: Map<string, { tag: string; kind: GroupingRuntime }>;
+  /** Room order offset, so a group's runtimes' rooms stay apart. */
   orderOffset: Map<string, number>;
   /** A merged building's first host, stale only when all its runtimes are. */
   primaryStale: Map<string, boolean>;
+  /** A building's name, by its first host's key: the published group's. */
+  labelOf: Map<string, string>;
   signature: string;
 };
 
-/** Rooms of a machine's later runtimes follow its first runtime's rooms. */
+/** Rooms of a group's later runtimes follow its first runtime's rooms. */
 const RUNTIME_ORDER_STRIDE = 1_000_000;
 
-const anchorsCache = new WeakMap<readonly TownRuntime[], Map<string, string>>();
-
 /**
- * Each endpoint's anchor by connection ID, for the views that are not their
- * endpoint's anchor: its first writable view in catalogue order (the order
- * `townRuntimes` lists), else its first. Profiles alone decide it, never
- * state, so what is kept under the anchor (desk pins, useDeskPins.ts) holds
- * through a takeover.
+ * The view World shows for each published endpoint, among the office's
+ * hosts: the published one, else the anchor, else the first present. Others
+ * are hidden; a shown view that is not the anchor stands in its place.
  */
-export function townEndpointAnchors(
-  runtimes: readonly TownRuntime[],
-): ReadonlyMap<string, string> {
-  const cached = anchorsCache.get(runtimes);
-  if (cached) return cached;
-  const byEndpoint = new Map<string, TownRuntime[]>();
-  for (const each of runtimes)
-    byEndpoint.set(each.endpoint, [
-      ...(byEndpoint.get(each.endpoint) ?? []),
-      each,
-    ]);
-  const anchors = new Map<string, string>();
-  for (const views of byEndpoint.values()) {
-    const anchor = views.find((view) => view.writable) ?? views[0]!;
-    for (const view of views)
-      if (view !== anchor) anchors.set(view.id, anchor.id);
-  }
-  anchorsCache.set(runtimes, anchors);
-  return anchors;
-}
-
-/**
- * Which view of each endpoint Town shows. Views share an endpoint when
- * worldHosts.ts gives them the same `endpoint`: the same runtime, place and
- * socket path strings, as the service compares saved endpoints
- * (connections/profiles.ts). Paths are not resolved: a second spelling of a
- * socket (a symlink) stays a second view, shown twice rather than hidden.
- *
- * Each endpoint's anchor (`townEndpointAnchors`) is chosen from its
- * profiles alone, never their state: the first writable view in catalogue
- * order, else the first. Town
- * shows the anchor's rooms, unless the anchor is down and another view is
- * live: then that view's (writable first), standing where the anchor's
- * stood, so a takeover moves no building and no saved room.
- */
-function endpointViews<View extends { connectionId: string; stale: boolean }>(
-  known: readonly View[],
-  runtimeOf: ReadonlyMap<string, TownRuntime>,
+function endpointViews(
+  hosts: readonly OfficeHost[],
+  grouping: HostGrouping | undefined,
 ) {
-  const anchors = townEndpointAnchors([...runtimeOf.values()]);
-  const hidden = new Set<View>();
-  const placeOf = new Map<View, View>();
-  const byEndpoint = new Map<string, View[]>();
-  for (const view of known) {
-    const endpoint = runtimeOf.get(view.connectionId)!.endpoint;
-    byEndpoint.set(endpoint, [...(byEndpoint.get(endpoint) ?? []), view]);
-  }
-  const writable = (view: View) => runtimeOf.get(view.connectionId)!.writable;
-  for (const views of byEndpoint.values()) {
-    if (views.length < 2) continue;
-    const anchorId =
-      anchors.get(views[0]!.connectionId) ?? views[0]!.connectionId;
-    const anchor =
-      views.find((view) => view.connectionId === anchorId) ??
-      views.find(writable) ??
-      views[0]!;
-    const live = views.filter((view) => !view.stale);
-    const kept = !anchor.stale
-      ? anchor
-      : (live.find(writable) ?? live[0] ?? anchor);
-    for (const view of views) if (view !== kept) hidden.add(view);
-    if (kept !== anchor) placeOf.set(kept, anchor);
+  const hidden = new Set<string>();
+  const placeOf = new Map<string, OfficeHost>();
+  const byConnection = new Map(hosts.map((host) => [host.connectionId, host]));
+  for (const endpoint of grouping?.endpoints ?? []) {
+    const present = endpoint.views.flatMap((id) => {
+      const host = byConnection.get(id);
+      return host ? [host] : [];
+    });
+    if (present.length < 2) continue;
+    const anchor = byConnection.get(endpoint.anchor);
+    const kept = byConnection.get(endpoint.shown) ?? anchor ?? present[0]!;
+    for (const host of present) if (host !== kept) hidden.add(host.key);
+    if (anchor && kept !== anchor) placeOf.set(kept.key, anchor);
   }
   return { hidden, placeOf };
 }
@@ -234,32 +126,46 @@ function shownHosts(
 
 function plan(
   office: HerdrOfficeProjection,
-  runtimes: readonly TownRuntime[],
-  mode: TownBuildingsMode,
+  grouping: HostGrouping | undefined,
 ): Plan {
-  const runtimeOf = new Map(runtimes.map((each) => [each.id, each]));
-  const known = office.hosts.filter((host) => runtimeOf.has(host.connectionId));
-  const views = endpointViews(known, runtimeOf);
-  const hidden = new Set([...views.hidden].map((host) => host.key));
-  const placeOf = new Map(
-    [...views.placeOf].map(([kept, anchor]) => [kept.key, anchor]),
-  );
+  const groupOf = new Map<string, string>();
+  const kindOf = new Map<string, GroupingRuntime>();
+  const groupLabel = new Map<string, string>();
+  for (const group of grouping?.groups ?? [])
+    for (const member of group.members) {
+      groupLabel.set(group.key, group.label);
+      groupOf.set(member.connection_id, group.key);
+      kindOf.set(member.connection_id, member.runtime);
+    }
+  const { hidden, placeOf } = endpointViews(office.hosts, grouping);
   const buildingOf = new Map<string, string>();
   const tagOf: Plan["tagOf"] = new Map();
   const orderOffset = new Map<string, number>();
   const primaryStale = new Map<string, boolean>();
+  const labelOf = new Map<string, string>();
   const byGroup = new Map<string, OfficeHost[]>();
-  for (const host of shownHosts(known, hidden, placeOf)) {
-    const group = runtimeGroupKey(runtimeOf.get(host.connectionId)!, mode);
+  for (const host of shownHosts(office.hosts, hidden, placeOf)) {
+    // A taken-over view stands in its anchor's group; a runtime World has
+    // not grouped (yet) stands alone.
+    const stands = (placeOf.get(host.key) ?? host).connectionId;
+    const group = groupOf.get(stands) ?? `runtime:${stands}`;
     byGroup.set(group, [...(byGroup.get(group) ?? []), host]);
   }
-  for (const members of byGroup.values()) {
+  for (const [group, members] of byGroup) {
+    // The building reads as World names the group in every view.
+    const building = members[0]!;
+    const label = groupLabel.get(group);
+    if (
+      label !== undefined &&
+      label !== (placeOf.get(building.key) ?? building).displayLabel
+    )
+      labelOf.set(building.key, label);
     if (members.length < 2) continue;
     // The first runtime in Town's order keys the building, whatever its
     // state, so rooms never change building when a runtime drops.
     const [first, ...later] = members as [OfficeHost, ...OfficeHost[]];
     const kinds = members.map(
-      (host) => runtimeOf.get(host.connectionId)!.runtime,
+      (host) => kindOf.get(host.connectionId) ?? "herdr",
     );
     members.forEach((host, index) => {
       const kind = kinds[index]!;
@@ -285,6 +191,7 @@ function plan(
     [...buildingOf],
     [...tagOf],
     [...primaryStale],
+    [...labelOf],
   ]);
   return {
     hidden,
@@ -293,6 +200,7 @@ function plan(
     tagOf,
     orderOffset,
     primaryStale,
+    labelOf,
     signature,
   };
 }
@@ -312,48 +220,50 @@ const freshCaches = (): Caches => ({
 });
 
 /**
- * Places the office's rooms and agents in machine buildings. Keeps object
- * identity for unchanged inputs (and the whole office when nothing moves),
- * so the town re-lays out only when the office itself changed.
+ * Places the office's rooms and agents in World's published groups. Keeps
+ * object identity for unchanged inputs (and the whole office when nothing
+ * moves), so the town re-lays out only when the office itself changed.
  */
 export function createTownBuildings() {
   let signature = "";
   let caches = freshCaches();
   let last: {
     office: HerdrOfficeProjection;
-    runtimes: readonly TownRuntime[];
-    mode: TownBuildingsMode;
+    grouping: HostGrouping | undefined;
     result: HerdrOfficeProjection;
   } | null = null;
   return (
     office: HerdrOfficeProjection,
-    runtimes: readonly TownRuntime[],
-    mode: TownBuildingsMode,
+    grouping: HostGrouping | undefined,
   ): HerdrOfficeProjection => {
-    if (
-      last &&
-      last.office === office &&
-      last.runtimes === runtimes &&
-      last.mode === mode
-    )
+    if (last && last.office === office && last.grouping === grouping)
       return last.result;
-    const next = plan(office, runtimes, mode);
+    const next = plan(office, grouping);
     if (next.signature !== signature) {
       signature = next.signature;
       caches = freshCaches();
     }
     const result = apply(office, next, caches);
-    last = { office, runtimes, mode, result };
+    last = { office, grouping, result };
     return result;
   };
 }
 
 function apply(
   office: HerdrOfficeProjection,
-  { hidden, placeOf, buildingOf, tagOf, orderOffset, primaryStale }: Plan,
+  {
+    hidden,
+    placeOf,
+    buildingOf,
+    tagOf,
+    orderOffset,
+    primaryStale,
+    labelOf,
+  }: Plan,
   cache: Caches,
 ): HerdrOfficeProjection {
-  if (!hidden.size && !buildingOf.size && !tagOf.size) return office;
+  if (!hidden.size && !buildingOf.size && !tagOf.size && !labelOf.size)
+    return office;
   const shown = (item: { hostKey: string }) => !hidden.has(item.hostKey);
   const memo = <T extends object>(
     map: WeakMap<T, T>,
@@ -407,7 +317,13 @@ function apply(
       : item;
   const host = (item: OfficeHost): OfficeHost => {
     const anchor = placeOf.get(item.key);
-    if (!anchor && !buildingOf.has(item.key) && !primaryStale.has(item.key))
+    const label = labelOf.get(item.key);
+    if (
+      !anchor &&
+      label === undefined &&
+      !buildingOf.has(item.key) &&
+      !primaryStale.has(item.key)
+    )
       return item;
     return {
       ...item,
@@ -418,6 +334,10 @@ function apply(
         displayOrder: anchor.displayOrder,
         deterministicSkin: anchor.deterministicSkin,
         placeConnectionId: anchor.connectionId,
+      }),
+      ...(label !== undefined && {
+        displayLabel: label,
+        accessibleLabel: label,
       }),
       ...(buildingOf.has(item.key) && {
         buildingKey: buildingOf.get(item.key)!,

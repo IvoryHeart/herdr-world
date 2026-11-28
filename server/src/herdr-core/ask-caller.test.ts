@@ -475,7 +475,7 @@ describe("a core asker's recipient (M5)", () => {
     ).toBe(false);
   });
 
-  test("a restarted program with identical native fields cannot inherit an ask", async () => {
+  test("a restarted agent can receive its terminal's saved answer", async () => {
     const w = await world();
     const { address, actor, recipients } = await asker(w, 55001);
     const recipient = (await recipients.capture(actor))!;
@@ -496,7 +496,7 @@ describe("a core asker's recipient (M5)", () => {
     );
     await w.settle();
     expect(await recipients.resolve(recipient)).toMatchObject({
-      state: "unconfirmed",
+      state: "attached",
     });
     const rows = await w.rows();
     expect(
@@ -513,13 +513,13 @@ describe("a core asker's recipient (M5)", () => {
       await w.settle();
       expect(await recipients.resolve(recipient)).toEqual({
         state: "unconfirmed",
-        reason: "The asking program changed; answer not sent, use ask get",
+        reason: expect.stringContaining("it's a shell now"),
       });
       // The replacement cannot speak as the asker either.
       expect(
         await recipients.authorize(
           { kind: "agent", actor: { ...actor, label: "x" } },
-          { recipient, owner_only: false } as never,
+          { actor, recipient, owner_only: false } as never,
         ),
       ).toBe("refused");
       await w.dispose();
@@ -589,7 +589,7 @@ describe("a core asker's recipient (M5)", () => {
         },
       )
     ).actor;
-    const ask = { recipient, owner_only: false } as never;
+    const ask = { actor, recipient, owner_only: false } as never;
     expect(
       await recipients.authorize({ kind: "agent", actor: peer }, ask),
     ).toBe("allowed");

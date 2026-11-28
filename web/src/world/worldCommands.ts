@@ -5,8 +5,14 @@
  * shared replica holds the pending value until World publishes the outcome.
  */
 
+import {
+  RUNTIME_GROUPING_DEFAULT,
+  RUNTIME_GROUPING_SETTING_KEY,
+  type RuntimeGrouping,
+} from "../../../shared/hostGrouping";
 import { bridge } from "../api";
 import { store } from "../store";
+import { provideRuntimeGroupingControl } from "./runtimeGrouping";
 import { worldRuntimeStore } from "./runtimeStore";
 import {
   inProgress,
@@ -95,4 +101,57 @@ export async function renameRoomThroughWorld(
     return;
   }
   held.answered();
+}
+
+/**
+ * Change World's "Group runtimes" setting. A choice only sets a value, so
+ * World accepts it even if another browser changed the setting since
+ * `expected` was shown, records both in its change history and publishes
+ * the result; every view follows the publication. Nothing is held here.
+ */
+async function setRuntimeGroupingThroughWorld(
+  expected: RuntimeGrouping | null,
+  value: RuntimeGrouping,
+) {
+  const failed = (detail: string) =>
+    store.notify({
+      kind: "error",
+      message: "Group runtimes was not changed",
+      detail,
+    });
+  try {
+    const reply = (await bridge.call(
+      "world.command",
+      {
+        id: newId(),
+        entity: { kind: "setting", key: RUNTIME_GROUPING_SETTING_KEY },
+        field: "value",
+        expected,
+        value,
+      },
+      30_000,
+    )) as { state?: unknown; detail?: unknown } | null;
+    if (reply?.state !== "stored")
+      failed(
+        typeof reply?.detail === "string"
+          ? reply.detail
+          : "World did not store the setting.",
+      );
+  } catch (cause) {
+    failed(cause instanceof Error ? cause.message : String(cause));
+  }
+}
+
+/** Give the Settings control World's published grouping and its command. */
+export function installRuntimeGroupingControl() {
+  const published = () => worldRuntimeStore.get().hostGrouping?.grouping;
+  provideRuntimeGroupingControl({
+    get: () => published() ?? RUNTIME_GROUPING_DEFAULT,
+    subscribe: (listener) => {
+      const off = worldRuntimeStore.subscribe(listener);
+      return () => void off();
+    },
+    set: (value) =>
+      void setRuntimeGroupingThroughWorld(published() ?? null, value),
+  });
 }

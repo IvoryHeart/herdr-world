@@ -100,7 +100,8 @@ set) or a connection change happens between the last re-read and the close; a
 source turning busy in that window is not excluded. The lock is per service:
 independent Worlds or external clients acting on the
 same agent are not excluded. A close-first move whose Board update fails
-moves the agent but leaves its desk details on the old address; the move log records it.
+moves the agent but leaves its desk details on the old address; the outcome
+says so (`namesDesk`), and nothing retries.
 A forking harness that does not report its session is not detected. A service crash between start and close can leave
 both copies; World does not recover it automatically. Real harness startup,
 login and readiness are checked by the owner check on a real Herdr TUI and

@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { worldLocalStorage } from "../browserStorage";
-import { hostsFilterByMachine, type WorldHost } from "../worldHosts";
+import { hostsFilterByGroup, type WorldHost } from "../worldHosts";
+import { useHostGrouping } from "./useHostGroups";
 
 const KEY = "worldHostsFilter.v1";
 const EVENT = "world-hosts-filter-changed";
@@ -30,21 +31,20 @@ export function writeHostsFilter(ids: HostsFilter) {
 
 /**
  * The overview scope is independent of operational ownership and legacy focus.
- * It is kept as connection IDs but read by machine: `ids` covers every runtime
- * of each selected machine (`hostsFilterByMachine`), so a selection saved per
- * connection shows its whole machine. View-only: operations stay qualified by
- * connection ID and generation.
+ * It is kept as connection IDs but read by World's published hosts
+ * (machines): `ids` covers every runtime of each selected machine
+ * (`hostsFilterByGroup`), so a selection saved per connection shows its whole
+ * machine, under either "Group runtimes" choice. View-only: operations stay qualified by connection ID and
+ * generation.
  */
 export function useHostsFilter(
-  catalogue: readonly Pick<WorldHost, "id" | "machine">[],
+  catalogue: readonly Pick<WorldHost, "id">[],
   catalogueReady = true,
 ) {
   const [ids, setIds] = useState<HostsFilter>(read);
   const [explanation, setExplanation] = useState("");
   const catalogueKey = JSON.stringify(catalogue.map(({ id }) => id));
-  const machinesKey = JSON.stringify(
-    catalogue.map(({ id, machine }) => [id, machine]),
-  );
+  const grouping = useHostGrouping();
   useEffect(() => {
     const changed = (event: Event) =>
       setIds((event as CustomEvent<HostsFilter>).detail);
@@ -64,15 +64,9 @@ export function useHostsFilter(
     );
     writeHostsFilter(retained.length ? retained : null);
   }, [catalogueKey, catalogueReady, ids]);
-  const machineIds = useMemo(
-    () =>
-      hostsFilterByMachine(
-        ids,
-        (JSON.parse(machinesKey) as [string, string][]).map(
-          ([id, machine]) => ({ id, machine }),
-        ),
-      ),
-    [ids, machinesKey],
+  const groupIds = useMemo(
+    () => hostsFilterByGroup(ids, grouping),
+    [ids, grouping],
   );
-  return { ids: machineIds, explanation, setIds: writeHostsFilter };
+  return { ids: groupIds, explanation, setIds: writeHostsFilter };
 }

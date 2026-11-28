@@ -86,7 +86,8 @@ type MoveLog = (step: string, fields: Record<string, unknown>) => void;
 
 export type AgentMoveDeps = {
   side(connectionId: string, generation: number): MoveSide | null;
-  board: RpcServices["board"];
+  /** The Board, read and patched only (a testing switch may wrap it). */
+  board(): Pick<ReturnType<RpcServices["board"]>, "get" | "patch">;
   publishBoardChanged(revision: number): void;
   publishWorldInvalidation(connectionId: string, generation: number): void;
   /**
@@ -542,8 +543,15 @@ async function handoff(
         ...(source!.unpinAliases?.(from.color_key) ?? []),
       ]);
     } catch (error) {
-      // It moved; only its desk details stayed behind.
+      // It moved; only its desk details stayed behind. The original has
+      // closed, so nothing undoes: say so (a Board refusal won't pass on an
+      // immediate retry; revision races are the Board store's own).
       log("rehome", { outcome: "failed", message: reason(error) });
+      return {
+        status: "moved",
+        target: moved,
+        message: `Its desk details stayed behind: ${reason(error)}. Its colour, pin and links stay on its old desk.`,
+      };
     }
     return { status: "moved", target: moved };
   };

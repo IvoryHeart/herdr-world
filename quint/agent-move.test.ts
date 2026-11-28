@@ -226,3 +226,32 @@ test("a reconnected target is never reached through another lease", async () => 
   );
   expect(mismatch.observation).toBe("move.fence");
 });
+
+test("a Codex move whose desk the Board refuses reports that the desk details stayed behind", async () => {
+  const deskLeft = {
+    ...quiet,
+    pc: "done",
+    outcome: "moved",
+    closeFirst: true,
+    effects: ["close", "start"],
+    alive: false,
+    copy: true,
+    desk: "src" as const,
+    closeReply: "ended",
+    resumeReply: "ready",
+    rehomeReply: "fail",
+    copyConv: true,
+    namesDesk: true,
+  };
+  const lock = { harness: "lock" as const, copyConv: false };
+  expect(await replayMove(trace(deskLeft, lock))).toEqual([
+    "movedTuiCore",
+    "lockClosedFirst",
+  ]);
+  // The silent-desk counterexample: production says what stayed behind.
+  const mismatch = await expectObservationMismatch(
+    () => replayMove(trace({ ...deskLeft, namesDesk: false }, lock)),
+    moveMismatches,
+  );
+  expect(mismatch.observation).toBe("move.report");
+});

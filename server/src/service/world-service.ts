@@ -493,7 +493,6 @@ async function compose(
     },
     serviceIncarnation,
   );
-  // Settings and commands: published with topology, under its revision.
   const publication = composeWorldPublication({
     settings,
     broadcast,
@@ -504,6 +503,7 @@ async function compose(
     ledger: () => storage.ledger(),
     invalidate: (id, generation) => publishWorldInvalidation(id, generation),
     log: (message) => logger.warn(message),
+    profiles: () => connectionProfiles,
   });
 
   const assistantContext = createRuntimeAssistantContext({
@@ -830,6 +830,11 @@ async function compose(
     paths,
     storage,
     failed: storage.failed,
+    /**
+     * @internal Settles after `count` more reads of sibling Worlds'
+     * questions: tests count reads instead of pausing (#1419).
+     */
+    afterAskPeerReads: askPeers.afterReads,
     /** The listener's port once started. */
     get port(): number | undefined {
       return server?.port;

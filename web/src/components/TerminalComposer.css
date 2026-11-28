@@ -2,12 +2,16 @@
   display: none;
 }
 
-/* Keep mobile styling in sync with the saved layout and URL override. */
-:where(html[data-layout="mobile"]) {
+:where(html[data-layout="mobile"]) .terminal-composer,
+.terminal-composer[data-open] {
+  display: flex;
+}
+
+/* The same editor opens on desktop for explicit saved-answer recovery. */
+:where(html) {
   .terminal-composer {
     /* The global bottom bar owns safe-area and keyboard-accessory spacing. */
     position: relative;
-    display: flex;
     flex-direction: column;
     gap: 6px;
     min-width: 0;
