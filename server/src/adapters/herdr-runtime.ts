@@ -6,7 +6,6 @@ import type {
   SessionProducers,
 } from "./runtime-ports";
 import { guardAgentInput, isAgentInput } from "./agent-input";
-import { localTerminalReaders, type TerminalReaders } from "./terminal-readers";
 
 /** Untyped native replies are confined to the TUI provider/legacy escape hatch. */
 export type TuiControlClient = {
@@ -111,7 +110,6 @@ export type TuiPassThrough = { kind: "herdr"; call: TuiControlClient["call"] };
 export function createTuiPassThrough(
   kind: string,
   client: TuiControlClient,
-  readers: TerminalReaders = localTerminalReaders,
 ): TuiPassThrough {
   if (kind !== "herdr") throw new Error("Raw runtime RPC is TUI-only");
   const call: TuiControlClient["call"] = async (
@@ -119,29 +117,6 @@ export function createTuiPassThrough(
     params = {},
     ...rest
   ) => {
-    if (method === "pane.process_info" && isAgentInput()) {
-      const reply = await client.call(method, params, ...rest);
-      const info = reply?.process_info;
-      if (!info || !Array.isArray(info.foreground_processes)) return reply;
-      const flags = await readers(info);
-      if (
-        flags.length !== info.foreground_processes.length ||
-        flags.some((v) => typeof v !== "boolean")
-      )
-        throw new Error("Unreadable terminal readers");
-      return {
-        ...reply,
-        process_info: {
-          ...info,
-          foreground_processes: info.foreground_processes.map(
-            (p: Record<string, unknown>, i: number) => ({
-              ...p,
-              reads_terminal: flags[i],
-            }),
-          ),
-        },
-      };
-    }
     // pane.send_input also carries the owner's explicit Terminal interaction.
     // Only World agent sends opt into foreground admission via async context.
     if (

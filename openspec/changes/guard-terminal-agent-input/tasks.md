@@ -1,19 +1,11 @@
-## Implementation (owner simplification supersedes earlier session design)
+## Implementation (2026-11-28 owner simplification supersedes earlier designs)
 
-- [x] 1.1 Replace original-session/foreground hashing with one shared program policy.
-- [x] 1.2 Guard TUI and core text boundaries, including foreground children.
-- [x] 1.3 Admit resumed/restarted agents, non-shell wrappers and npm; remove unused storage plumbing.
+- [x] 1.1 Use one shared foreground leader basename policy, ignoring arguments and children.
+- [x] 1.2 Apply it at TUI and core input boundaries; remove tty-reader code and input-specific /proc probing.
+- [x] 1.3 Preserve pre-PR behavior when runtime foreground information is missing.
 - [x] 1.4 Keep terminal/runtime qualification, raw Terminal authority and no-replay recovery.
-- [x] 1.5 Render authoritative plain refusal reasons and retain copy/get/composer recovery.
-- [x] 2.1 Align help, active deltas, capability notes and verification mappings.
-- [x] 2.2 Pass focused regressions and quick typecheck.
+- [x] 1.5 Retain authoritative Not sent reasons and copy/get/composer recovery.
+- [x] 2.1 Align help, active deltas, capability notes and verification mappings; document inside-harness shells and missing information.
+- [x] 2.2 Pass shell-exit/retrieval tests on both runtimes, basename/children/fallback matrices and quick typecheck.
 - [x] 2.3 Pass full verification gate; format, inspect, commit and validate exact PR body.
 - [x] 2.4 Push crew branch and hand off without CI polling or merging.
-
-- [x] 3.1 Refuse shells by basename regardless of arguments, multiplexers and nested shell launchers.
-- [x] 3.2 Keep tool-child busy and empty-cmdline failures temporary with zero input and fresh checks.
-- [x] 3.3 Verify owner feedback matrices, typecheck and full canonical gate.
-
-- [x] 4.1 Restrict input admission to foreground-group PTY readers; ignore pipe helpers on both runtimes.
-- [x] 4.2 Add harness-plus-pipe-helper and PTY reader regression tests, preserving discovery.
-- [x] 4.3 Align the MCP correction contract, capability guidance and verification mappings.

@@ -18,7 +18,6 @@
 - `server/src/world/answer-dispatch.ts`
 - `server/src/adapters/agent-input.ts`
 - `server/src/adapters/agent-input.test.ts`
-- `server/src/adapters/terminal-readers.ts`, `server/src/adapters/terminal-readers.test.ts`
 - `server/src/adapters/herdr-runtime.ts`, `server/src/connections/runtime.ts`
 - `server/src/herdr-core/harness.ts`, `server/src/herdr-core/harness.test.ts`
 - `server/src/herdr-core/ask-caller.ts`
@@ -72,8 +71,10 @@
 
 ## Foreground admission
 
-Right before World types answers, Chat messages, notifications or prompts, it checks what is reading that terminal, including foreground children. A process counts only when it is in the terminal's foreground process group and its stdin is that terminal's PTY. Stdio MCP servers, language servers and other helpers on pipes do not block delivery; a PTY-reading child still does. A shell, interactive REPL, editor/pager, ssh, sudo/su or database client stops input. Other programs are allowed, including agents resumed or restarted, arbitrary agents, non-shell wrappers and npm installations. Shells are recognized by executable basename alone, including bash --rcfile/--init-file/-o and script/-c launchers. Multiplexers (tmux, screen, zellij) and nested shell launchers (docker, busybox sh) also stop input. A tool child (ssh, python (including scripts and stdin), psql, sudo) under an admitted leader means busy: nothing is sent, World says to try again shortly without saying the agent has gone, and saved answers wait for a fresh check. Empty command lines are temporary too. World does not match the original agent session or hash its process IDs. A failed check says to try again shortly and leaves saved answers waiting. Runtime/terminal qualification and no replay of refused or uncertain sends still apply.
+Right before World types answers, Chat messages, notifications or prompts, it checks only the foreground process group's leader reported by the runtime. It uses the executable basename and ignores arguments. Shells, REPL interpreters, editors/pagers, ssh, sudo/su, database clients, tmux/screen/zellij and docker stop input. This includes shell scripts, bash --rcfile/--init-file/-o, node/python scripts and docker exec: arguments do not change the classification. Other executable names are allowed without matching the original agent session.
 
-In Reception > Outbox, **Not sent** names the current program category in plain words. **Copy answer** copies the saved owner answer; the full `herdr-world ask get <id>` command reads it later. **Put in Terminal composer** opens that terminal's draft on desktop or phone and preserves existing text. It sends nothing; the owner reviews and sends explicitly. Neither runtime makes the final OS foreground check and typing one indivisible operation. Automatic input requires readable Linux PTY/process evidence: TUI probes its qualified host, while core uses its local host process namespace. Missing evidence stays temporarily unavailable; it never falls back to local PIDs for a remote host.
+Children and MCP helpers are ignored. A shell started inside a live harness is a known limit: the harness leader still passes this check. World does no tty or /proc inspection for input admission. When the runtime provides no foreground information (including macOS, remote cores and a Herdr TUI without process info), this check preserves behavior before this PR. Existing connection, generation, terminal and delivery qualification still apply; missing foreground information does not override them.
+
+In Reception > Outbox, **Not sent** names the refused program category in plain words. **Copy answer** copies the saved owner answer; the full `herdr-world ask get <id>` command reads it later. **Put in Terminal composer** opens that terminal's draft on desktop or phone and preserves existing text. It sends nothing; the owner reviews and sends explicitly. Refused deliveries and possible sends are never automatically replayed. Neither runtime makes the final OS foreground check and typing one indivisible operation.
 
 The phone core Terminal keeps its Send controls open; desktop draft recovery opens them on request.

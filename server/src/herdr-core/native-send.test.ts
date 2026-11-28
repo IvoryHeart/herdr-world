@@ -113,31 +113,27 @@ test("a lost send reply is uncertain and is never retried", async () => {
   );
 });
 
-for (const argv of [
-  ["ssh", "example.invalid", "git", "pull"],
-  ["python3", "-"],
-  ["python3", "tool.py"],
-  ["psql", "-c", "select 1"],
-  ["sudo", "-n", "example"],
-  [],
-])
-  test(`core final input check keeps ${argv.length ? argv.join(" ") : "empty cmdline"} child temporary with zero writes`, async () => {
-    const children: string[][] = [];
-    const { w, lease, fence } = await setup(children);
-    await expect(
-      lease.runtime.send(fence, "An answer", async () => {
-        children.push(argv);
-        return true;
-      }),
-    ).rejects.toThrow(/agent_input_unavailable:.*Try again shortly/);
-    expect(w.fake.deliveredInput).toEqual([]);
-    expect(w.fake.calls.filter((c) => c.method === "terminal.send")).toEqual(
-      [],
-    );
-    children.length = 0;
-    await lease.runtime.send(fence, "An answer", async () => true);
-    expect(w.fake.deliveredInput).toHaveLength(1);
+test("core ignores child processes that change during final preparation", async () => {
+  const children: string[][] = [];
+  const { w, lease, fence } = await setup(children);
+  await lease.runtime.send(fence, "An answer", async () => {
+    children.push(["bash"], ["ssh"], ["python3"], ["docker"], ["vim"]);
+    return true;
   });
+  expect(w.fake.deliveredInput).toHaveLength(1);
+});
+
+test("core without foreground information preserves native input", async () => {
+  const w = await coreWorld();
+  worlds.push(w);
+  await w.connect();
+  const address = w.fake.create({ argv: ["codex"], foreground: null });
+  await w.settle();
+  const lease = w.lease();
+  const fence = CoreOperationFence.admit(lease, address);
+  await lease.runtime.send(fence, "An answer", async () => true);
+  expect(w.fake.deliveredInput).toHaveLength(1);
+});
 
 test("a held native answer is cancelled when its agent exits to bash", async () => {
   const { w, address, lease, fence } = await setup();

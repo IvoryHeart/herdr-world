@@ -731,29 +731,7 @@ export function createCoreConnectionRuntime(
     }
   };
   const checkInput = (record: CoreTerminalRecord) => {
-    const foreground = record.foreground as {
-      pid?: number;
-      name?: string;
-      argv?: string[];
-    } | null;
-    const children =
-      foreground?.pid && foregroundGroup
-        ? foregroundGroup(foreground.pid, foreground.argv?.[0], {
-            argv: foreground.argv,
-          })
-        : null;
-    if (children === null)
-      throw new Error(
-        "agent_input_unavailable: The terminal could not be checked. Try again shortly. Nothing was sent.",
-      );
-    const reason = foregroundInputRefusal([
-      {
-        ...foreground,
-        argv: children[0] ?? [],
-        reads_terminal: Boolean(children[0]?.length),
-      },
-      ...children.slice(1).map((argv) => ({ name: argv[0], argv })),
-    ]);
+    const reason = foregroundInputRefusal(record.foreground);
     if (reason) throw new Error(`agent_not_ready: ${reason}`);
   };
   const self: CoreConnectionRuntime = {
@@ -860,7 +838,7 @@ export function createCoreConnectionRuntime(
         try {
           fence.check("dispatch");
           const now = view.terminal(fence.occupant!.address);
-          if (!now || foregroundInputRefusal([now.foreground])) cancel.abort();
+          if (!now || foregroundInputRefusal(now.foreground)) cancel.abort();
         } catch {
           cancel.abort();
         }

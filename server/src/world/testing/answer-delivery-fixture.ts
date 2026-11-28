@@ -106,11 +106,7 @@ export async function productionAnswerFixture(
     throw new Error(`Unexpected synthetic Herdr method ${method}`);
   };
   const conversation = createHerdrConversationSource({
-    herdrCall: createTuiPassThrough("herdr", { call }, async (info) =>
-      (info.foreground_processes as unknown[]).map(
-        (p) => (p as { reads_terminal?: boolean }).reads_terminal !== false,
-      ),
-    ).call,
+    herdrCall: createTuiPassThrough("herdr", { call }).call,
     files: localAgentSessionFiles,
     context: createAgentSessionResolverContext(),
     cache: createSessionProjectionCache(localAgentSessionFiles),

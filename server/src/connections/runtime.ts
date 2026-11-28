@@ -1,7 +1,6 @@
 import { herdrAdapter } from "../adapters/herdr";
 import { createMemoryHost } from "../memory/host";
 import { createTuiPassThrough } from "../adapters/herdr-runtime";
-import { remoteTerminalReaders } from "../adapters/terminal-readers";
 import type { Clock, Scheduler } from "../service/ports";
 import {
   TERMINAL_DEFAULT_SIZE,
@@ -207,21 +206,7 @@ export function createLegacyConnectionRuntime(args: {
     client: herdr,
     terminalBridge: () => terminalBridge,
   });
-  const tui = createTuiPassThrough(
-    "herdr",
-    herdr,
-    config.sshHost
-      ? remoteTerminalReaders(async (command) => {
-          if (remotePlatform === "windows")
-            throw new Error("Terminal reader evidence unavailable");
-          return (
-            await runProcess(["ssh", config.sshHost!, command], undefined, {
-              timeoutMs: 5000,
-            })
-          ).stdout;
-        })
-      : undefined,
-  );
+  const tui = createTuiPassThrough("herdr", herdr);
   const agentSessionFiles = createAgentSessionFileAccess({
     sshHost: config.sshHost,
     runBinaryProcessWithTimeout,

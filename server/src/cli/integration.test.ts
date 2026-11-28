@@ -329,6 +329,7 @@ test("skill guide changes require a version bump", () => {
     8: "1fa61a7d9522a4a737e1920555284f7f3d7f4b6f85a52559909778f7ed6585ac",
     9: "a74de06764682d464956318ebec0a6e16b54bfdef35e129411e5410728995ed0",
     10: "5c2b470b05b99fe33ff1dc9bd5e68e693468f3f2f15e9bb55bf6ea9b955f2b8d",
+    11: "72fc634c8992a4f4649d1245d37ae1a39aef33c8d8ec2d9e66b7082da098adae",
   };
   expect(createHash("sha256").update(WORLD_SKILL).digest("hex")).toBe(
     digests[WORLD_SKILL_VERSION]!,

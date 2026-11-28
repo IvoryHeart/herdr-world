@@ -143,9 +143,7 @@ export class AcquisitionHost {
         client: herdr,
         terminalBridge: () => terminalBridge,
       }),
-      tui: createTuiPassThrough("herdr", herdr, async (info) =>
-        (info.foreground_processes as unknown[]).map(() => true),
-      ),
+      tui: createTuiPassThrough("herdr", herdr),
       identity: options.identity,
       async startTransport() {},
       startBackground() {},

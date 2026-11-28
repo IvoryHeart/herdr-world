@@ -22,9 +22,8 @@ async function fixture(
   foreground = { name: "claude", argv: ["claude"] },
 ) {
   const children: string[][] = [];
-  let processReadFails = false;
   const world = await coreWorld({
-    foregroundGroups: () => (processReadFails ? null : children),
+    foregroundGroups: () => children,
   });
   cleanups.push(world.dispose);
   await world.connect();
@@ -175,9 +174,6 @@ async function fixture(
     world,
     children,
     prompts,
-    failProcessRead(value: boolean) {
-      processReadFails = value;
-    },
     f,
     dispatcher,
     recipient,
@@ -254,54 +250,6 @@ for (const name of ["vim", "python", "node", "ssh", "sudo", "psql"])
   });
 
 for (const runtime of ["core", "tui"] as const)
-  for (const name of ["bash", "vim", "tmux", "docker"])
-    test(`${runtime}: a ${name} child of the original harness refuses saved answer delivery`, async () => {
-      const f = await fixture(runtime);
-      await f.answer();
-      if (runtime === "core") f.children.push([name]);
-      else f.f.foreground.foreground_processes.push({ pid: 6001, name });
-      await f.dispatcher.wake();
-      await f.check();
-    });
-
-for (const harness of ["codex", "pi", "gemini"])
-  test(`core: a node-launched ${harness} captures a recipient and delivers through Outbox`, async () => {
-    const f = await fixture("core", {
-      name: "node",
-      argv: ["node", `/opt/${harness}.js`],
-    });
-    expect(f.recipient?.adapter).toBe("herdr-core");
-    await f.answer();
-    await f.dispatcher.wake();
-    expect(f.world.fake.deliveredInput).toHaveLength(1);
-    expect(
-      f.f.storage.ledger.ask("q-foreground")?.delivery?.answer?.state,
-    ).toBe("delivered");
-  });
-
-test("TUI foreground read failure waits, then rechecks the original recipient", async () => {
-  const f = await fixture("tui");
-  const call = f.f.lease.runtime.tui.call.bind(f.f.lease.runtime.tui);
-  let fail = true;
-  f.f.lease.runtime.tui.call = async (method, params, timeout, beforeSend) => {
-    if (method === "pane.process_info" && fail) throw new Error("RPC timeout");
-    return call(method, params, timeout, beforeSend);
-  };
-  expect(await f.recipients.resolve(f.recipient)).toMatchObject({
-    state: "unresolved",
-  });
-  await f.answer();
-  await f.dispatcher.wake();
-  const entries = await f.f.storage.outbox.forRecord("q-foreground");
-  expect(entries[0]?.state).not.toBe("refused");
-  expect(f.world.fake.deliveredInput).toEqual([]);
-  fail = false;
-  expect(await f.recipients.resolve(f.recipient)).toMatchObject({
-    state: "attached",
-  });
-});
-
-for (const runtime of ["core", "tui"] as const)
   for (const name of ["claude", "codex", "new-agent"])
     test(`${runtime}: restarted or different ${name} can receive the saved answer`, async () => {
       const f = await fixture(runtime);
@@ -315,64 +263,21 @@ for (const runtime of ["core", "tui"] as const)
     });
 
 for (const runtime of ["core", "tui"] as const)
-  test(`${runtime}: an MCP shell launcher is refused by basename`, async () => {
-    const f = await fixture(runtime);
-    if (runtime === "core")
-      f.children.push(
-        ["sh", "-c", "mcp-server"],
-        ["node", "/opt/mcp/server.js"],
-      );
-    else
-      f.f.foreground.foreground_processes.push({
-        pid: 6001,
-        name: "sh",
-        argv: ["sh", "-c", "mcp-server"],
-      } as never);
-    await f.answer();
-    await f.dispatcher.wake();
-    await f.check("shell");
-  });
-
-for (const runtime of ["core", "tui"] as const)
-  for (const argv of [
-    ["ssh", "example.invalid", "git", "pull"],
-    ["python3", "-"],
-    ["python3", "tool.py"],
-    ["psql", "-c", "select 1"],
-    ["sudo", "-n", "example"],
-    [],
+  for (const name of [
+    "bash",
+    "vim",
+    "tmux",
+    "docker",
+    "ssh",
+    "python3",
+    "psql",
+    "sudo",
   ])
-    test(`${runtime}: ${argv.length ? argv.join(" ") : "empty cmdline"} child waits and rechecks before saved answer delivery`, async () => {
+    test(`${runtime}: ignores a ${name} child of the foreground harness`, async () => {
       const f = await fixture(runtime);
+      if (runtime === "core") f.children.push([name]);
+      else f.f.foreground.foreground_processes.unshift({ pid: 6001, name });
       await f.answer();
-      if (runtime === "core") f.children.push(argv);
-      else
-        f.f.foreground.foreground_processes.push({
-          pid: 6001,
-          name: argv[0],
-          argv,
-        } as never);
-      await f.dispatcher.wake();
-      expect(
-        f.f.storage.ledger.ask("q-foreground")?.delivery?.answer?.state,
-      ).toBe("pending");
-      const entry = (await f.f.storage.outbox.forRecord("q-foreground"))[0]!;
-      expect(entry.state).not.toBe("refused");
-      expect(entry.evidence?.reason).not.toMatch(/isn't running|not attached/);
-      expect(f.world.fake.deliveredInput).toEqual([]);
-      expect(f.prompts).toEqual([]);
-      expect(
-        await f.cli.handle(
-          { command: "ask get", params: { id: "q-foreground" } },
-          null,
-        ),
-      ).toMatchObject({
-        ok: true,
-        result: { answer: { text: "printf answer_should_not_run" } },
-      });
-      f.children.length = 0;
-      f.f.foreground.foreground_processes.splice(1);
-      f.f.time(100000);
       await f.dispatcher.wake();
       expect(
         f.f.storage.ledger.ask("q-foreground")?.delivery?.answer?.state,
@@ -382,19 +287,13 @@ for (const runtime of ["core", "tui"] as const)
       ).toHaveLength(1);
     });
 
-test("core: failed foreground child reads keep the answer pending with zero writes", async () => {
-  const f = await fixture("core");
+test("TUI without foreground information retains saved-answer delivery", async () => {
+  const f = await fixture("tui");
+  f.f.foreground.foreground_processes.length = 0;
   await f.answer();
-  f.failProcessRead(true);
-  await f.dispatcher.wake();
-  expect(f.f.storage.ledger.ask("q-foreground")?.delivery?.answer?.state).toBe(
-    "pending",
-  );
-  expect(f.world.fake.deliveredInput).toEqual([]);
-  f.failProcessRead(false);
-  f.f.time(100000);
   await f.dispatcher.wake();
   expect(f.f.storage.ledger.ask("q-foreground")?.delivery?.answer?.state).toBe(
     "delivered",
   );
+  expect(f.prompts).toHaveLength(1);
 });

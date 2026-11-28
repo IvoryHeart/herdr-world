@@ -95,7 +95,7 @@ export function coreRecipientChange(
   occupancy: number | null = null,
 ): "ended" | "changed" | null {
   if (!record || record.remote || record.state !== "live") return "ended";
-  if (foregroundOf(record) && foregroundInputRefusal([record.foreground]))
+  if (foregroundOf(record) && foregroundInputRefusal(record.foreground))
     return "changed";
   const now = coreRecipientToken(coreId, record, occupancy);
   if (!now) return "changed";

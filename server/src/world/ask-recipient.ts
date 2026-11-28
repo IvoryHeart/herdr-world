@@ -130,7 +130,7 @@ export function createAskRecipients(deps: {
     if (
       !occupant ||
       !occupant.foreground ||
-      foregroundInputRefusal([occupant.foreground]) ||
+      foregroundInputRefusal(occupant.foreground) ||
       actor.terminal_id !== actor.pane_id ||
       occupant.fingerprint !== actor.agent_session_fingerprint
     )
@@ -194,7 +194,7 @@ export function createAskRecipients(deps: {
         state: "unresolved",
         reason: "The terminal could not be checked; try again shortly",
       };
-    const reason = foregroundInputRefusal([occupant.foreground]);
+    const reason = foregroundInputRefusal(occupant.foreground);
     if (reason)
       return { state: "unconfirmed", reason: `Agent not attached. ${reason}` };
     const delivery = host.delivery?.(
