@@ -30,21 +30,6 @@ Town, Desk, Board, Spaces and the CLI.
   `ledger_changes`; regrouping from topology records nothing. The cross-view test is
   `server/src/world/world-cross-view.test.ts`.
 
-## 3. Colour and look
-
-Needs the agent and place records of `world-agent-identity` (tasks 3, 6, 7.2 and 7.3).
-
-- [ ] 3.1 The shared colour and look resolver (`world-agent-identity` task 8.1) runs on
-  the service. `world.snapshot` carries each agent's, place's and room's resolved
-  colour and look.
-- [ ] 3.2 Town, Board, Desk, Spaces, Apartments and the CLI read the resolved values.
-  Delete Board's own resolution and colour target building
-  (`web/src/world/BoardView.tsx`), Town's look rule
-  (`web/src/world/town/townAppearance.ts`), `web/src/world/apartments/residentLook.ts`
-  and the copy in `server/src/features/apartments/service.ts`. Pickers write through
-  `agent.set` and the place equivalent (task 8.2 of `world-agent-identity`), with
-  history.
-
 ## 4. Commands, fences and room names
 
 - [x] 4.1 Command records on the service: command ID, entity, field, expected value,
@@ -142,3 +127,23 @@ Needs the agent and place records of `world-agent-identity` (tasks 3, 6, 7.2 and
   (terminal input and focus stay). A check fails when `web/src/` calls one or keeps a
   World fact in browser storage. Delete what is left of the browser World builder,
   update the capability notes and archive this change.
+
+## 3. Colour and look (last)
+
+Moved to the end on 2026-11-25: "We can even do color at the end, thats not
+important now, one world is the most important bit." The agent record comes first;
+colour and look follow once the other steps are on the World path. The step keeps
+its number so references to it stay valid.
+
+Needs the agent and place records of `world-agent-identity` (tasks 3, 6, 7.2 and 7.3).
+
+- [ ] 3.1 The shared colour and look resolver (`world-agent-identity` task 8.1) runs on
+  the service. `world.snapshot` carries each agent's, place's and room's resolved
+  colour and look.
+- [ ] 3.2 Town, Board, Desk, Spaces, Apartments and the CLI read the resolved values.
+  Delete Board's own resolution and colour target building
+  (`web/src/world/BoardView.tsx`), Town's look rule
+  (`web/src/world/town/townAppearance.ts`), `web/src/world/apartments/residentLook.ts`
+  and the copy in `server/src/features/apartments/service.ts`. Pickers write through
+  `agent.set` and the place equivalent (task 8.2 of `world-agent-identity`), with
+  history.

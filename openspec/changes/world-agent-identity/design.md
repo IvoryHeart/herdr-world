@@ -127,13 +127,45 @@ never trimmed automatically.
 
 ## 4. Storage and migration
 
-The agent is the first kind in the single-model plan's `entities` table, and its
-fields use that plan's `facts` table. Hosts, rooms and tabs that carry their own
-colour, spot or status become `place` entities in the same tables, so one store
-holds every colour. One new table, `agent_conversations`, holds
-`(agent_id, host_id, harness, conversation_id, first_seen, last_seen, source)`.
-Seat bindings stay in `world_bindings`. All of these go into
-`server/src/storage/catalog.ts`.
+The agent is the first kind in the single-model plan's two unified tables,
+`entities` and `facts`. They are the only tables this change adds. Hosts, rooms
+and tabs that carry their own colour, spot or status become `place` entities in
+the same tables later (task 7.2), and so do the other kinds the World-as-one steps
+move (notes, crews, conversations). Seat bindings stay in `world_bindings`, IDs
+come from `world_ids`, and every change is a history entry in `ledger_changes`.
+
+| Table | Columns | Identity | Limit |
+| --- | --- | --- | --- |
+| `entities` | `id` (in `world_ids`), `kind` (`agent` for now), `created_at`, `ended_at` | the World ID, `a-` and eight symbols for an agent, never reused | none: never trimmed; the user decides |
+| `facts` | `entity_id`, `field`, `item`, `value` (JSON), `owner`, `revision`, `updated_at` | `(entity_id, field, item)`; `item` is empty for a single value | 4 KiB per value; rows never trimmed |
+
+- **`owner`** is `world` for a value World owns (colour, pin, the user's choices)
+  or the adapter that owns it (`herdr`, `core`, `claude`, `codex`) for a last-known
+  source value World keeps, such as the name or the harness. When a source takes a
+  field over, the source wins and the old World value stays in history.
+- **`item`** makes a field hold several values without a table of its own. The
+  conversation history is the field `conversation` with one item per conversation,
+  keyed `<host>/<harness>/<conversation ID>`, and a value holding first and last
+  seen and the source. The current conversation is the field `conversation.current`,
+  whose value names one of those items. Later relations (group membership, a
+  `works on` link to a PR) are items keyed by the other entity's ID. This is why
+  the earlier `agent_conversations` table is not needed.
+- **State.** Only what must survive a restart is stored: `ended_at` (the user's End,
+  or a close with no conversation to resume) and the seat binding's own state.
+  Live, away and unresolved are derived on each revision from the seat binding and
+  the current observation, so a World restart shows every agent unresolved until
+  its terminal is seen again, as section 1 requires.
+- **Fields this change writes:** `harness` and `name` and `folder` (labels, owned by
+  the runtime or harness, last known), and `conversation` and `conversation.current`
+  (owned by the harness). Each World-as-one step registers the fields it moves and
+  deletes the old store's writer for them in the same PR. Nothing is registered ahead
+  of its step.
+- **Store operations:** create, set label, append conversation, set fact and end,
+  each one transaction in the World store's single writer, each raising the World
+  revision once. None deletes a row; there is no trim.
+
+The table inventory, and which World-as-one step folds each old table into these
+two tables, is in [storage.md](storage.md).
 
 Migration copies and never guesses:
 1. The schema step only adds tables, after the usual pre-upgrade snapshot.
@@ -168,10 +200,16 @@ saved, so nothing is copied for it.
    therefore keeps displaying and stays available to copy later, for as long as it
    takes. A retired table is renamed `retired_*`, kept for one release and never
    deleted automatically. Rollback means restoring the named snapshot.
-5. From the schema step on, `appearance.prune` stops deleting colours and
-   appearance rows when a terminal disappears; it only hides them, as the
-   continuity check already does. Otherwise a colour could be deleted before it
-   is copied. An away agent keeps its colour and look like its other fields.
+5. Before any copy, World stops deleting the facts it will copy (task 7.1).
+   `appearance.prune` no longer deletes colours and appearance rows when a terminal
+   disappears; it only hides them, as the continuity check already does, because
+   each row carries its terminal witness. A closed tab's colour and desk pin
+   (`tabClosedOps`) are not deleted either. They are keyed by tab ID alone, and an
+   older Herdr can reuse a tab ID, so the row is kept and marked closed instead:
+   the tab colour's `tab-colour` binding already ends on close, and readers skip a
+   row whose binding has ended; a desk pin gets the same closed mark in its own
+   row. A reused ID therefore never shows an old colour or pin. An away agent keeps
+   its colour and look like its other fields.
 
 ## 5. One record for every view
 
@@ -212,10 +250,16 @@ setting, Group runtimes (#1307: one per machine or one per runtime), through one
 shared derivation over the agent's host. Town buildings, the Desk navigator and
 lists, and Board's host zones all use it; no view groups by its own rule.
 
-**Snapshot.** The snapshot gains `agents`, one entry per agent ID with every field
-above, its state, conversation (state, ID, source or reason) and seat. Each
-terminal row it attributes also gets `agent_id`. Both come from the same
-observation and revision. Town desks, Desk records and Board agent cards key on
+**Snapshot.** The snapshot gains `agents`, one entry per agent ID with its state,
+labels, conversation (state, ID, source or reason) and seat, and each field above
+once its World-as-one step moves it (colour and look come last). Each terminal row
+it attributes also gets `agent_id`. Both come from the same observation and
+revision: the resolver runs when an observation is admitted, never in the read,
+commits to the store, and the snapshot publishes the store's agents beside the
+terminals they were resolved from. The CLI reads the same `world.snapshot` on the
+service; each browser reads it once into its World replica, and every view reads
+the agent through one selector over that replica (`agent_id` of a terminal, then
+the record), never by matching names, tabs or harness IDs. Town desks, Desk records and Board agent cards key on
 `agent_id`; the old desk and card keys become derived lookups. A view never decides
 which agent a terminal is. Two agents with the same name stay two desks, and away
 and unresolved agents never appear as duplicates. A cross-view test renders Town,

@@ -70,8 +70,9 @@ entity is the agent, and a conversation is a claim and a history row. Implementa
 follows the steps in [tasks](tasks.md). Agent moves (#1184) build on it later and are
 out of scope. Spaces' browser pins and usage stay with their own single-model steps.
 
-This proposal asks for storage approval: agents and places (host, room, tab)
-become the first kinds in the single-model plan's `entities` and `facts` tables,
-replacing `board_colors`, `board_appearance` and the desk and room pin tables
-after a verified copy, and one new table, `agent_conversations`, holds each
-agent's conversation history (see design).
+Storage: agents and places (host, room, tab) become the first kinds in the
+single-model plan's `entities` and `facts` tables, approved in #1398 as the
+unified home. They replace `board_colors`, `board_appearance` and the desk and room
+pin tables after a verified copy. No other table is added: an agent's conversation
+history is a multi-valued fact (see [design](design.md) and the
+[inventory](storage.md)).

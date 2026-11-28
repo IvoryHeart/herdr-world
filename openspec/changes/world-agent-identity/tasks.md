@@ -30,8 +30,9 @@ Each later step is one PR of about 300 changed lines or fewer, excluding tests.
 
 ## 3. Agent store
 
-- [ ] 3.1 Migration that adds `entities`, `facts` and `agent_conversations` (agent
-  kind only), with catalog entries giving owner, identity and limit.
+- [ ] 3.1 Migration that adds `entities` and `facts` (agent kind only), with catalog
+  entries giving owner, identity and limit. No other table: conversation history is a
+  multi-valued fact ([storage](storage.md)).
 - [ ] 3.2 Agent store operations: create, set label, append conversation, set
   fact, end. Never trim.
 
@@ -55,8 +56,9 @@ Each later step is one PR of about 300 changed lines or fewer, excluding tests.
 
 ## 7. Migration of facts
 
-- [ ] 7.1 Stop `appearance.prune` from deleting colours and appearance rows; it
-  only hides them. Ships before any copy.
+- [ ] 7.1 Stop `appearance.prune` from deleting colours and appearance rows, and
+  `tabClosedOps` from deleting a closed tab's colour and desk pin; both only hide
+  them. Ships before any copy.
 - [ ] 7.2 Place entities for host, room and tab; copy `board_colors`, room spots
   and tab colours of tabs without a single agent onto them.
 - [ ] 7.3 Copy tab colour, status text, avatar, desk pin and rank, Board card
