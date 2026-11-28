@@ -203,7 +203,7 @@
       "reason": "Not converted yet; its area sweep (#1419) replaces these with waits on the real signal."
     },
     "web/src/annotations.browser.tsx": {
-      "pauses": 68,
+      "pauses": 67,
       "reason": "Not converted yet; its area sweep (#1419) replaces these with waits on the real signal."
     },
     "web/src/api.test.ts": {

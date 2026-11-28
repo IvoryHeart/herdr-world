@@ -1,3 +1,4 @@
+import "./agentInputPreview";
 import { coreFixtureEnabled } from "./coreFixture";
 import { moveBoardRefuses } from "./world/moveBoardRefuses";
 import { coreInstallFake } from "./coreInstall";

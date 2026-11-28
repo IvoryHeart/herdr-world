@@ -10,7 +10,7 @@ import {
   useConversationRead,
   type LatestConversation,
 } from "../conversationRead";
-import { terminalComposerRequest } from "../../terminalComposer";
+import { sendAgentInput } from "../../agentInput";
 import { questionFromScreen, screenIdentity } from "../paneScreen";
 import type { WorldLeafObject, WorldObject } from "../worldObject";
 
@@ -223,7 +223,7 @@ export function townChoices(lines: readonly string[]): TownChoice[] {
 export class TownReplyError extends Error {}
 
 /**
- * Send text to a pane. `submit` presses Enter after it; a menu choice is a
+ * Send guarded agent input. `submit` presses Enter after it; a menu choice is a
  * single key and is sent without Enter, as an agent's menu expects.
  */
 export async function sendTownReply(
@@ -236,6 +236,5 @@ export async function sendTownReply(
     throw new TownReplyError(
       "This agent's host changed; refresh before replying.",
     );
-  const request = terminalComposerRequest(leaf.pane.pane_id, text, submit);
-  await client.call(request.method, request.params);
+  await sendAgentInput(client, leaf.pane.pane_id, text, submit);
 }

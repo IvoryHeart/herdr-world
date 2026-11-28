@@ -6,6 +6,7 @@ import App from "./App";
 import { bridge, type ConnectionClient, type TerminalPush } from "./api";
 import {
   annotationDraftStorageKey,
+  compileReviewFeedback,
   readReviewAnnotations,
   writeReviewAnnotations,
   type ReviewAnnotation,
@@ -242,6 +243,10 @@ export async function checkAnnotationUX(
         rows = Number(params.rows);
       }
       if (method === "pane.send_input") {
+        check(
+          params.agent_input === true,
+          "Review prefill bypassed the foreground guard",
+        );
         sent.push(params);
         delivery = Promise.withResolvers<object>();
         return delivery.promise;
@@ -1299,6 +1304,7 @@ export async function checkAnnotationUX(
     await until(() => delivery, "pre-fill shortcut did not start");
     check(
       sent[0]?.pane_id === pane.pane_id &&
+        sent[0]?.agent_input === true &&
         JSON.stringify(sent[0]?.keys) === "[]",
       "pre-fill did not use source pane without Enter",
     );
@@ -1312,10 +1318,35 @@ export async function checkAnnotationUX(
     );
     click(".annotation-delivery-actions button:last-child");
     await until(() => delivery, "second pre-fill did not start");
-    delivery!.reject(new Error("Synthetic delivery failure"));
+    const refusedFeedback = compileReviewFeedback(draft());
+    delivery!.reject(
+      new Error(
+        "agent_not_ready: The agent isn't running in that terminal any more; it's a shell now. Nothing was sent.",
+      ),
+    );
     delivery = null;
-    await settle();
+    await until(
+      () => store.get().notice?.message === "Review feedback not sent",
+      "foreground refusal did not offer recovery",
+    );
     check(draft().length === 1, "failed delivery erased work");
+    check(
+      store.get().notice?.detail?.includes("shell now") === true &&
+        !store.get().notice?.detail?.includes("agent_not_ready") &&
+        store.get().notice?.actionLabel === "Copy feedback" &&
+        store.get().notice?.actionClipboardText === refusedFeedback,
+      "Guard refusal lost feedback or exposed a native error instead of Copy",
+    );
+    const beforeRecoveryCopy = copyCalls;
+    click(".toast-error button.toast-action");
+    await until(
+      () => copyCalls === beforeRecoveryCopy + 1,
+      "Copy recovery did not reach the clipboard",
+    );
+    check(
+      draft().length === 1 && !delivery,
+      "Copy recovery changed the draft or retried input",
+    );
     type(".annotation-card textarea", " ");
     check(
       [

@@ -12,6 +12,9 @@
 **Code:**
 
 - `web/src/world/town/TownPeek.tsx`
+- `web/src/world/town/townChat.ts` (shared Town/Board guarded reply sender)
+- `web/src/agentInput.ts`, `server/src/service/rpc-dispatch.ts` (foreground opt-in and Copy recovery)
+- `web/src/main.tsx`, `web/src/agentInputPreview.ts` (capture the refusal switch before routing)
 - `web/src/world/board/BoardPeek.tsx`
 - `web/src/world/WorldInspectorConversation.tsx`
 - `web/src/components/WorkspaceInspectorHost.tsx` (top selector; folds the tabs into the view menu when they do not fit)
@@ -22,6 +25,9 @@
 
 **Tests:**
 
+- `web/src/world/town/townChat.test.ts`, `web/src/agentInput.test.ts`
+- `web/src/agentInput.dom.test.ts`, `web/src/appStartup.browser.test.ts`, `web/src/testing/agentInputPreviewAcceptance.ts` (root-to-Town startup, later navigation and zero preview sends)
+- `server/src/service/terminal-input.test.ts`
 - `web/src/world/WorldInspectorChatWorktree.test.ts`
 - `web/src/components/TerminalComposer.uploads.test.ts`
 - `web/src/world/DeskView.test.ts`
@@ -35,6 +41,8 @@
 - Use the conversation watch for latest chatter; screen text is not the latest message.
 - Opening an agent returns its character to its desk without marking work reviewed.
 - There is no peek CLI; task-summary and ask have separate contracts.
+- Replies and answer keys use the same foreground check as Chat. A refused send shows **Not sent** with **Copy**; copying never types or retries. A stale agent label cannot authorize a send.
+- This preview connects to the owner's real agents. To try recovery, open `/?agentInputGuard=refused` on the preview origin: startup captures and removes the parameter before routing to `/town`. Peek replies, answer keys and review prefill refuse without runtime input throughout view navigation until reload. Reloading the cleaned URL restores real delivery.
 
 ## Usage reference
 

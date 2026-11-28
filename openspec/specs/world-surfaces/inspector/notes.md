@@ -20,6 +20,9 @@
 - `web/src/components/WorkspaceInspectorHost.tsx`
 - `server/src/agent/worktree.ts`
 - `web/src/world/coreInspector.ts`
+- `web/src/App.tsx`, `web/src/annotations.ts` (review compilation and qualified prefill)
+- `web/src/agentInput.ts`, `server/src/service/rpc-dispatch.ts` (shared foreground check and Copy fallback)
+- `web/src/main.tsx`, `web/src/agentInputPreview.ts` (preview refusal captured before routing)
 
 **Tests:**
 
@@ -27,6 +30,9 @@
 - `web/src/world/WorldInspectorChatWorktree.test.ts`
 - `web/src/chatFocus.test.ts`
 - `server/src/agent/worktree.test.ts`
+- `web/src/annotations.browser.tsx`, `web/src/filePreviewNavigation.test.ts` (desktop/phone review recovery)
+- `server/src/service/terminal-input.test.ts`
+- `web/src/appStartup.browser.test.ts`, `web/src/testing/agentInputPreviewAcceptance.ts` (root-to-Town refusal with zero runtime sends)
 
 **Pitfalls:**
 
@@ -265,6 +271,14 @@ File operations and previews work locally and over SSH.
   Leaving the draft's workspace or connection during pre-fill retains the original draft,
   even after returning. Closing Inspector or Annotations does not discard drafts.
   Blank comments cannot be delivered.
+- Pre-fill checks the foreground program using the same guard as Chat; a stale
+  Agent label is not enough. A refusal shows **Review feedback not sent** with
+  **Copy feedback**, retains the draft and never retries input. Direct Terminal
+  typing/paste remains available. This preview talks to the owner's real agents.
+  To try refusal, open `/?agentInputGuard=refused` on the preview origin; startup
+  captures and removes the switch before routing to `/town`. Pre-fill, peek replies
+  and answer keys refuse without runtime input across view navigation until reload.
+  Reloading the cleaned URL restores real delivery.
 - Refresh re-anchors matching file/diff content and marks unresolved anchors stale
   without losing captured quotes.
 
