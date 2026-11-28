@@ -8,6 +8,7 @@ import {
 const resumeGallery = new URLSearchParams(location.search).has(
   "resume-gallery",
 );
+import { isBackPending } from "../systemBack";
 import { TerminalAttachFrameWatchdog } from "../terminalResize";
 import { windowMinimizeAcceptance } from "./testing/windowMinimizeAcceptance";
 import { requestTerminalComposer } from "./terminalComposerRequest";
@@ -90,6 +91,23 @@ let failInterestPatch = false;
 const check = (condition: boolean, message: string) => {
   if (!condition) failures.push(message);
 };
+/**
+ * The app's own Back (`history.go`) lands on Chrome's real popstate (or a
+ * 1 s fallback timer). Test time runs ahead of it while the fixture waits, so
+ * on a loaded runner a step's settle can end before it lands: wait for it.
+ */
+async function ownBackLanded() {
+  while (isBackPending())
+    await new Promise<void>((resolve) => {
+      const landed = () => {
+        window.removeEventListener("popstate", landed);
+        resolve();
+      };
+      window.addEventListener("popstate", landed);
+      // A traversal that cannot move ends on that timer instead.
+      clock.real.setTimeout(landed, 10);
+    });
+}
 const settle = () => clock.advance(80);
 // ResizeObserver runs after layout. Give its React update a painted frame
 // before dispatching another arrangement or saving a geometry baseline.
@@ -6251,6 +6269,9 @@ async function run() {
       () => spacesMore()?.getAttribute("aria-expanded") === "false",
       "direct Spaces Back closes More first",
     );
+    // Closing More went Back in history; Spaces' Back ignores a press
+    // while that traversal is in flight, so let it land first.
+    await ownBackLanded();
     await settle();
     check(
       window.location.pathname === "/spaces",
