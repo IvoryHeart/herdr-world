@@ -5,6 +5,7 @@ import {
   writeFileSync,
 } from "node:fs";
 import { basename, join } from "node:path";
+import { localTestChrome } from "./test-chrome";
 import { CHROME, TEST, type Affected } from "./affected";
 import { acquireCheckSlot, type CheckClass, heldEnv } from "./check-lock";
 import { repositorySelection } from "./validation-scope";
@@ -272,6 +273,10 @@ if (!browserOnly) {
 }
 if (results.every((result) => result.code === 0)) {
   const ok = (list: Result[]) => list.every((result) => result.code === 0);
+  if (full && !staticOnly) {
+    const chrome = await localTestChrome();
+    if (chrome) process.env.CHROME_BIN = chrome;
+  }
   const tests = (async () => {
     const done = await Promise.all(busy.map(runLane));
     // Chrome tests outside World use the same browser slot after the busy
@@ -280,10 +285,10 @@ if (results.every((result) => result.code === 0)) {
       ? [...done, ...(await Promise.all(quiet.map(runLane)))]
       : done;
   })();
-  const [checked, tested] = await Promise.all([
-    Promise.all(verification.map(runLane)),
-    tests,
-  ]);
+  const tested = await tests;
+  // Browser and model lanes compete for the same CPUs. Preserve the model
+  // deadline by starting verification after both browser lanes finish.
+  const checked = await Promise.all(verification.map(runLane));
   results.push(...checked, ...tested);
 }
 

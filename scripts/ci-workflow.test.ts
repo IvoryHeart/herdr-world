@@ -1,4 +1,4 @@
-import { verificationJobs } from "./ci-model-plan";
+import { verificationGroups } from "./ci-model-plan";
 import { expect, test } from "bun:test";
 import {
   mkdirSync,
@@ -29,7 +29,12 @@ type WorkflowStep = {
   if?: string;
   "continue-on-error"?: boolean;
   env?: Record<string, string>;
-  with?: { "fetch-depth"?: number; filter?: string; ref?: string };
+  with?: {
+    "fetch-depth"?: number;
+    filter?: string;
+    ref?: string;
+    "persist-credentials"?: boolean;
+  };
   "working-directory"?: string;
 };
 
@@ -46,14 +51,14 @@ type WorkflowJob = {
     "fail-fast"?: boolean;
     "max-parallel"?: number;
     matrix?: {
-      include?: Array<{ arch?: string; runner?: string }>;
+      include?: Array<Record<string, string | number>>;
       platform?: string[];
       shard?: number[] | string;
       arch?: string[];
       suite?: string[];
       suites?: string[];
       order?: string[];
-      group?: string;
+      group?: string | string[];
     };
   };
   steps: WorkflowStep[];
@@ -86,10 +91,238 @@ const worldWorkflow = Bun.YAML.parse(
   jobs: Record<string, WorkflowJob>;
 };
 
+// Evaluate the default full run (no optional preview/diagnostic labels), then
+// recursively count runner leaves. Reusable callers themselves take no runner.
+function fullModeJobs(event: string) {
+  const selection = JSON.stringify({
+    world: ["all"],
+    web: ["all"],
+    worldShards: worldBrowserShards.map((_, i) => i + 1),
+  });
+  const github = {
+    event_name: event,
+    workflow: "CI",
+    ref: "refs/heads/branch",
+    event: {
+      action: "opened",
+      pull_request: { state: "open", labels: [] },
+      label: { name: "" },
+    },
+  };
+  const needs = {
+    "validation-scope": {
+      result: "success",
+      outputs: {
+        mode: "full",
+        world: "true",
+        verification: "true",
+        selection,
+      },
+    },
+  };
+  const evaluate = (value: string, inputs: Record<string, unknown>) => {
+    const expression = value
+      .replace(/^\$\{\{\s*|\s*\}\}$/g, "")
+      .replace(/needs\.([\w-]+)/g, 'needs["$1"]')
+      .replace(
+        "github.event.pull_request.labels.*.name",
+        "github.event.pull_request.labels",
+      );
+    return new Function(
+      "github",
+      "needs",
+      "inputs",
+      "fromJSON",
+      "toJSON",
+      "contains",
+      "always",
+      "cancelled",
+      `return (${expression})`,
+    )(
+      github,
+      needs,
+      inputs,
+      JSON.parse,
+      JSON.stringify,
+      (items: string | string[], item: string) => items.includes(item),
+      () => true,
+      () => false,
+    );
+  };
+  const count = (
+    jobs: Record<string, WorkflowJob>,
+    inputs: Record<string, unknown>,
+  ): number =>
+    Object.values(jobs).reduce((sum, job) => {
+      if (job.if && !evaluate(job.if, inputs)) return sum;
+      const matrix = job.strategy?.matrix;
+      let expansions = 1;
+      if (matrix) {
+        const { include, ...axes } = matrix;
+        const values = Object.values(axes).map((axis) =>
+          typeof axis === "string" ? evaluate(axis, inputs) : axis,
+        );
+        expansions = values.reduce((n, axis) => n * axis.length, 1);
+        // Current include-only matrices add one runner per row.
+        if (include) {
+          expect(values).toHaveLength(0);
+          expansions = include.length;
+        }
+      }
+      if (job.uses) {
+        expect(job.uses).toStartWith("./.github/workflows/");
+        const called = Bun.YAML.parse(
+          readFileSync(job.uses.slice(2), "utf8"),
+        ) as { jobs: Record<string, WorkflowJob> };
+        const calledInputs = Object.fromEntries(
+          Object.entries(job.with ?? {}).map(([key, value]) => [
+            key,
+            value.startsWith("${{") ? evaluate(value, inputs) : value,
+          ]),
+        );
+        return sum + expansions * count(called.jobs, calledInputs);
+      }
+      expect(job["runs-on"]).toBeDefined();
+      return sum + expansions;
+    }, 0);
+  return count(workflow.jobs, { browser_diagnostics: false });
+}
+
+test("the full-mode graph uses at most sixteen jobs, including every reusable matrix expansion", () => {
+  for (const event of ["pull_request", "merge_group", "workflow_dispatch"])
+    expect(fullModeJobs(event)).toBeLessThanOrEqual(16);
+});
+
+test("combined runner workloads survive unit failure but stop on cancellation", () => {
+  const steps = workflow.jobs["unit-tests"].steps;
+  const workloads = steps.filter(
+    (step) =>
+      step.run === "bun run check:static --static-group=${{ matrix.group }}" ||
+      step.run === "bun run security:check" ||
+      step.run?.startsWith("bun scripts/test-chrome.ts") ||
+      step.run?.startsWith("bun scripts/ci-tests.ts web ") ||
+      step.uses?.startsWith("actions/cache@"),
+  );
+  expect(workloads).toHaveLength(5);
+  for (const step of workloads) {
+    const evaluate = new Function(
+      "cancelled",
+      "always",
+      "matrix",
+      "needs",
+      "fromJSON",
+      "toJSON",
+      `return (${step.if!.replace(/^\$\{\{\s*|\s*\}\}$/g, "").replace(/needs\.([\w-]+)/g, 'needs["$1"]')})`,
+    );
+    for (const cancelled of [false, true]) {
+      expect(
+        evaluate(
+          () => cancelled,
+          () => true,
+          { group: "repository", web: 1 },
+          {
+            "validation-scope": {
+              outputs: { world: "true", selection: '{"web":["all"]}' },
+            },
+          },
+          JSON.parse,
+          JSON.stringify,
+        ),
+      ).toBe(!cancelled);
+    }
+    expect(step.if).toContain("cancelled()");
+  }
+});
+
+test("Delivery evidence conditions reference only declared dependencies", () => {
+  const delivery = workflow.jobs.delivery;
+  for (const step of delivery.steps) {
+    for (const match of step.if?.matchAll(/needs\.([\w-]+)\./g) ?? [])
+      expect(delivery.needs).toContain(match[1]!);
+  }
+});
+
+test("flaky reporting uses only a daily schedule or manual default-branch run", async () => {
+  const tracker = Bun.YAML.parse(
+    await Bun.file(".github/workflows/flaky-tests.yml").text(),
+  ) as {
+    on: Record<string, unknown>;
+    name: string;
+    jobs: Record<string, WorkflowJob>;
+    permissions: Record<string, string>;
+    concurrency: unknown;
+  };
+  expect(Object.keys(tracker.on).sort()).toEqual([
+    "schedule",
+    "workflow_dispatch",
+  ]);
+  expect(tracker.on.schedule).toEqual([{ cron: "17 4 * * *" }]);
+  expect(tracker.name).toBe("Daily flaky tests");
+  expect(Object.keys(tracker.jobs)).toEqual(["report"]);
+  expect(tracker.permissions).toEqual({
+    contents: "read",
+    actions: "read",
+    issues: "write",
+  });
+  expect(tracker.concurrency).toEqual({
+    group: "daily-flaky-tests",
+    "cancel-in-progress": false,
+  });
+  const job = tracker.jobs.report;
+  expect(job.if).toContain("github.event.repository.default_branch");
+  expect(job.steps[0]!.with?.ref).toBe(
+    "${{ github.event.repository.default_branch }}",
+  );
+  expect(job.steps[0]!.with?.["persist-credentials"]).toBe(false);
+  expect(
+    job.steps
+      .filter((step: WorkflowStep) => step.run?.includes("flaky-tests.ts"))
+      .map((step: WorkflowStep) => step.run),
+  ).toEqual(["bun scripts/flaky-tests.ts daily"]);
+  expect(
+    workflow.jobs.delivery.steps.some((step) =>
+      /flaky-tests\.ts (gate|track|pending)/.test(step.run || ""),
+    ),
+  ).toBe(false);
+  const download = workflow.jobs.delivery.steps.find(
+    (step) => step.name === "Download flaky test evidence",
+  );
+  expect(download?.with).toMatchObject({
+    pattern: "flaky-tests-*-${{ github.run_attempt }}",
+  });
+  expect(download?.with).not.toHaveProperty("merge-multiple");
+  for (const step of workflow.jobs.delivery.steps.filter((step) =>
+    /flaky|retry/i.test(step.name || ""),
+  )) {
+    expect(step["continue-on-error"]).toBe(true);
+  }
+});
+
+test("retry summaries and flaky.json artifacts stay inside existing test jobs and cannot fail them", () => {
+  for (const job of [
+    workflow.jobs["unit-tests"],
+    worldWorkflow.jobs["world-browser"],
+  ]) {
+    const summarize = job.steps.find((step) =>
+      step.run?.startsWith("bun scripts/flaky-tests.ts summarize"),
+    );
+    expect(summarize?.if).toBe("always()");
+    expect(summarize?.["continue-on-error"]).toBe(true);
+    expect(summarize?.env?.GH_TOKEN).toBeUndefined();
+    const upload = job.steps.find(
+      (step) => step.name === "Retain flaky test evidence",
+    );
+    expect(upload?.if).toBe("always()");
+    expect(upload?.["continue-on-error"]).toBe(true);
+    expect((upload?.with as Record<string, unknown>)?.path).toBe(
+      ".agents/delivery/flaky/flaky.json",
+    );
+  }
+});
+
 test("World stability label selects fresh full evidence and three consecutive passes", () => {
   const requested = `\${{ contains(github.event.pull_request.labels.*.name, '${STABILITY_LABEL}') }}`;
   expect(workflow.jobs["world-browser"].with?.stability).toBe(requested);
-  expect(workflow.jobs["web-browser"].with?.stability).toBe(requested);
   expect(
     workflow.jobs["validation-scope"].steps.find((step) => step.id === "scope")
       ?.env?.WORLD_BROWSER_STABILITY,
@@ -136,12 +369,20 @@ test("a closed or merged PR's edit or label skips every job before it takes a ru
   }
 });
 
-test("delivery checks the current audit, PR description and each leaf directly", () => {
-  const audit = workflow.jobs["dependency-security"];
-  expect(audit.needs).toBe("validation-scope");
-  expect(audit.if).toBe(
-    "needs.validation-scope.outputs.mode != 'reuse' && needs.validation-scope.outputs.mode != 'hold'",
-  );
+test("delivery checks the combined lanes, current audit and PR description", () => {
+  expect(workflow.jobs["dependency-security"]).toBeUndefined();
+  expect(
+    workflow.jobs["unit-tests"].steps.find(
+      (step) => step.run === "bun run security:check",
+    ),
+  ).toMatchObject({
+    if: "${{ !cancelled() && matrix.group == 'repository' }}",
+  });
+  expect(
+    workflow.jobs.static.steps.some(
+      (step) => step.run === "bun run security:check",
+    ),
+  ).toBe(true);
   const resultSteps = workflow.jobs.delivery.steps.filter(
     (step) => step.run === "bun scripts/ci-delivery-result.ts",
   );
@@ -149,12 +390,15 @@ test("delivery checks the current audit, PR description and each leaf directly",
   for (const step of resultSteps)
     expect(step.env).toMatchObject({
       SCOPE_RESULT: "${{ needs.validation-scope.result }}",
-      DESCRIPTION_RESULT: "${{ needs.pr-description.result }}",
-      SECURITY_RESULT: "${{ needs.dependency-security.result }}",
-      STATIC_RESULT: "${{ needs.static.result }}",
+      DESCRIPTION_RESULT: "${{ steps.description.outcome || 'skipped' }}",
+      SECURITY_RESULT:
+        "${{ needs.validation-scope.outputs.mode == 'docs' && needs.static.result || needs.unit-tests.result }}",
+      STATIC_RESULT:
+        "${{ needs.validation-scope.outputs.mode == 'docs' && needs.static.result || needs.unit-tests.result }}",
       UNIT_RESULT: "${{ needs.unit-tests.result }}",
       WORLD_RESULT: "${{ needs.world-browser.result }}",
-      WEB_RESULT: "${{ needs.web-browser.result }}",
+      WEB_RESULT:
+        "${{ needs.validation-scope.outputs.world == 'true' && toJSON(fromJSON(needs.validation-scope.outputs.selection).web) != '[]' && needs.unit-tests.result || 'skipped' }}",
       BEHAVIORAL_RESULT: "${{ needs.behavioral.result }}",
     });
 });
@@ -233,13 +477,10 @@ test("CI exposes the protected delivery gate and runs the complete repository ch
   expect(delivery?.name).toBe("Delivery checks");
   expect(delivery?.needs).toEqual([
     "validation-scope",
-    "pr-description",
     "static",
     "unit-tests",
     "world-browser",
-    "web-browser",
     "behavioral",
-    "dependency-security",
   ]);
   expect(delivery?.if).toBe(
     "always() && needs.validation-scope.result != 'skipped'",
@@ -252,16 +493,19 @@ test("CI exposes the protected delivery gate and runs the complete repository ch
     env: {
       VALIDATION_MODE: "full",
       SCOPE_RESULT: "${{ needs.validation-scope.result }}",
-      STATIC_RESULT: "${{ needs.static.result }}",
+      STATIC_RESULT:
+        "${{ needs.validation-scope.outputs.mode == 'docs' && needs.static.result || needs.unit-tests.result }}",
       WORLD_RESULT: "${{ needs.world-browser.result }}",
     },
   });
   expect(workflow.jobs.validation).toBeUndefined();
   expect(worldWorkflow.jobs["web-browser"]).toBeUndefined();
   expect(workflow.jobs["world-browser"].needs).toBe("validation-scope");
-  expect(workflow.jobs["unit-tests"].strategy?.matrix?.shard).toEqual([
-    1, 2, 3, 4,
-  ]);
+  expect(
+    workflow.jobs["unit-tests"].strategy?.matrix?.include?.map(
+      (row) => row.shard,
+    ),
+  ).toEqual([1, 2, 3, 4]);
   expect(workflow.jobs["unit-tests"].strategy?.["fail-fast"]).toBe(false);
   expect(workflow.jobs["unit-tests"].needs).toBe("validation-scope");
   const scope = workflow.jobs["validation-scope"];
@@ -277,17 +521,6 @@ test("CI exposes the protected delivery gate and runs the complete repository ch
   expect(scope.steps.some((step) => step.name === DESCRIPTION_STEP)).toBe(
     false,
   );
-  expect(workflow.jobs["pr-description"]).toMatchObject({
-    needs: "validation-scope",
-    if: "always() && needs.validation-scope.result != 'skipped' && github.event_name == 'pull_request'",
-  });
-  expect(
-    workflow.jobs["pr-description"].steps.find(
-      (step) => step.name === DESCRIPTION_STEP,
-    ),
-  ).toMatchObject({
-    run: 'bun run check:pr-body --event "$GITHUB_EVENT_PATH"',
-  });
   const checkout = scope.steps.find((step) =>
     step.uses?.startsWith("actions/checkout@"),
   );
@@ -344,7 +577,11 @@ test("unit shards run four files at a time, build only for their consumers and r
   expect(
     job.steps.find((step) => step.name === "Retain flaky test evidence")?.if,
   ).toBe("always()");
-  expect(job.steps.some((step) => step["continue-on-error"])).toBe(false);
+  expect(
+    job.steps
+      .filter((step) => step["continue-on-error"])
+      .map((step) => step.name),
+  ).toEqual(["Summarize retry evidence", "Retain flaky test evidence"]);
   expect(
     workflow.jobs["validation-scope"].steps.find(
       (step) => step.id === "unit-comparison",
@@ -379,16 +616,19 @@ test("no timing gates delivery: browser jobs use the pinned Chrome and delegate 
   expect(worldWorkflow.jobs["world-latency"]).toBeUndefined();
   expect(JSON.stringify(worldWorkflow)).not.toContain("--retry");
   expect(JSON.stringify(worldWorkflow)).not.toContain("latency");
-  for (const name of ["world-browser", "web-shards"]) {
-    const runs = worldWorkflow.jobs[name]!.steps.flatMap((step) =>
-      step.run ? [step.run] : [],
-    );
+  for (const job of [
+    worldWorkflow.jobs["world-browser"]!,
+    workflow.jobs["unit-tests"]!,
+  ]) {
+    const runs = job.steps.flatMap((step) => (step.run ? [step.run] : []));
     const chrome = runs.indexOf(
       'bun scripts/test-chrome.ts "$HOME/.cache/herdr-test-chrome"',
     );
     expect(chrome).toBeGreaterThan(-1);
     expect(chrome).toBeLessThan(
-      runs.findIndex((run) => run.startsWith("bun scripts/ci-tests.ts")),
+      runs.findIndex((run) =>
+        /^bun scripts\/(?:ci-tests.ts web|ci-world-tests.ts) /.test(run),
+      ),
     );
   }
 });
@@ -451,34 +691,35 @@ test("the latency trend measures the trend suites on quiet runners and reports w
   expect(workflow.jobs["world-latency-trend"]).toBeUndefined();
 });
 
-test("all World browser shards and the web browser suites run independently and retain failure evidence", () => {
+test("World shards and packed web suites retain their partitions and failure evidence", () => {
   expect(workflow.jobs["world-browser"]).toMatchObject({
     needs: "validation-scope",
-    if: "needs.validation-scope.outputs.world == 'true' && toJSON(fromJSON(needs.validation-scope.outputs.selection).world) != '[]'",
+    if: "!cancelled() && needs.validation-scope.result == 'success' && needs.validation-scope.outputs.world == 'true' && toJSON(fromJSON(needs.validation-scope.outputs.selection).world) != '[]'",
     uses: "./.github/workflows/world-browser.yml",
-    with: { lane: "world" },
   });
   expect(Object.keys(worldWorkflow.on)).toEqual(["workflow_call"]);
   expect(worldWorkflow.permissions.contents).toBe("read");
   const world = worldWorkflow.jobs["world-browser"];
   expect(world?.needs).toBeUndefined();
-  expect(world?.if).toBe(
-    "inputs.lane == 'world' && toJSON(fromJSON(inputs.selection).world) != '[]'",
-  );
+  expect(world?.if).toBe("toJSON(fromJSON(inputs.selection).world) != '[]'");
   expect(world?.["continue-on-error"] ?? false).toBe(false);
-  expect(world.steps.filter((step) => step["continue-on-error"])).toHaveLength(
-    0,
-  );
+  expect(
+    world.steps
+      .filter((step) => step["continue-on-error"])
+      .map((step) => step.name),
+  ).toEqual(["Summarize retry evidence", "Retain flaky test evidence"]);
   expect(world?.["runs-on"]).toBe("ubuntu-latest");
   expect(world?.strategy?.matrix?.shard).toBe(
     "${{ fromJSON(inputs.selection).worldShards }}",
   );
   expect(world?.strategy?.["fail-fast"]).toBe(false);
-  expect(world?.strategy?.["max-parallel"]).toBe(worldBrowserShards.length);
+  expect(worldBrowserShards).toHaveLength(6);
+  expect(world?.strategy?.["max-parallel"]).toBe(6);
+  expect(world?.name).toBe("World browser tests (${{ matrix.shard }}/6)");
   expect(
     world?.steps.find(
       (step) =>
-        step.run === "bun scripts/ci-tests.ts world ${{ matrix.shard }}",
+        step.run === "bun scripts/ci-world-tests.ts ${{ matrix.shard }}",
     ),
   ).toMatchObject({
     env: {
@@ -498,30 +739,39 @@ test("all World browser shards and the web browser suites run independently and 
       ),
     },
   });
-  const web = worldWorkflow.jobs["web-shards"];
-  expect(web?.needs).toBeUndefined();
-  expect(web?.if).toBe(
-    "inputs.lane == 'web' && toJSON(fromJSON(inputs.selection).web) != '[]'",
-  );
-  expect(web?.strategy?.matrix?.shard).toEqual([1, 2]);
-  expect(workflow.jobs["web-browser"]).toMatchObject({
-    needs: "validation-scope",
-    if: "needs.validation-scope.outputs.world == 'true' && toJSON(fromJSON(needs.validation-scope.outputs.selection).web) != '[]'",
-    uses: "./.github/workflows/world-browser.yml",
-    with: { lane: "web" },
-  });
-  expect(web.steps.filter((step) => step["continue-on-error"])).toHaveLength(0);
+  expect(Object.keys(worldWorkflow.jobs)).toEqual(["world-browser"]);
+  const packed = workflow.jobs["unit-tests"];
+  const webStep = packed.steps.find(
+    (step) => step.run === "bun scripts/ci-tests.ts web ${{ matrix.web }}/2",
+  )!;
   expect(
-    web?.steps.find(
+    packed.strategy?.matrix?.include?.map((row) => row.web).filter(Boolean),
+  ).toEqual([1, 2]);
+  expect(webStep.env?.HERDR_TEST_EXCLUDE_WORLD_BROWSER).toBe("0");
+  expect(webStep.if).toContain("!cancelled()");
+  expect(webStep.if).toContain("matrix.web != 0");
+  expect(webStep.if).toContain(".web) != '[]'");
+  expect(packed.steps.indexOf(webStep)).toBeGreaterThan(
+    packed.steps.findIndex(
+      (step) => step.name === "Run affected non-browser tests",
+    ),
+  );
+  expect(
+    packed.steps.filter(
       (step) =>
-        step.run === "bun scripts/ci-tests.ts web ${{ matrix.shard }}/2",
+        step["continue-on-error"] && !/retry|flaky/i.test(step.name || ""),
+    ),
+  ).toHaveLength(0);
+  expect(
+    packed.steps.find(
+      (step) => step.run === "bun scripts/ci-tests.ts web ${{ matrix.web }}/2",
     ),
   ).toMatchObject({
-    run: "bun scripts/ci-tests.ts web ${{ matrix.shard }}/2",
+    run: "bun scripts/ci-tests.ts web ${{ matrix.web }}/2",
     env: { HERDR_TEST_PARALLEL: "2", HERDR_TEST_MAX_CONCURRENCY: "2" },
   });
   expect(
-    web?.steps.find((step) =>
+    packed.steps.find((step) =>
       step.uses?.startsWith("actions/upload-artifact@"),
     ),
   ).toMatchObject({ if: "always()" });
@@ -576,11 +826,11 @@ test("description policy runs independently without preventing the scope decisio
   expect(
     scope.steps.find((step) => step.name === SCOPE_STEP)!.if,
   ).toBeUndefined();
-  const description = workflow.jobs["pr-description"].steps.find(
+  const description = workflow.jobs.delivery.steps.find(
     (step) => step.name === DESCRIPTION_STEP,
   )!;
   expect(description["continue-on-error"]).toBeUndefined();
-  const checkout = workflow.jobs["pr-description"].steps.find((step) =>
+  const checkout = workflow.jobs.delivery.steps.find((step) =>
     step.uses?.startsWith("actions/checkout@"),
   );
   expect(checkout?.with?.["fetch-depth"]).toBe(0);
@@ -608,56 +858,32 @@ test("a metadata event on a red head fails the scope job by name and starts no c
   expect(workflow.jobs.validation).toBeUndefined();
 });
 
-test("maintained tooling checks run once even when every model reuses evidence", async () => {
+test("maintained tooling checks run once on the first group even with complete cache hits", async () => {
   const candidate = Bun.YAML.parse(
-    await Bun.file(
-      new URL(
-        "../.github/workflows/behavioral-verification.yml",
-        import.meta.url,
-      ),
-    ).text(),
+    await Bun.file(".github/workflows/behavioral-verification.yml").text(),
   ) as { jobs: Record<string, WorkflowJob> };
-  const tooling = candidate.jobs.tooling;
-  expect(tooling).toBeDefined();
-  // A cache hit in every shard must still typecheck Quint test files and
-  // validate notices. Neither job scheduling nor its steps may depend on reuse.
-  expect(tooling.if).toBeUndefined();
-  expect(tooling.needs).toBeUndefined();
-  expect(tooling.strategy).toBeUndefined();
-  expect(tooling["continue-on-error"]).toBeUndefined();
-  for (const step of tooling.steps) {
-    expect(step.if).toBeUndefined();
-    expect(step["continue-on-error"]).toBeUndefined();
-  }
-  const install = tooling.steps.findIndex(
-    (step) => step.run === "bun install --frozen-lockfile",
-  );
-  const lockedTools = tooling.steps.findIndex(
-    (step) =>
-      step.run ===
-      "npm ci --prefix tools/quint --ignore-scripts --no-audit --no-fund",
-  );
-  expect(install).toBeGreaterThan(-1);
-  expect(lockedTools).toBeGreaterThan(-1);
-  for (const command of [
-    "verification:typecheck",
-    "verification:notices:check",
+  expect(candidate.jobs.tooling).toBeUndefined();
+  const steps = candidate.jobs.shards.steps;
+  for (const name of [
+    "Install locked development tooling",
+    "Validate maintained types and tooling notices",
   ]) {
-    const checks = Object.values(candidate.jobs).flatMap((job) =>
-      job.steps.filter((step) => step.run?.includes(`bun run ${command}`)),
-    );
+    const checks = steps.filter((step) => step.name === name);
     expect(checks).toHaveLength(1);
-    const check = tooling.steps.indexOf(checks[0]);
-    expect(check).toBeGreaterThan(install);
-    expect(check).toBeGreaterThan(lockedTools);
+    expect(checks[0].if).toBe("matrix.shard == 1");
+    expect(checks[0]["continue-on-error"]).toBeUndefined();
   }
   expect(
-    tooling.steps.some((step) => step.run?.includes("verification:setup")),
-  ).toBe(false);
-  expect(candidate.jobs.candidate.needs).toContain("tooling");
-  expect(workflow.jobs.behavioral.uses).toBe(
-    "./.github/workflows/behavioral-verification.yml",
+    steps.find((step) => step.run === "bun install --frozen-lockfile")?.if,
+  ).toBe("matrix.shard == 1 || steps.reuse.outputs.reused != 'true'");
+  expect(
+    steps.find(
+      (step) => step.name === "Validate maintained types and tooling notices",
+    )?.run,
+  ).toBe(
+    "bun run verification:typecheck\nbun run verification:notices:check\n",
   );
+  expect(candidate.jobs.candidate.needs).toBe("shards");
   expect(workflow.jobs.delivery.needs).toContain("behavioral");
 });
 
@@ -685,10 +911,10 @@ test("accepted behavioral evidence stays unfiltered whenever its protected depen
   expect(candidate.permissions).toEqual({ contents: "read" });
   const job = candidate.jobs.shards;
   expect(job.strategy?.matrix?.shard).toEqual(
-    verificationJobs.map((_, index) => index + 1),
+    verificationGroups.map((_, index) => index + 1),
   );
   expect(job.strategy?.["fail-fast"]).toBe(false);
-  expect(candidate.jobs.candidate.needs).toEqual(["tooling", "shards"]);
+  expect(candidate.jobs.candidate.needs).toBe("shards");
   expect(candidate.jobs.candidate.name).toBe("Behavioral verification");
   expect(candidate.jobs.candidate.if).toBe(
     "github.event_name == 'workflow_dispatch' && github.workflow == 'Behavioral verification'",
@@ -777,8 +1003,7 @@ test("accepted behavioral evidence stays unfiltered whenever its protected depen
   expect(job["timeout-minutes"]).toBe(20);
   const verify = job.steps.find(
     (step) =>
-      step.run ===
-      "bun run verification:resources --system --shard=${{ matrix.shard }}/26",
+      step.run === "bun scripts/ci-model-groups.ts run ${{ matrix.shard }}",
   )!;
   expect(verify).toBeDefined();
   expect(verify.if).toBe("steps.reuse.outputs.reused != 'true'");
@@ -814,7 +1039,7 @@ test("accepted behavioral evidence stays unfiltered whenever its protected depen
     "./.github/workflows/behavioral-verification.yml",
   );
   expect(workflow.jobs.behavioral.if).toBe(
-    "needs.validation-scope.outputs.verification == 'true'",
+    "!cancelled() && needs.validation-scope.result == 'success' && needs.validation-scope.outputs.verification == 'true'",
   );
   for (const step of workflow.jobs.delivery.steps.filter(
     (step) => step.run === "bun scripts/ci-delivery-result.ts",
@@ -863,7 +1088,7 @@ test("model and diagnostic checks fail immediately and retain original evidence"
   expect(steps.some((step) => step.name?.includes("Retry"))).toBe(false);
   expect(steps.some((step) => step["continue-on-error"])).toBe(false);
   expect(
-    steps.filter((step) => step.run?.includes("verification:resources")),
+    steps.filter((step) => step.run?.includes("ci-model-groups.ts run")),
   ).toHaveLength(1);
   expect(
     steps.filter(
@@ -987,20 +1212,24 @@ test("release package verification extracts into a temp folder tar would unescap
 });
 
 test("Static checks retain concurrent command logs even after failure", () => {
-  const job = workflow.jobs.static!;
-  expect(job.strategy?.["fail-fast"]).toBe(false);
-  expect(job.strategy?.matrix?.group).toBe(
-    '${{ fromJSON(needs.validation-scope.outputs.mode == \'docs\' && \'["repository"]\' || \'["repository","types","build"]\') }}',
+  const job = workflow.jobs["unit-tests"];
+  expect(workflow.jobs.static.if).toBe(
+    "needs.validation-scope.outputs.mode == 'docs'",
   );
-  expect(job.name).toBe("Static checks (${{ matrix.group }})");
+  expect(job.strategy?.["fail-fast"]).toBe(false);
+  expect(
+    job.strategy?.matrix?.include?.map((row) => row.group).filter(Boolean),
+  ).toEqual(["types", "build", "repository"]);
   expect(job.needs).toBe("validation-scope");
   expect(job["continue-on-error"] ?? false).toBe(false);
   expect(
     job.steps.find((step) => step.uses?.startsWith("actions/checkout@"))?.with,
+  ).toMatchObject({ "persist-credentials": false });
+  expect(
+    job.steps.find((step) => step.name === "Fetch history for static ratchets"),
   ).toMatchObject({
-    "fetch-depth": 0,
-    filter: "blob:none",
-    ref: "${{ github.sha }}",
+    if: "${{ !cancelled() && matrix.group != '' }}",
+    run: "git fetch --filter=blob:none --unshallow origin",
   });
   expect(
     job.steps.find(
@@ -1008,13 +1237,18 @@ test("Static checks retain concurrent command logs even after failure", () => {
         step.run === "bun run check:static --static-group=${{ matrix.group }}",
     ),
   ).toMatchObject({
-    if: "needs.validation-scope.outputs.mode != 'docs'",
+    if: "${{ !cancelled() && matrix.group != '' }}",
   });
-  expect(job.steps.filter((step) => step["continue-on-error"])).toHaveLength(0);
+  expect(
+    job.steps.filter(
+      (step) =>
+        step["continue-on-error"] && !/retry|flaky/i.test(step.name || ""),
+    ),
+  ).toHaveLength(0);
   expect(
     job.steps.find((step) => step.name === "Upload static check logs"),
   ).toMatchObject({
-    if: "always() && needs.validation-scope.outputs.mode != 'docs'",
+    if: "always() && matrix.group != ''",
     uses: "actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9",
     with: {
       name: "static-check-logs-${{ matrix.group }}",

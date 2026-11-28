@@ -185,9 +185,15 @@ async function ownerSnapshot(started: boolean) {
 
 type Point = { x: number; y: number };
 
-test.skipIf(!chrome)(
-  "Town on its owner's topology: every room's controls, one TUI, square buildings, a core start",
-  async () => {
+test
+  .skipIf(!chrome)
+  .each(
+    (["machine", "runtime"] as const).flatMap((mode) =>
+      [1, 2].map((part) => [mode, part] as const),
+    ),
+  )(
+  "Town on its owner's topology (%s, rooms %i/2): every room's controls, one TUI, square buildings, a core start",
+  async (mode, part) => {
     const dir = await mkdtemp(join(tmpdir(), "town-owner-topology-"));
     const { assets } = await buildWorldBrowserBundle("TownOwnerTopology", dir);
     const snapshots = new Map([
@@ -484,7 +490,7 @@ test.skipIf(!chrome)(
         return `not brought clear: ${JSON.stringify(await roomBox(label))} at ${await level()}`;
       };
 
-      for (const mode of ["machine", "runtime"] as const) {
+      {
         result = Promise.withResolvers<string[]>();
         requested = Promise.withResolvers<void>();
         await command("Page.navigate", {
@@ -575,7 +581,9 @@ test.skipIf(!chrome)(
 
         // Each room, brought into view: a real pointer reaches its controls.
         const misses: string[] = [];
-        for (const room of rooms) {
+        // The two fresh fixtures cover disjoint room sets; all topology and
+        // launch/reorder assertions still run in each fixture.
+        for (const room of rooms.filter((_, index) => index % 2 === part - 1)) {
           const label = room.label.replace(/^Room /, "").replace(/, .*$/, "");
           const core = room.connection === "core-local";
           const unseen = await visit(mode, room.key, label);

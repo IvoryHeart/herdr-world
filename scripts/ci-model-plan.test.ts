@@ -1,6 +1,31 @@
 import { expect, test } from "bun:test";
 import { verificationModels } from "../quint/models";
-import { verificationJobs, verificationJob } from "./ci-model-plan";
+import {
+  verificationJobs,
+  verificationJob,
+  verificationGroups,
+  verificationGroup,
+  modelPartSeconds,
+  MODEL_GROUP_WORKERS,
+} from "./ci-model-plan";
+
+test("four time-packed runners execute every immutable model part exactly once", () => {
+  expect(verificationGroups).toHaveLength(4);
+  expect(MODEL_GROUP_WORKERS).toBe(4);
+  expect(verificationGroups.flat().sort((a, b) => a - b)).toEqual(
+    verificationJobs.map((_, i) => i + 1),
+  );
+  const loads = verificationGroups.map((indices) =>
+    indices.reduce((sum, i) => sum + modelPartSeconds[i - 1]!, 0),
+  );
+  expect(Math.max(...loads) - Math.min(...loads)).toBeLessThanOrEqual(15);
+  for (const group of verificationGroups)
+    expect(group.map((i) => modelPartSeconds[i - 1])).toEqual(
+      group.map((i) => modelPartSeconds[i - 1]).sort((a, b) => b! - a!),
+    );
+  for (const index of [0, 5, 1.5, NaN])
+    expect(() => verificationGroup(index)).toThrow();
+});
 
 test("every model owns a job; heavy models retain all disjoint parts", () => {
   expect([...new Set(verificationJobs.map((job) => job.model))].sort()).toEqual(

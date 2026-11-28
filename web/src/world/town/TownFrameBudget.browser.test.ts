@@ -76,9 +76,9 @@ const RASTER_PER_PAN_FRAME = [1.5, 4];
  */
 const UNDRAWN_SHARE = 1 / 20;
 
-test.skipIf(!chrome)(
-  "Town pans at the display's rate, zooms without restyling its overlay and quiets for the composer",
-  async () => {
+test.skipIf(!chrome).each(["home-pan", "zoom", "desk-pan", "composer"])(
+  "Town frame budget (%s): display-rate pans, bounded zoom restyles and composer quiet",
+  async (phase) => {
     const dir = await mkdtemp(join(tmpdir(), "town-frame-budget-"));
     const { assets } = await buildWorldBrowserBundle(
       "testing/town-scale/TownScale",
@@ -302,39 +302,65 @@ test.skipIf(!chrome)(
       const overlay = await evaluate(
         "document.querySelectorAll('.town-world *').length",
       );
-      const pans = [await pan()];
-      const zooms = [await zoomIn(), await zoomIn(), await zoomIn()];
-      pans.push(await pan());
-      const idle = await draws();
-      await evaluate("new Promise((r) => setTimeout(r, 2000))");
-      const idleDraws = (await draws()) - idle;
-      // A headless page has no window focus; without it no focus events fire.
-      await command("Emulation.setFocusEmulationEnabled", { enabled: true });
-      await evaluate(`(() => {
+      const pans = phase === "home-pan" ? [await pan()] : [];
+      const zooms =
+        phase === "zoom"
+          ? [await zoomIn(), await zoomIn(), await zoomIn()]
+          : [];
+      if (phase === "desk-pan" || phase === "composer") {
+        // Fresh fixture: reach desk scale without replaying another case's traces.
+        for (let step = 0; step < 3; step++)
+          await evaluate('window.townScale.zoom("in")', MEASURE_DEADLINE_MS);
+      }
+      if (phase === "desk-pan") pans.push(await pan());
+      let idleDraws = 0,
+        typingDraws = 0,
+        resumedDraws = 0,
+        value = 0;
+      if (phase === "composer") {
+        const idle = await draws();
+        await evaluate("new Promise((r) => setTimeout(r, 2000))");
+        idleDraws = (await draws()) - idle;
+        // A headless page has no window focus; without it no focus events fire.
+        await command("Emulation.setFocusEmulationEnabled", { enabled: true });
+        await evaluate(`(() => {
         const input = document.createElement("textarea");
         input.className = "terminal-composer-input";
         input.style.cssText = "position:fixed;left:8px;bottom:8px;z-index:10";
         document.body.append(input);
         input.focus();
       })()`);
-      const typed = await draws();
-      for (let index = 0; index < TYPED_KEYS; index++) {
-        const key = { key: "a", code: "KeyA", windowsVirtualKeyCode: 65 };
-        await command("Input.dispatchKeyEvent", {
-          ...key,
-          type: "keyDown",
-          text: "a",
-        });
-        await command("Input.dispatchKeyEvent", { ...key, type: "keyUp" });
-        await evaluate("new Promise((r) => setTimeout(r, 100))");
+        const typed = await draws();
+        for (let index = 0; index < TYPED_KEYS; index++) {
+          const key = { key: "a", code: "KeyA", windowsVirtualKeyCode: 65 };
+          await command("Input.dispatchKeyEvent", {
+            ...key,
+            type: "keyDown",
+            text: "a",
+          });
+          await command("Input.dispatchKeyEvent", { ...key, type: "keyUp" });
+          await evaluate("new Promise((r) => setTimeout(r, 100))");
+        }
+        typingDraws = (await draws()) - typed;
+        const resumed = await draws();
+        // This is a frame-count assertion, not a one-second speed budget.
+        // Shared software-rendering CPUs may present only one frame per second.
+        const afterResume = await evaluate(
+          `new Promise((resolve) => {
+            const sample = () => {
+              const frames = window.__HERDR_TOWN_RENDERER__.frames;
+              if (frames - ${resumed} > ${typingDraws}) resolve(frames);
+              else requestAnimationFrame(sample);
+            };
+            sample();
+          })`,
+          MEASURE_DEADLINE_MS,
+        );
+        resumedDraws = afterResume - resumed;
+        value = await evaluate(
+          "document.querySelector('.terminal-composer-input').value.length",
+        );
       }
-      const typingDraws = (await draws()) - typed;
-      const resumed = await draws();
-      await evaluate("new Promise((r) => setTimeout(r, 1000))");
-      const resumedDraws = (await draws()) - resumed;
-      const value = await evaluate(
-        "document.querySelector('.terminal-composer-input').value.length",
-      );
       // Numbers for the PR; the assertions below are counts.
       console.log(
         JSON.stringify({
@@ -363,7 +389,7 @@ test.skipIf(!chrome)(
         // tile by tile on every frame. At desk scale a pan uncovers new
         // tiles; repainting the moved overlay took over twice as many.
         expect(run.raster).toBeLessThan(
-          run.ticks * RASTER_PER_PAN_FRAME[index]!,
+          run.ticks * RASTER_PER_PAN_FRAME[phase === "desk-pan" ? 1 : index]!,
         );
       }
       expect(zooms.map((zoom) => zoom.level)).not.toContain("home");
@@ -377,12 +403,14 @@ test.skipIf(!chrome)(
         );
         expect(zoom.forced).toBe(0);
       }
-      // Ambient motion keeps its own pace, not the display's.
-      expect(idleDraws).toBeLessThanOrEqual(64);
-      expect(value).toBe(TYPED_KEYS);
-      // Typing in the composer quiets Town's motion, then it resumes.
-      expect(typingDraws).toBeLessThanOrEqual(4);
-      expect(resumedDraws).toBeGreaterThan(typingDraws);
+      if (phase === "composer") {
+        // Ambient motion keeps its own pace, not the display's.
+        expect(idleDraws).toBeLessThanOrEqual(64);
+        expect(value).toBe(TYPED_KEYS);
+        // Typing in the composer quiets Town's motion, then it resumes.
+        expect(typingDraws).toBeLessThanOrEqual(4);
+        expect(resumedDraws).toBeGreaterThan(typingDraws);
+      }
     } finally {
       connection?.close();
       await stopChrome(child);

@@ -290,7 +290,7 @@ bun run test <path>           # focused Bun test
 bun run test:quick            # non-Chromium suite
 CHROME_BIN=/path/to/chromium bun run test:browser
 bun run test:world            # all World browser acceptance suites
-bun run test:world --shard=1/6 # reproduce one CI shard, one browser at a time
+bun run test:world --shard=1/6 --parallel=2 # case shard with two isolated Chrome processes
 bun run test --web-browser    # Chrome-driven suites outside World, as CI's web job runs them
 bun run build:site            # landing page/tutorial
 bun run check                 # repository checks and tests
@@ -298,6 +298,31 @@ bun run check:delivery        # full local gate, including behavioral verificati
 ```
 
 Use `bun run test <path>` for every ordinary test, including focused cases.
+
+World's six browser shards balance individual case durations from
+`scripts/world-browser-timings.json` across three process-isolated workers each.
+CI admits two Chrome processes per runner, each with one active case; three
+logical timing queues do not override that limit. `--parallel=1` remains available
+for isolated diagnosis. Verification starts after the local browser lanes, so
+CPU contention from Chrome cannot consume the model gate's deadline.
+Each selected file has exactly one fallback selector for new or renamed cases;
+missing timings never exclude tests. Exact-name tasks allow zero matches when
+recorded names have been renamed or deleted; the fallback still fails if it
+matches no tests, and assertion failures still fail the shard. To refresh the
+committed weights from a complete CI run (keep its artifacts outside tracked paths):
+
+```bash
+gh run download RUN_ID --pattern 'world-browser-*-attempt-*' --dir .agents/browser-timings
+bun scripts/refresh-world-browser-timings.ts .agents/browser-timings https://github.com/IvoryHeart/herdr-world/actions/runs/RUN_ID
+```
+
+Refresh after browser journey splits and changes from #1419. The table records
+JUnit case seconds; runner setup is additional. Split-case estimates are labelled
+until CI supplies their first observations. Keep all assertions when splitting;
+each case must create its own browser profile and fixture state. World handoff
+cases select shell, windows, admission, resources, resume, authority or shared
+Inspector checks; the shared-creation cases select Chat, creation or retention.
+
 Feature discovery uses committed `server/src/features/index.gen.ts` and
 `web/src/features/index.gen.ts` indexes. After adding or removing a feature's
 `register.ts` or `mount.tsx` under those roots, run `bun run features:generate`.
@@ -506,8 +531,9 @@ those paths are unaffected, including shards with one file worker.
 PR CI and Release run the remaining repository checks with one file worker and up
 to two concurrent cases, preserving the upstream test configuration. Both call the
 [shared World browser workflow](../.github/workflows/world-browser.yml), which runs
-six separate runners, each with one file worker and one active case, and
-the web browser lane (**Web browser shards** in PR CI). Browser jobs install the
+six separate runners, each with two isolated Chrome processes and one active
+case per process. PR CI packs the two web browser partitions after units on
+existing runners. Browser jobs install the
 Chrome for Testing build pinned in
 [`tools/chrome/test-chrome.json`](../tools/chrome/test-chrome.json) (checksum
 verified, cached) and print its version and the runner's CPU, so a browser
@@ -516,8 +542,16 @@ and later deny unprivileged user namespaces to programs without an AppArmor
 profile, which aborts Chrome's sandbox outside the packaged path; on CI the
 installer loads a profile like the Chrome package's for the pinned binary, and
 then starts it headless once, so a browser that cannot start fails installation
-rather than every test. Locally it prints the two commands instead. No job retries a
-failed test. The [shard inventory](../scripts/world-browser-suites.ts) splits all
+rather than every test. Local `test:world` and `check:delivery` use the same
+checksum-verified Linux x64 pin unless `CHROME_BIN` explicitly selects another
+browser. On restricted Ubuntu hosts with the packaged `chrome` AppArmor profile,
+they launch through `aa-exec -p chrome`, keeping the sandbox enabled without
+changing host policy. Without that existing profile, the installer prints the
+two setup commands. Other platforms retain their explicit/system browser.
+The concurrent-context work budget was calibrated on the pin: Chrome 157 mounts
+1,312 desktop cards where pinned Chrome 156 mounts 1,248 (budget 1,280). Pinning
+preserves every work assertion and the fixture's viewport. Failed unit files and
+exact browser cases retry once in their existing jobs; persistent failures stay red. The [shard inventory](../scripts/world-browser-suites.ts) splits all
 World browser suites between the six shards, discovering `*.test.ts` and
 `*.test.tsx` files recursively under `web/src/world/` with the
 `// @world-browser-suite` marker or Chrome launch code. Measured weights in

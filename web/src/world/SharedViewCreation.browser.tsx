@@ -494,6 +494,9 @@ async function action(title: string) {
   button.click();
 }
 async function run() {
+  const scenario = new URL(location.href).searchParams.get("scenario");
+  if (!["chat", "creation", "retention"].includes(scenario ?? ""))
+    throw new Error("Unknown shared creation scenario");
   const width = Number(await (await fetch("/viewport-ready")).text());
   check(
     window.innerWidth === width,
@@ -567,817 +570,834 @@ async function run() {
     "Root did not default to Town",
   );
   // A reported session is not proof that its conversation is readable.
-  const betaPane = runtime.get("beta")!.panes[0]!;
-  sessionArrived = true;
-  betaPane.agent_session = syntheticSession;
-  chatUnavailable = "missing_integration";
-  await worldRuntimeStore.refresh();
-  const openAgent = async (unavailable = true) => {
-    const selector =
-      '.town-view-shell .world-semantic-target[data-kind="agent"]';
-    await until(() => document.querySelector(selector), "Town agent target");
-    document.querySelector<HTMLButtonElement>(selector)!.click();
-    await until(
-      () =>
-        document.querySelector(
-          unavailable
-            ? '.workspace-inspector[data-view="terminal"]'
-            : ".workspace-inspector",
-        ),
-      "Unreadable Chat must open on Terminal even with a reported session",
-    );
-  };
-  const chooseView = async (view: "history" | "terminal") => {
-    const trigger = document.querySelector<HTMLButtonElement>(
-      '.workspace-inspector button[aria-label^="Inspector view:"]',
-    );
-    if (trigger) trigger.click();
-    const selector = trigger
-      ? `[aria-label="Inspector views"] [data-view="${view}"]`
-      : `.workspace-inspector [role="tab"][aria-label="${view === "history" ? "Chat" : "Terminal"}"]`;
-    await until(() => document.querySelector(selector), `Choose ${view}`);
-    document.querySelector<HTMLButtonElement>(selector)!.click();
-  };
-  const conversationChanged = () => {
-    for (const listener of conversationControls)
-      listener({
-        type: "agent_conversation_changed",
-        connection_id: "beta",
-        connection_generation: 7,
-        pane_id: betaPane.pane_id,
-      });
-  };
-  const closeAgent = async () => {
-    document
-      .querySelector<HTMLButtonElement>(
-        'button[aria-label="Close Inspector window"]',
-      )!
-      .click();
-    await until(
-      () => !document.querySelector(".workspace-inspector"),
-      "Return to Town",
-    );
-  };
-  // While the opening waits on Terminal for Chat it says so; Stay on
-  // Terminal is a manual view choice, so a later readable Chat keeps it.
-  const waitLine = () =>
-    document.querySelector<HTMLElement>(
-      ".workspace-inspector .world-inspector-chat-wait",
-    );
-  // Cross the real timer boundary and retain the same announcer throughout.
-  const timedHost = document.createElement("div");
-  document.body.append(timedHost);
-  const timedRoot = createRoot(timedHost);
-  flushSync(() =>
-    timedRoot.render(
-      <WorldLoader
-        since={Date.now() - WORLD_LOADER_LONGER_MS + 1000}
-        label="Waiting for Chat"
-        longerLabel="Still waiting for Chat"
-      />,
-    ),
-  );
-  const timedStatus = timedHost.querySelector('[role="status"]')!;
-  check(
-    timedStatus.textContent === "Waiting for Chat" &&
-      !timedStatus.closest('[aria-busy="true"]'),
-    "The initial live announcement is outside busy content",
-  );
-  await until(
-    () => timedStatus.textContent === "Still waiting for Chat",
-    "The elapsed wait updates its live announcement",
-  );
-  check(
-    timedHost.querySelector('[role="status"]') === timedStatus &&
-      !timedStatus.closest('[aria-busy="true"]'),
-    "The longer-wait announcement retains a live region outside busy content",
-  );
-  timedRoot.unmount();
-  timedHost.remove();
-  await openAgent();
-  await until(waitLine, "The opening window says it is waiting for Chat");
-  check(
-    !!waitLine()?.textContent?.includes("Chat is not available yet") &&
-      !!waitLine()?.querySelector('[role="status"]') &&
-      !waitLine()!
-        .querySelector('[role="status"]')!
-        .closest('[aria-busy="true"]') &&
-      !waitLine()!.closest(".workspace-inspector-body"),
-    "The Chat-availability status is outside busy content and the Terminal body",
-  );
-  await document.fonts.ready;
-  await new Promise<void>((resolve) => requestAnimationFrame(() => resolve()));
-  const rowBounds = waitLine()!.getBoundingClientRect();
-  const actionBounds = waitLine()!
-    .querySelector("button")!
-    .getBoundingClientRect();
-  check(
-    rowBounds.left >= 0 &&
-      rowBounds.right <= innerWidth &&
-      actionBounds.left >= rowBounds.left &&
-      actionBounds.right <= rowBounds.right &&
-      (innerWidth > 640 || actionBounds.height >= 44),
-    "The waiting row and Terminal action fit desktop and phone with a phone touch target",
-  );
-  check(
-    matchMedia("(prefers-reduced-motion: reduce)").matches &&
-      getComputedStyle(waitLine()!.querySelector("svg")!).animationName ===
-        "none",
-    "Reduced motion stops the waiting icon",
-  );
-  const stay = Array.from(waitLine()!.querySelectorAll("button")).find(
-    (button) => button.textContent?.includes("Stay on Terminal"),
-  );
-  stay!.click();
-  await until(() => !waitLine(), "Stay on Terminal ends the wait line");
-  chatUnavailable = "";
-  conversationChanged();
-  await worldRuntimeStore.refresh();
-  await settle();
-  check(
-    !!document.querySelector('.workspace-inspector[data-view="terminal"]'),
-    "After Stay on Terminal a readable Chat does not switch the window",
-  );
-  chatUnavailable = "missing_integration";
-  await closeAgent();
-  await openAgent();
-  for (const reason of [
-    "no_session",
-    "missing_integration",
-    "unsupported_agent",
-    "read_failed",
-    "unbound_title",
-  ]) {
-    chatUnavailable = reason;
-    const before = conversationReads;
-    conversationChanged();
-    await until(() => conversationReads > before, `Recheck ${reason}`);
-    await settle();
-    check(
-      !!document.querySelector('.workspace-inspector[data-view="terminal"]') &&
-        !document.querySelector(".agent-chat-unavailable"),
-      `${reason} stays on Terminal without an automatic error page`,
-    );
-    check(
-      betaPane.agent_status === "idle" &&
-        !!betaPane.agent_session &&
-        !!waitLine()?.textContent?.includes("Chat is not available yet") &&
-        !/starting|answer/i.test(waitLine()?.textContent ?? ""),
-      `${reason} with an existing idle session describes Chat availability without claiming startup or an unanswered request`,
-    );
-  }
-  const manualReply = Promise.withResolvers<void>();
-  conversationBarrier = manualReply.promise;
-  chatUnavailable = "";
-  const manualRead = conversationReads;
-  conversationChanged();
-  await until(
-    () => conversationReads > manualRead,
-    "Delayed availability read",
-  );
-  await chooseView("terminal");
-  const manualCompleted = completedConversationReads;
-  conversationBarrier = null;
-  manualReply.resolve();
-  await until(
-    () => completedConversationReads > manualCompleted,
-    "Late availability reply",
-  );
-  await settle();
-  check(
-    !!document.querySelector('.workspace-inspector[data-view="terminal"]') &&
-      !waitLine(),
-    "A late available reply cannot override a manual view choice",
-  );
-  chatUnavailable = "read_failed";
-  await chooseView("history");
-  await until(
-    () =>
+  if (scenario === "chat") {
+    const betaPane = runtime.get("beta")!.panes[0]!;
+    sessionArrived = true;
+    betaPane.agent_session = syntheticSession;
+    chatUnavailable = "missing_integration";
+    await worldRuntimeStore.refresh();
+    const openAgent = async (unavailable = true) => {
+      const selector =
+        '.town-view-shell .world-semantic-target[data-kind="agent"]';
+      await until(() => document.querySelector(selector), "Town agent target");
+      document.querySelector<HTMLButtonElement>(selector)!.click();
+      await until(
+        () =>
+          document.querySelector(
+            unavailable
+              ? '.workspace-inspector[data-view="terminal"]'
+              : ".workspace-inspector",
+          ),
+        "Unreadable Chat must open on Terminal even with a reported session",
+      );
+    };
+    const chooseView = async (view: "history" | "terminal") => {
+      const trigger = document.querySelector<HTMLButtonElement>(
+        '.workspace-inspector button[aria-label^="Inspector view:"]',
+      );
+      if (trigger) trigger.click();
+      const selector = trigger
+        ? `[aria-label="Inspector views"] [data-view="${view}"]`
+        : `.workspace-inspector [role="tab"][aria-label="${view === "history" ? "Chat" : "Terminal"}"]`;
+      await until(() => document.querySelector(selector), `Choose ${view}`);
+      document.querySelector<HTMLButtonElement>(selector)!.click();
+    };
+    const conversationChanged = () => {
+      for (const listener of conversationControls)
+        listener({
+          type: "agent_conversation_changed",
+          connection_id: "beta",
+          connection_generation: 7,
+          pane_id: betaPane.pane_id,
+        });
+    };
+    const closeAgent = async () => {
       document
-        .querySelector(".agent-chat-unavailable")
-        ?.textContent?.includes("Synthetic read_failed"),
-    "Manual Chat retains the bound record error",
-  );
-  const openTerminal = Array.from(
-    document.querySelectorAll<HTMLButtonElement>(
-      ".agent-chat-unavailable button",
-    ),
-  ).find((button) => button.textContent?.includes("Open Terminal"));
-  check(!!openTerminal, "Manual unavailable Chat offers Open Terminal");
-  openTerminal!.click();
-  await until(
-    () => document.querySelector('.workspace-inspector[data-view="terminal"]'),
-    "Open Terminal leaves unavailable Chat",
-  );
-  chatUnavailable = "";
-  conversationChanged();
-  await worldRuntimeStore.refresh();
-  check(
-    !!document.querySelector('.workspace-inspector[data-view="terminal"]'),
-    "Recovery cannot override a manual Terminal choice",
-  );
-  await closeAgent();
-  await openAgent(false);
-  await until(
-    () => document.querySelector('.workspace-inspector[data-view="history"]'),
-    "An untouched window follows actual Chat availability",
-  );
-  await closeAgent();
-  // Focused terminal/harness replacement retires the opening before aggregate
-  // reconciliation; even restoration cannot let its delayed reply switch views.
-  const focusedPane = (patch: Partial<Pane>) => {
-    const state = store.get(),
-      snapshot = connectionSnapshot(state, "beta");
-    const panes = snapshot.panes.map((pane) =>
-      pane.pane_id === betaPane.pane_id ? { ...pane, ...patch } : pane,
+        .querySelector<HTMLButtonElement>(
+          'button[aria-label="Close Inspector window"]',
+        )!
+        .click();
+      await until(
+        () => !document.querySelector(".workspace-inspector"),
+        "Return to Town",
+      );
+    };
+    // While the opening waits on Terminal for Chat it says so; Stay on
+    // Terminal is a manual view choice, so a later readable Chat keeps it.
+    const waitLine = () =>
+      document.querySelector<HTMLElement>(
+        ".workspace-inspector .world-inspector-chat-wait",
+      );
+    // Cross the real timer boundary and retain the same announcer throughout.
+    const timedHost = document.createElement("div");
+    document.body.append(timedHost);
+    const timedRoot = createRoot(timedHost);
+    flushSync(() =>
+      timedRoot.render(
+        <WorldLoader
+          since={Date.now() - WORLD_LOADER_LONGER_MS + 1000}
+          label="Waiting for Chat"
+          longerLabel="Still waiting for Chat"
+        />,
+      ),
     );
-    __storeTesting.replaceState({
-      ...state,
-      ...(state.activeConnectionId === "beta" ? { panes } : {}),
-      sessionsByConnectionId: {
-        ...state.sessionsByConnectionId,
-        beta: { ...snapshot, panes },
-      },
-    });
-  };
-  for (const replacement of [
-    { terminal_id: "replacement-terminal" },
-    { agent: "replacement-harness" },
-  ]) {
-    chatUnavailable = "read_failed";
-    await openAgent();
-    const reply = Promise.withResolvers<void>();
-    conversationBarrier = reply.promise;
-    chatUnavailable = "";
-    const before = conversationReads;
-    conversationChanged();
-    await until(() => conversationReads > before, "Captured availability read");
-    focusedPane(replacement);
-    await settle();
-    focusedPane({ terminal_id: betaPane.terminal_id, agent: betaPane.agent });
-    await settle();
-    const completed = completedConversationReads;
-    conversationBarrier = null;
-    reply.resolve();
+    const timedStatus = timedHost.querySelector('[role="status"]')!;
+    check(
+      timedStatus.textContent === "Waiting for Chat" &&
+        !timedStatus.closest('[aria-busy="true"]'),
+      "The initial live announcement is outside busy content",
+    );
     await until(
-      () => completedConversationReads > completed,
-      "Replaced availability reply",
+      () => timedStatus.textContent === "Still waiting for Chat",
+      "The elapsed wait updates its live announcement",
     );
+    check(
+      timedHost.querySelector('[role="status"]') === timedStatus &&
+        !timedStatus.closest('[aria-busy="true"]'),
+      "The longer-wait announcement retains a live region outside busy content",
+    );
+    timedRoot.unmount();
+    timedHost.remove();
+    await openAgent();
+    await until(waitLine, "The opening window says it is waiting for Chat");
+    check(
+      !!waitLine()?.textContent?.includes("Chat is not available yet") &&
+        !!waitLine()?.querySelector('[role="status"]') &&
+        !waitLine()!
+          .querySelector('[role="status"]')!
+          .closest('[aria-busy="true"]') &&
+        !waitLine()!.closest(".workspace-inspector-body"),
+      "The Chat-availability status is outside busy content and the Terminal body",
+    );
+    await document.fonts.ready;
+    await new Promise<void>((resolve) =>
+      requestAnimationFrame(() => resolve()),
+    );
+    const rowBounds = waitLine()!.getBoundingClientRect();
+    const actionBounds = waitLine()!
+      .querySelector("button")!
+      .getBoundingClientRect();
+    check(
+      rowBounds.left >= 0 &&
+        rowBounds.right <= innerWidth &&
+        actionBounds.left >= rowBounds.left &&
+        actionBounds.right <= rowBounds.right &&
+        (innerWidth > 640 || actionBounds.height >= 44),
+      "The waiting row and Terminal action fit desktop and phone with a phone touch target",
+    );
+    check(
+      matchMedia("(prefers-reduced-motion: reduce)").matches &&
+        getComputedStyle(waitLine()!.querySelector("svg")!).animationName ===
+          "none",
+      "Reduced motion stops the waiting icon",
+    );
+    const stay = Array.from(waitLine()!.querySelectorAll("button")).find(
+      (button) => button.textContent?.includes("Stay on Terminal"),
+    );
+    stay!.click();
+    await until(() => !waitLine(), "Stay on Terminal ends the wait line");
+    chatUnavailable = "";
+    conversationChanged();
+    await worldRuntimeStore.refresh();
     await settle();
     check(
       !!document.querySelector('.workspace-inspector[data-view="terminal"]'),
-      "Replacement/restoration cannot revive an automatic Chat switch",
+      "After Stay on Terminal a readable Chat does not switch the window",
     );
+    chatUnavailable = "missing_integration";
     await closeAgent();
-  }
-  sessionArrived = false;
-  delete betaPane.agent_session;
-  await worldRuntimeStore.refresh();
-  // On the phone, a terminal opened from a Town agent's card takes two
-  // Backs to leave: the first closes Composer, the second returns to Town.
-  if (window.innerWidth < 640) {
-    const townPath = window.location.pathname;
-    await until(
-      () =>
-        document.querySelector(
-          '.town-view-shell .world-semantic-target[data-kind="agent"]',
-        ),
-      "Town agent target",
-    );
-    document
-      .querySelector<HTMLButtonElement>(
-        '.town-view-shell .world-semantic-target[data-kind="agent"]',
-      )!
-      .click();
-    // A phone's anchored header control switches views; ⋯ holds attention.
-    const viewTrigger = () =>
-      document.querySelector<HTMLButtonElement>(
-        '.workspace-inspector button[aria-label^="Inspector view:"]',
+    await openAgent();
+    for (const reason of [
+      "no_session",
+      "missing_integration",
+      "unsupported_agent",
+      "read_failed",
+      "unbound_title",
+    ]) {
+      chatUnavailable = reason;
+      const before = conversationReads;
+      conversationChanged();
+      await until(() => conversationReads > before, `Recheck ${reason}`);
+      await settle();
+      check(
+        !!document.querySelector(
+          '.workspace-inspector[data-view="terminal"]',
+        ) && !document.querySelector(".agent-chat-unavailable"),
+        `${reason} stays on Terminal without an automatic error page`,
       );
-    await until(
-      () =>
-        document.querySelector('.workspace-inspector[data-view="terminal"]') &&
-        viewTrigger(),
-      "Town pre-session agent window on Terminal",
-    );
-    sessionArrived = true;
-    Object.assign(runtime.get("beta")!.panes[0]!, {
-      agent_session: syntheticSession,
-    });
-    await worldRuntimeStore.refresh();
-    await until(
-      () =>
-        document.querySelector('.workspace-inspector[data-view="history"]') &&
-        viewTrigger(),
-      "Town agent window on Chat after session arrival",
-    );
-    viewTrigger()!.click();
-    const terminalItem = () =>
-      document.querySelector<HTMLButtonElement>(
-        '[aria-label="Inspector views"] [data-view="terminal"]',
+      check(
+        betaPane.agent_status === "idle" &&
+          !!betaPane.agent_session &&
+          !!waitLine()?.textContent?.includes("Chat is not available yet") &&
+          !/starting|answer/i.test(waitLine()?.textContent ?? ""),
+        `${reason} with an existing idle session describes Chat availability without claiming startup or an unanswered request`,
       );
-    await until(terminalItem, "Terminal in the anchored view selector");
-    terminalItem()!.click();
+    }
+    const manualReply = Promise.withResolvers<void>();
+    conversationBarrier = manualReply.promise;
+    chatUnavailable = "";
+    const manualRead = conversationReads;
+    conversationChanged();
     await until(
-      () =>
-        document.querySelector(
-          ".workspace-inspector textarea.terminal-composer-input",
-        ),
-      "Town opened the agent's terminal",
+      () => conversationReads > manualRead,
+      "Delayed availability read",
     );
-    await worldRuntimeStore.refresh();
-    check(
-      Boolean(
-        document.querySelector('.workspace-inspector[data-view="terminal"]'),
-      ),
-      "A refresh replaced the manual Terminal choice",
-    );
-    document
-      .querySelector<HTMLTextAreaElement>(
-        ".workspace-inspector textarea.terminal-composer-input",
-      )!
-      .click();
+    await chooseView("terminal");
+    const manualCompleted = completedConversationReads;
+    conversationBarrier = null;
+    manualReply.resolve();
     await until(
-      () => document.querySelector(".workspace-inspector .terminal-composer"),
-      "Composer opened in the terminal",
-    );
-    history.back();
-    await until(
-      () =>
-        !document.querySelector(
-          ".workspace-inspector .terminal-composer[data-open]",
-        ),
-      "the first Back did not close Composer",
-    );
-    check(
-      !!document.querySelector(".workspace-inspector"),
-      "the first Back closed the terminal too",
-    );
-    history.back();
-    await until(
-      () => !document.querySelector(".workspace-inspector"),
-      "the second Back did not return to Town",
+      () => completedConversationReads > manualCompleted,
+      "Late availability reply",
     );
     await settle();
     check(
-      window.location.pathname === townPath &&
-        !!document.querySelector(".town-view-shell"),
-      `the second Back left Town for ${window.location.pathname}`,
+      !!document.querySelector('.workspace-inspector[data-view="terminal"]') &&
+        !waitLine(),
+      "A late available reply cannot override a manual view choice",
     );
-  }
-  const rootViewSelect = document.querySelector<HTMLSelectElement>(
-    '[aria-label="World view"]',
-  )!;
-  rootViewSelect.value = "town";
-  rootViewSelect.dispatchEvent(new Event("change", { bubbles: true }));
-  await until(
-    () =>
-      document.querySelector(
-        '.world-office-shell .world-new-seat-canvas-action[aria-label*="alpha b"]',
-      ),
-    "second room control",
-  );
-  check(
-    !document.querySelector(".workspace-inspector"),
-    "Fresh Office unexpectedly has Inspector",
-  );
-  const fullRoom = document.querySelector<HTMLButtonElement>(
-    '.world-new-seat-canvas-action[aria-label*="alpha b"]',
-  )!;
-  await until(
-    () => !fullRoom.disabled,
-    "full room creation admitted after scene render",
-  );
-  check(!fullRoom.disabled, "Eight displayed desks disabled creation");
-  check(
-    !alpha.attached.has("b-1-terminal"),
-    "Second room was eagerly attached",
-  );
-  const chooseTerminal = async (
-    connectionId: string,
-    workspaceId: string,
-    repeat = false,
-  ) => {
+    chatUnavailable = "read_failed";
+    await chooseView("history");
     await until(
-      () => document.querySelector(".agent-launcher-card"),
-      "room launcher Terminal choice",
+      () =>
+        document
+          .querySelector(".agent-chat-unavailable")
+          ?.textContent?.includes("Synthetic read_failed"),
+      "Manual Chat retains the bound record error",
     );
-    const expected = buildWorldObject(
-      worldRuntimeStore.get().connections,
-      "alpha",
-    ).spaces.find(
-      (space) =>
-        space.connectionId === connectionId && space.nativeId === workspaceId,
-    );
-    check(
-      document.querySelector<HTMLSelectElement>(".agent-launcher select")
-        ?.value === expected?.id,
-      "Room launcher changed the seat's qualified destination",
-    );
-    const terminal = document.querySelector<HTMLButtonElement>(
-      ".agent-launcher-card",
-    )!;
-    check(
-      terminal.textContent?.includes("Terminal"),
-      "The first room launcher choice must be Terminal",
-    );
-    terminal.click();
-    if (repeat) terminal.click();
-  };
-  const gate = Promise.withResolvers<void>();
-  heldMutation = gate.promise;
-  fullRoom.click();
-  fullRoom.click();
-  await chooseTerminal("alpha", "b", true);
-  await until(
-    () => calls.some((call) => call.method === "tab.create"),
-    "second-room prepared dispatch",
-  );
-  check(
-    alpha.attached.has("b-1-terminal"),
-    "Second-room source was not prepared",
-  );
-  await until(() => fullRoom.disabled, "visible creating state");
-  check(
-    calls.filter((call) => call.method === "tab.create").length === 1,
-    "Repeated plus duplicated mutation",
-  );
-  heldMutation = null;
-  gate.resolve();
-  await createdInspector(1);
-  check(
-    alpha.tabs.filter((tab) => tab.workspace_id === "b").length === 9,
-    "Ninth tab was not created",
-  );
-  const projection = projectWorldOffice(
-    buildWorldObject(worldRuntimeStore.get().connections, "alpha"),
-    Date.now(),
-  );
-  check(
-    projection.rooms.find(
-      (room) =>
-        room.workspaceRef.connectionId === "alpha" &&
-        room.workspaceRef.nativeId === "b",
-    )?.desks.length === 8,
-    "Office exceeded eight displayed desks",
-  );
-  const betaRoom = document.querySelector<HTMLButtonElement>(
-    '.world-new-seat-canvas-action[aria-label*="beta a"]',
-  )!;
-  await until(
-    () => !betaRoom.disabled,
-    "cold inactive host control after scene render",
-  );
-  check(!betaRoom.disabled, "Cold inactive host was not preparable");
-  betaRoom.click();
-  await chooseTerminal("beta", "a");
-  await createdInspector(2);
-  check(
-    store.get().activeConnectionId === "alpha",
-    "Inactive host creation changed Spaces host",
-  );
-  check(
-    [...calls].reverse().find((call) => call.method === "tab.create")?.host ===
-      "beta",
-    "Inactive host dispatch fell back to alpha",
-  );
-  const roomButton = document.querySelector<HTMLButtonElement>(
-    '.town-add-room[aria-label="Add room to beta"]',
-  )!;
-  await until(() => !roomButton.disabled, "room-specific workspace control");
-  roomButton.click();
-  await until(
-    () =>
-      document.querySelector<HTMLSelectElement>(
-        '[aria-label="Destination host"]',
-      )?.value === "beta",
-    "Add room keeps its building's host",
-  );
-  // A recent folder is the second tap: Add room, then the folder.
-  const folderInput = () =>
-    document.querySelector<HTMLInputElement>(
-      '[role="dialog"][aria-label="Create workspace"] input[placeholder^="e.g."]',
-    );
-  await until(
-    () => folderInput()?.value === "/srv/example/site",
-    "a new room defaults to its host's most recent folder",
-  );
-  const recentFolder = [
-    ...document.querySelectorAll<HTMLButtonElement>(
-      '[aria-label="Recent folders"] button',
-    ),
-  ];
-  check(
-    recentFolder.map((button) => button.title).join() ===
-      "/srv/example/site,/srv/example/docs",
-    `recent folders: ${recentFolder.map((button) => button.title).join()}`,
-  );
-  recentFolder[1]!.click();
-  await until(
-    () =>
-      folderInput()?.value === "/srv/example/docs" &&
-      document.querySelector(
-        '[aria-label="Folders to browse"] [title="/srv/example/docs/guide"]',
-      ) &&
-      document.querySelector(
-        '[aria-label="Folders to browse"] [title="/srv/example"]',
+    const openTerminal = Array.from(
+      document.querySelectorAll<HTMLButtonElement>(
+        ".agent-chat-unavailable button",
       ),
-    "a recent folder chose itself and listed its folders to browse",
-  );
-  await submitWorkspace();
-  await createdInspector(3);
-  const roomCreate = [...calls]
-    .reverse()
-    .find((call) => call.method === "workspace.create")!;
-  check(
-    roomCreate.host === "beta" &&
-      (roomCreate.params.browser_source as { workspace_id: string })
-        .workspace_id === "a",
-    "Add room used another host or source workspace",
-  );
-  check(
-    roomCreate.params.cwd === "/srv/example/docs",
-    `Add room created in ${String(roomCreate.params.cwd)}, not the chosen folder`,
-  );
-  for (const name of ["town", "desk", "board"]) {
-    await view(name);
-    const beforeTab = created;
-    await action("New tab");
-    await createdInspector(beforeTab + 1);
-    check(
-      location.pathname === `/${name}`,
-      `${name} tab creation switched view`,
+    ).find((button) => button.textContent?.includes("Open Terminal"));
+    check(!!openTerminal, "Manual unavailable Chat offers Open Terminal");
+    openTerminal!.click();
+    await until(
+      () =>
+        document.querySelector('.workspace-inspector[data-view="terminal"]'),
+      "Open Terminal leaves unavailable Chat",
     );
-    const count = created;
-    await action("New workspace");
+    chatUnavailable = "";
+    conversationChanged();
+    await worldRuntimeStore.refresh();
+    check(
+      !!document.querySelector('.workspace-inspector[data-view="terminal"]'),
+      "Recovery cannot override a manual Terminal choice",
+    );
+    await closeAgent();
+    await openAgent(false);
+    await until(
+      () => document.querySelector('.workspace-inspector[data-view="history"]'),
+      "An untouched window follows actual Chat availability",
+    );
+    await closeAgent();
+    // Focused terminal/harness replacement retires the opening before aggregate
+    // reconciliation; even restoration cannot let its delayed reply switch views.
+    const focusedPane = (patch: Partial<Pane>) => {
+      const state = store.get(),
+        snapshot = connectionSnapshot(state, "beta");
+      const panes = snapshot.panes.map((pane) =>
+        pane.pane_id === betaPane.pane_id ? { ...pane, ...patch } : pane,
+      );
+      __storeTesting.replaceState({
+        ...state,
+        ...(state.activeConnectionId === "beta" ? { panes } : {}),
+        sessionsByConnectionId: {
+          ...state.sessionsByConnectionId,
+          beta: { ...snapshot, panes },
+        },
+      });
+    };
+    for (const replacement of [
+      { terminal_id: "replacement-terminal" },
+      { agent: "replacement-harness" },
+    ]) {
+      chatUnavailable = "read_failed";
+      await openAgent();
+      const reply = Promise.withResolvers<void>();
+      conversationBarrier = reply.promise;
+      chatUnavailable = "";
+      const before = conversationReads;
+      conversationChanged();
+      await until(
+        () => conversationReads > before,
+        "Captured availability read",
+      );
+      focusedPane(replacement);
+      await settle();
+      focusedPane({ terminal_id: betaPane.terminal_id, agent: betaPane.agent });
+      await settle();
+      const completed = completedConversationReads;
+      conversationBarrier = null;
+      reply.resolve();
+      await until(
+        () => completedConversationReads > completed,
+        "Replaced availability reply",
+      );
+      await settle();
+      check(
+        !!document.querySelector('.workspace-inspector[data-view="terminal"]'),
+        "Replacement/restoration cannot revive an automatic Chat switch",
+      );
+      await closeAgent();
+    }
+    sessionArrived = false;
+    delete betaPane.agent_session;
+    await worldRuntimeStore.refresh();
+    // On the phone, a terminal opened from a Town agent's card takes two
+    // Backs to leave: the first closes Composer, the second returns to Town.
+    if (window.innerWidth < 640) {
+      const townPath = window.location.pathname;
+      await until(
+        () =>
+          document.querySelector(
+            '.town-view-shell .world-semantic-target[data-kind="agent"]',
+          ),
+        "Town agent target",
+      );
+      document
+        .querySelector<HTMLButtonElement>(
+          '.town-view-shell .world-semantic-target[data-kind="agent"]',
+        )!
+        .click();
+      // A phone's anchored header control switches views; ⋯ holds attention.
+      const viewTrigger = () =>
+        document.querySelector<HTMLButtonElement>(
+          '.workspace-inspector button[aria-label^="Inspector view:"]',
+        );
+      await until(
+        () =>
+          document.querySelector(
+            '.workspace-inspector[data-view="terminal"]',
+          ) && viewTrigger(),
+        "Town pre-session agent window on Terminal",
+      );
+      sessionArrived = true;
+      Object.assign(runtime.get("beta")!.panes[0]!, {
+        agent_session: syntheticSession,
+      });
+      await worldRuntimeStore.refresh();
+      await until(
+        () =>
+          document.querySelector('.workspace-inspector[data-view="history"]') &&
+          viewTrigger(),
+        "Town agent window on Chat after session arrival",
+      );
+      viewTrigger()!.click();
+      const terminalItem = () =>
+        document.querySelector<HTMLButtonElement>(
+          '[aria-label="Inspector views"] [data-view="terminal"]',
+        );
+      await until(terminalItem, "Terminal in the anchored view selector");
+      terminalItem()!.click();
+      await until(
+        () =>
+          document.querySelector(
+            ".workspace-inspector textarea.terminal-composer-input",
+          ),
+        "Town opened the agent's terminal",
+      );
+      await worldRuntimeStore.refresh();
+      check(
+        Boolean(
+          document.querySelector('.workspace-inspector[data-view="terminal"]'),
+        ),
+        "A refresh replaced the manual Terminal choice",
+      );
+      document
+        .querySelector<HTMLTextAreaElement>(
+          ".workspace-inspector textarea.terminal-composer-input",
+        )!
+        .click();
+      await until(
+        () => document.querySelector(".workspace-inspector .terminal-composer"),
+        "Composer opened in the terminal",
+      );
+      history.back();
+      await until(
+        () =>
+          !document.querySelector(
+            ".workspace-inspector .terminal-composer[data-open]",
+          ),
+        "the first Back did not close Composer",
+      );
+      check(
+        !!document.querySelector(".workspace-inspector"),
+        "the first Back closed the terminal too",
+      );
+      history.back();
+      await until(
+        () => !document.querySelector(".workspace-inspector"),
+        "the second Back did not return to Town",
+      );
+      await settle();
+      check(
+        window.location.pathname === townPath &&
+          !!document.querySelector(".town-view-shell"),
+        `the second Back left Town for ${window.location.pathname}`,
+      );
+    }
+  }
+  if (scenario === "creation") {
+    const rootViewSelect = document.querySelector<HTMLSelectElement>(
+      '[aria-label="World view"]',
+    )!;
+    rootViewSelect.value = "town";
+    rootViewSelect.dispatchEvent(new Event("change", { bubbles: true }));
     await until(
       () =>
         document.querySelector(
-          '[role="dialog"][aria-label="Create workspace"]',
+          '.world-office-shell .world-new-seat-canvas-action[aria-label*="alpha b"]',
         ),
-      `${name} workspace confirmation`,
+      "second room control",
     );
-    const destination = document.querySelector<HTMLSelectElement>(
-      '[aria-label="Destination host"]',
+    check(
+      !document.querySelector(".workspace-inspector"),
+      "Fresh Office unexpectedly has Inspector",
+    );
+    const fullRoom = document.querySelector<HTMLButtonElement>(
+      '.world-new-seat-canvas-action[aria-label*="alpha b"]',
     )!;
     await until(
-      () => destination.value === "beta",
-      `${name} selected destination effect`,
+      () => !fullRoom.disabled,
+      "full room creation admitted after scene render",
+    );
+    check(!fullRoom.disabled, "Eight displayed desks disabled creation");
+    check(
+      !alpha.attached.has("b-1-terminal"),
+      "Second room was eagerly attached",
+    );
+    const chooseTerminal = async (
+      connectionId: string,
+      workspaceId: string,
+      repeat = false,
+    ) => {
+      await until(
+        () => document.querySelector(".agent-launcher-card"),
+        "room launcher Terminal choice",
+      );
+      const expected = buildWorldObject(
+        worldRuntimeStore.get().connections,
+        "alpha",
+      ).spaces.find(
+        (space) =>
+          space.connectionId === connectionId && space.nativeId === workspaceId,
+      );
+      check(
+        document.querySelector<HTMLSelectElement>(".agent-launcher select")
+          ?.value === expected?.id,
+        "Room launcher changed the seat's qualified destination",
+      );
+      const terminal = document.querySelector<HTMLButtonElement>(
+        ".agent-launcher-card",
+      )!;
+      check(
+        terminal.textContent?.includes("Terminal"),
+        "The first room launcher choice must be Terminal",
+      );
+      terminal.click();
+      if (repeat) terminal.click();
+    };
+    const gate = Promise.withResolvers<void>();
+    heldMutation = gate.promise;
+    fullRoom.click();
+    fullRoom.click();
+    await chooseTerminal("alpha", "b", true);
+    await until(
+      () => calls.some((call) => call.method === "tab.create"),
+      "second-room prepared dispatch",
     );
     check(
-      destination.value === "beta",
-      `${name} workspace destination lost selected host`,
+      alpha.attached.has("b-1-terminal"),
+      "Second-room source was not prepared",
+    );
+    await until(() => fullRoom.disabled, "visible creating state");
+    check(
+      calls.filter((call) => call.method === "tab.create").length === 1,
+      "Repeated plus duplicated mutation",
+    );
+    heldMutation = null;
+    gate.resolve();
+    await createdInspector(1);
+    check(
+      alpha.tabs.filter((tab) => tab.workspace_id === "b").length === 9,
+      "Ninth tab was not created",
+    );
+    const projection = projectWorldOffice(
+      buildWorldObject(worldRuntimeStore.get().connections, "alpha"),
+      Date.now(),
+    );
+    check(
+      projection.rooms.find(
+        (room) =>
+          room.workspaceRef.connectionId === "alpha" &&
+          room.workspaceRef.nativeId === "b",
+      )?.desks.length === 8,
+      "Office exceeded eight displayed desks",
+    );
+    const betaRoom = document.querySelector<HTMLButtonElement>(
+      '.world-new-seat-canvas-action[aria-label*="beta a"]',
+    )!;
+    await until(
+      () => !betaRoom.disabled,
+      "cold inactive host control after scene render",
+    );
+    check(!betaRoom.disabled, "Cold inactive host was not preparable");
+    betaRoom.click();
+    await chooseTerminal("beta", "a");
+    await createdInspector(2);
+    check(
+      store.get().activeConnectionId === "alpha",
+      "Inactive host creation changed Spaces host",
+    );
+    check(
+      [...calls].reverse().find((call) => call.method === "tab.create")
+        ?.host === "beta",
+      "Inactive host dispatch fell back to alpha",
+    );
+    const roomButton = document.querySelector<HTMLButtonElement>(
+      '.town-add-room[aria-label="Add room to beta"]',
+    )!;
+    await until(() => !roomButton.disabled, "room-specific workspace control");
+    roomButton.click();
+    await until(
+      () =>
+        document.querySelector<HTMLSelectElement>(
+          '[aria-label="Destination host"]',
+        )?.value === "beta",
+      "Add room keeps its building's host",
+    );
+    // A recent folder is the second tap: Add room, then the folder.
+    const folderInput = () =>
+      document.querySelector<HTMLInputElement>(
+        '[role="dialog"][aria-label="Create workspace"] input[placeholder^="e.g."]',
+      );
+    await until(
+      () => folderInput()?.value === "/srv/example/site",
+      "a new room defaults to its host's most recent folder",
+    );
+    const recentFolder = [
+      ...document.querySelectorAll<HTMLButtonElement>(
+        '[aria-label="Recent folders"] button',
+      ),
+    ];
+    check(
+      recentFolder.map((button) => button.title).join() ===
+        "/srv/example/site,/srv/example/docs",
+      `recent folders: ${recentFolder.map((button) => button.title).join()}`,
+    );
+    recentFolder[1]!.click();
+    await until(
+      () =>
+        folderInput()?.value === "/srv/example/docs" &&
+        document.querySelector(
+          '[aria-label="Folders to browse"] [title="/srv/example/docs/guide"]',
+        ) &&
+        document.querySelector(
+          '[aria-label="Folders to browse"] [title="/srv/example"]',
+        ),
+      "a recent folder chose itself and listed its folders to browse",
     );
     await submitWorkspace();
-    await createdInspector(count + 1);
+    await createdInspector(3);
+    const roomCreate = [...calls]
+      .reverse()
+      .find((call) => call.method === "workspace.create")!;
     check(
-      location.pathname === `/${name}`,
-      `${name} workspace creation switched view`,
+      roomCreate.host === "beta" &&
+        (roomCreate.params.browser_source as { workspace_id: string })
+          .workspace_id === "a",
+      "Add room used another host or source workspace",
     );
-  }
-  const viewChangeCount = created;
-  const viewGate = Promise.withResolvers<void>();
-  heldMutation = viewGate.promise;
-  await action("New tab");
-  await until(
-    () =>
-      calls.filter(
-        (call) =>
-          call.method === "tab.create" || call.method === "workspace.create",
-      ).length ===
-      viewChangeCount + 1,
-    "held creation dispatched before view change",
-  );
-  await view("board");
-  heldMutation = null;
-  viewGate.resolve();
-  await createdInspector(viewChangeCount + 1);
-  check(
-    location.pathname === "/board",
-    "Pending creation lost the current visual view",
-  );
-  // Stale-observation admission is covered by useWorldCreatedTerminal.test.ts.
-  // Retain the real Close-button intent wiring and rendered-Inspector check.
-  const supersededCount = created;
-  const supersededGate = Promise.withResolvers<void>();
-  heldMutation = supersededGate.promise;
-  await action("New tab");
-  await until(
-    () =>
-      calls.filter(
-        (call) =>
-          call.method === "tab.create" || call.method === "workspace.create",
-      ).length ===
-      supersededCount + 1,
-    "held creation before explicit Inspector close",
-  );
-  const close = document.querySelector<HTMLButtonElement>(
-    '.world-managed-window.is-active [aria-label="Close Inspector window"]',
-  );
-  check(Boolean(close), "Current Inspector close action missing");
-  close!.click();
-  heldMutation = null;
-  supersededGate.resolve();
-  await until(
-    () =>
-      created === supersededCount + 1 &&
-      store.get().notice?.detail?.includes("superseded"),
-    "newer Inspector close supersedes automatic focus",
-  );
-  check(
-    lastCreated && !visiblePane(lastCreated.pane_id),
-    "Late creation reopened an Inspector after explicit close",
-  );
-  // Close the Inspectors the cases above left open. Each one remounts its
-  // terminal whenever a visual view mounts again, so a dozen of them made
-  // each completion below wait on that remount, not on its own creation.
-  await action("Close all terminal windows");
-  await until(
-    () => !document.querySelector(".world-managed-window"),
-    "earlier Inspectors closed",
-  );
-  await view("spaces");
-  const count = created;
-  await store.createTab("a");
-  await until(
-    () =>
-      created === count + 1 && lastCreated && visiblePane(lastCreated.pane_id),
-    "Spaces native created terminal",
-  );
-  check(location.pathname === "/spaces", "Spaces creation switched view");
-  check(
-    calls.filter(
-      (call) =>
-        call.method === "tab.create" || call.method === "workspace.create",
-    ).length === created,
-    "Creation dispatch/result counts differ",
-  );
-  // Completion follows the current view in both directions, for both operations.
-  for (const [from, to] of [
-    ["spaces", "town"],
-    ["town", "spaces"],
-  ] as const) {
-    for (const kind of ["tab", "workspace"] as const) {
-      await view(from);
-      await store.focusWorkspace("a");
-      const gate = Promise.withResolvers<void>();
-      heldMutation = gate.promise;
-      const before = created;
-      const method = `${kind}.create`;
-      const beforeCalls = calls.filter((call) => call.method === method).length;
-      const pending =
-        kind === "tab"
-          ? store.createTab("a")
-          : store.createWorkspace("View handoff");
+    check(
+      roomCreate.params.cwd === "/srv/example/docs",
+      `Add room created in ${String(roomCreate.params.cwd)}, not the chosen folder`,
+    );
+    for (const name of ["town", "desk", "board"]) {
+      await view(name);
+      const beforeTab = created;
+      await action("New tab");
+      await createdInspector(beforeTab + 1);
+      check(
+        location.pathname === `/${name}`,
+        `${name} tab creation switched view`,
+      );
+      const count = created;
+      await action("New workspace");
       await until(
         () =>
-          calls.filter((call) => call.method === method).length > beforeCalls,
-        `${from} ${kind} pending dispatch`,
+          document.querySelector(
+            '[role="dialog"][aria-label="Create workspace"]',
+          ),
+        `${name} workspace confirmation`,
       );
-      await view(to);
-      const inspectorsBeforeCompletion = document.querySelectorAll(
-        ".world-managed-window",
-      ).length;
-      heldMutation = null;
-      gate.resolve();
-      await pending;
-      await store.refresh();
-      await worldRuntimeStore.refresh();
-      await createdInspector(before + 1);
+      const destination = document.querySelector<HTMLSelectElement>(
+        '[aria-label="Destination host"]',
+      )!;
+      await until(
+        () => destination.value === "beta",
+        `${name} selected destination effect`,
+      );
       check(
-        location.pathname === `/${to}`,
-        `${from}-to-${to} ${kind} completion changed the view`,
+        destination.value === "beta",
+        `${name} workspace destination lost selected host`,
       );
-      if (to === "spaces")
-        check(
-          document.querySelectorAll(".world-managed-window").length ===
-            inspectorsBeforeCompletion,
-          "Spaces completion opened a hidden visual Inspector",
+      await submitWorkspace();
+      await createdInspector(count + 1);
+      check(
+        location.pathname === `/${name}`,
+        `${name} workspace creation switched view`,
+      );
+    }
+    const viewChangeCount = created;
+    const viewGate = Promise.withResolvers<void>();
+    heldMutation = viewGate.promise;
+    await action("New tab");
+    await until(
+      () =>
+        calls.filter(
+          (call) =>
+            call.method === "tab.create" || call.method === "workspace.create",
+        ).length ===
+        viewChangeCount + 1,
+      "held creation dispatched before view change",
+    );
+    await view("board");
+    heldMutation = null;
+    viewGate.resolve();
+    await createdInspector(viewChangeCount + 1);
+    check(
+      location.pathname === "/board",
+      "Pending creation lost the current visual view",
+    );
+    // Stale-observation admission is covered by useWorldCreatedTerminal.test.ts.
+    // Retain the real Close-button intent wiring and rendered-Inspector check.
+    const supersededCount = created;
+    const supersededGate = Promise.withResolvers<void>();
+    heldMutation = supersededGate.promise;
+    await action("New tab");
+    await until(
+      () =>
+        calls.filter(
+          (call) =>
+            call.method === "tab.create" || call.method === "workspace.create",
+        ).length ===
+        supersededCount + 1,
+      "held creation before explicit Inspector close",
+    );
+    const close = document.querySelector<HTMLButtonElement>(
+      '.world-managed-window.is-active [aria-label="Close Inspector window"]',
+    );
+    check(Boolean(close), "Current Inspector close action missing");
+    close!.click();
+    heldMutation = null;
+    supersededGate.resolve();
+    await until(
+      () =>
+        created === supersededCount + 1 &&
+        store.get().notice?.detail?.includes("superseded"),
+      "newer Inspector close supersedes automatic focus",
+    );
+    check(
+      lastCreated && !visiblePane(lastCreated.pane_id),
+      "Late creation reopened an Inspector after explicit close",
+    );
+    // Close the Inspectors the cases above left open. Each one remounts its
+    // terminal whenever a visual view mounts again, so a dozen of them made
+    // each completion below wait on that remount, not on its own creation.
+    await action("Close all terminal windows");
+    await until(
+      () => !document.querySelector(".world-managed-window"),
+      "earlier Inspectors closed",
+    );
+    await view("spaces");
+    const count = created;
+    await store.createTab("a");
+    await until(
+      () =>
+        created === count + 1 &&
+        lastCreated &&
+        visiblePane(lastCreated.pane_id),
+      "Spaces native created terminal",
+    );
+    check(location.pathname === "/spaces", "Spaces creation switched view");
+    check(
+      calls.filter(
+        (call) =>
+          call.method === "tab.create" || call.method === "workspace.create",
+      ).length === created,
+      "Creation dispatch/result counts differ",
+    );
+    // Completion follows the current view in both directions, for both operations.
+    for (const [from, to] of [
+      ["spaces", "town"],
+      ["town", "spaces"],
+    ] as const) {
+      for (const kind of ["tab", "workspace"] as const) {
+        await view(from);
+        await store.focusWorkspace("a");
+        const gate = Promise.withResolvers<void>();
+        heldMutation = gate.promise;
+        const before = created;
+        const method = `${kind}.create`;
+        const beforeCalls = calls.filter(
+          (call) => call.method === method,
+        ).length;
+        const pending =
+          kind === "tab"
+            ? store.createTab("a")
+            : store.createWorkspace("View handoff");
+        await until(
+          () =>
+            calls.filter((call) => call.method === method).length > beforeCalls,
+          `${from} ${kind} pending dispatch`,
         );
+        await view(to);
+        const inspectorsBeforeCompletion = document.querySelectorAll(
+          ".world-managed-window",
+        ).length;
+        heldMutation = null;
+        gate.resolve();
+        await pending;
+        await store.refresh();
+        await worldRuntimeStore.refresh();
+        await createdInspector(before + 1);
+        check(
+          location.pathname === `/${to}`,
+          `${from}-to-${to} ${kind} completion changed the view`,
+        );
+        if (to === "spaces")
+          check(
+            document.querySelectorAll(".world-managed-window").length ===
+              inspectorsBeforeCompletion,
+            "Spaces completion opened a hidden visual Inspector",
+          );
+      }
     }
   }
-
-  await view("spaces");
-  const first = alpha.panes.find((pane) => pane.pane_id === "a-1-pane")!;
-  const sibling = {
-    ...first,
-    pane_id: "a-sibling-pane",
-    terminal_id: "a-sibling-terminal",
-  };
-  alpha.panes.push(sibling);
-  await store.refresh();
-  await store.focusPane(first.pane_id);
-  await until(
-    () => alpha.attached.has(first.terminal_id),
-    "split source pane attached",
-  );
-  // Start with the source hidden: its new attachment must wait for the ACK,
-  // independently of the selected mobile/zoomed pane.
-  await store.focusPane(sibling.pane_id);
-  zoomedTabId = first.tab_id;
-  await store.refresh();
-  await until(
-    () =>
-      !alpha.attached.has(first.terminal_id) && visiblePane(sibling.pane_id),
-    "zoomed sibling visible before source preparation",
-  );
-  const attachmentGate = Promise.withResolvers<void>();
-  heldAttachment = {
-    terminalId: first.terminal_id,
-    promise: attachmentGate.promise,
-  };
-  const retainGate = Promise.withResolvers<void>();
-  heldMutation = retainGate.promise;
-  const beforeRetainCalls = calls.filter(
-    (call) => call.method === "tab.create",
-  ).length;
-  const retained = store.createQualifiedTab(
-    { connectionId: "alpha", runtimeGeneration: 7 },
-    "a",
-    { sourcePaneId: first.pane_id },
-  );
-  await until(
-    () =>
-      alpha.attached.has(first.terminal_id) &&
-      store.get().terminalAttachments[first.terminal_id]?.ready === false,
-    "demanded source awaiting attachment ACK",
-  );
-  const sourceAttaches = calls.filter(
-    (call) =>
-      call.method === "terminal.attach" &&
-      call.params.terminal_id === first.terminal_id,
-  ).length;
-  zoomedTabId = null;
-  await store.refresh();
-  await store.focusPane(first.pane_id);
-  await until(() => visiblePane(first.pane_id), "preparing source visible");
-  await store.focusPane(sibling.pane_id);
-  await until(
-    () =>
-      visiblePane(sibling.pane_id) && alpha.attached.has(sibling.terminal_id),
-    "preparation switched to split sibling",
-  );
-  check(
-    alpha.attached.has(first.terminal_id),
-    "Pane selection detached the source before its attachment ACK",
-  );
-  check(
-    calls.filter((call) => call.method === "tab.create").length ===
-      beforeRetainCalls,
-    "Creation dispatched before its source attachment ACK",
-  );
-  heldAttachment = null;
-  attachmentGate.resolve();
-  await until(
-    () =>
-      calls.filter((call) => call.method === "tab.create").length >
-      beforeRetainCalls,
-    "split pending dispatch",
-  );
-  check(
-    alpha.attached.has(first.terminal_id),
-    "Changing split pane detached the pending creation source",
-  );
-  if (width === 390)
-    check(
-      !visiblePane(first.pane_id),
-      "Retained source displaced the visible mobile split pane",
+  if (scenario === "retention") {
+    await view("spaces");
+    const first = alpha.panes.find((pane) => pane.pane_id === "a-1-pane")!;
+    const sibling = {
+      ...first,
+      pane_id: "a-sibling-pane",
+      terminal_id: "a-sibling-terminal",
+    };
+    alpha.panes.push(sibling);
+    await store.refresh();
+    await store.focusPane(first.pane_id);
+    await until(
+      () => alpha.attached.has(first.terminal_id),
+      "split source pane attached",
     );
-  zoomedTabId = first.tab_id;
-  await store.refresh();
-  await settle();
-  check(
-    alpha.attached.has(first.terminal_id),
-    "Zooming the sibling detached the pending creation source",
-  );
-  check(
-    !visiblePane(first.pane_id) && visiblePane(sibling.pane_id),
-    "Zoom did not retain the source independently of visibility",
-  );
-  check(
-    calls.filter(
+    // Start with the source hidden: its new attachment must wait for the ACK,
+    // independently of the selected mobile/zoomed pane.
+    await store.focusPane(sibling.pane_id);
+    zoomedTabId = first.tab_id;
+    await store.refresh();
+    await until(
+      () =>
+        !alpha.attached.has(first.terminal_id) && visiblePane(sibling.pane_id),
+      "zoomed sibling visible before source preparation",
+    );
+    const attachmentGate = Promise.withResolvers<void>();
+    heldAttachment = {
+      terminalId: first.terminal_id,
+      promise: attachmentGate.promise,
+    };
+    const retainGate = Promise.withResolvers<void>();
+    heldMutation = retainGate.promise;
+    const beforeRetainCalls = calls.filter(
+      (call) => call.method === "tab.create",
+    ).length;
+    const retained = store.createQualifiedTab(
+      { connectionId: "alpha", runtimeGeneration: 7 },
+      "a",
+      { sourcePaneId: first.pane_id },
+    );
+    await until(
+      () =>
+        alpha.attached.has(first.terminal_id) &&
+        store.get().terminalAttachments[first.terminal_id]?.ready === false,
+      "demanded source awaiting attachment ACK",
+    );
+    const sourceAttaches = calls.filter(
       (call) =>
         call.method === "terminal.attach" &&
         call.params.terminal_id === first.terminal_id,
-    ).length === sourceAttaches,
-    "Retained source was remounted during preparation, pane selection or zoom",
-  );
-  heldMutation = null;
-  retainGate.resolve();
-  await retained;
-  check(
-    Boolean(visiblePane(sibling.pane_id)),
-    "Creation overrode the newer split-pane selection",
-  );
-  check(
-    calls.filter((call) => call.method === "tab.create").length ===
-      beforeRetainCalls + 1,
-    "Prepared source did not dispatch exactly once",
-  );
-  check(
-    creationSources().length === 0,
-    "Creation did not release its retained source demand",
-  );
+    ).length;
+    zoomedTabId = null;
+    await store.refresh();
+    await store.focusPane(first.pane_id);
+    await until(() => visiblePane(first.pane_id), "preparing source visible");
+    await store.focusPane(sibling.pane_id);
+    await until(
+      () =>
+        visiblePane(sibling.pane_id) && alpha.attached.has(sibling.terminal_id),
+      "preparation switched to split sibling",
+    );
+    check(
+      alpha.attached.has(first.terminal_id),
+      "Pane selection detached the source before its attachment ACK",
+    );
+    check(
+      calls.filter((call) => call.method === "tab.create").length ===
+        beforeRetainCalls,
+      "Creation dispatched before its source attachment ACK",
+    );
+    heldAttachment = null;
+    attachmentGate.resolve();
+    await until(
+      () =>
+        calls.filter((call) => call.method === "tab.create").length >
+        beforeRetainCalls,
+      "split pending dispatch",
+    );
+    check(
+      alpha.attached.has(first.terminal_id),
+      "Changing split pane detached the pending creation source",
+    );
+    if (width === 390)
+      check(
+        !visiblePane(first.pane_id),
+        "Retained source displaced the visible mobile split pane",
+      );
+    zoomedTabId = first.tab_id;
+    await store.refresh();
+    await settle();
+    check(
+      alpha.attached.has(first.terminal_id),
+      "Zooming the sibling detached the pending creation source",
+    );
+    check(
+      !visiblePane(first.pane_id) && visiblePane(sibling.pane_id),
+      "Zoom did not retain the source independently of visibility",
+    );
+    check(
+      calls.filter(
+        (call) =>
+          call.method === "terminal.attach" &&
+          call.params.terminal_id === first.terminal_id,
+      ).length === sourceAttaches,
+      "Retained source was remounted during preparation, pane selection or zoom",
+    );
+    heldMutation = null;
+    retainGate.resolve();
+    await retained;
+    check(
+      Boolean(visiblePane(sibling.pane_id)),
+      "Creation overrode the newer split-pane selection",
+    );
+    check(
+      calls.filter((call) => call.method === "tab.create").length ===
+        beforeRetainCalls + 1,
+      "Prepared source did not dispatch exactly once",
+    );
+    check(
+      creationSources().length === 0,
+      "Creation did not release its retained source demand",
+    );
+  }
   check(
     calls.filter(
       (call) =>

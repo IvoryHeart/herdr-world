@@ -131,12 +131,14 @@ export function renderRunTiming(
     "",
     "Runner waits sum job created_at → started_at (parallel waits overlap); dependency waits before a job is created are excluded. Skipped jobs are excluded. Missing timestamps stay unknown.",
     "",
-    "| Job | Result | Execution | Runner wait |",
-    "| --- | --- | ---: | ---: |",
+    `Executed jobs: **${active.length}** (matrix expansions included).`,
+    "",
+    "| Job | Result | Execution | Runner wait | Start offset | End offset |",
+    "| --- | --- | ---: | ---: | ---: | ---: |",
   );
   for (const row of measured)
     lines.push(
-      `| ${label(row.job.name)} | ${row.job.conclusion ?? "in progress"} | ${seconds(row.execution)} | ${seconds(row.wait)} |`,
+      `| ${label(row.job.name)} | ${row.job.conclusion ?? "in progress"} | ${seconds(row.execution)} | ${seconds(row.wait)} | ${seconds(duration(run.created_at, row.job.started_at))} | ${seconds(duration(run.created_at, end(row.job)))} |`,
     );
   return lines.join("\n") + "\n";
 }

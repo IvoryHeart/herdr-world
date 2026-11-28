@@ -184,6 +184,7 @@ finish();
       env: {
         ...process.env,
         CI: "true",
+        CHROME_BIN: join(directory, "fixture-chrome"),
         PATH: `${directory}:${process.env.PATH ?? ""}`,
         GATE_COMMANDS: record,
         GATE_REAL_BUN: process.execPath,
@@ -416,6 +417,10 @@ test("tooling classification includes earlier PR commits on an incremental push"
     true,
   );
   expect(full.commands).toContain("run verification:gate");
+  const verification = full.commands.indexOf("run verification:gate");
+  for (const [index, command] of full.commands.entries())
+    if (/run-world-tests|scripts\/run-tests/.test(command))
+      expect(index).toBeLessThan(verification);
   expect(
     full.commands.some((cmd) => cmd.startsWith("scripts/run-world-tests.ts")),
   ).toBe(true);

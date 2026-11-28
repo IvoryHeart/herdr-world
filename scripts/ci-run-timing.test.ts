@@ -59,6 +59,10 @@ test("timings distinguish the critical dependency from the longest execution and
     "Runner waits: **6m 41s** across 6 jobs; longest **Units (1/2)** — 6m 20s",
   );
   expect(report).toContain("| Units (1/2) | failure | 50s | 6m 20s |");
+  expect(report).toContain(
+    "| Units (1/2) | failure | 50s | 6m 20s | 6m 40s | 7m 30s |",
+  );
+  expect(report).toContain("Executed jobs: **6**");
   expect(report).toContain("in progress");
   expect(report).not.toContain("| Preview |");
   expect(report).toContain(

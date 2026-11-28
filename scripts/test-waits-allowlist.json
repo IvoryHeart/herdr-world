@@ -399,7 +399,7 @@
       "reason": "Not converted yet; its area sweep (#1419) replaces these with waits on the real signal."
     },
     "web/src/world/town/TownCanvas.browser.tsx": {
-      "pauses": 39,
+      "pauses": 38,
       "reason": "Not converted yet; its area sweep (#1419) replaces these with waits on the real signal."
     },
     "web/src/world/town/townCenter.browser.ts": {
