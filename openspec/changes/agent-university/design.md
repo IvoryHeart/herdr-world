@@ -45,115 +45,139 @@ Non-goals: building any of it in this step; a skills or MCP marketplace;
 installing skills or MCP servers; new harnesses; World-defined MCP servers that
 need a secret (see § 6); changing any table, column or data file.
 
-## 1. The building and its colleges
+## 1. The building, its colleges and how you use them
 
-### Art directions (pick one)
+### UX flows (pick one)
 
-The first pass (`screens/university-art.svg`) drew the University plainer than
-Town's agents and desks. It is superseded. Three directions are painted with
-Town's own canvas helpers at 16-pixel tiles and shown in the real Town (the
-golden fixture, clear day). One is picked, and then the University window,
-college page, editor, diploma and phone screens are finished in it (task 1.4).
-Each capture shows the same four wings, left to right: Claude Code open, Codex
-open, Kimi Code logged out, and Pi not installed. Captures are at laptop size
-(1512 × 982) at home zoom, as a laptop close-up, and at phone size (390 × 844)
-dragged to the University.
+Today a profile is edited from the town center: **town center → Profiles →
+pick the profile in the dialog's roster → (one of five tabs) → Save**, and
+hired with **town center → New agent → (room) → profile card**. Three flows
+for the University follow, each simpler than that. Each storyboard shows, on a
+laptop and on a phone: finding the University in Town (between the town
+center and the library), browsing a college, creating and editing a profile,
+attaching skills and MCP servers, and hiring. Numbered marks are the clicks or
+taps.
 
-**A. Collegiate Gothic.** A honey-stone gatehouse with battlements, corner
-turrets with slate caps, and a clock over a lit arched gate with three college
-shields. Steep gabled wings have lancet windows, a crest in the gable, a
-pennant in the college colour and ivy on the piers. It reads as "old
-university" at a glance. It shares stone with the town center and library, so
-its tower and tall windows are what set it apart.
+Clicks (taps on a phone; the same count unless noted), not counting typing:
 
-![A at laptop size, home zoom](screens/direction-a-laptop.png)
-![A, laptop close-up](screens/direction-a-close.png)
-![A at phone size](screens/direction-a-phone.png)
+| Task | Today | Flow 1: Profile cards | Flow 2: College doors | Flow 3: Roster and editor |
+| --- | --- | --- | --- | --- |
+| Hire from a profile, room known | 3 | **2** | **2** | **2** from a room's + seat; 3 from the University (phone: 2) |
+| Hire into another room, or with a task | 4 + typing | 3 + typing | 3 + typing | 3 + typing |
+| Edit one field of an existing profile | 4–5 | **3** | **3** | **3** (2 for the profile shown last) |
+| Attach a skill or MCP server | 6 | 4 | 4 | 4 |
+| Create a profile | 4 | 3 | 3 | 3 |
+| See what a harness offers (a college) | not possible | 3 | **1** | 2 |
 
-**B. Tudor brick.** A red diapered-brick gate tower with ogee-capped turrets,
-an oriel window and arms over the gate. Its wings have half-timbered gables
-whose bargeboards take the college colour, and twisted chimneys. It is the
-warmest and busiest of the three, and the only one with a pattern in the wall.
-It shares brick with the post office.
+Create counts the college preset to the last one used (Flow 2: the open
+college); choosing another adds one click.
 
-![B at laptop size, home zoom](screens/direction-b-laptop.png)
-![B, laptop close-up](screens/direction-b-close.png)
-![B at phone size](screens/direction-b-phone.png)
+**What every flow shares** (and what makes each simpler than today):
 
-**C. Glasshouse campus.** A central glass hall with a rotunda, a tree inside
-and a clock. Each college is an octagonal glass pavilion on a brick base, with
-ribs in the college colour and plants inside. It looks unlike every other
-building in Town, and it shows the wing states most strongly: lit glass, dark
-glass, or a bare iron frame with a ladder and a crate of panes.
+- **One page, no tabs.** The editor drops today's five tabs (Who, Brain,
+  Skills & tools, Brief, Look & sound) for one scrolling page: who, model and
+  effort, the college's skills and MCP servers as checklists, brief, look.
+- **Hire sits on the profile.** **Hire in api** starts at once when the room
+  is known: the room selected in Town, else the profile's home room. The arrow
+  beside it, or a profile whose brief asks for a task (`{{task}}`), opens the
+  existing New agent launcher with the profile chosen, to pick another room or
+  type the task. With no known room, Hire opens that launcher. A host that
+  lacks an attached skill or MCP server shows the refusal there (§ 3, "A host
+  that lacks one") and starts nothing.
+- **Where it is.** The building and its sign between the town center and the
+  library; the town center's Buildings ring; Settings → Agent profiles,
+  Actions and Board's Edit profiles. The town center's ring loses Profiles and
+  keeps New agent and the Town master.
+- **Phone.** The University is the place window's bottom sheet. Back at its
+  top closes an inner page first, then the sheet. No swipes; chips wrap.
+- **Retired profiles** sit on a collapsed shelf at the bottom of the list,
+  with Restore and Delete (§ 2).
 
-![C at laptop size, home zoom](screens/direction-c-laptop.png)
-![C, laptop close-up](screens/direction-c-close.png)
-![C at phone size](screens/direction-c-phone.png)
+**Flow 1 — Profile cards.** The University opens one window on **Profiles**:
+cards grouped by college, each with **Hire in api**, Edit, Copy and Retire,
+and **New profile** in the header. **Colleges** is the second tab: one row per
+harness with its readiness and its skills and MCP states; a row opens the
+college page. Edit replaces the window's body with the editor, with Back.
 
-All three share the lot (18 × 8 tiles plus a 3-row quad), the quad (lawn,
-gravel path to the gate, hedges, benches, two lamps), the gate in the middle
-where hires come out (§ 4), and the wing order: Claude Code, Codex, then other
-kinds alphabetically. Claude Code's college is terracotta (`#d9775a`), Codex's
-ink blue (`#3f6fb4`), and other harnesses take a muted colour from the style
-system with the harness's initial on the crest. At most four wings are drawn,
-two on each side. A fifth or later college shares an annex wing whose crest
-reads `+N`, and the window lists every college.
+![Flow 1 storyboard: laptop and phone](screens/flow-1-profile-cards.svg)
 
-### Town style system
+- Strength: the thing you came for (a profile) is the first thing you see,
+  whatever its harness; it scales to many profiles as a list.
+- Cost: colleges are one tab away, so "what can Codex be given" is a detour.
 
-Every Town building, the University included and every one after it, follows
-these rules. They are read from the shipped paint (`townSprites.ts`, the
-center, post office, library and observatory painters, and the agent and desk
-sprites), except detail density, which sets the bar at the agents' and desks'
-level, above the plainer buildings:
+**Flow 2 — College doors.** Each college is a door on the building and a chip
+on its sign. A college page shows that harness's profiles on the left and what
+it has on the chosen host on the right (skills, MCP servers, models, efforts,
+modes, readiness per host). Opening a profile turns the right-hand lists into
+checkboxes for it, so attaching is ticking what you can see. The gate, or
+**+16 more**, opens all colleges as a grid.
 
-- **Scale.** One art pixel is one world pixel on a 16-pixel tile
-  (`TOWN_TILE`). A building is sized against its neighbours. A storey is about
-  one tile, a door about one tile wide and a tile and a half tall, and a person
-  is about one tile high. No building is drawn at another resolution and
-  scaled.
-- **Outline.** Every painted layer is outlined with `townOutline()`: one pixel
-  of Town ink (`TOWN_OUTLINE`, `#1c1722`) stamped from the silhouette. Ground
-  shadows and lawn are painted on their own layer outside the outline.
-- **Light from the upper left.** Roofs are lightest at the ridge and darken
-  toward the eaves (`townShade`). Walls carry a darker strip on their right
-  edge and under every sill, cornice and eave. Bevels are lit on the top and
-  left and shaded on the bottom and right. Ground shadows are `rgba(0,0,0,.2)`,
-  under and to the right.
-- **Palette.** Every colour is a family in Town's palette, used with
-  `townShade` steps rather than new hex values. The families are stone and
-  sand (`#ece2c8`, `#d9cfb8`, `#d9b27a`), brick (`#a4553f`), slate
-  (`#4f5a80`), copper and verdigris (`#4f9a86`), wood (`#9b6a3f`, `#6e4a2e`),
-  gold (`#e8c75a`, highlight `#fff0b0`, shade `#a8862e`), lit glass
-  (`#ffe39a`/`#ffe0a0`, deep `#f0b860`), dark glass (slate shaded), lawn
-  (`#6fae5a`) and gravel (`#d9cfb8`). A new building takes a family no
-  neighbour uses as its main material, so the row stays readable.
-- **Detail density.** A building has the detail of the agents and desks
-  beside it: at least one textured material (coursed stone, brick bond,
-  shingles, panes), a lit opening, and one landmark feature that reads at home
-  zoom (a dome, clock, tower or sign board). No flat fills over two tiles.
-- **State in paint, numbers on the sign.** Paint shows only a few fixed
-  variants (open, shut, missing). Counts, names and changing text sit on the
-  building's DOM sign, which keeps a readable size at every zoom.
-- **Glass and light.** Lit windows use the lit-glass family; unlit or
-  logged-out windows use dark glass. Town's lighting and weather passes tint
-  the whole sprite, so the paint has no time of day.
-- **Placement.** A building stands on its own lot from a lot file, with its
-  sign in `townCivicSigns` or its own sign component. It never paints into a
-  neighbour's lot or onto a street.
+![Flow 2 storyboard: laptop and phone](screens/flow-2-college-doors.svg)
 
-### Wing states
+- Strength: the clearest picture of "a college per harness"; browsing what a
+  harness offers is one click.
+- Cost: profiles are split by harness, so finding one means knowing its
+  college. Doors are small at home zoom; the sign's chips are the main target.
 
-The paint has only three variants per wing, chosen from the college's state
-across the hosts the Hosts filter shows. The exact drawing follows the picked
-direction, as in the captures:
+**Flow 3 — Roster and editor.** The University opens straight into the editor
+on the last profile, with the roster grouped by college on the left (a college
+header opens its page in the right pane). It is today's profile dialog moved
+into the University, without its tabs. Hiring also stays where it is today: a
+room's **+** seat or New agent, then the profile card.
 
-| College state (over shown hosts) | Wing art | Sign chip |
+![Flow 3 storyboard: laptop and phone](screens/flow-3-roster-editor.svg)
+
+- Strength: least new UI; editing is fastest when you return to the same
+  profile.
+- Cost: the editor is the first thing you see even when you only want to
+  hire; hiring from the University itself takes 3 clicks on a laptop.
+
+**Recommendation: Flow 1.** It has the fewest clicks for the two common tasks
+(hire 2, edit 3), keeps every profile in one list whatever its harness, and
+works the same in a sheet on a phone. Flow 2's college page is kept as the
+page a college row opens. Once a flow is picked, the window, editor and phone
+screens are drawn for it and its click counts become acceptance rules in the
+creation-profiles delta (task 1.2).
+
+### Placeholder art
+
+Town's art direction is not decided (#1117 waits for a style), so the
+University is drawn as a **marked placeholder** in the current Town style: a
+plain sand block with a hazard band along its roof, a board reading
+UNIVERSITY / PLACEHOLDER, a gate in the middle where hires come out, one door
+per college in its college colour, and a plain lawn quad. The three art
+directions shown before are withdrawn. When the Town style is picked, final
+art replaces only the paint file; the lot, doors, sign and states stay.
+
+![The placeholder in the real Town at laptop size](screens/placeholder-laptop.png)
+![The placeholder, close up](screens/placeholder-close.png)
+![The placeholder at phone size](screens/placeholder-phone.png)
+
+The placeholder keeps the parts of Town's style that make it sit in the row:
+16-pixel tiles at one art pixel per world pixel (`TOWN_TILE`), the one-pixel
+Town ink outline (`townOutline()`, `#1c1722`), light from the upper left (a
+shaded right edge and a ground shadow), and colours from Town's palette
+families (stone and sand `#d9cfb8`, slate `#4f5a80`, lit glass `#ffe39a`).
+Counts and changing text sit on the building's DOM sign, never in the paint.
+Detail level and materials wait for the Town style.
+
+Doors are ordered Claude Code, Codex, then other harnesses alphabetically.
+Claude Code's colour is terracotta (`#d9775a`), Codex's ink blue (`#3f6fb4`),
+others a muted palette colour with the harness's initial. At most four doors
+are drawn; the fifth and later colleges share the sign's `+N` chip, and the
+window lists every college.
+
+### College states in Town
+
+The paint has three variants per college door, chosen from the college's
+state across the hosts the Hosts filter shows:
+
+| College state (over shown hosts) | Door | Sign chip |
 | --- | --- | --- |
-| Installed and logged in on at least one host | Lit windows, open door, pennant or ribs in the college colour | `Claude Code · 2 hosts` |
-| Installed everywhere it is found, logged out everywhere | Dark glass, shut door with a small key plaque, pennant furled | `Codex · Log in` |
-| Not installed on any shown host | Under construction (A, B: scaffolding with a dust sheet; C: a bare frame with a ladder) | `Pi · Not installed` |
-| Unknown (probe failed, Windows, not yet read) | Normal art, no lights change | `Kimi · ?` |
+| Installed and logged in on at least one host | Lit pane | `Claude Code · 2 hosts` |
+| Installed everywhere it is found, logged out everywhere | Dark pane | `Codex · Log in` |
+| Not installed on any shown host | Taped across | `Pi · Not installed` |
+| Unknown (probe failed, Windows, not yet read) | Unchanged | `Kimi · ?` |
 
 Unknown is never drawn as missing (the same honesty rule as harness
 readiness).
@@ -179,17 +203,17 @@ What moves to make room, once, when the University ships:
 - **The shore** (warehouse, harbour and shipyard) moves 20 tiles right,
   because the town grows 20 tiles wider to hold the extra lot.
 - **The home view** fits the wider town. At laptop size (1512 × 982) it opens
-  about 13% further out than today, as the captures show.
+  about 13% further out than today, as the placeholder captures show.
 - **Nothing else moves.** The post office, town center, rooms, streets, desks,
-  agents and Apartments stay where they are. After this, a wing appearing for
-  a new harness stays inside the University lot and moves nothing.
+  agents and Apartments stay where they are. After this, a college appearing
+  for a new harness stays inside the University lot and moves nothing.
 
 On a narrow (phone) town the civic row runs along the top, right of the stacked
 rooms (#1351). The University is the first building right of the screen at
 home, where the library is today: one drag right of the town center. On a
 phone the library's hanging sign stays below the observatory's, and the
-University's sign stands on its gatehouse the way the observatory's stands on
-its dome.
+University's sign stands on its roof the way the observatory's stands on its
+dome.
 
 Notes that name the library's place (the town and memory notes, and the
 shipyard notes' "drag to reach") are updated when this ships. Every Town
@@ -201,43 +225,38 @@ the renderer scene, a DOM sign with `useTownPlace("university", …)`, and an
 entry in `TOWN_CENTER_BUILDINGS`. The building opens what its sign opens; the
 sign stays the keyboard target.
 
-### The University window
+### Parts every flow uses
 
-![The University window on desktop](screens/university-window.svg)
+These are the same whichever flow is picked; the flow decides only how they
+are arranged. One window, the Town place window frame (`PlaceWindow`), holds
+them, reachable from every view.
 
-One window, the Town place window frame (`PlaceWindow`), reachable from every
-view: in Town from the building, its sign and the town center's Buildings
-ring; elsewhere from Settings, Actions, the launcher and Board. It has two
-tabs:
+**The profile list.** Every profile, grouped by college, with its look, name,
+the first line of its role, model, effort and permission, counts of attached
+skills and MCP servers, a warning chip when an attached item is missing on
+some shown host, and **Working now** (agents running from it, each opening
+that agent's character sheet). Actions: **Hire in <room>**, **Edit**,
+**Copy**, **Retire**, and **New profile**. The **Retired** shelf (collapsed,
+with a count) has **Restore** and **Delete**.
 
-- **Profiles** (default): every profile, grouped by college, each a card with
-  its look, name, the first line of its role, model, effort and permission,
-  and counts of attached skills and MCP servers. A card shows a warning chip
-  when an attached item is missing on some shown host. Each card has **Hire**,
-  **Edit**, **Copy** and **Retire**. **New profile** sits in the header. A
-  **Retired** shelf at the bottom (collapsed, with a count) lists retired
-  profiles with **Restore** and **Delete**. Each card also shows **Working
-  now** (agents running from it), each opening that agent's character sheet.
-- **Colleges:** one row per college with its readiness chip and its skills
-  and MCP states (supported, planned or not built, § 3); a row opens the
-  college page.
+**The editor.** Today's editor fields on one page instead of five tabs, plus
+two sections. The screen below shows its content; its frame follows the
+picked flow.
 
-The editor (Edit, New profile) replaces the window's body with the existing
-editor's fields plus two new sections, with **Back** at the top on phones.
-
-![The profile editor with skills and MCP servers from its college](screens/profile-editor.svg)
+![The profile editor's content: skills and MCP servers from its college](screens/profile-editor.svg)
 
 - **Skills from this college** and **MCP servers from this college**: a
   checklist of what the college offers, each item with where it comes from
   (repository, user, plugin) and a dot per shown host (present, missing, not
   checked). Items the profile already attaches but no shown host has stay
-  listed, marked missing, so nothing silently disappears.
+  listed, marked missing, so nothing silently disappears. On a phone the dots
+  become a short "Missing on build-box" line.
 - **What the agent gets:** the diploma it would get on the chosen host (§ 4)
   and the exact launch command (already in the editor today).
 
-### College page
+**The college page.**
 
-![A college page: hosts, skills, MCP servers and choices](screens/college-window.svg)
+![A college page's content: hosts, skills, MCP servers and choices](screens/college-window.svg)
 
 - **Hosts:** one row per connected host: installed, logged in and method, or
   unknown with its reason, with **Log in** and **Check again** from the existing
@@ -259,15 +278,9 @@ editor's fields plus two new sections, with **Back** at the top on phones.
   moved per college. A college without a launch mapping for them says so.
 - **Profiles in this college**, with **New profile** preset to it.
 
-### Phone
-
-![Phone: Town with the University sign, the Profiles sheet, the editor](screens/phone.svg)
-
-The window is the place window's bottom sheet. Profile cards stack in one
-column with Hire as the first button; the tabs stay one tap away at the top;
-the editor and college page open in the same sheet with **Back** at its top
-(the top Back closes the inner page first, then the sheet, as the layer stack
-does). No swipes. Host dots become a short "Missing on build-box" line.
+**Hire and refusal.** Hire in a known room calls `launcher.start` at once;
+otherwise, and on a refusal, the existing New agent launcher opens with the
+profile chosen and says what is missing (§ 3).
 
 ## 2. Profile lifecycle
 
@@ -591,8 +604,11 @@ catch; the risk is listed below.
 
 Every hire from a profile goes through `launcher.start` with `profile_id`:
 
-- **University:** Hire on a card opens the existing New agent launcher with that
-  profile chosen; the user picks the room.
+- **University:** **Hire in <room>** on a profile calls `launcher.start` at
+  once when the room is known (the room selected in Town, else the profile's
+  home room) and the brief needs no task; otherwise it opens the existing New
+  agent launcher with that profile chosen, where the user picks the room or
+  types the task (§ 1).
 - **Town center:** New agent stays first in its ring and opens the same
   launcher. The ring's Profiles entry goes; its Buildings ring gains University.
 - **Board** (hub and New tab dialog), **Actions → New agent**, **Spaces** and
@@ -756,8 +772,11 @@ profile, and every change goes through World to its store.
   owner-only; the verify item may remove the copy entirely.
 - **Stale catalogs:** the editor's dots can lag; the pre-launch check is the
   authority, and a vanish after it fails as an ordinary harness exit.
-- **More wings than room:** capped at four plus an annex; the window is the
-  complete list.
+- **More colleges than doors:** four doors are drawn, the rest share the
+  sign's `+N` chip; the window is the complete list.
+- **A one-click hire in the wrong room:** Hire names its room on the button
+  (**Hire in api**), and the arrow beside it picks another; a started agent is
+  stopped the usual way.
 
 ## Verification plan (step 2)
 

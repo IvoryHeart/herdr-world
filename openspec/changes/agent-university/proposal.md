@@ -25,14 +25,18 @@ comes fresh out of the University to work.
   the library; the library, observatory and shore move once to make room. Its
   window is where profiles are created, edited, copied, retired, restored and
   deleted. The town center keeps New agent and the Town master; its ring loses
-  Profiles and its Buildings ring gains the University.
+  Profiles and its Buildings ring gains the University. Three ways to use it
+  are drawn for review (design § 1): profile cards, college doors, or a roster
+  and editor; each hires in 2 clicks and edits in 3, against 3 and 4–5 from
+  the town center today.
 - **One college per harness.** Every harness World supports today has a
   college: the eight it reads conversations from (Claude Code, Codex, Kimi
   Code, Grok, Pi, omp, Muse, Antigravity) and the others in its integration
-  list, drawn as wings of the University. A college shows, per host: installed and logged
+  list, drawn as doors of the University. A college shows, per host: installed and logged
   in, the skills and MCP servers that harness can see there, and its models,
-  efforts and permission modes. A wing whose harness is missing or logged out
-  looks it, in Town and in the window.
+  efforts and permission modes. A door whose harness is missing or logged out
+  looks it, in Town and in the window. Until Town's art direction is chosen
+  (#1117), the building is a marked placeholder in the current Town style.
 - **Supported, planned or not built.** Each college's skills, MCP servers and
   registry have one state, from a sourced table of each harness's own launch
   options (design § 3). Supported means a per-launch option attaches exactly
@@ -69,7 +73,7 @@ comes fresh out of the University to work.
 - `world-surfaces/creation-profiles`: profile lifecycle with retire and copy,
   colleges and their per-host catalogs, attaching skills and MCP servers at
   launch, refusal on a host that lacks one, the diploma, and who may attach.
-- `world-surfaces/town`: the University landmark and its college wings, and
+- `world-surfaces/town`: the University landmark and its college doors, and
   profile hires arriving from the University.
 
 ## Impact
