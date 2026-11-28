@@ -113,6 +113,13 @@ export const webBrowserSuites = [
 export function webBrowserPages() {
   return availableParallelism();
 }
+/**
+ * Local web browser lane workers: each runs its files one after another with
+ * its own Chrome, so more cores take more workers (two on a four-core runner).
+ */
+export function webBrowserWorkers() {
+  return Math.max(2, Math.min(4, Math.floor(availableParallelism() / 4)));
+}
 /** Everything the browser workflow runs, for repository validation to skip. */
 export const browserWorkflowIgnorePattern = ignorePattern([
   ...worldBrowserSuites,

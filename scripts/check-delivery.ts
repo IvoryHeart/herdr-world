@@ -5,10 +5,15 @@ import {
   writeFileSync,
 } from "node:fs";
 import { basename, join } from "node:path";
-import { CHROME, TEST, type Affected } from "./affected";
+import type { Affected } from "./affected";
 import { acquireCheckSlot, type CheckClass, heldEnv } from "./check-lock";
+import { splitTests, trackedTests } from "./delivery-tests";
 import { repositorySelection } from "./validation-scope";
-import { webBrowserPages, worldBrowserSuites } from "./world-browser-suites";
+import {
+  webBrowserPages,
+  webBrowserWorkers,
+  worldBrowserSuites,
+} from "./world-browser-suites";
 
 /**
  * Local checks in lanes. Static checks run first, outside the heavy queue.
@@ -116,24 +121,12 @@ const staticCommands = STATIC.filter((command) => {
   return staticGroup === undefined || group === staticGroup;
 });
 
-function trackedTests() {
-  const result = Bun.spawnSync(["git", "ls-files"], { cwd: root });
-  return result.stdout
-    .toString()
-    .split("\n")
-    .filter((path) => TEST.test(path));
-}
-
 function plan(selection: Affected) {
-  const world = new Set(worldBrowserSuites);
   const browser = selection.full ? worldBrowserSuites : selection.browser;
-  const tests = (selection.full ? trackedTests() : selection.unit).filter(
-    (path) => !world.has(path),
+  const { unit, chrome } = splitTests(
+    root,
+    selection.full ? trackedTests(root) : selection.unit,
   );
-  const chrome = tests.filter((path) =>
-    CHROME.test(readFileSync(join(root, path), "utf8")),
-  );
-  const unit = tests.filter((path) => !chrome.includes(path));
   const busy: Lane[] = [];
   if (unit.length && !browserOnly)
     busy.push({
@@ -158,7 +151,7 @@ function plan(selection: Affected) {
           "bun",
           "scripts/run-tests.ts",
           ...chrome,
-          "--parallel=2",
+          `--parallel=${webBrowserWorkers()}`,
           `--max-concurrency=${webBrowserPages()}`,
         ],
       ],

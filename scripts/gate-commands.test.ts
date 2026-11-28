@@ -12,6 +12,7 @@ import { availableParallelism, tmpdir } from "node:os";
 import { join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { acquireAllCheckSlots, acquireCheckSlot } from "./check-lock";
+import { webBrowserWorkers } from "./world-browser-suites";
 
 const root = fileURLToPath(new URL("../", import.meta.url));
 const staticCommands = [
@@ -460,7 +461,7 @@ test("pre-push keeps all non-browser units for gate changes and leaves heavy sui
   ]);
   expect(full.status).toBe(0);
   expect(full.commands).toContain(
-    `scripts/run-tests.ts web/src/uiScale.test.ts --parallel=2 --max-concurrency=${availableParallelism()}`,
+    `scripts/run-tests.ts web/src/uiScale.test.ts --parallel=${webBrowserWorkers()} --max-concurrency=${availableParallelism()}`,
   );
   expect(full.commands).toContain("scripts/verification-reuse.ts");
   expect(
@@ -528,7 +529,7 @@ test("Chrome lanes share the browser slot while unit and verification work hold 
     );
     expect(result.status).toBe(0);
     expect(result.commands).toContain(
-      `scripts/run-tests.ts web/src/uiScale.test.ts --parallel=2 --max-concurrency=${availableParallelism()}`,
+      `scripts/run-tests.ts web/src/uiScale.test.ts --parallel=${webBrowserWorkers()} --max-concurrency=${availableParallelism()}`,
     );
     expect(
       result.commands.some((cmd) =>
