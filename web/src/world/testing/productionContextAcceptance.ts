@@ -564,7 +564,7 @@ export function registerProductionContextTests(group: ProductionContextGroup) {
               (Bun.env.WORLD_TRACE_PREFIX ? "&trace=1" : ""),
           ],
           { stdout: "ignore", stderr: Bun.file(dir + "/browser.log") },
-          { exclusive: traceTimeline },
+          { exclusive: traceTimeline || view !== "uncertain" },
         );
         await browser.start();
         // Keep both observation/render phases and the deliberate 20-second stall

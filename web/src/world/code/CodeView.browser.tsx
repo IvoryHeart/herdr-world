@@ -1,5 +1,6 @@
 import { clock as fixtureTime } from "../testing/installTestClock";
 import { presentTestFrame } from "../testing/testClock";
+import { observeCondition } from "../testing/browserEvents";
 import { flushSync } from "react-dom";
 import { createRoot } from "react-dom/client";
 import "../../styles/tokens.css";
@@ -26,13 +27,13 @@ const check = (condition: boolean, message: string) => {
 };
 const advance = (ms = 80) => fixtureTime.advance(ms);
 async function until(condition: () => boolean, message: string, ms = 3000) {
-  const end = Date.now() + ms;
-  while (Date.now() < end) {
-    if (condition()) return true;
-    await advance(30);
+  try {
+    await observeCondition(condition, message, ms);
+    return true;
+  } catch {
+    failures.push(message);
+    return false;
   }
-  failures.push(message);
-  return false;
 }
 const $ = <T extends Element = HTMLElement>(
   selector: string,

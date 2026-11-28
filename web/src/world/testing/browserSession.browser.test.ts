@@ -33,7 +33,7 @@ test("case pointer flags reach native CSS media queries after navigation", async
       await handle.exited;
     }
   }
-});
+}, 90_000); // Admission can wait behind browser-wide traces; assertions are event-based.
 
 test("one Chrome owns isolated case storage, targets and independent lifetimes", async () => {
   const fixture = Bun.serve({
@@ -123,4 +123,4 @@ test("one Chrome owns isolated case storage, targets and independent lifetimes",
     }
     fixture.stop(true);
   }
-});
+}, 90_000);

@@ -149,7 +149,7 @@ only the actual draw; scene budgets and gap diagnostics still run every step.
 Production submits every requested raster immediately. Native frame-budget and
 transport performance fixtures retain the production renderer and clock.
 Layout, scrolling and media-query checks explicitly await native frames after
-stepping test time. Browser-wide traces have exclusive admission; other cases
+stepping test time. Browser-wide traces and native performance cases have exclusive admission; other cases
 share up to eight contexts locally, bounded by the available cores. Pointer
 fixtures use native per-page touch emulation, retaining actual CSS media queries.
 

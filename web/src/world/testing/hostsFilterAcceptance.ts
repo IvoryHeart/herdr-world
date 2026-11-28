@@ -84,6 +84,7 @@ export function registerHostsFilterTests(group: HostFilterGroup) {
               `${server.url.href}?operation=${operation}&view=${view}`,
             ],
             { stdout: "ignore", stderr: Bun.file(join(dir, "browser.log")) },
+            { exclusive: operation.startsWith("town-idle") },
           );
           await browser.start();
           const observed = await waitForBrowserFixture(

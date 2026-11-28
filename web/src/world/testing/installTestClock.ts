@@ -11,12 +11,17 @@ import { frameRenderSurface } from "./townRenderSurface";
 export const clock = installTestClock();
 // One visible raster per native frame, even when the injected clock steps
 // several scene frames. The renderer still acknowledges an actual draw.
-injectTownRenderSurface(() =>
-  frameRenderSurface(
-    (callback) => clock.real.requestAnimationFrame!(callback),
-    (id) => clock.real.cancelAnimationFrame!(id),
-  ),
-);
+if (
+  !new URLSearchParams(location.search)
+    .get("operation")
+    ?.startsWith("town-idle")
+)
+  injectTownRenderSurface(() =>
+    frameRenderSurface(
+      (callback) => clock.real.requestAnimationFrame!(callback),
+      (id) => clock.real.cancelAnimationFrame!(id),
+    ),
+  );
 Object.assign(window, { __herdrTestStep: () => clock.frame() });
 // Layout/control fixtures keep the same local date at noon. Day/night
 // contracts select their explicit sky mode; wall time never changes GPU work.
