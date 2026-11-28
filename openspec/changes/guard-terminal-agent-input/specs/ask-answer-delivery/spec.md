@@ -2,7 +2,7 @@
 
 ### Requirement: Answer delivery checks the current foreground program
 
-Immediately before typing an ask question or answer, World SHALL check the current foreground program and foreground children. Shells, interactive REPLs, editors/pagers, ssh, sudo/su and database clients SHALL receive no input. Other programs SHALL be admitted without original harness/session or PID matching. Failed reads SHALL leave delivery pending for a fresh check.
+Immediately before typing an ask question or answer, World SHALL check the foreground leader and children. Shells (by basename regardless of arguments), multiplexers, shell launchers, REPLs, editors/pagers, ssh, privilege and database clients SHALL receive no input. Tool children under an admitted leader SHALL mean temporarily busy. Empty command lines and failed reads SHALL leave delivery pending. Other programs SHALL be admitted without original harness/session or PID matching.
 
 #### Scenario: Agent exits to its shell
 
@@ -12,18 +12,29 @@ Immediately before typing an ask question or answer, World SHALL check the curre
 
 #### Scenario: A foreground child reads the terminal
 
-- **WHEN** an agent leader has an interactive shell, REPL, editor/pager or ssh child in its foreground group
+- **WHEN** an agent leader has a shell, editor/pager, multiplexer or shell-launcher child in its foreground group
 - **THEN** no answer is typed, even when stale agent/session reports remain
+
+#### Scenario: A foreground tool temporarily holds input
+
+- **WHEN** an admitted agent leader has an ssh, python (including scripts and stdin), psql or sudo child in the foreground
+- **THEN** World types nothing and says the terminal is busy and to try again shortly, without saying the agent has gone
+- **AND** the answer stays pending and retrievable; a fresh attempt rechecks the foreground after the tool exits
+
+#### Scenario: Shell options and nested shell launchers
+
+- **WHEN** the foreground is bash --rcfile, bash --init-file, bash -o vi, zsh -o, a shell script/-c launcher, tmux, screen, zellij, docker exec -it with sh, or busybox sh
+- **THEN** no input is sent regardless of arguments or stale agent metadata
 
 #### Scenario: Agent restarts or runs through a launcher
 
-- **WHEN** a resumed, restarted, different or unknown agent, wrapper script or npm entrypoint now runs at the same qualified terminal
+- **WHEN** a resumed, restarted, different or unknown agent, non-shell wrapper or npm entrypoint now runs at the same qualified terminal
 - **THEN** the current program check allows input unless a refused interactive program is reading the terminal
 - **AND** it does not require original-session evidence or hash foreground PIDs
 
 #### Scenario: Temporary foreground read failure
 
-- **WHEN** the current program cannot be read
+- **WHEN** the current program cannot be read or a foreground member has an empty command line
 - **THEN** World types nothing and says to try again shortly; a saved answer remains pending and a fresh attempt rechecks the terminal
 
 #### Scenario: Owner recovers an undelivered answer

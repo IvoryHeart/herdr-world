@@ -111,12 +111,13 @@ Targets are on your own host; add --connection ID for another one.
          New asks from a verified local Linux caller with a supported bound
          Chat session can receive the saved answer there without --wait.
          Right before typing, World checks the current foreground and its children.
-         Shells, interactive REPLs, editors/pagers, ssh, sudo/su and database
-         clients receive nothing. Reception says Not sent; Copy answer and
+         Shells (any arguments), multiplexers, shell launchers, interactive
+         REPLs, editors/pagers, ssh, sudo/su and database clients receive nothing. Reception says Not sent; Copy answer and
          herdr-world ask get ID keep the saved answer available.
-         Other programs, including resumed/restarted agents, wrappers and npm
+         Other programs, including resumed/restarted agents, non-shell wrappers and npm
          entrypoints, are allowed without matching the original agent session.
-         A failed read says try again shortly; saved answers wait for a fresh check.
+         Foreground tool children mean busy; empty cmdlines and failed reads
+         say try again shortly. Nothing is sent; saved answers wait for a fresh check.
          Older, unverified and unsupported asks keep answers for ask get.
          An owner answer may end with "Attached files:" and one absolute path
          per line: files the owner attached, stored temporarily; open them.

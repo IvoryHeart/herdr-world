@@ -8,6 +8,7 @@ import {
 } from "../herdr-core/recipient";
 import {
   foregroundInputRefusal,
+  agentInputFailure,
   checkTuiForeground,
 } from "../adapters/agent-input";
 import type { ReadyRuntimeLease } from "../connections/manager";
@@ -402,7 +403,9 @@ export function createAskRecipients(deps: {
           }
         : {
             state: "unresolved",
-            reason: "The terminal could not be checked; try again shortly",
+            reason:
+              agentInputFailure(error)?.message ??
+              "The terminal could not be checked; try again shortly",
           };
     }
     const after = await paneActor(host(lease), recipient.pane_id);

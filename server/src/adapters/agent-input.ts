@@ -33,6 +33,8 @@ for (const [kind, names] of [
     "an editor or pager",
     "vi vim nvim view nano emacs emacsclient joe pico ed ex less more most pager sensible-editor editor",
   ],
+  ["a terminal multiplexer", "tmux screen zellij"],
+  ["a shell launcher", "docker"],
   ["ssh", "ssh mosh"],
   ["sudo or su", "sudo su doas"],
   [
@@ -42,13 +44,14 @@ for (const [kind, names] of [
 ] as const)
   for (const name of names.split(" ")) blocked.set(name, kind);
 
-/** One policy for both runtimes, including foreground children. No agent allowlist. */
+/** One policy for both runtimes: foreground leader first, then its children. */
 export function foregroundInputRefusal(programs: unknown[]): string | null {
   if (!programs.length)
     throw new Error(
       "agent_input_unavailable: The terminal could not be checked. Try again shortly. Nothing was sent.",
     );
-  for (const value of programs) {
+  const kinds: (string | undefined)[] = [];
+  for (const [index, value] of programs.entries()) {
     const process = row(value);
     if (!process || typeof process.name !== "string" || !process.name)
       throw new Error(
@@ -59,26 +62,15 @@ export function foregroundInputRefusal(programs: unknown[]): string | null {
       process.argv.every((word) => typeof word === "string")
         ? (process.argv as string[])
         : [];
+    if (Array.isArray(process.argv) && !words.length)
+      throw new Error(
+        "agent_input_unavailable: The terminal could not be checked. Try again shortly. Nothing was sent.",
+      );
     const names = [base(process.name), ...(words[0] ? [base(words[0])] : [])];
+    let refused: string | undefined;
     for (const name of names) {
       let kind = blocked.get(name);
-      if (shells.has(name)) {
-        // A script/-c launcher waits for its children; it does not read terminal
-        // commands. Check those foreground children too (MCP launchers included).
-        const args = words.slice(1);
-        const scriptAt = args.findIndex(
-          (word) => !word.startsWith("-") && !word.startsWith("+"),
-        );
-        const options = scriptAt < 0 ? args : args.slice(0, scriptAt);
-        const interactive = options.some(
-          (word) => word === "--interactive" || /^-[^-]*[is]/.test(word),
-        );
-        const script = args.some(
-          (word) => !word.startsWith("-") && !word.startsWith("+"),
-        );
-        if (!interactive && script) continue;
-        kind = "a shell";
-      }
+      if (shells.has(name)) kind = "a shell";
       if (
         /^(?:python(?:\d+(?:\.\d+)*)?|node(?:js)?|bun|deno|ruby|irb|pry|ipython\d*|julia|R|ghci|iex|erl|lua\d*(?:\.\d+)?)$/i.test(
           name,
@@ -131,16 +123,38 @@ export function foregroundInputRefusal(programs: unknown[]): string | null {
           }
         }
         if (
+          // Interpreter children are tools even when running a script.
+          index > 0 ||
           interactive ||
           !script ||
           /^(irb|pry|ipython\d*|ghci|iex|erl)$/i.test(name)
         )
           kind = "a REPL";
       }
-      if (kind)
-        return `The agent isn't running in that terminal any more; it's ${kind} now. Nothing was sent.`;
+      if (kind) {
+        refused = kind;
+        break;
+      }
     }
+    kinds.push(refused);
   }
+  // Tool children can temporarily hold the agent's terminal. Shells, editors
+  // and launchers remain permanent refusals, regardless of other group members.
+  const permanent =
+    kinds[0] ??
+    kinds
+      .slice(1)
+      .find(
+        (kind) =>
+          kind &&
+          !["ssh", "sudo or su", "a database client", "a REPL"].includes(kind),
+      );
+  if (permanent)
+    return `The agent isn't running in that terminal any more; it's ${permanent} now. Nothing was sent.`;
+  if (kinds.some(Boolean))
+    throw new Error(
+      "agent_input_unavailable: The agent's terminal is busy with a foreground tool. Try again shortly. Nothing was sent.",
+    );
   return null;
 }
 
@@ -173,7 +187,15 @@ export async function checkTuiForeground(
     !Array.isArray(process.foreground_processes)
   )
     throw new Error("Foreground information could not be read");
-  const reason = foregroundInputRefusal(process.foreground_processes);
+  const programs = [...process.foreground_processes];
+  const leader = programs.findIndex(
+    (value) => row(value)?.pid === process.foreground_process_group_id,
+  );
+  if (leader > 0) programs.unshift(...programs.splice(leader, 1));
+  // Without the leader, do not infer that a refused program is an agent's tool.
+  const reason = foregroundInputRefusal(
+    leader < 0 ? [null, ...programs] : programs,
+  );
   if (reason) throw new Error(`agent_not_ready: ${reason}`);
 }
 

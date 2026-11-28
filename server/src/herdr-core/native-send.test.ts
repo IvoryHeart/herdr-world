@@ -9,8 +9,8 @@ const worlds: Awaited<ReturnType<typeof coreWorld>>[] = [];
 afterEach(async () => {
   for (const w of worlds.splice(0)) await w.dispose();
 });
-async function setup() {
-  const w = await coreWorld();
+async function setup(children: string[][] = []) {
+  const w = await coreWorld({ foregroundGroups: () => children });
   worlds.push(w);
   await w.connect();
   const address = w.fake.create({
@@ -112,6 +112,32 @@ test("a lost send reply is uncertain and is never retried", async () => {
     1,
   );
 });
+
+for (const argv of [
+  ["ssh", "example.invalid", "git", "pull"],
+  ["python3", "-"],
+  ["python3", "tool.py"],
+  ["psql", "-c", "select 1"],
+  ["sudo", "-n", "example"],
+  [],
+])
+  test(`core final input check keeps ${argv.length ? argv.join(" ") : "empty cmdline"} child temporary with zero writes`, async () => {
+    const children: string[][] = [];
+    const { w, lease, fence } = await setup(children);
+    await expect(
+      lease.runtime.send(fence, "An answer", async () => {
+        children.push(argv);
+        return true;
+      }),
+    ).rejects.toThrow(/agent_input_unavailable:.*Try again shortly/);
+    expect(w.fake.deliveredInput).toEqual([]);
+    expect(w.fake.calls.filter((c) => c.method === "terminal.send")).toEqual(
+      [],
+    );
+    children.length = 0;
+    await lease.runtime.send(fence, "An answer", async () => true);
+    expect(w.fake.deliveredInput).toHaveLength(1);
+  });
 
 test("a held native answer is cancelled when its agent exits to bash", async () => {
   const { w, address, lease, fence } = await setup();

@@ -96,7 +96,7 @@ export function CoreTerminalComposer({
   return (
     <div className="core-watch-composer">
       <TerminalComposer
-        open={requested}
+        open={mobile || requested}
         draftKey={terminalComposerDraftKey(connectionId, generation, address)}
         paneId={address}
         mode={mode}

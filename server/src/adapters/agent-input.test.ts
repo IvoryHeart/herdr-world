@@ -1,6 +1,10 @@
 import { expect, test } from "bun:test";
 import { createTuiPassThrough } from "./herdr-runtime";
-import { foregroundInputRefusal, withAgentInput } from "./agent-input";
+import {
+  checkTuiForeground,
+  foregroundInputRefusal,
+  withAgentInput,
+} from "./agent-input";
 
 function fixture(name: string | null = "claude") {
   let session = "original";
@@ -133,9 +137,6 @@ for (const [name, argv] of [
   ["node", ["node", "/opt/agent/cli.js"]],
   ["node", ["node", "/opt/agent/cli.js", "--interactive"]],
   ["python", ["python", "/opt/agent/cli.py", "-i"]],
-  ["bash", ["bash", "run-agent.sh", "-i"]],
-  ["bash", ["bash", "run-agent.sh"]],
-  ["sh", ["sh", "-c", "mcp-server"]],
 ] as const)
   test(`admits ${argv.join(" ")} without a harness allowlist`, async () => {
     const f = fixture();
@@ -216,6 +217,17 @@ for (const argv of [
   ["node", "-i", "agent.js"],
   ["node", "-e", "expression", "-i"],
   ["bash", "-s", "argument"],
+  ["/bin/bash", "--rcfile", "example"],
+  ["bash", "--init-file", "example"],
+  ["bash", "-o", "vi"],
+  ["zsh", "-o", "vi"],
+  ["bash", "run-agent.sh", "-i"],
+  ["sh", "-c", "mcp-server"],
+  ["tmux", "attach"],
+  ["screen"],
+  ["zellij"],
+  ["docker", "exec", "-it", "example", "sh"],
+  ["busybox", "sh"],
   ["irb"],
   ["less"],
   ["su"],
@@ -228,4 +240,46 @@ for (const argv of [
 
 test("empty foreground evidence is temporary, never a permanent refusal", () => {
   expect(() => foregroundInputRefusal([])).toThrow("agent_input_unavailable:");
+  expect(() => foregroundInputRefusal([{ name: "codex", argv: [] }])).toThrow(
+    "agent_input_unavailable:",
+  );
+});
+
+for (const argv of [
+  ["ssh", "example.invalid", "git", "pull"],
+  ["python3", "-"],
+  ["python3", "tool.py"],
+  ["psql", "-c", "select 1"],
+  ["sudo", "-n", "example"],
+])
+  test(`tool child ${argv.join(" ")} is temporarily busy, not a departed agent`, async () => {
+    const programs = [
+      { pid: 20, name: "codex", argv: ["codex"] },
+      { pid: 21, name: argv[0], argv },
+    ];
+    expect(() => foregroundInputRefusal(programs)).toThrow(
+      /agent_input_unavailable:.*busy.*Try again shortly/,
+    );
+    for (const foreground_processes of [programs, [...programs].reverse()])
+      await expect(
+        checkTuiForeground(
+          async () => ({
+            process_info: {
+              foreground_process_group_id: 20,
+              foreground_processes,
+            },
+          }),
+          "w1:p1",
+        ),
+      ).rejects.toThrow(/agent_input_unavailable:.*busy.*Try again shortly/);
+  });
+
+test("an interactive shell child remains a permanent refusal even with a busy tool", () => {
+  expect(
+    foregroundInputRefusal([
+      { name: "codex" },
+      { name: "ssh" },
+      { name: "bash", argv: ["bash", "--rcfile", "example"] },
+    ]),
+  ).toContain("a shell now");
 });

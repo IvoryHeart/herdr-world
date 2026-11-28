@@ -30,6 +30,8 @@
 - `server/src/herdr-core/runtime.ts`
 - `server/src/herdr-core/connections.ts`, `server/src/herdr-core/testing/core-world.ts`
 - `server/src/herdr-core/recipient.ts`
+- `server/src/herdr-core/native-send.test.ts`
+- `server/src/herdr-core/process-group.ts`
 
 - `shared/askCommands.ts`
 - `shared/questionAsker.ts`
@@ -62,6 +64,8 @@
 
 ## Foreground admission
 
-Right before World types answers, Chat messages, notifications or prompts, it checks what is reading that terminal, including foreground children. A shell, interactive REPL, editor/pager, ssh, sudo/su or database client stops input. Other programs are allowed, including agents resumed or restarted, arbitrary agents, wrappers and npm installations. Noninteractive script/-c launchers wait for their children; those children are checked too. World does not match the original agent session or hash its process IDs. A failed check says to try again shortly and leaves saved answers waiting. Runtime/terminal qualification and no replay of refused or uncertain sends still apply.
+Right before World types answers, Chat messages, notifications or prompts, it checks what is reading that terminal, including foreground children. A shell, interactive REPL, editor/pager, ssh, sudo/su or database client stops input. Other programs are allowed, including agents resumed or restarted, arbitrary agents, non-shell wrappers and npm installations. Shells are recognized by executable basename alone, including bash --rcfile/--init-file/-o and script/-c launchers. Multiplexers (tmux, screen, zellij) and nested shell launchers (docker, busybox sh) also stop input. A tool child (ssh, python (including scripts and stdin), psql, sudo) under an admitted leader means busy: nothing is sent, World says to try again shortly without saying the agent has gone, and saved answers wait for a fresh check. Empty command lines are temporary too. World does not match the original agent session or hash its process IDs. A failed check says to try again shortly and leaves saved answers waiting. Runtime/terminal qualification and no replay of refused or uncertain sends still apply.
 
 In Reception > Outbox, **Not sent** names the current program category in plain words. **Copy answer** copies the saved owner answer; the full `herdr-world ask get <id>` command reads it later. **Put in Terminal composer** opens that terminal's draft on desktop or phone and preserves existing text. It sends nothing; the owner reviews and sends explicitly. Neither runtime makes the final OS foreground check and typing one indivisible operation. Core's local child checks require a readable host process namespace; remote child evidence is limited to what core reports.
+
+The phone core Terminal keeps its Send controls open; desktop draft recovery opens them on request.

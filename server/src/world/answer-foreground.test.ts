@@ -156,7 +156,12 @@ async function fixture(
   });
   cleanups.push(() => service.stop());
   function detach(name: string | null) {
-    const pid = name === "claude" ? 7000 : 5000;
+    const pid =
+      runtime === "tui" && name === "bash"
+        ? f.foreground.shell_pid
+        : name === "claude"
+          ? 7000
+          : 5000;
     if (runtime === "core") {
       if (name) world.fake.foreground(terminal, { pid, name, argv: [name] });
       else world.fake.terminal(terminal)!.foreground = null;
@@ -169,6 +174,7 @@ async function fixture(
   return {
     world,
     children,
+    prompts,
     failProcessRead(value: boolean) {
       processReadFails = value;
     },
@@ -248,7 +254,7 @@ for (const name of ["vim", "python", "node", "ssh", "sudo", "psql"])
   });
 
 for (const runtime of ["core", "tui"] as const)
-  for (const name of ["bash", "vim", "node", "ssh"])
+  for (const name of ["bash", "vim", "tmux", "docker"])
     test(`${runtime}: a ${name} child of the original harness refuses saved answer delivery`, async () => {
       const f = await fixture(runtime);
       await f.answer();
@@ -309,7 +315,7 @@ for (const runtime of ["core", "tui"] as const)
     });
 
 for (const runtime of ["core", "tui"] as const)
-  test(`${runtime}: an MCP shell launcher does not block answer delivery`, async () => {
+  test(`${runtime}: an MCP shell launcher is refused by basename`, async () => {
     const f = await fixture(runtime);
     if (runtime === "core")
       f.children.push(
@@ -324,10 +330,57 @@ for (const runtime of ["core", "tui"] as const)
       } as never);
     await f.answer();
     await f.dispatcher.wake();
-    expect(
-      f.f.storage.ledger.ask("q-foreground")?.delivery?.answer?.state,
-    ).toBe("delivered");
+    await f.check("shell");
   });
+
+for (const runtime of ["core", "tui"] as const)
+  for (const argv of [
+    ["ssh", "example.invalid", "git", "pull"],
+    ["python3", "-"],
+    ["python3", "tool.py"],
+    ["psql", "-c", "select 1"],
+    ["sudo", "-n", "example"],
+    [],
+  ])
+    test(`${runtime}: ${argv.length ? argv.join(" ") : "empty cmdline"} child waits and rechecks before saved answer delivery`, async () => {
+      const f = await fixture(runtime);
+      await f.answer();
+      if (runtime === "core") f.children.push(argv);
+      else
+        f.f.foreground.foreground_processes.push({
+          pid: 6001,
+          name: argv[0],
+          argv,
+        } as never);
+      await f.dispatcher.wake();
+      expect(
+        f.f.storage.ledger.ask("q-foreground")?.delivery?.answer?.state,
+      ).toBe("pending");
+      const entry = (await f.f.storage.outbox.forRecord("q-foreground"))[0]!;
+      expect(entry.state).not.toBe("refused");
+      expect(entry.evidence?.reason).not.toMatch(/isn't running|not attached/);
+      expect(f.world.fake.deliveredInput).toEqual([]);
+      expect(f.prompts).toEqual([]);
+      expect(
+        await f.cli.handle(
+          { command: "ask get", params: { id: "q-foreground" } },
+          null,
+        ),
+      ).toMatchObject({
+        ok: true,
+        result: { answer: { text: "printf answer_should_not_run" } },
+      });
+      f.children.length = 0;
+      f.f.foreground.foreground_processes.splice(1);
+      f.f.time(100000);
+      await f.dispatcher.wake();
+      expect(
+        f.f.storage.ledger.ask("q-foreground")?.delivery?.answer?.state,
+      ).toBe("delivered");
+      expect(
+        runtime === "core" ? f.world.fake.deliveredInput : f.prompts,
+      ).toHaveLength(1);
+    });
 
 test("core: failed foreground child reads keep the answer pending with zero writes", async () => {
   const f = await fixture("core");
