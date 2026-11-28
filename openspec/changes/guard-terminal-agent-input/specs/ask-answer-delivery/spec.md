@@ -48,6 +48,16 @@ Immediately before typing an ask question or answer, World SHALL check the foreg
 - **WHEN** World observes a foreground or qualified-runtime change while core holds input
 - **THEN** World cancels the held send and never automatically replays a possible send
 
+### Requirement: Only terminal readers affect foreground admission
+
+A process SHALL count only when it belongs to the terminal's foreground process group and its stdin is that terminal's PTY. Pipe-connected helpers SHALL NOT count. Unreadable reader evidence SHALL keep delivery temporarily unavailable.
+
+#### Scenario: Harness has pipe-connected helpers
+
+- **WHEN** a Claude or Codex foreground leader has stdio MCP servers, language servers or other helpers with stdin connected to pipes
+- **THEN** those helpers do not block answer delivery, even if they are shells, interpreters or launchers in the same process group
+- **AND** a child whose stdin is the terminal PTY still receives the existing refusal or temporary-busy check
+
 ## MODIFIED Requirements
 
 ### Requirement: Capture and recheck the original bound state

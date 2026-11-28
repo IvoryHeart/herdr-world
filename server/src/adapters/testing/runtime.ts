@@ -10,7 +10,9 @@ export function herdrRuntimeFixture<Client extends TuiControlClient>(
 ) {
   return {
     herdr,
-    tui: createTuiPassThrough("herdr", herdr),
+    tui: createTuiPassThrough("herdr", herdr, async (info) =>
+      (info.foreground_processes as unknown[]).map(() => true),
+    ),
     ...createHerdrControlPorts(herdr),
   };
 }

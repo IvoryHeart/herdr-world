@@ -738,15 +738,21 @@ export function createCoreConnectionRuntime(
     } | null;
     const children =
       foreground?.pid && foregroundGroup
-        ? foregroundGroup(foreground.pid, foreground.argv?.[0])
-        : [];
+        ? foregroundGroup(foreground.pid, foreground.argv?.[0], {
+            argv: foreground.argv,
+          })
+        : null;
     if (children === null)
       throw new Error(
         "agent_input_unavailable: The terminal could not be checked. Try again shortly. Nothing was sent.",
       );
     const reason = foregroundInputRefusal([
-      foreground,
-      ...children.map((argv) => ({ name: argv[0], argv })),
+      {
+        ...foreground,
+        argv: children[0] ?? [],
+        reads_terminal: Boolean(children[0]?.length),
+      },
+      ...children.slice(1).map((argv) => ({ name: argv[0], argv })),
     ]);
     if (reason) throw new Error(`agent_not_ready: ${reason}`);
   };

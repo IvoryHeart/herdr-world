@@ -36,6 +36,7 @@ export async function coreWorld(
   options: FakeCoreOptions & {
     topology?: CoreTopologyPort;
     foregroundGroups?: ForegroundGroupReader;
+    foregroundInputs?: ForegroundGroupReader;
   } = {},
 ) {
   const root = mkdtempSync(join(tmpdir(), "hcw-op-"));
@@ -47,7 +48,16 @@ export async function coreWorld(
   /** When each read-model change was announced. */
   const changedAt: number[] = [];
   const core = createCoreConnections({
-    foregroundGroups: options.foregroundGroups ?? (() => []),
+    foregroundGroups: (leader, command, inputOnly) => {
+      if (inputOnly && options.foregroundInputs)
+        return options.foregroundInputs(leader, command, inputOnly);
+      const children =
+        options.foregroundGroups?.(leader, command) ??
+        (options.foregroundGroups ? null : []);
+      return inputOnly && children !== null
+        ? [inputOnly.argv ?? [command ?? "codex"], ...children]
+        : children;
+    },
     logger: silentLogger,
     changed: () => {},
     observed: (id) => {

@@ -5,12 +5,15 @@ import { localForegroundGroups, readForegroundGroup } from "./process-group";
 import { createCoreConnectionRuntime } from "./runtime";
 import { memoryStreamPair } from "./stream";
 import { FakeCore } from "./testing/fake-core";
+import { coreWorld } from "./testing/core-world";
+import { CoreOperationFence } from "./fence";
 
 type Proc = {
   pgrp: number;
   argv: string[];
   children?: number[];
   comm?: string;
+  stdin?: string;
 };
 
 /** A synthetic /proc: pid → group, command line and children. */
@@ -25,18 +28,19 @@ function procFs(procs: Record<number, Proc>): ProcFs {
     read(path) {
       const proc = at(path);
       if (path.endsWith("/stat"))
-        return `${path.split("/")[2]} (${proc.comm ?? "x) y"}) S 1 ${proc.pgrp} ${proc.pgrp} 0`;
+        return `${path.split("/")[2]} (${proc.comm ?? "x) y"}) S 1 ${proc.pgrp} ${proc.pgrp} 34817 40`;
       if (path.endsWith("/cmdline")) return `${proc.argv.join("\0")}\0`;
       if (path.endsWith("/children"))
         return `${(proc.children ?? []).join(" ")} `;
       throw new Error(`ENOENT ${path}`);
     },
     list(path) {
+      if (path === "/proc") return Object.keys(procs);
       at(path);
       return [path.split("/")[2]!];
     },
-    link() {
-      throw new Error("unused");
+    link(path) {
+      return at(path).stdin ?? "/dev/pts/1";
     },
   };
 }
@@ -60,6 +64,45 @@ describe("a local core's foreground group, read on the host", () => {
       ["tee", "log"],
       ["git", "status"],
     ]);
+  });
+
+  test("input readers exclude pipe helpers but include their PTY-reading descendants", () => {
+    const fs = procFs({
+      40: { pgrp: 40, argv: ["claude"], children: [41, 42, 43] },
+      41: {
+        pgrp: 40,
+        argv: ["sh", "-c", "mcp-server"],
+        stdin: "pipe:[100]",
+        children: [44],
+      },
+      42: { pgrp: 40, argv: ["python3", "mcp.py"], stdin: "pipe:[101]" },
+      43: { pgrp: 43, argv: ["vim"] },
+      44: { pgrp: 40, argv: ["vim"] },
+      45: { pgrp: 40, argv: ["ssh", "example.invalid"] },
+    });
+    expect(readForegroundGroup(40, "claude", fs, true)).toEqual([
+      ["claude"],
+      ["vim"],
+      ["ssh", "example.invalid"],
+    ]);
+    expect(readForegroundGroup(40, "claude", fs)).toContainEqual([
+      "sh",
+      "-c",
+      "mcp-server",
+    ]);
+  });
+
+  test("a pipe-connected leader is ignored while its PTY-reading agent child is admitted", () => {
+    const fs = procFs({
+      40: {
+        pgrp: 40,
+        argv: ["sh", "wrapper.sh"],
+        stdin: "pipe:[100]",
+        children: [41],
+      },
+      41: { pgrp: 40, argv: ["claude"] },
+    });
+    expect(readForegroundGroup(40, "sh", fs, true)).toEqual([[], ["claude"]]);
   });
 
   test("a pid that is not a readable group leader is unknown, not empty", () => {
@@ -211,3 +254,36 @@ async function until(predicate: () => boolean | Promise<boolean>, ms = 2_000) {
     await Bun.sleep(2);
   }
 }
+
+test("core delivers to a harness with pipe-connected helpers but blocks a PTY reader at final send", async () => {
+  const procs: Record<number, Proc> = {
+    40: { pgrp: 40, argv: ["claude"], children: [41, 42] },
+    41: { pgrp: 40, argv: ["sh", "-c", "mcp-server"], stdin: "pipe:[100]" },
+    42: { pgrp: 40, argv: ["python3", "mcp.py"], stdin: "pipe:[101]" },
+  };
+  const fs = procFs(procs);
+  const w = await coreWorld({
+    foregroundInputs: (leader, command) =>
+      readForegroundGroup(leader, command, fs, true),
+  });
+  try {
+    await w.connect();
+    const address = w.fake.create({
+      foreground: { pid: 40, name: "claude", argv: ["claude"] },
+    });
+    await w.settle();
+    const lease = w.lease();
+    const fence = CoreOperationFence.admit(lease, address);
+    await lease.runtime.send(fence, "An answer", async () => true);
+    expect(w.fake.deliveredInput).toHaveLength(1);
+    await expect(
+      lease.runtime.send(fence, "Another answer", async () => {
+        procs[41]!.stdin = "/dev/pts/1";
+        return true;
+      }),
+    ).rejects.toThrow("agent_not_ready:");
+    expect(w.fake.deliveredInput).toHaveLength(1);
+  } finally {
+    await w.dispose();
+  }
+});

@@ -13,3 +13,7 @@
 - [x] 3.1 Refuse shells by basename regardless of arguments, multiplexers and nested shell launchers.
 - [x] 3.2 Keep tool-child busy and empty-cmdline failures temporary with zero input and fresh checks.
 - [x] 3.3 Verify owner feedback matrices, typecheck and full canonical gate.
+
+- [x] 4.1 Restrict input admission to foreground-group PTY readers; ignore pipe helpers on both runtimes.
+- [x] 4.2 Add harness-plus-pipe-helper and PTY reader regression tests, preserving discovery.
+- [x] 4.3 Align the MCP correction contract, capability guidance and verification mappings.

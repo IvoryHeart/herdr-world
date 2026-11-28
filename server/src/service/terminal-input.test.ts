@@ -57,7 +57,9 @@ for (const foreground of ["bash", "vim", "ssh"])
           return { sent: true };
         },
       };
-      const tui = createTuiPassThrough("herdr", client);
+      const tui = createTuiPassThrough("herdr", client, async (info) =>
+        (info.foreground_processes as unknown[]).map(() => true),
+      );
       const identity = { id: "alpha", label: "Alpha", source: "test" };
       manager.register({
         identity,

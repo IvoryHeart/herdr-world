@@ -31,3 +31,13 @@ Every World-originated terminal text path SHALL share the current foreground che
 - **WHEN** an admitted leader has a foreground ssh, python (including scripts and stdin), psql or sudo child
 - **THEN** World types nothing and says the terminal is busy and to try again shortly, without saying the agent has gone
 - **AND** saved answers remain pending for a fresh check
+
+### Requirement: Input admission excludes pipe-connected helpers
+
+Only processes in the terminal's foreground process group whose stdin is that terminal's PTY SHALL count. Pipe-connected helpers SHALL NOT block input. Missing reader evidence SHALL leave input temporarily unavailable.
+
+#### Scenario: Agent uses stdio MCP or a language server
+
+- **WHEN** an admitted foreground agent has helpers whose stdin is a pipe
+- **THEN** those helpers do not block Chat, notifications, prompts or any other World text path
+- **AND** a PTY-reading child still receives the shared refusal or busy check

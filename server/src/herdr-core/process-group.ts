@@ -1,4 +1,5 @@
 import { readdirSync, readFileSync, readlinkSync } from "node:fs";
+import { readsTerminal } from "../adapters/terminal-readers";
 import type { ProcFs } from "../world/caller-identity";
 
 /**
@@ -16,6 +17,7 @@ import type { ProcFs } from "../world/caller-identity";
 export type ForegroundGroupReader = (
   leader: number,
   command?: string,
+  input?: { argv?: string[] },
 ) => string[][] | null;
 
 const realProc: ProcFs = {
@@ -72,16 +74,40 @@ function childrenOf(fs: ProcFs, pid: number): number[] | null {
  * The leader's descendants still in its process group, nearest first, as
  * argv lists. Null when `leader` is not a readable group leader, or when it
  * does not run `command` (core's argv[0]): then the pid is not the one core
- * meant (another pid namespace, or the leader already ended).
+ * meant (another pid namespace, or the leader already ended). In input mode,
+ * include a leader slot first (empty when its stdin is elsewhere), then members whose
+ * stdin is that terminal's PTY, including pipeline siblings. Discovery keeps
+ * its existing descendant walk for harness identification.
  */
 export function readForegroundGroup(
   leader: number,
   command?: string,
   fs: ProcFs = realProc,
+  inputReadersOnly = false,
 ): string[][] | null {
   if (!Number.isSafeInteger(leader) || leader <= 1) return null;
   if (groupOf(fs, leader) !== leader) return null;
   if (command !== undefined && argvOf(fs, leader)[0] !== command) return null;
+  if (inputReadersOnly) {
+    try {
+      const leaderArgv = argvOf(fs, leader);
+      if (!leaderArgv.length) return null;
+      const leaderReads = readsTerminal(fs, leader, leader);
+      const pids = fs.list("/proc").filter((pid) => /^\d+$/.test(pid));
+      if (pids.length > 8192) return null;
+      const readers = [leaderReads ? leaderArgv : []];
+      // Pipeline members can be siblings of the leader, not its descendants.
+      for (const text of pids) {
+        const pid = Number(text);
+        if (pid === leader || groupOf(fs, pid) !== leader) continue;
+        if (readsTerminal(fs, pid, leader)) readers.push(argvOf(fs, pid));
+        if (readers.length > MAX_MEMBERS) return null;
+      }
+      return readers;
+    } catch {
+      return null;
+    }
+  }
   const members: string[][] = [];
   const seen = new Set<number>([leader]);
   const queue = [leader];
@@ -107,6 +133,7 @@ export function localForegroundGroups(
   platform: NodeJS.Platform = process.platform,
 ): ForegroundGroupReader | undefined {
   return platform === "linux"
-    ? (leader, command) => readForegroundGroup(leader, command)
+    ? (leader, command, input) =>
+        readForegroundGroup(leader, command, realProc, Boolean(input))
     : undefined;
 }

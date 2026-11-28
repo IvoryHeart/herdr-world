@@ -44,7 +44,9 @@ function fixture(name: string | null = "claude") {
   return {
     writes,
     client,
-    tui: createTuiPassThrough("herdr", client),
+    tui: createTuiPassThrough("herdr", client, async (info) =>
+      (info.foreground_processes as unknown[]).map(() => true),
+    ),
     changeSession() {
       session = "replacement";
     },
@@ -82,12 +84,16 @@ test("matching foreground sends once and preserves the final dispatch guard", as
   const f = fixture();
   let guarded = false;
   const call = f.client.call.bind(f.client);
-  const tui = createTuiPassThrough("herdr", {
-    call(method, _params, _timeout, beforeSend) {
-      beforeSend?.();
-      return call(method);
+  const tui = createTuiPassThrough(
+    "herdr",
+    {
+      call(method, _params, _timeout, beforeSend) {
+        beforeSend?.();
+        return call(method);
+      },
     },
-  });
+    async (info) => (info.foreground_processes as unknown[]).map(() => true),
+  );
   await tui.call(
     "agent.prompt",
     { target: "w1:p1", text: "hello" },
@@ -201,9 +207,13 @@ for (const malformed of ["agent.get", "pane.process_info"])
   test(`malformed ${malformed} reply is unavailable, not a changed agent`, async () => {
     const f = fixture();
     const call = f.client.call.bind(f.client);
-    const tui = createTuiPassThrough("herdr", {
-      call: async (method) => (method === malformed ? {} : call(method)),
-    });
+    const tui = createTuiPassThrough(
+      "herdr",
+      {
+        call: async (method) => (method === malformed ? {} : call(method)),
+      },
+      async (info) => (info.foreground_processes as unknown[]).map(() => true),
+    );
     await expect(
       tui.call("agent.prompt", { target: "w1:p1", text: "hello" }),
     ).rejects.toThrow("agent_input_unavailable:");
@@ -283,3 +293,38 @@ test("an interactive shell child remains a permanent refusal even with a busy to
     ]),
   ).toContain("a shell now");
 });
+
+for (const method of ["agent.prompt", "pane.send_input"])
+  test(`${method} delivers with a pipe-connected MCP child under the harness leader`, async () => {
+    const f = fixture();
+    const call = f.client.call.bind(f.client);
+    const tui = createTuiPassThrough(
+      "herdr",
+      {
+        call: async (method) =>
+          method === "pane.process_info"
+            ? {
+                process_info: {
+                  pane_id: "w1:p1",
+                  tty: "/dev/pts/1",
+                  foreground_process_group_id: 20,
+                  foreground_processes: [
+                    { pid: 20, name: "claude", argv: ["claude"] },
+                    { pid: 21, name: "sh", argv: ["sh", "-c", "mcp-server"] },
+                    { pid: 22, name: "python3", argv: ["python3", "mcp.py"] },
+                  ],
+                },
+              }
+            : call(method),
+      },
+      async () => [true, false, false],
+    );
+    await withAgentInput(null, () =>
+      tui.call(method, {
+        target: "w1:p1",
+        pane_id: "w1:p1",
+        text: "An answer",
+      }),
+    );
+    expect(f.writes).toEqual([method]);
+  });

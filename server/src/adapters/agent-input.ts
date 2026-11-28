@@ -53,6 +53,10 @@ export function foregroundInputRefusal(programs: unknown[]): string | null {
   const kinds: (string | undefined)[] = [];
   for (const [index, value] of programs.entries()) {
     const process = row(value);
+    if (process?.reads_terminal === false) {
+      kinds.push(undefined);
+      continue;
+    }
     if (!process || typeof process.name !== "string" || !process.name)
       throw new Error(
         "agent_input_unavailable: The terminal could not be checked. Try again shortly. Nothing was sent.",
@@ -151,6 +155,10 @@ export function foregroundInputRefusal(programs: unknown[]): string | null {
       );
   if (permanent)
     return `The agent isn't running in that terminal any more; it's ${permanent} now. Nothing was sent.`;
+  if (programs.every((value) => row(value)?.reads_terminal === false))
+    throw new Error(
+      "agent_input_unavailable: The terminal has no readable foreground program. Try again shortly. Nothing was sent.",
+    );
   if (kinds.some(Boolean))
     throw new Error(
       "agent_input_unavailable: The agent's terminal is busy with a foreground tool. Try again shortly. Nothing was sent.",
@@ -177,7 +185,11 @@ export async function checkTuiForeground(
   call: TuiControlClient["call"],
   paneId: string,
 ): Promise<void> {
-  const reply = row(await call("pane.process_info", { pane_id: paneId }));
+  const reply = row(
+    await withAgentInput(null, () =>
+      call("pane.process_info", { pane_id: paneId }),
+    ),
+  );
   const process = row(reply?.process_info);
   if (
     !process ||

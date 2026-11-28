@@ -6,6 +6,7 @@ Issue #1437 demonstrated an ask answer being typed into bash after its agent exi
 
 - Share one foreground program check across answers, Chat, notification replies, prompts, menu text and launch/Board prompts on both runtimes.
 - Refuse shells, interactive REPLs, editors/pagers, ssh, sudo/su and database clients, including foreground children. Classify shells by basename regardless of arguments, and refuse multiplexers and nested shell launchers. Tool children under an admitted leader are temporarily busy; empty command lines and failed reads are temporarily unavailable, with zero input.
+- Count only foreground-group processes whose stdin is the terminal PTY; pipe-connected MCP and language-server helpers never block delivery.
 - Admit all other programs, including arbitrary agents, resumed/restarted agents, wrappers and npm entrypoints. Remove the per-session foreground witness and PID hashing introduced by this change.
 - Treat failed reads as temporary. Preserve qualified terminal/runtime authority and no-replay handling for refused or uncertain sends. Show plain Not sent reasons and answer recovery.
 
