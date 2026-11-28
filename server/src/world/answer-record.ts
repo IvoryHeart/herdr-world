@@ -3,7 +3,7 @@ import type { AnswerActor } from "./ask-delivery-types";
 import {
   ANSWER_DELIVERY_VERB,
   ANSWER_DELIVERY_DELAY_MS,
-  originalAsker,
+  isQuestionAsker,
   sameRecipient,
 } from "./ask-delivery-types";
 import type { createAskRecipients } from "./ask-recipient";
@@ -55,7 +55,7 @@ export function createAnswerRecorder(deps: {
           actor.kind === "agent" &&
           (ask.owner_only ||
             !actor.actor.verified ||
-            originalAsker(ask.recipient, actor.actor))
+            isQuestionAsker(ask, actor.actor))
         )
           throw new CliError(
             "refused",

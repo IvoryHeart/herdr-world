@@ -1,5 +1,6 @@
 import { questionAskerKey } from "../../../shared/questionAsker";
 import { askQuestionHint } from "../../../shared/askCommands";
+import { isQuestionAsker } from "./ask-delivery-types";
 import { CliError } from "./world-cli-errors";
 import type { CliHost, WorldCliDeps } from "./world-cli";
 import { paneActor } from "./world-cli-actor";
@@ -343,10 +344,7 @@ export async function handleWorldAsk(
       // and never from the agent that asked.
       if (!actor.verified)
         refused("only the owner or a verified agent answers questions");
-      if (
-        ask!.actor.connection_id === actor.connection_id &&
-        ask!.actor.pane_id === actor.pane_id
-      )
+      if (isQuestionAsker(ask!, actor))
         refused("an agent cannot answer its own question");
       if (ask!.answer) refused(`${id} is already answered`);
       deps.publishLedger(

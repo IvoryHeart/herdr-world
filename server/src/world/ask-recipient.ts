@@ -22,6 +22,7 @@ import {
 } from "./world-cli-actor";
 import type { CliActor, LedgerAsk } from "./world-ledger";
 import {
+  isQuestionAsker,
   originalAsker,
   validRecipient,
   type AnswerActor,
@@ -437,7 +438,7 @@ export function createAskRecipients(deps: {
       !by.pane_id ||
       !by.terminal_id ||
       !by.agent_session_fingerprint ||
-      originalAsker(ask.recipient, by)
+      isQuestionAsker(ask, by)
     )
       return "refused";
     const core = coreConnections();
