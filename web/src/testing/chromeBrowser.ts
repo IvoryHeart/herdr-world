@@ -450,20 +450,24 @@ export async function openPage(
   // entry, so the app's history starts there, as in a Chrome launched on that
   // address: `history.back()` from the first view must not leave it.
   let first = true;
+  // A case's own `Page.navigate` commands get the same first replacement.
+  const pageCommand: ChromePage["command"] = (method, params, deadlineMs) => {
+    if (method !== "Page.navigate" || !first)
+      return command(method, params, deadlineMs);
+    first = false;
+    return command(
+      "Runtime.evaluate",
+      { expression: `location.replace(${JSON.stringify(params?.url)})` },
+      deadlineMs,
+    ).then(() => ({}));
+  };
   const navigate = async (url: string) => {
     const loaded = Promise.withResolvers<void>();
     const off = on("Page.loadEventFired", () => loaded.resolve());
     try {
-      if (first) {
-        first = false;
-        await command("Runtime.evaluate", {
-          expression: `location.replace(${JSON.stringify(url)})`,
-        });
-      } else {
-        const result = await command("Page.navigate", { url });
-        if (result?.errorText)
-          throw new Error(`Navigation failed: ${result.errorText}`);
-      }
+      const result = await pageCommand("Page.navigate", { url });
+      if (result?.errorText)
+        throw new Error(`Navigation failed: ${result.errorText}`);
       await withBrowserDeadline(loaded.promise, `Load ${url}`, 30_000);
       const reached = await evaluate("location.href");
       if (String(reached).startsWith("chrome-error:"))
@@ -497,8 +501,8 @@ export async function openPage(
     });
   const exited = exitedBrowser;
   return {
-    command,
-    cdp: (method, params) => command(method, params),
+    command: pageCommand,
+    cdp: (method, params) => pageCommand(method, params),
     on,
     evaluate,
     waitFor,
