@@ -989,8 +989,6 @@
       "web/src/world/BoardView.tsx#__boardDraftsTesting",
       "web/src/world/ConnectionRecoveryBanner.tsx#reconnectCachedHost",
       "web/src/world/CoreKillConfirm.tsx#CoreKillList",
-      "web/src/world/CoreTerminalWatch.tsx#CoreTerminalWatch",
-      "web/src/world/CoreTerminalWatch.tsx#useCoreDraftScopes",
       "web/src/world/CoreWorktrees.tsx#createCoreWorktreeFor",
       "web/src/world/CoreWorktrees.tsx#openCoreWorktreeFor",
       "web/src/world/CoreWorktrees.tsx#removeCoreWorktreeConfirmed",

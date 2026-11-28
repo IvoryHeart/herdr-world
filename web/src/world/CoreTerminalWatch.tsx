@@ -1,11 +1,4 @@
-import {
-  type ReactNode,
-  useEffect,
-  useLayoutEffect,
-  useMemo,
-  useRef,
-  useState,
-} from "react";
+import { useEffect, useLayoutEffect, useRef, useState } from "react";
 import { Eye } from "lucide-react";
 import { Terminal } from "@xterm/xterm";
 import { UnicodeGraphemesAddon } from "@xterm/addon-unicode-graphemes";
@@ -28,17 +21,15 @@ import {
   isFocusReport,
   userInputSignal,
 } from "../coreTyping";
-import type { WorldObjectNode } from "./worldObject";
-import { holdTerminalComposerDraftScope } from "../terminalComposer";
 import { CoreTerminalComposer } from "./CoreTerminalComposer";
+import type { CoreWatchTarget } from "./coreInspectorTerminal";
+import {
+  claimPageKeys,
+  focusMovesToTerminal,
+  inspectorKey,
+  releasePageKeys,
+} from "./coreTerminalKeys";
 import "./coreWatch.css";
-
-/** Which herdr-core terminal to watch, as World's snapshot names it. */
-export type CoreWatchTarget = {
-  connectionId: string;
-  generation: number;
-  address: string;
-};
 
 const pageTheme = (): ResolvedTheme =>
   document.documentElement.dataset.theme === "light" ? "light" : "dark";
@@ -75,30 +66,6 @@ function useBridgeEpoch() {
   return epoch;
 }
 
-/** Keys a person types to a terminal, as xterm sends them. */
-function typedKey(event: KeyboardEvent): string | null {
-  if (event.ctrlKey || event.metaKey || event.altKey || event.isComposing)
-    return null;
-  if (event.key === "Enter") return "\r";
-  if (event.key === "Backspace") return "\x7f";
-  return event.key.length === 1 ? event.key : null;
-}
-
-/**
- * The core terminal a key typed on the bare page goes to: the one shown or
- * touched last, so two open Inspectors never both take it.
- */
-let pageKeyOwner: Element | null = null;
-
-/** A control that takes typing itself: a key there is never the terminal's. */
-function takesTyping(element: Element): boolean {
-  return Boolean(
-    element.closest(
-      'input, textarea, select, [contenteditable=""], [contenteditable="true"], [role="tab"], [role="menu"], [role="dialog"]',
-    ),
-  );
-}
-
 /**
  * A herdr-core terminal, watched and typed into: the Terminal tab of World's
  * Inspector. Core's grid is adopted exactly and the drawing is only scaled
@@ -114,11 +81,14 @@ export function CoreTerminalWatch({
   target,
   title,
   active = true,
+  typedEarly,
 }: {
   target: CoreWatchTarget;
   title: string;
   /** Its tab is the one shown: keys typed in the Inspector come here. */
   active?: boolean;
+  /** Keys typed for this terminal while it loaded, sent once it is here. */
+  typedEarly?: string[];
 }) {
   const sectionRef = useRef<HTMLElement | null>(null);
   const viewRef = useRef<HTMLDivElement | null>(null);
@@ -359,15 +329,22 @@ export function CoreTerminalWatch({
   // and the next key goes there (keyboard navigation between tabs stays).
   useEffect(() => {
     if (!active) return;
-    pageKeyOwner = sectionRef.current;
-    const focused = document.activeElement;
-    if (
-      !focused ||
-      focused === document.body ||
-      (focused.closest('[role="tab"]') && !focused.matches(":focus-visible"))
-    )
-      termRef.current?.focus();
+    claimPageKeys(sectionRef.current);
+    if (focusMovesToTerminal()) termRef.current?.focus();
   }, [active]);
+
+  // Keys typed while the watch was still loading go now, once, in order;
+  // like any early key they wait for the watch to open.
+  useEffect(() => {
+    const term = termRef.current;
+    const early = typedEarly?.splice(0) ?? [];
+    if (!term || early.length === 0) return;
+    if (activeRef.current) term.focus();
+    if (!term.options.disableStdin)
+      for (const key of early) term.input(key, true);
+    // The keys are taken once, when the watch arrives.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   // A key typed in this Inspector while nothing there takes typing (its
   // frame, its title bar, the page itself) focuses the terminal and is sent
@@ -378,18 +355,8 @@ export function CoreTerminalWatch({
       const section = sectionRef.current;
       if (!activeRef.current || event.defaultPrevented || !term || !section)
         return;
-      const key = typedKey(event);
-      if (key === null || section.offsetParent === null) return;
-      const target = event.target instanceof Element ? event.target : null;
-      if (target && section.contains(target)) return;
-      const scope = section.closest(".workspace-inspector");
-      const page = !target || target === document.body;
-      if (page ? pageKeyOwner !== section : !scope?.contains(target!)) return;
-      if (!page && takesTyping(target!)) return;
-      if (!page && target!.closest("button, a")) {
-        // A button's own keys (Enter, Space) stay the button's.
-        if (key === "\r" || key === " ") return;
-      }
+      const key = inspectorKey(event, section);
+      if (key === null) return;
       event.preventDefault();
       term.focus();
       if (!term.options.disableStdin) term.input(key, true);
@@ -398,7 +365,7 @@ export function CoreTerminalWatch({
     const section = sectionRef.current;
     return () => {
       document.removeEventListener("keydown", onKey, true);
-      if (pageKeyOwner === section) pageKeyOwner = null;
+      releasePageKeys(section);
     };
   }, []);
 
@@ -409,9 +376,7 @@ export function CoreTerminalWatch({
       aria-label={`${title}'s terminal`}
       data-core-watch={target.address}
       data-held={held ? `${held.cols}x${held.rows}` : undefined}
-      onPointerDownCapture={() => {
-        pageKeyOwner = sectionRef.current;
-      }}
+      onPointerDownCapture={() => claimPageKeys(sectionRef.current)}
     >
       <header className="core-watch-head">
         <small className="core-watch-grid" data-core-watch-grid>
@@ -481,122 +446,4 @@ export function CoreTerminalWatch({
       ) : null}
     </section>
   );
-}
-
-/** What the watch needs of a World node: its label and, if live, its target. */
-type WatchableNode = { label: string; watch?: CoreWatchTarget };
-type WatchableWorld = { nodeById: ReadonlyMap<string, WatchableNode> };
-type DraftScope = { connectionId: string; generation: number };
-
-/**
- * Keeps unsent composer drafts for each core connection generation in
- * `scopes`. App's catalogue does not list core connections, so their drafts
- * are held here: a scope lets go (and its drafts go) only when its
- * generation leaves, an actual change of owner, never when a view closes.
- */
-export function useCoreDraftScopes(scopes: readonly DraftScope[]) {
-  const held = useRef(new Map<string, () => void>());
-  const key = JSON.stringify(
-    [
-      ...new Set(
-        scopes.map((s) => JSON.stringify([s.connectionId, s.generation])),
-      ),
-    ].sort(),
-  );
-  useEffect(() => {
-    const wanted = new Set<string>(JSON.parse(key));
-    for (const [scope, release] of held.current)
-      if (!wanted.has(scope)) {
-        held.current.delete(scope);
-        release();
-      }
-    for (const scope of wanted)
-      if (!held.current.has(scope)) {
-        const [connectionId, generation] = JSON.parse(scope);
-        held.current.set(
-          scope,
-          holdTerminalComposerDraftScope(connectionId, generation),
-        );
-      }
-  }, [key]);
-  useEffect(() => {
-    const scopes = held.current;
-    return () => {
-      for (const release of scopes.values()) release();
-      scopes.clear();
-    };
-  }, []);
-}
-
-/**
- * The Terminal tab's body for a live herdr-core leaf, or undefined for any
- * other node. The watch starts the first time the tab is shown and then
- * stays while the window is shown (hidden while another tab is), so a look
- * at Chat neither ends the stream nor gives the size back. Minimizing or
- * closing the window ends both: the page's watch and World's seat go, and
- * the watch starts again when the Terminal tab is shown next.
- */
-export function coreInspectorTerminal(
-  node: WorldObjectNode | undefined,
-  view: {
-    /** The Terminal tab is the one selected in the Inspector. */
-    selected: boolean;
-    /** The Inspector window is on screen (not minimized or hidden). */
-    shown: boolean;
-  },
-): ReactNode | undefined {
-  if (node?.kind !== "agent" && node?.kind !== "terminal") return;
-  if (!node.coreControl) return;
-  if (!node.watch || node.stale)
-    return (
-      <div className="core-watch-ended" role="status">
-        <p>This herdr-core terminal is not live now.</p>
-      </div>
-    );
-  return (
-    <CoreInspectorTerminal
-      key={`${node.id}:${node.watch.generation}`}
-      target={node.watch}
-      title={node.label}
-      selected={view.selected}
-      shown={view.shown}
-    />
-  );
-}
-
-function CoreInspectorTerminal({
-  target,
-  title,
-  selected,
-  shown,
-}: {
-  target: CoreWatchTarget;
-  title: string;
-  selected: boolean;
-  shown: boolean;
-}) {
-  const [watching, setWatching] = useState(selected && shown);
-  if (watching && !shown) setWatching(false);
-  else if (!watching && shown && selected) setWatching(true);
-  return watching ? (
-    <CoreTerminalWatch
-      target={target}
-      title={title}
-      active={selected && shown}
-    />
-  ) : null;
-}
-
-/** Every live core generation in `worlds` keeps its composer drafts. */
-export function useCoreTerminalDrafts(worlds: readonly WatchableWorld[]) {
-  const live = useMemo(
-    () =>
-      worlds.flatMap((world) =>
-        [...world.nodeById.values()].flatMap((n) => (n.watch ? [n.watch] : [])),
-      ),
-    // The worlds' identities are what change.
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-    worlds,
-  );
-  useCoreDraftScopes(live);
 }

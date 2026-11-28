@@ -19,7 +19,7 @@ import {
   rememberTerminalInputMode,
   type TerminalInputMode,
 } from "../terminalInputMode";
-import type { CoreWatchTarget } from "./CoreTerminalWatch";
+import type { CoreWatchTarget } from "./coreInspectorTerminal";
 import { subscribeTerminalComposerRequest } from "./terminalComposerRequest";
 
 const PASTE_MARKERS = /\x1b\[20[01]~/g;
