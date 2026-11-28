@@ -94,6 +94,7 @@ export const webBrowserSuites = [
   "web/src/chatMenus.test.ts",
   "web/src/mobileTerminal.test.ts",
   "web/src/layerStack.browser.test.ts",
+  "web/src/testing/chromeHistory.browser.test.ts",
   "web/src/components/VisualPreview.test.ts",
   "web/src/components/TerminalThemeDialog.test.ts",
   "web/src/components/HerdrSetupCard.test.ts",

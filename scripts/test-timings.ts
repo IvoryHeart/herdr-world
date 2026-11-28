@@ -143,6 +143,9 @@ async function timeLane(
   const loadBefore = loadavg()[0]!;
   const began = performance.now();
   const phases: Timed["phases"] = [];
+  // A file writer does not truncate: empty the log so a shorter run leaves no
+  // stale lines from the last one.
+  await Bun.write(`${out}.log`, "");
   const log = Bun.file(`${out}.log`).writer();
   const child = Bun.spawn(wrapped, {
     cwd: root,
