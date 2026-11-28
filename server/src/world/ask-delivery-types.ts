@@ -32,8 +32,8 @@ export type ChatAnswerRecipient = {
  * `reported` holds the occupant fingerprint the verified caller had
  * (`coreOccupantFingerprint`: core, address, pid, argv, template and occupancy), so a kept
  * terminal's replacement shell, even one reusing the pid, is another asker.
- * World sends saved answers only to this original program and foreground;
- * `ask get`/`--wait` remain available when delivery cannot be established.
+ * Saved answers address this terminal's current admitted foreground program;
+ * original caller identity still owns ask get/--wait and acknowledgements.
  */
 export type CoreAnswerRecipient = {
   adapter: "herdr-core";

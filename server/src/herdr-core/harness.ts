@@ -19,6 +19,7 @@ const ALIASES: Record<string, readonly string[]> = {
   qodercli: ["qoder", "qoderclicn", "qodercn"],
   pi: ["pi-agent", "pi-coding-agent"],
   hermes: ["hermes-agent"],
+  muse: ["muse-code"],
 };
 /** Detection/desktop harnesses outside World's integration-name list. */
 const EXTRA_HARNESSES = [

@@ -1,3 +1,4 @@
+import { agentInputFailure } from "../adapters/agent-input";
 import { deliverCore } from "../herdr-core/delivery";
 import { CoreFenceError } from "../herdr-core/fence";
 import { CoreRpcError } from "../herdr-core/client";
@@ -129,13 +130,20 @@ export function createAnswerDispatcher(deps: {
             receipt: { source: "herdr-core", pointer: prompt.pointer },
           };
         } catch (error) {
+          const admission = agentInputFailure(error);
+          if (admission)
+            return {
+              state: admission.reason === "unavailable" ? "wait" : "refused",
+              reason: admission.message,
+              not_submitted: true,
+            };
           const refused =
             error instanceof CoreRpcError ||
             (error instanceof CoreFenceError && error.stage !== "publication");
           return {
             state: refused || !marked ? "refused" : "uncertain",
             reason: refused
-              ? "Core refused the answer or its original occupant/foreground changed; use ask get"
+              ? "Original agent is not attached or core refused the answer; not delivered, use ask get"
               : "The core send outcome is uncertain; never retried automatically, use ask get",
             ...(refused ? { not_submitted: true } : {}),
           };
@@ -161,7 +169,7 @@ export function createAnswerDispatcher(deps: {
           const result = await deliverCore(
             binding.lease,
             recipient.pane_id,
-            recipient.conversation.fingerprint,
+            binding.token,
             { kind: "message", text: prompt.text },
             {
               beforeSubmit: () => context.beforeSubmit(),
@@ -196,7 +204,7 @@ export function createAnswerDispatcher(deps: {
           await binding.lease.runtime.agentSessions!.conversation.send({
             pane_id: recipient.pane_id,
             text: prompt.text,
-            session_fingerprint: recipient.conversation.fingerprint,
+            session_fingerprint: binding.conversation.session_fingerprint!,
             baseline: binding.conversation.messages
               .filter((message) => message.role === "user")
               .map((message) => message.id),
@@ -209,7 +217,8 @@ export function createAnswerDispatcher(deps: {
               (!marked || context.guard()) &&
               deps.recipients.guard(recipient, binding.lease, info),
             submitted: (fingerprint) => {
-              confirmed = fingerprint === recipient.conversation.fingerprint;
+              confirmed =
+                fingerprint === binding.conversation.session_fingerprint!;
             },
           });
         if (result.status === "sent")
@@ -219,7 +228,7 @@ export function createAnswerDispatcher(deps: {
                 receipt: {
                   source: "herdr-chat",
                   delivery_id: result.delivery.id,
-                  fingerprint: recipient.conversation.fingerprint,
+                  fingerprint: binding.conversation.session_fingerprint!,
                   pointer: prompt.pointer,
                 },
               }
@@ -235,7 +244,7 @@ export function createAnswerDispatcher(deps: {
           state: retry ? "wait" : "refused",
           reason: retry
             ? "Chat submitted nothing; waiting for admission on the original binding"
-            : "Chat refused the original recipient or state; nothing sent, use ask get",
+            : `Original agent is not attached or Chat refused input; not delivered, use ask get. ${result.message}`,
           not_submitted: true,
         };
       } finally {

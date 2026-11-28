@@ -1,4 +1,5 @@
 import { CHAT_KEY } from "../../../shared/chatKeys";
+import { withAgentInput } from "../adapters/agent-input";
 import type { ConversationSource } from "./conversation";
 import type { PendingPrompt } from "./pending-prompt";
 import type { HerdrCall } from "./session-types";
@@ -129,11 +130,13 @@ export function createMenuPresser(args: {
         "changed",
         "The agent changed while Chat checked it. Nothing was sent; check it and try again.",
       );
-    await args.herdrCall(
-      "pane.send_input",
-      text !== undefined
-        ? { pane_id, text, keys: [] }
-        : { pane_id, text: "", keys: [key] },
+    await withAgentInput(after, () =>
+      args.herdrCall(
+        "pane.send_input",
+        text !== undefined
+          ? { pane_id, text, keys: [] }
+          : { pane_id, text: "", keys: [key] },
+      ),
     );
     // A harness redraws its menu shortly after a key. Read until the screen
     // differs from the one checked, for at most about half a second, so Chat

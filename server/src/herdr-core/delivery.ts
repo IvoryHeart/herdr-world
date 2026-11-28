@@ -11,7 +11,7 @@ import { CoreFenceError, CoreOperationFence } from "./fence";
 import type { CoreMirrorTerminal } from "./mirror";
 import { CORE_RECIPIENT, coreRecipientChange, foregroundOf } from "./recipient";
 import type { CoreConnectionRuntime } from "./runtime";
-import { coreHarness } from "./topology";
+import { agentInputFailure } from "../adapters/agent-input";
 
 export { coreRecipientChange, coreRecipientToken } from "./recipient";
 
@@ -173,12 +173,20 @@ export async function deliverCore(
       "World could not verify the current program. Nothing was sent.",
     );
   }
-  const change = coreRecipientChange(
-    recipient,
-    coreId,
-    record,
-    view.occupancy(address),
-  );
+  let change;
+  try {
+    change = coreRecipientChange(
+      recipient,
+      coreId,
+      record,
+      view.occupancy(address),
+    );
+  } catch {
+    return refused(
+      "unavailable",
+      "The terminal could not be checked. Try again shortly. Nothing was sent.",
+    );
+  }
   if (!foregroundOf(record) || recipient.endsWith(".-"))
     return refused(
       "changed",
@@ -188,11 +196,6 @@ export async function deliverCore(
     return refused(
       change,
       changedMessage(change, { ...record, remote: false }, nothing),
-    );
-  if (!coreHarness({ ...record, remote: false }))
-    return refused(
-      "unsupported",
-      "This terminal is a shell, not an agent. Nothing was sent.",
     );
   const answering = input.kind === "answer" || input.kind === "keys";
   if (answering && statusWord(record) !== "blocked")
@@ -205,6 +208,34 @@ export async function deliverCore(
       "unavailable",
       "The saved answer no longer needs delivery. Nothing was sent.",
     );
+  if (options.beforeSubmit) {
+    // Persisting a durable attempt awaited storage. Recheck the native
+    // foreground after that await, including changes not yet in the mirror.
+    try {
+      record = await lease.runtime.inspect(fence);
+    } catch {
+      return refused(
+        "unavailable",
+        "World could not recheck the foreground. Nothing was sent.",
+      );
+    }
+    const lateChange = coreRecipientChange(
+      recipient,
+      coreId,
+      record,
+      view.occupancy(address),
+    );
+    if (lateChange)
+      return refused(
+        lateChange,
+        changedMessage(lateChange, { ...record, remote: false }, nothing),
+      );
+    if (answering && statusWord(record) !== "blocked")
+      return refused(
+        "not-waiting",
+        `It is no longer waiting on a question. ${nothing}`,
+      );
+  }
   if (options.guard && !options.guard())
     return refused(
       "unavailable",
@@ -267,6 +298,8 @@ export async function deliverCore(
           : null,
     };
   } catch (error) {
+    const admission = agentInputFailure(error);
+    if (admission) return refused(admission.reason, admission.message);
     if (error instanceof CoreFenceError)
       return error.reason === "occupant-gone"
         ? refused("ended", `It has ended. ${nothing}`)

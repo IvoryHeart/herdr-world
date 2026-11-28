@@ -11,7 +11,14 @@
     "server/src/adapters/herdr.live.test.ts",
     "server/src/world/snapshot.test.ts",
     "server/src/adapters/herdr-runtime.test.ts",
-    "server/src/adapters/runtime-consumers.test.ts"
+    "server/src/adapters/runtime-consumers.test.ts",
+    "server/src/adapters/agent-input.test.ts",
+    "server/src/world/answer-foreground.test.ts",
+    "server/src/herdr-core/native-send.test.ts",
+    "server/src/service/terminal-input.test.ts",
+    "server/src/herdr-core/harness.test.ts",
+    "web/src/world/terminalComposerRequest.test.ts",
+    "web/src/world/AnswerDeliveries.browser.test.ts"
   ],
   "acceptedDelivery": "https://github.com/IvoryHeart/herdr-world/pull/549",
   "technique": "direct-conformance",
@@ -40,7 +47,7 @@
     ],
     "review": "The accepted delivery link records the merged design contract, not implementation acceptance. This adapter implementation awaits independent PR review."
   },
-  "evidenceDecision": "P3 selects direct external-source conformance rather than a finite model. Existing runtime/snapshot models remain required for their unchanged owner fences; these tests establish the new adapter boundary, not durable identity, effect recovery or v2 delivery. Typed runtime-port translation and actual raw-client-free snapshot, Desk screen and terminal-setting consumers add direct compatibility evidence; native traffic, lease ownership and no-replay behavior retain their existing contracts. Remaining callback areas are explicitly TUI-only; no core runtime is enabled.",
+  "evidenceDecision": "P3 selects direct external-source conformance rather than a finite model. Existing runtime/snapshot models remain required for their unchanged owner fences; these tests establish the new adapter boundary, not durable identity, effect recovery or v2 delivery. Typed runtime-port translation and actual raw-client-free snapshot, Desk screen and terminal-setting consumers add direct compatibility evidence; native traffic, lease ownership and no-replay behavior retain their existing contracts. Remaining callback areas are explicitly TUI-only; no core runtime is enabled. Issue #1437 uses one shared runtime-reported foreground group leader basename check, ignoring arguments and children. The finite TUI/core input and World+SQLite answer matrices cover shell/REPL/editor/ssh, privilege/database and multiplexer/launcher refusals, child/MCP exclusion, resumed/restarted and arbitrary executable names, and pre-PR compatibility when foreground information is absent. No tty or /proc inspection is used for admission. Shell-exit checks at answer, dispatch and final preparation prove zero writes, Not sent, retrieval and no revival on both runtimes. Existing qualified runtime/terminal fences and opaque possible-send recovery remain unchanged; held-send cancellation uses the real framed transport. The stateless predicate adds no ordering state; finite class/path and preparation-boundary tests cover its decisions, while the full canonical gate retains ordering evidence. Outbox browser checks cover plain reasons, Copy answer and qualified draft-only recovery. A shell inside a live harness and runtimes without foreground information remain documented limits; no atomic OS foreground-and-send or live-platform guarantee is claimed.",
   "promotion": {
     "decision": "pending",
     "scope": "New adapter boundary only; independent implementation review and CI required."

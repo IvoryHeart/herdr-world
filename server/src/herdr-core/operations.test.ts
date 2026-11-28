@@ -48,7 +48,7 @@ const confirmAll = (plan: CoreKillPlanView): CoreKillConfirmation => ({
 
 describe("launching in herdr-core (M2, M3)", () => {
   test("a non-Claude/Codex profile sends its role and brief through native delivery", async () => {
-    const w = await world({ runStatus: "idle" });
+    const w = await world({ runStatus: "idle", runForeground: "pi" });
     const room = await createCoreRoom(w.lease(), w.topology, "Review");
     const outcome = await launchCore(
       w.lease(),
@@ -88,8 +88,24 @@ describe("launching in herdr-core (M2, M3)", () => {
     expect(w.fake.deliveredInput).toEqual([]);
   });
 
+  test("an idle report from a shell wrapper cannot admit an automatic brief", async () => {
+    const w = await world({ runStatus: "idle", runForeground: "bash" });
+    const outcome = await launchCore(
+      w.lease(),
+      {
+        workspaceId: CORE_UNPLACED_WORKSPACE,
+        kind: "pi",
+        label: "Scout",
+        text: "Review carefully",
+      },
+      { topology: w.topology, resolveExecutable },
+    );
+    expect(outcome).toMatchObject({ status: "started" });
+    expect(w.fake.deliveredInput).toEqual([]);
+  });
+
   test("uncertain brief delivery retains the definitely started agent identity", async () => {
-    const w = await world({ runStatus: "idle" });
+    const w = await world({ runStatus: "idle", runForeground: "pi" });
     w.fake.onTyped = () => w.fake.kill(w.socket);
     const outcome = await launchCore(
       w.lease(),
