@@ -35,8 +35,8 @@ permissions:
 concurrency:
     # Each main SHA receives its own lightweight evidence report.
     group: ci-${{ github.workflow }}-${{ github.event.pull_request.number || (github.event_name == 'push' && github.sha) || github.ref }}
-    # A new PR event cancels the obsolete head before requesting more runners.
-    cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+    # New code/closure cancels obsolete work; metadata edits retain active proof.
+    cancel-in-progress: ${{ github.event_name == 'pull_request' && contains(fromJSON('["opened","synchronize","reopened","closed"]'), github.event.action) }}
 
 jobs:
     browser-diagnostics:

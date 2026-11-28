@@ -9,6 +9,7 @@ import {
 import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
 import {
+  fullValidationSelection,
   isToolingOnlyChange,
   isToolingPath,
   repositorySelection,
@@ -878,3 +879,14 @@ test.each(["unit", "web"])(
     }
   },
 );
+
+test("full-mode inventory matches exhaustive graph selection without source-import work", () => {
+  const root = process.cwd();
+  const { tracked, deleted, changed } = gitChanges(root, "origin/main");
+  const graph = buildGraph(root, tracked, deleted);
+  const coverage = readCoverageScope(root, "origin/main");
+  expect(fullValidationSelection(root)).toEqual(selectValidation(graph, []));
+  expect(repositorySelection(root, "origin/main")).toEqual(
+    selectValidation(graph, changed, coverage.owns, changed, coverage.models),
+  );
+});

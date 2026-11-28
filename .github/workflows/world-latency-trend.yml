@@ -12,6 +12,11 @@ on:
         paths:
             - "web/src/world/**"
             - "web/src/clock.ts"
+            - "web/src/api.ts"
+            - "web/src/store.ts"
+            - "web/src/layoutPreferences.ts"
+            - "web/src/browserStorage.ts"
+            - "web/src/types.ts"
             - "web/src/styles/**"
             - "web/src/style*.css"
             - "web/public/**"
@@ -35,6 +40,11 @@ on:
         paths:
             - "web/src/world/**"
             - "web/src/clock.ts"
+            - "web/src/api.ts"
+            - "web/src/store.ts"
+            - "web/src/layoutPreferences.ts"
+            - "web/src/browserStorage.ts"
+            - "web/src/types.ts"
             - "web/src/styles/**"
             - "web/src/style*.css"
             - "web/public/**"

@@ -1,5 +1,5 @@
 import { expect, jest, mock, test } from "bun:test";
-import { mkdtempSync, rmSync, writeFileSync } from "node:fs";
+import { mkdtempSync, mkdirSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import {
@@ -174,7 +174,9 @@ test("Chrome teardown exits cleanly and force-stops a stuck process", async () =
 });
 
 test("Chrome readiness tolerates slow startup and an incomplete port file", async () => {
-  const profile = mkdtempSync(join(tmpdir(), "chrome-startup-test-"));
+  const directory = mkdtempSync(join(tmpdir(), "chrome-startup-test-"));
+  const profile = join(directory, "profile");
+  mkdirSync(profile);
   const portFile = join(profile, "DevToolsActivePort");
   jest.useFakeTimers();
   try {
@@ -193,14 +195,16 @@ test("Chrome readiness tolerates slow startup and an incomplete port file", asyn
     expect(await ready).toBe("9222");
   } finally {
     jest.useRealTimers();
-    rmSync(profile, { recursive: true, force: true });
+    rmSync(directory, { recursive: true, force: true });
   }
 });
 
 test.each(["exit", "timeout"])(
   "Chrome startup %s includes stderr instead of a missing-file error",
   async (failure) => {
-    const profile = mkdtempSync(join(tmpdir(), "chrome-startup-test-"));
+    const directory = mkdtempSync(join(tmpdir(), "chrome-startup-test-"));
+    const profile = join(directory, "profile");
+    mkdirSync(profile);
     const errorOutput = join(profile, "stderr");
     writeFileSync(errorOutput, "browser startup diagnostic");
     jest.useFakeTimers();
@@ -220,7 +224,7 @@ test.each(["exit", "timeout"])(
       );
     } finally {
       jest.useRealTimers();
-      rmSync(profile, { recursive: true, force: true });
+      rmSync(directory, { recursive: true, force: true });
     }
   },
 );

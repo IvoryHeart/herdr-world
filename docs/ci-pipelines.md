@@ -611,3 +611,10 @@ The native installer matrix also runs the auto-sync runtime-status crash suite.
 It repeats source and standalone embedded-worker import, commit, acknowledgement
 and drain schedules against each target's actual SQLite. These process-crash
 checks do not establish physical power-loss durability.
+
+Validation scope scans all introduced commit messages and additions against every
+parent, batching Git reads per parent (including intermediate leaks removed before
+HEAD). Unconditional full validation enumerates the tracked test inventory without
+building the dependency graph; scoped selection still follows imports. PR code and
+closure events cancel obsolete runs; description/label events retain active proof.
+Town side workflows include the shared store/API/layout inputs as render inputs.

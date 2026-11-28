@@ -1,6 +1,7 @@
 import {
   affected,
   buildGraph,
+  fullChangeReason,
   checkAssetOwner,
   gitChanges,
   TEST,
@@ -272,8 +273,18 @@ export function repositorySelection(
   const complete = gitChanges(root, base, head);
   const tests = testBase === base ? complete : gitChanges(root, testBase, head);
   const coverage = readCoverageScope(root, base);
+  const deleted = [...complete.deleted, ...tests.deleted];
+  // A gate/configuration change already requires every test. Reading every
+  // source's imports here wastes the scope job's critical-path budget.
+  const graph: Graph = fullChangeReason([...complete.changed, ...tests.changed])
+    ? {
+        files: new Set([...complete.tracked, ...deleted]),
+        gone: new Set(deleted),
+        deps: new Map(),
+      }
+    : buildGraph(root, complete.tracked, deleted);
   return selectValidation(
-    buildGraph(root, complete.tracked, [...complete.deleted, ...tests.deleted]),
+    graph,
     complete.changed,
     coverage.owns,
     tests.changed,
@@ -283,7 +294,14 @@ export function repositorySelection(
 
 export function fullValidationSelection(root: string): ValidationSelection {
   const files = gitChanges(root, "HEAD");
-  return selectValidation(buildGraph(root, files.tracked, files.deleted), []);
+  return selectValidation(
+    {
+      files: new Set([...files.tracked, ...files.deleted]),
+      gone: new Set(files.deleted),
+      deps: new Map(),
+    },
+    [],
+  );
 }
 
 if (import.meta.main) {

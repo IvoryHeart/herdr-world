@@ -193,13 +193,34 @@ test("the full-mode graph uses at most sixteen jobs, including every reusable ma
     expect(fullModeJobs(event)).toBeLessThanOrEqual(16);
 });
 
-test("a new PR event cancels its superseded run and closure cancels only that PR's active runs", async () => {
+test("new PR code and closure cancel obsolete work while metadata retains active proof", async () => {
   expect(workflow.concurrency.group).toContain(
     "github.event.pull_request.number",
   );
-  expect(workflow.concurrency["cancel-in-progress"]).toBe(
-    "${{ github.event_name == 'pull_request' }}",
+  const cancellationExpression = String(
+    workflow.concurrency["cancel-in-progress"],
   );
+  const cancels = new Function(
+    "github",
+    "contains",
+    "fromJSON",
+    `return (${cancellationExpression.slice(3, -2)});`,
+  );
+  for (const action of [
+    "opened",
+    "synchronize",
+    "reopened",
+    "closed",
+    "edited",
+    "labeled",
+  ])
+    expect(
+      cancels(
+        { event_name: "pull_request", event: { action } },
+        (list: string[], value: string) => list.includes(value),
+        JSON.parse,
+      ),
+    ).toBe(!["edited", "labeled"].includes(action));
   expect(workflow.on.pull_request.types).toContain("closed");
   const cancellation = Bun.YAML.parse(
     readFileSync(".github/workflows/cancel-closed.yml", "utf8"),
@@ -291,6 +312,9 @@ test("advisory renderer workflows cannot start on an unrelated server or documen
     for (const path of [
       "web/src/world/town/TownCanvas.tsx",
       "web/src/clock.ts",
+      "web/src/api.ts",
+      "web/src/store.ts",
+      "web/src/layoutPreferences.ts",
     ])
       expect(paths.some((pattern) => new Bun.Glob(pattern).match(path))).toBe(
         true,
@@ -582,9 +606,16 @@ test("CI exposes the protected delivery gate and runs the complete repository ch
   ]);
   expect(workflow.permissions.actions).toBe("read");
   // Every main commit retains its own run so an owner tag can await it.
-  expect(workflow.concurrency["cancel-in-progress"]).toBe(
-    "${{ github.event_name == 'pull_request' }}",
+  const cancel = new Function(
+    "github",
+    "contains",
+    "fromJSON",
+    `return (${String(workflow.concurrency["cancel-in-progress"]).slice(3, -2)});`,
   );
+  for (const event_name of ["push", "workflow_dispatch", "merge_group"])
+    expect(cancel({ event_name, event: {} }, () => true, JSON.parse)).toBe(
+      false,
+    );
   expect(workflow.on.push).toEqual({ branches: ["main"] });
   expect(workflow.concurrency.group).toContain(
     "(github.event_name == 'push' && github.sha)",
