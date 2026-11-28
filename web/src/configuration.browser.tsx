@@ -41,16 +41,9 @@ const renderBoundary = () =>
   );
 // Waits depend on the host (held chunks, trusted input over CDP), which real
 // time moves: look again on each real rendering frame while test time runs.
-const waitFor = async (predicate: () => boolean) => {
-  const end = clock.real.now() + 4000;
-  while (!predicate()) {
-    if (clock.real.now() > end)
-      throw new Error("Timed out waiting for configuration");
-    await new Promise<void>((resolve) =>
-      clock.real.requestAnimationFrame!(() => resolve()),
-    );
-  }
-};
+// Main's 80 polls of 50 ms: 4 s, in test time and in real time alike.
+const waitFor = (predicate: () => boolean) =>
+  clock.until(predicate, "Timed out waiting for configuration", 4000);
 const button = (label: string) => {
   const found = Array.from(
     document.querySelectorAll<HTMLButtonElement>("button"),
