@@ -35,7 +35,10 @@ export type TestClock = {
   advance(ms: number): Promise<void>;
   /** Two animation frames: of test time, or real ones on real time. */
   frame(): Promise<void>;
-  /** Advance until `done()` holds, or fail after `limit` ms of test time. */
+  /**
+   * Advance until `done()` holds, or fail after `limit` ms of test time (on
+   * the running clock, and of real time too).
+   */
   until(done: () => boolean, message: string, limit?: number): Promise<void>;
   /** The page's real timers, for the fixture's own reporting. */
   real: {
@@ -346,9 +349,17 @@ export function installTestClock(
     limit: number,
   ) {
     const end = now + limit;
+    // In a page on the running clock test time can outrun real work the page
+    // still does (a chunk loading on a loaded runner), so the failure
+    // deadline is also that long in real time. It only bounds a hang: nothing
+    // waits on it. Without real frames (unit tests) there is no such work.
+    const realEnd =
+      running && real.requestAnimationFrame !== undefined
+        ? real.now() + limit
+        : -Infinity;
     if (!running) await runTimers();
     for (let steps = 1; !done(); steps++) {
-      if (settled >= end) throw new Error(message);
+      if (settled >= end && real.now() >= realEnd) throw new Error(message);
       // A state that follows layout needs real rendering frames too.
       if (running && steps % 4 === 0) {
         await rendered();
