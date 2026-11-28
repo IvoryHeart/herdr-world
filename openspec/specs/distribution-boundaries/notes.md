@@ -10,6 +10,9 @@
 
 **Code:**
 
+- `web/src/testing/nativeTouch.ts`, `web/src/testing/nativeTouch.test.ts` (native touch delivery fence before fixture time advances)
+
+
 - `scripts/testing/file-deadline.ts`, `scripts/testing/file-deadline.test.ts`, `scripts/test-temp-preload.ts` (parent-owned hard file deadlines across module, hook and case hangs, independent of fixture clocks)
 - `scripts/ci-unit-schedule.ts`, `scripts/ci-unit-schedule.test.ts` (exact command/argument/concurrency comparison, excluding only the failure watchdog)
 - `scripts/world-case-phases.ts`, `web/src/world/testing/casePhases.ts` (World case phase records and job-summary tables)

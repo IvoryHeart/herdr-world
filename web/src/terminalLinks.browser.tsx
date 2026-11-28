@@ -1,3 +1,4 @@
+import { nativeTouchDriver } from "./testing/nativeTouch";
 import { clock as fixtureTime } from "./world/testing/installTestClock";
 import { TerminalLinkInspector } from "./testing/TerminalLinkInspector";
 import { Terminal, type ILink, type ILinkProvider } from "@xterm/xterm";
@@ -339,11 +340,16 @@ const action = (label: string) =>
   [...document.querySelectorAll<HTMLButtonElement>("button")].find(
     (el) => el.textContent?.trim() === label,
   );
-const touch = (type: string, points: { x: number; y: number }[] = []) =>
-  input("Input.dispatchTouchEvent", {
-    type,
-    touchPoints: points.map((p, id) => ({ ...p, id })),
-  });
+const touchDriver = nativeTouchDriver(
+  window,
+  (type, points) =>
+    input("Input.dispatchTouchEvent", {
+      type,
+      touchPoints: points.map((p, id) => ({ ...p, id })),
+    }),
+  () => new Promise<void>((resolve) => fixtureTime.real.setTimeout(resolve, 0)),
+);
+const touch = touchDriver.send;
 const tap = async (element: Element) => {
   const rect = element.getBoundingClientRect();
   await touch("touchStart", [
