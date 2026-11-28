@@ -1,4 +1,6 @@
 import { existsSync, readFileSync, realpathSync } from "node:fs";
+import { availableParallelism } from "node:os";
+import { CHROME } from "./affected";
 import { planWorldBrowserCases } from "./world-browser-cases";
 import timings from "./world-browser-timings.json";
 import { join, relative, resolve, sep } from "node:path";
@@ -103,6 +105,14 @@ export const webBrowserSuites = [
   "server/src/herdr-core/files.browser.test.ts",
   "server/src/ide/webview-origin.browser.test.ts",
 ];
+/**
+ * Concurrent cases of a web browser suite share one Chrome with a browser
+ * context per case (`web/src/testing/sharedChrome.ts`) and mostly wait on the
+ * page, so they run up to one page per core.
+ */
+export function webBrowserPages() {
+  return availableParallelism();
+}
 /** Everything the browser workflow runs, for repository validation to skip. */
 export const browserWorkflowIgnorePattern = ignorePattern([
   ...worldBrowserSuites,
@@ -116,10 +126,7 @@ function ignorePattern(paths: string[]) {
 }
 
 function browserSource(source: string) {
-  return (
-    /^\/\/ @world-browser-suite\b/m.test(source) ||
-    /CHROME_BIN|--headless/.test(source)
-  );
+  return /^\/\/ @world-browser-suite\b/m.test(source) || CHROME.test(source);
 }
 
 export function selectWorldBrowserShard(shard?: string): string[] {

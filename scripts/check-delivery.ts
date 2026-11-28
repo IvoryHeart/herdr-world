@@ -8,7 +8,7 @@ import { basename, join } from "node:path";
 import { CHROME, TEST, type Affected } from "./affected";
 import { acquireCheckSlot, type CheckClass, heldEnv } from "./check-lock";
 import { repositorySelection } from "./validation-scope";
-import { worldBrowserSuites } from "./world-browser-suites";
+import { webBrowserPages, worldBrowserSuites } from "./world-browser-suites";
 
 /**
  * Local checks in lanes. Static checks run first, outside the heavy queue.
@@ -153,7 +153,15 @@ function plan(selection: Affected) {
     quiet.push({
       name: "quiet",
       queue: "browser",
-      commands: [["bun", "scripts/run-tests.ts", ...chrome, "--parallel=2"]],
+      commands: [
+        [
+          "bun",
+          "scripts/run-tests.ts",
+          ...chrome,
+          "--parallel=2",
+          `--max-concurrency=${webBrowserPages()}`,
+        ],
+      ],
     });
   const verification: Lane[] =
     full && !browserOnly

@@ -112,6 +112,10 @@ test("World suites are discovered without timing entries; stale weights add no s
       ["New.browser.test.ts", "// @world-browser-suite\n"],
       ["nested/Legacy.test.tsx", 'const args = ["--headless"];\n'],
       ["Measured.test.ts", "const chrome = Bun.env.CHROME_BIN;\n"],
+      [
+        "Shared.test.ts",
+        'import { openChromePage } from "../testing/sharedChrome";\n',
+      ],
       ["Light.test.ts", "// @world-browser-suite\n"],
       ["Unit.test.ts", "export const unit = true;\n"],
       ["Ignored.browser.tsx", "// @world-browser-suite\n"],
@@ -122,6 +126,7 @@ test("World suites are discovered without timing entries; stale weights add no s
       "web/src/world/Light.test.ts",
       "web/src/world/Measured.test.ts",
       "web/src/world/New.browser.test.ts",
+      "web/src/world/Shared.test.ts",
       "web/src/world/nested/Legacy.test.tsx",
     ]);
     await assertWorldBrowserInventory(root, suites);

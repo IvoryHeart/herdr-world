@@ -7,6 +7,7 @@ import {
   unitTestShards,
 } from "./ci-unit-shards";
 import {
+  webBrowserPages,
   worldBrowserParallelSuites,
   worldBrowserShards,
 } from "./world-browser-suites";
@@ -121,7 +122,7 @@ if (import.meta.main) {
             ? [`--shard=${shard}/${worldBrowserShards.length}`]
             : []),
           `--parallel=${parallel}`,
-          `--max-concurrency=${lane === "world" ? 1 : 2}`,
+          `--max-concurrency=${lane === "world" ? 1 : lane === "web" ? webBrowserPages() : 2}`,
           ...(lane === "unit"
             ? ["--timings=scripts/ci-unit-timings.json"]
             : []),

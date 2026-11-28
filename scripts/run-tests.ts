@@ -12,6 +12,7 @@ import {
   assertWebBrowserInventory,
   assertWorldBrowserInventory,
   browserWorkflowIgnorePattern,
+  webBrowserPages,
   webBrowserSuites,
   includesBrowserSuites,
   worldBrowserIgnorePattern,
@@ -51,7 +52,9 @@ const parallelism = configuredParallelism
 const configuredMaxConcurrency = process.env.HERDR_TEST_MAX_CONCURRENCY;
 const maxConcurrency = configuredMaxConcurrency
   ? Number(configuredMaxConcurrency)
-  : 2;
+  : webBrowser
+    ? webBrowserPages()
+    : 2;
 
 if (!Number.isSafeInteger(parallelism) || parallelism < 1) {
   throw new Error("HERDR_TEST_PARALLEL must be a positive integer");

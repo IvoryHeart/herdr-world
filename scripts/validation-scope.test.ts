@@ -6,7 +6,7 @@ import {
   rmSync,
   writeFileSync,
 } from "node:fs";
-import { tmpdir } from "node:os";
+import { availableParallelism, tmpdir } from "node:os";
 import { dirname, join } from "node:path";
 import {
   isToolingOnlyChange,
@@ -870,7 +870,9 @@ test.each(["unit", "web"])(
         `--retry-flaky=${lane === "unit" ? "unit" : "browser"}`,
       );
       expect(args).toContain(`--parallel=${lane === "unit" ? 4 : 2}`);
-      expect(args).toContain("--max-concurrency=2");
+      expect(args).toContain(
+        `--max-concurrency=${lane === "web" ? availableParallelism() : 2}`,
+      );
       if (lane === "unit")
         expect(args).toContain("--timings=scripts/ci-unit-timings.json");
     } finally {

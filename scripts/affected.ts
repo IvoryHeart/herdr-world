@@ -23,7 +23,8 @@ const ASSET_AUTHORITIES = new Set([
   "scripts/town-golden.browser.test.ts",
 ]);
 /** A test that drives Chrome, as World's browser inventory recognises one. */
-export const CHROME = /CHROME_BIN|--headless/;
+/** Sources that drive Chrome: their own launch, or the shared test browser. */
+export const CHROME = /CHROME_BIN|--headless|testing\/sharedChrome"/;
 const RESOLVE = ["", ".ts", ".tsx", ".js", ".mjs", "/index.ts", "/index.tsx"];
 
 /** Changes that can alter any result: run the full gate. */

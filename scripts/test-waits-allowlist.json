@@ -326,10 +326,6 @@
       "pauses": 4,
       "reason": "Not converted yet; its area sweep (#1419) replaces these with waits on the real signal."
     },
-    "web/src/uiScale.test.ts": {
-      "pauses": 1,
-      "reason": "Not converted yet; its area sweep (#1419) replaces these with waits on the real signal."
-    },
     "web/src/world/code/CodeView.browser.tsx": {
       "pauses": 12,
       "reason": "Not converted yet; its area sweep (#1419) replaces these with waits on the real signal."
