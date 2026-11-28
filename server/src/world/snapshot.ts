@@ -161,7 +161,6 @@ export class WorldSnapshotService<Runtime extends RuntimeWithOperations> {
     private readonly onFreshObservation?: observation.Fresh,
     private readonly onCompleteObservation?: observation.Complete,
     incarnation?: string,
-    /** Runs the response deadline, so tests can expire it in test time. */
     private readonly scheduler: Scheduler = systemScheduler,
   ) {
     this.observation = new WorldObservation(incarnation);

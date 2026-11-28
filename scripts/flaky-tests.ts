@@ -141,6 +141,7 @@ export function archiveFlakyJson(archive: Uint8Array): unknown[] {
   return reports;
 }
 
+/** @internal */
 export async function downloadReports(api: GitHubAPI, run: number) {
   const reports: Array<{ attempt: number; report: FlakeReport }> = [];
   for (let page = 1; ; page++) {

@@ -12,12 +12,13 @@
 import { readFileSync } from "node:fs";
 import { CHROME } from "./affected";
 
-/** Unit files: the slowest recorded on CI takes about 55 s. */
+/** @internal Unit files: the slowest recorded on CI takes about 55 s. */
 export const UNIT_FILE_LIMIT_MS = 180_000;
-/** Chrome-driven files: the slowest recorded World file takes about 140 s. */
+/** @internal Chrome-driven files: the slowest recorded World file takes about 140 s. */
 export const BROWSER_FILE_LIMIT_MS = 300_000;
-/** `--live` checks talk to real runtimes. */
+/** @internal `--live` checks talk to real runtimes. */
 export const LIVE_FILE_LIMIT_MS = 600_000;
+/** @internal */
 export const FILE_LIMIT_ENV = "HERDR_TEST_FILE_TIMEOUT_MS";
 export const FILE_TIMEOUT_EXIT = 124;
 
