@@ -1,3 +1,6 @@
+import { clock as fixtureTime } from "./world/testing/installTestClock";
+import { observeCondition } from "./world/testing/browserEvents";
+import { isBackPending } from "./systemBack";
 import { createRoot } from "react-dom/client";
 import { flushSync } from "react-dom";
 import { StrictMode, useState } from "react";
@@ -33,7 +36,13 @@ const failures: string[] = [];
 const check = (condition: boolean, message: string) => {
   if (!condition) failures.push(`${location.search}: ${message}`);
 };
-const settle = () => new Promise((resolve) => setTimeout(resolve, 120));
+const advance = async () => {
+  await fixtureTime.advance(120);
+  await observeCondition(
+    () => !isBackPending(),
+    "owned history traversal lands",
+  );
+};
 const input = async (method: string, body: Record<string, unknown>) => {
   const response = await fetch("/input", {
     method: "POST",
@@ -224,7 +233,7 @@ async function press(
         clickCount: 1,
       });
   }
-  await settle();
+  await advance();
 }
 // Lower left, clear of the menus anchored at the top right.
 const pressTerminal = () =>
@@ -242,11 +251,15 @@ async function escape(times = 1) {
         code: "Escape",
         windowsVirtualKeyCode: 27,
       });
-  await settle();
+  await advance();
 }
 async function back() {
+  const popped = new Promise<void>((resolve) =>
+    window.addEventListener("popstate", () => resolve(), { once: true }),
+  );
   history.back();
-  await settle();
+  await popped;
+  await advance();
 }
 const menu = () => $('[role="menu"][aria-label="Window actions"]');
 const swatches = () => $('.color-swatch-popover [role="group"]');
@@ -256,7 +269,7 @@ const menuTrigger = () =>
 
 async function run() {
   const deadline = performance.now() + 5_000;
-  while (!textarea() && performance.now() < deadline) await settle();
+  while (!textarea() && performance.now() < deadline) await advance();
   check(Boolean(textarea()), "xterm did not mount");
 
   // The owner's report: a dropdown over the terminal must close when the
@@ -428,7 +441,7 @@ async function run() {
         code: "Tab",
         windowsVirtualKeyCode: 9,
       });
-    await settle();
+    await advance();
     check(!select(), "a quick Tab out left the dropdown open");
     // xterm consumes keys in its textarea; Escape still closes the top layer.
     await press($('button[aria-label="Sort order"]'), "dropdown trigger");

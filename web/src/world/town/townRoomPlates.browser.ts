@@ -1,3 +1,4 @@
+import type { TestClock } from "../testing/testClock";
 import { store } from "../../store";
 import type { LaunchTarget } from "../agentProfiles";
 import { prepareTownRoomCard } from "./townRoomCard.browser";
@@ -17,6 +18,7 @@ export async function checkTownRoomPlates(
   target: Pick<LaunchTarget, "connectionId" | "generation" | "workspaceId">,
   /** How many agents the town has opened or selected so far. */
   activations: () => number,
+  clock: Pick<TestClock, "frame" | "advance">,
 ) {
   const renderer = window.__HERDR_TOWN_RENDERER__!;
   await prepareTownRoomCard(host, renderer, waitFor);
@@ -147,7 +149,7 @@ export async function checkTownRoomPlates(
     new PointerEvent("pointermove", { bubbles: true, pointerType: "mouse" }),
   );
   plate.focus();
-  await new Promise((resolve) => requestAnimationFrame(resolve));
+  await clock.frame();
   check(
     !cardOpen() && plate.getAttribute("aria-expanded") === "false",
     "hovering or focusing a room plate must not open its card",
@@ -232,7 +234,7 @@ export async function checkTownRoomPlates(
   );
   plate.blur();
   // With every card closed, each agent of each room's top row takes a tap.
-  await checkTopRowAgentsTappable(host, check, waitFor, activations);
+  await checkTopRowAgentsTappable(host, check, waitFor, activations, clock);
   // A table's nameplate takes its own pointer and opens the table's card.
   plate.blur();
   const title = plate
@@ -412,6 +414,7 @@ export async function checkTopRowAgentsTappable(
     message: string | (() => string),
   ) => Promise<void>,
   activations: () => number,
+  clock: Pick<TestClock, "frame" | "advance">,
 ) {
   const renderer = window.__HERDR_TOWN_RENDERER__!;
   const canvas = host.querySelector<HTMLElement>(".town-canvas-host")!;
@@ -477,7 +480,7 @@ export async function checkTopRowAgentsTappable(
   const within = async (condition: () => boolean) => {
     for (let wait = 0; wait < 40; wait++) {
       if (condition()) return true;
-      await new Promise((resolve) => setTimeout(resolve, 25));
+      await clock.advance(25);
     }
     return condition();
   };
@@ -533,7 +536,7 @@ export async function checkTopRowAgentsTappable(
         new PointerEvent("pointerleave", { pointerId: 81, pointerType: kind }),
       );
       // Past the double-tap window, so the next agent's tap stands alone.
-      await new Promise((resolve) => setTimeout(resolve, 350));
+      await clock.advance(350);
     }
   check(
     tapped > 0 && misses.length === 0,

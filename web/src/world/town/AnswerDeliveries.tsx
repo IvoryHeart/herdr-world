@@ -1,3 +1,4 @@
+import { clock } from "../../clock";
 import { useEffect, useRef, useState } from "react";
 import { askerName } from "../worldAsks";
 import {
@@ -70,7 +71,7 @@ export function AnswerDeliveries({
           : "Dismissed. Your answer stays saved."),
     );
     if (!error)
-      requestAnimationFrame(() => {
+      clock.requestAnimationFrame(() => {
         const cards =
           region.current?.querySelectorAll<HTMLElement>(".answer-delivery");
         (
@@ -176,7 +177,7 @@ export function AnswerDeliveryCard({
       setError(
         "Delivery changed. Review the current result before sending again.",
       );
-      requestAnimationFrame(() =>
+      clock.requestAnimationFrame(() =>
         (sendButton.current ?? card.current)?.focus(),
       );
     }
@@ -290,7 +291,7 @@ export function AnswerDeliveryCard({
               disabled={busy}
               onClick={() => {
                 setConfirm(null);
-                requestAnimationFrame(() =>
+                clock.requestAnimationFrame(() =>
                   (sendButton.current ?? card.current)?.focus(),
                 );
               }}

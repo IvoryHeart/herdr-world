@@ -1,3 +1,5 @@
+import { withTestClock } from "../testing/testClock";
+import { clock } from "../testing/installTestClock";
 import { installTownMasterFixture } from "../testing/townMasterFixture";
 import { checkSlowTownFlight } from "./townSlowFlight.browser";
 import { checkCoreDesks } from "./coreTownMoves.browser";
@@ -105,7 +107,7 @@ if (exactViewport)
     `${window.innerWidth}x${window.innerHeight}` === exactViewport,
     `the ${exactViewport} case ran in a ${window.innerWidth}x${window.innerHeight} CSS viewport`,
   );
-const settle = () => new Promise((resolve) => setTimeout(resolve, 50));
+const advance = () => clock.frame();
 const progress: { at: number; waitingFor: string; frames: number }[] = [];
 Object.assign(window, { __townCheckProgress: progress });
 async function waitFor(
@@ -117,11 +119,11 @@ async function waitFor(
     waitingFor: typeof message === "string" ? message : "rendered geometry",
     frames: window.__HERDR_TOWN_RENDERER__?.frames ?? 0,
   });
-  for (let index = 0; index < 400; index += 1) {
-    if (condition()) return;
-    await settle();
-  }
-  throw new Error(typeof message === "string" ? message : message());
+  await clock.until(
+    condition,
+    typeof message === "string" ? message : message(),
+    20_000,
+  );
 }
 
 function random(seed: number) {
@@ -982,7 +984,7 @@ async function groupTwoDesks(
       start.x + ((end.x - start.x) * step) / 8,
       start.y + ((end.y - start.y) * step) / 8,
     );
-    await settle();
+    await advance();
   }
   // Resting on the other desk snaps to it: the plaque offers to group.
   await waitFor(
@@ -1019,12 +1021,15 @@ async function groupTwoDesks(
   await waitFor(() => walled() > walls, "the grouped desks have no team wall");
   // A join that grows the room reflows once input pauses; later steps (and
   // the check below) start from that settled layout, as a capture would.
-  await window.__HERDR_WORLD_CAPTURE__!.wait({
-    view: "town",
-    width: innerWidth,
-    height: innerHeight,
-    timeoutMs: 20_000,
-  });
+  await withTestClock(
+    clock,
+    window.__HERDR_WORLD_CAPTURE__!.wait({
+      view: "town",
+      width: innerWidth,
+      height: innerHeight,
+      timeoutMs: 20_000,
+    }),
+  );
   // Joining moves no other desk, and leaves Herdr's tab order alone.
   check(
     !moves.some((move) => move.method === "tab.move"),
@@ -1554,7 +1559,7 @@ async function run() {
       () => desk(targetId) === undefined,
       "removed room remained admitted",
     );
-    await settle();
+    await advance();
     const restored = {
       ...base.connections[base.connections.length - 1]!,
       generation: 4,
@@ -1575,7 +1580,7 @@ async function run() {
       `room navigation renderer error: ${diagnostics.lastError}`,
     );
     root.unmount();
-    await settle();
+    await advance();
     check(
       diagnostics.activeApplications === 0,
       "room navigation unmount leaked a renderer",
@@ -1611,7 +1616,7 @@ async function run() {
     } finally {
       root.unmount();
     }
-    await settle();
+    await advance();
     check(
       diagnostics.activeApplications === 0,
       "slow-flight unmount leaked a renderer",
@@ -1631,7 +1636,7 @@ async function run() {
       lastRequest: () => moves[moves.length - 1],
     });
     root.unmount();
-    await settle();
+    await advance();
     return;
   }
   if (scale === "typical" && mode === "test") {
@@ -1662,7 +1667,7 @@ async function run() {
       }),
     );
     root.unmount();
-    await settle();
+    await advance();
     return;
   }
   // Same seeded topology as typical, in its own case: the complete trip
@@ -1698,7 +1703,7 @@ async function run() {
       },
     );
     root.unmount();
-    await settle();
+    await advance();
     check(
       window.__HERDR_TOWN_RENDERER__?.activeApplications === 0,
       "bus trip unmount left a live renderer",
@@ -1769,7 +1774,7 @@ async function run() {
         );
         await waitFor(() => ghost() === null, "Escape left the room carried");
         roomPress("pointerup", wall.left + 30, below + 10);
-        await settle();
+        await advance();
         check(moves.length === before, "a room put back by Escape moved");
         roomPress("pointerdown", wall.left + 3, below);
         roomPress("pointermove", wall.left + 30, below + 10);
@@ -1784,7 +1789,7 @@ async function run() {
         ] as const;
         roomPress("pointermove", ...floor);
         for (let frame = 0; frame < 10; frame += 1) {
-          await settle();
+          await advance();
           if (ghost()?.dataset.valid === "true") break;
         }
         check(
@@ -1869,9 +1874,10 @@ async function run() {
         workspaceId: base.connections[0]!.snapshot!.workspaces[0]!.workspace_id,
       },
       () => opened.length + inspected.length + selected.length,
+      clock,
     );
     root.unmount();
-    await settle();
+    await advance();
     return;
   }
 
@@ -1890,7 +1896,7 @@ async function run() {
       foldRoomAgents.length,
     );
     root.unmount();
-    await settle();
+    await advance();
     return;
   }
 
@@ -1937,7 +1943,7 @@ async function run() {
       );
     }
     root.unmount();
-    await settle();
+    await advance();
     return;
   }
 
@@ -2022,7 +2028,7 @@ async function run() {
       "protected-room StrictMode duplicated the renderer",
     );
     root.unmount();
-    await settle();
+    await advance();
     check(
       rendered.activeApplications === 0 &&
         document.querySelectorAll("canvas[data-office-canvas]").length === 0,
@@ -2065,7 +2071,7 @@ async function run() {
               ...point,
             }),
           );
-        await new Promise((resolve) => setTimeout(resolve, 900));
+        await clock.advance(900);
       }
       // Then pan with the arrow keys until the room's top is in view.
       for (let step = 0; canvas && step < 12; step += 1) {
@@ -2086,7 +2092,7 @@ async function run() {
         canvas.dispatchEvent(
           new KeyboardEvent("keydown", { key: "ArrowUp", bubbles: true }),
         );
-        await new Promise((resolve) => setTimeout(resolve, 150));
+        await clock.advance(150);
       }
     }
     // Keep the town alive: flip a few statuses every couple of seconds.
@@ -2368,9 +2374,7 @@ async function run() {
         // The reflow hold and its explicit Fold/Expand bypass are scene rules,
         // checked headless in scene/townScene.test.ts.
         root.unmount();
-        await new Promise<void>((resolve) =>
-          requestAnimationFrame(() => resolve()),
-        );
+        await clock.frame();
         return true;
       }
     }
@@ -2448,7 +2452,7 @@ async function run() {
           panelBody
             .querySelector('[aria-label="Outbox"]')
             ?.textContent?.includes("No answers waiting here.") === true,
-        "the Summary's empty Outbox did not settle",
+        "the Summary's empty Outbox did not advance",
       );
       checkSummarySections("empty");
       answerDeliveries.deliveries = [
@@ -2856,7 +2860,7 @@ async function run() {
       const readsBefore = conversationCalls.filter(
         (call) => call.method === "agent_conversation.latest",
       ).length;
-      await new Promise((resolve) => setTimeout(resolve, 4_500));
+      await clock.advance(4_500);
       check(
         conversationCalls.filter(
           (call) => call.method === "agent_conversation.latest",
@@ -2945,7 +2949,7 @@ async function run() {
       () => host.querySelectorAll(".town-chooser-list button").length === 6,
       "the six-pane desk did not list all six panes",
     );
-    await settle();
+    await advance();
     check(
       document.activeElement ===
         host.querySelector(".town-chooser-list button"),
@@ -2958,7 +2962,7 @@ async function run() {
       () => host.querySelector(".town-chooser") === null,
       "Escape did not close the chooser",
     );
-    await settle();
+    await advance();
     check(
       document.activeElement === crowded,
       "focus did not return to the desk",
@@ -3015,7 +3019,7 @@ async function run() {
       );
       conversationUnavailable = false;
       host.querySelector<HTMLButtonElement>(".town-peek-close")!.click();
-      await settle();
+      await advance();
     }
 
     // Tapping the desk of an agent waiting at reception opens its chat.
@@ -3067,7 +3071,7 @@ async function run() {
       townOpens: "terminal",
     });
     window.dispatchEvent(new Event(WORLD_OFFICE_PREFERENCES_CHANGED_EVENT));
-    await settle();
+    await advance();
     const finishedAgent = [
       ...host.querySelectorAll<HTMLButtonElement>(
         '.world-semantic-target[data-kind="agent"]',
@@ -3122,7 +3126,7 @@ async function run() {
       townOpens: "chat",
     });
     window.dispatchEvent(new Event(WORLD_OFFICE_PREFERENCES_CHANGED_EVENT));
-    await settle();
+    await advance();
     opened.length = 0;
 
     // The Town master's chat (FirstMate's) is docked from the start on wide
@@ -3151,8 +3155,8 @@ async function run() {
         "the Town master's chat should open on Chat",
       );
     } else {
-      await settle();
-      await settle();
+      await advance();
+      await advance();
       check(
         inspected.length === 0,
         "a phone must not open the Town master's chat by itself",
@@ -3160,7 +3164,7 @@ async function run() {
     }
     // Changing views and back does not reopen it in the same visit.
     await fixtureTownMaster(null);
-    await settle();
+    await advance();
     await fixtureTownMaster(
       (() => {
         const agent = worldFor(base.connections).leaves.find(
@@ -3174,8 +3178,8 @@ async function run() {
         };
       })(),
     );
-    await settle();
-    await settle();
+    await advance();
+    await advance();
     check(
       inspected.length === (phone ? 0 : 1),
       "the Town master's chat opened again in the same visit",
@@ -3700,7 +3704,7 @@ async function run() {
         // The ghost judges the drop target on a later frame, whose timing
         // depends on the renderer (SwiftShader or the GPU); give it a few.
         for (let frame = 0; frame < 10; frame += 1) {
-          await settle();
+          await advance();
           if (ghost()?.dataset.valid === "true") break;
         }
         const label = ghost()?.textContent ?? "";
@@ -4022,7 +4026,7 @@ async function run() {
           })),
         ),
       );
-      await new Promise((resolve) => setTimeout(resolve, 600));
+      await clock.advance(600);
       check(
         diagnostics.layout!.geometry === before,
         "the town reflowed while the user held it",
@@ -4147,7 +4151,7 @@ async function run() {
           'button[aria-label="Show the whole town"]',
         )!
         .click();
-      await new Promise((resolve) => setTimeout(resolve, 100));
+      await clock.advance(100);
       await waitFor(
         () => !diagnostics.flying,
         "Town did not finish showing the whole town",
@@ -4163,7 +4167,7 @@ async function run() {
             !diagnostics.transitioning &&
             !diagnostics.flying &&
             diagnostics.buildingsDrawn === diagnostics.layout!.buildings,
-          `Town did not settle after ${what}`,
+          `Town did not advance after ${what}`,
         );
       };
       await settled("showing the whole town");
@@ -4266,7 +4270,7 @@ async function run() {
     "duplicate town canvases",
   );
   root.unmount();
-  await settle();
+  await advance();
   check(
     window.__HERDR_TOWN_RENDERER__!.activeApplications === 0,
     "unmount left a live renderer",

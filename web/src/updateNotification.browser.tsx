@@ -1,3 +1,4 @@
+import { clock as fixtureTime } from "./world/testing/installTestClock";
 import { createUpdateNotificationHistory } from "./updateNotifications";
 import { worldLocalStorage } from "./browserStorage";
 import { type ComponentType, Suspense, useState } from "react";
@@ -20,17 +21,12 @@ const failures: string[] = [];
 const check = (value: unknown, message: string) => {
   if (!value) failures.push(message);
 };
-const frame = () =>
-  new Promise<void>((resolve) =>
-    requestAnimationFrame(() => requestAnimationFrame(() => resolve())),
-  );
+const frame = () => fixtureTime.frame();
 async function until(predicate: () => unknown) {
-  for (let i = 0; i < 120; i++) {
-    if (predicate()) return;
-    await frame();
-  }
-  throw new Error(
+  await fixtureTime.until(
+    () => !!predicate(),
     `Update fixture did not reach ${predicate.name || predicate.toString()}: ${document.body.innerText.slice(0, 500)}`,
+    3840,
   );
 }
 const nativeFetch = window.fetch.bind(window);

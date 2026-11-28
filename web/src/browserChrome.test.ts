@@ -205,9 +205,13 @@ test.each(["exit", "timeout"])(
     writeFileSync(errorOutput, "browser startup diagnostic");
     jest.useFakeTimers();
     try {
-      const child = { exitCode: null as number | null };
+      const exited = Promise.withResolvers<number>();
+      const child = { exitCode: null as number | null, exited: exited.promise };
       const ready = waitForChromePort(child, profile, errorOutput);
-      if (failure === "exit") child.exitCode = 1;
+      if (failure === "exit") {
+        child.exitCode = 1;
+        exited.resolve(1);
+      }
       jest.advanceTimersByTime(failure === "exit" ? 25 : 20000);
       await expect(ready).rejects.toThrow(
         failure === "exit"

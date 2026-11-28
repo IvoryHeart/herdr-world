@@ -2,7 +2,7 @@ name: CI
 
 on:
     pull_request:
-        types: [opened, synchronize, reopened, labeled]
+        types: [opened, synchronize, reopened, labeled, edited, closed]
     # The queue must validate its combined commit afresh, independently of PR proof.
     merge_group:
         types: [checks_requested]
@@ -35,8 +35,8 @@ permissions:
 concurrency:
     # Each main SHA receives its own lightweight evidence report.
     group: ci-${{ github.workflow }}-${{ github.event.pull_request.number || (github.event_name == 'push' && github.sha) || github.ref }}
-    # PR events queue and inspect existing evidence for that head/tree.
-    cancel-in-progress: false
+    # A new PR event cancels the obsolete head before requesting more runners.
+    cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 jobs:
     browser-diagnostics:
@@ -133,6 +133,13 @@ jobs:
               with:
                   bun-version: "1.4.4"
                   no-cache: true
+            - name: Scan introduced commits and PR metadata without exposing matches
+              run: |
+                  if [ "$GITHUB_EVENT_NAME" = pull_request ]; then
+                    bun scripts/check-privacy.ts --event "$GITHUB_EVENT_PATH"
+                  else
+                    bun run check:privacy
+                  fi
             - name: Determine validation scope
               id: scope
               env:
@@ -288,7 +295,7 @@ jobs:
                   HERDR_TEST_EXCLUDE_WORLD_BROWSER: "0"
                   HERDR_TEST_MAX_CONCURRENCY: "2"
                   HERDR_CI_SELECTION: ${{ needs.validation-scope.outputs.selection }}
-              run: bun scripts/ci-tests.ts web ${{ matrix.web }}/2
+              run: bun scripts/run-browser-tests.ts --ci-web=${{ matrix.web }}/2
             - name: Upload web browser test results
               if: always() && matrix.web != 0 && needs.validation-scope.outputs.world == 'true' && toJSON(fromJSON(needs.validation-scope.outputs.selection).web) != '[]'
               uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7
@@ -329,6 +336,8 @@ jobs:
         needs: validation-scope
         if: "!cancelled() && needs.validation-scope.result == 'success' && needs.validation-scope.outputs.verification == 'true'"
         uses: ./.github/workflows/behavioral-verification.yml
+        with:
+            diagnostic-control: ${{ fromJSON(needs.validation-scope.outputs.selection).full || fromJSON(needs.validation-scope.outputs.selection).diagnosticControl }}
 
     model-evidence:
         name: Main model evidence

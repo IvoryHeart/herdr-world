@@ -97,7 +97,13 @@ export function useWorldCreatedTerminal({
         const node = exactNode();
         return {
           available: Boolean(node?.actionable && !node.stale),
-          observation: `${worldRuntimeStore.get().observedAt}:${connectionSnapshot(snapshot, event.connectionId).lastRefresh}`,
+          // These are source-owned versions; two observations can share a timestamp.
+          observation: JSON.stringify([
+            worldRuntimeStore.get().serviceIncarnation,
+            worldRuntimeStore.get().revision,
+            connectionSnapshot(snapshot, event.connectionId).browserNavigation
+              .revision,
+          ]),
           invalidReason:
             intentRequestRef.current !== expectedIntent
               ? "A newer Inspector selection superseded automatic focus."

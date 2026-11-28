@@ -1,3 +1,4 @@
+import { clock } from "../testing/installTestClock";
 import { WORLD_AGENT_LAUNCH_EVENT } from "../agentProfiles";
 import { WORLD_APARTMENTS_EVENT } from "../apartments/apartmentsStore";
 import { spotlightHelpTarget } from "../../help/helpTry";
@@ -266,7 +267,7 @@ export async function checkTownCenter(
   // The plaque opens it too; a press outside closes it.
   sign()!.click();
   await waitFor(() => ring() !== null, "the plaque opened no menu");
-  await new Promise((resolve) => setTimeout(resolve, 350));
+  await clock.advance(350);
   host.querySelector(".town-center-backdrop")!.dispatchEvent(
     new PointerEvent("pointerdown", {
       bubbles: true,
@@ -391,10 +392,7 @@ export async function checkApartmentsTry(
     );
   };
   // The world layer follows the camera on Town's next frame.
-  const frame = () =>
-    new Promise((resolve) =>
-      requestAnimationFrame(() => requestAnimationFrame(resolve)),
-    );
+  const frame = () => clock.frame();
   const press = async (key: string) => {
     canvas.dispatchEvent(new KeyboardEvent("keydown", { key, bubbles: true }));
     await frame();

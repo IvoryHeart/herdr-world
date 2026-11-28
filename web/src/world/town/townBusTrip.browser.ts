@@ -1,3 +1,4 @@
+import { clock } from "../testing/installTestClock";
 import type { BinEntry, BinState } from "../../../../shared/bin";
 import { flushSync } from "react-dom";
 import { worldBinStore } from "../bin/useWorldBin";
@@ -23,7 +24,7 @@ async function whileDrawing(condition: () => boolean, message: string) {
     }
     if (now - start > 600 || performance.now() - since > 5_000)
       throw new Error(`${message} (${now - start} frames drawn)`);
-    await new Promise((resolve) => setTimeout(resolve, 50));
+    await clock.advance(50);
   }
 }
 

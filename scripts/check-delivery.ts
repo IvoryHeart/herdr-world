@@ -6,14 +6,14 @@ import {
 } from "node:fs";
 import { basename, join } from "node:path";
 import { localTestChrome } from "./test-chrome";
-import { CHROME, TEST, type Affected } from "./affected";
+import { TEST, type Affected } from "./affected";
 import { acquireCheckSlot, type CheckClass, heldEnv } from "./check-lock";
 import { repositorySelection } from "./validation-scope";
-import { worldBrowserSuites } from "./world-browser-suites";
+import { webBrowserSuites, worldBrowserSuites } from "./world-browser-suites";
 
 /**
  * Local checks in lanes. Static checks run first, outside the heavy queue.
- * The default (`check:changed`, used by pre-push) runs static checks and
+ * The default (`check:changed`) runs static checks and
  * affected non-browser units. A full selection expands only the unit inventory.
  * CI owns browser and behavioral acceptance before merge.
  *
@@ -34,6 +34,12 @@ type Lane = {
 };
 
 const args = process.argv.slice(2);
+const onlyLane = args.find((arg) => arg.startsWith("--lane="))?.slice(7);
+if (
+  onlyLane &&
+  !["static", "unit", "browser", "quiet", "verification"].includes(onlyLane)
+)
+  throw new Error("Unknown delivery lane");
 const browserOnly = args.includes("--browser");
 const staticOnly = args.includes("--static");
 const staticGroup = args
@@ -131,16 +137,24 @@ function plan(selection: Affected) {
   const tests = (selection.full ? trackedTests() : selection.unit).filter(
     (path) => !world.has(path),
   );
-  const chrome = tests.filter((path) =>
-    CHROME.test(readFileSync(join(root, path), "utf8")),
-  );
+  const chrome = tests.filter((path) => webBrowserSuites.includes(path));
   const unit = tests.filter((path) => !chrome.includes(path));
   const busy: Lane[] = [];
   if (unit.length && !browserOnly)
     busy.push({
       name: "unit",
       queue: "light",
-      commands: [["bun", "scripts/run-tests.ts", ...unit]],
+      env: { HERDR_TEST_EXCLUDE_WORLD_BROWSER: "1" },
+      commands: [
+        [
+          "bun",
+          "scripts/run-tests.ts",
+          ...unit,
+          "--timings=scripts/ci-unit-timings.json",
+          "--reporter=junit",
+          "--reporter-outfile=.agents/delivery/timing-unit.xml",
+        ],
+      ],
     });
   if (browser.length && (full || browserOnly))
     busy.push({
@@ -154,7 +168,17 @@ function plan(selection: Affected) {
     quiet.push({
       name: "quiet",
       queue: "browser",
-      commands: [["bun", "scripts/run-tests.ts", ...chrome, "--parallel=2"]],
+      commands: [
+        [
+          "bun",
+          "scripts/run-browser-tests.ts",
+          ...chrome,
+          "--parallel=4",
+          "--max-concurrency=12",
+          "--reporter=junit",
+          "--reporter-outfile=.agents/delivery/timing-quiet.xml",
+        ],
+      ],
     });
   const verification: Lane[] =
     full && !browserOnly
@@ -220,10 +244,19 @@ async function runLaneCommands(lane: Lane, log: string): Promise<Result> {
 }
 
 const selection = scope();
-const { busy, quiet, verification } = plan(selection);
+const planned = plan(selection);
+const busy = planned.busy.filter((lane) => !onlyLane || lane.name === onlyLane);
+const quiet = planned.quiet.filter(
+  (lane) => !onlyLane || lane.name === onlyLane,
+);
+const verification = planned.verification.filter(
+  (lane) => !onlyLane || lane.name === onlyLane,
+);
 const lanes = [...verification, ...busy, ...quiet];
 mkdirSync(logs, { recursive: true });
-for (const name of ["unit", "browser", "quiet", "verification"])
+for (const name of ["unit", "browser", "quiet", "verification"].filter(
+  (name) => !onlyLane || name === onlyLane,
+))
   writeFileSync(join(logs, `${name}.log`), "");
 console.info(
   `[gate] ${staticOnly ? "static" : browserOnly ? "browser" : full ? "full" : tooling ? "tooling" : "changed"}: ${selection.why}; lanes: ${[...(browserOnly ? [] : ["static"]), ...lanes.map((lane) => lane.name)].join(", ")}`,
@@ -234,7 +267,7 @@ if (!selection.full)
   );
 const results: Result[] = [];
 let firstStaticFailure: Result | undefined;
-if (!browserOnly) {
+if (!browserOnly && (!onlyLane || onlyLane === "static")) {
   const checked = await Promise.all(
     staticCommands.map(async (command) => {
       const result = await runLane({
@@ -303,3 +336,7 @@ for (const result of results)
     `[gate] ${result.name}: ${result.code === 0 ? "passed" : `failed (exit ${result.code})`} in ${result.seconds.toFixed(0)}s — ${result.log}`,
   );
 process.exitCode = failed.length ? 1 : 0;
+writeFileSync(
+  join(logs, "results.json"),
+  JSON.stringify(results, null, 2) + "\n",
+);

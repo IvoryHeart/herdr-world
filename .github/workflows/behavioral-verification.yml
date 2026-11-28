@@ -3,6 +3,10 @@ name: Behavioral verification
 # Accepted bounded contracts; protected Delivery checks depend on this workflow.
 on:
   workflow_call:
+    inputs:
+      diagnostic-control:
+        type: boolean
+        default: true
   workflow_dispatch:
 
 permissions:
@@ -79,7 +83,7 @@ jobs:
         if: steps.reuse.outputs.reused != 'true'
         run: bun scripts/ci-model-groups.ts run ${{ matrix.shard }}
       - name: Exercise a failing candidate and verify retained diagnostics
-        if: steps.reuse.outputs.reused != 'true'
+        if: matrix.shard == 1 && (github.event_name == 'workflow_dispatch' || inputs.diagnostic-control)
         run: bun run verification:diagnostic-control
       - name: Prepare passing model evidence for reuse
         if: steps.reuse.outputs.reused != 'true'

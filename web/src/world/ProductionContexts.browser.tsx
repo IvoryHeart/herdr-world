@@ -1,4 +1,8 @@
+import { observeCondition } from "./testing/browserEvents";
 import { Profiler } from "react";
+import { setTownDaylightMode } from "./town/townDaylight";
+// Transport/readiness work must have the same lighting on every runner.
+setTownDaylightMode("day");
 import { Application } from "pixi.js";
 import { createRoot } from "react-dom/client";
 import { bridge, type ConnectionClient } from "../api";
@@ -715,9 +719,15 @@ async function run() {
             ),
           `${view} did not finish progressive controls`,
         );
-      // Keep input and real pushes running throughout layout, canvas paints and
-      // a bounded settling window, rather than stopping at first DOM.
-      await new Promise((resolve) => setTimeout(resolve, 1000));
+      // Keep native input and pushes running until both have made observable
+      // progress through the mounted application, including the actual paints.
+      await observeCondition(
+        () =>
+          acknowledgements.some((ack) => ack.phase === stage) &&
+          receivedFrames > 0 &&
+          presentedFrames > 0,
+        "Mounted input and terminal frames did not complete",
+      );
       await frames(4);
       if (view === "town") {
         const renderer = window.__HERDR_TOWN_RENDERER__;

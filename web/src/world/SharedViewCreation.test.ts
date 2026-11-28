@@ -1,3 +1,7 @@
+import {
+  launchTestBrowser,
+  type TestBrowser,
+} from "../../../scripts/testing/browser-session";
 import { afterAll, beforeAll, expect, test } from "bun:test";
 import { mkdtemp, readFile, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
@@ -53,6 +57,7 @@ test
     const result = Promise.withResolvers<string[]>();
     let socket: WebSocket | undefined;
     const pageRequested = Promise.withResolvers<void>();
+    let driver: InputDriver | undefined;
     const server = Bun.serve({
       hostname: "127.0.0.1",
       port: 0,
@@ -74,7 +79,7 @@ test
             socket!.onopen = () => resolve();
             socket!.onerror = () => reject(new Error("CDP connection failed"));
           });
-          const driver = new InputDriver(socket);
+          driver = new InputDriver(socket);
           await driver.call("Emulation.setEmulatedMedia", {
             features: [{ name: "prefers-reduced-motion", value: "reduce" }],
           });
@@ -88,6 +93,12 @@ test
             enabled: width === 390,
           });
           return new Response(String(width));
+        }
+        if (path === "/input" && request.method === "POST") {
+          if (!driver) return new Response("Input not ready", { status: 503 });
+          const { method, params } = await request.json();
+          await driver.call(method, params);
+          return new Response("ok");
         }
         if (path === "/result") {
           result.resolve(await request.json());
@@ -107,10 +118,10 @@ test
         );
       },
     });
-    let browser: ReturnType<typeof Bun.spawn> | undefined;
+    let browser: TestBrowser | undefined;
     try {
       for (const [path, output] of bundle.assets) assets.set(path, output);
-      browser = Bun.spawn(
+      browser = await launchTestBrowser(
         [
           chrome!,
           "--headless=new",
@@ -127,6 +138,7 @@ test
         ],
         { stdout: "ignore", stderr: Bun.file(join(dir, "browser.log")) },
       );
+      await browser.start();
       const observed = await waitForBrowserFixture(
         pageRequested.promise,
         result.promise,

@@ -1,3 +1,4 @@
+import { spawnTestChrome } from "./testing/browser-session";
 import { mkdtempSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
@@ -21,7 +22,7 @@ export async function warmChrome(
   const profile = mkdtempSync(join(tmpdir(), "chrome-warmup-"));
   const began = performance.now();
   try {
-    const child = Bun.spawn(
+    const child = spawnTestChrome(
       [
         chrome,
         "--headless=new",

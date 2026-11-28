@@ -29,6 +29,37 @@ test("individual cases from a heavy file occupy different workers", () => {
   );
 });
 
+test("local case queues use available capacity without changing CI's default cap", async () => {
+  const files = Array.from({ length: 18 }, (_, index) => `file-${index}`);
+  const workers = files.map((file) => [
+    { file, names: ["case"], remaining: true, seconds: 1 },
+  ]);
+  let active = 0,
+    peak = 0;
+  const seen: string[] = [];
+  expect(
+    await executeWorldBrowserCases(
+      workers,
+      files,
+      async (task) => {
+        active++;
+        peak = Math.max(peak, active);
+        seen.push(task.file);
+        await Promise.resolve();
+        active--;
+        return 0;
+      },
+      4,
+      18,
+    ),
+  ).toBe(0);
+  expect(peak).toBe(4);
+  expect(seen.sort()).toEqual([...files].sort());
+  await expect(
+    executeWorldBrowserCases(workers, files, async () => 0),
+  ).rejects.toThrow("Too many");
+});
+
 test("known, new and renamed cases run exactly once, including colliding names in other files", () => {
   const timings = {
     a: { "x [brackets] $": 40, shared: 30, deleted: 20 },

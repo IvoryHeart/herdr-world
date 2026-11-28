@@ -109,21 +109,50 @@ try commands. No discovery probes or additional servers are started by Shipyard.
 Tests react instead of pausing. Await the event, promise, message, DOM change or
 counted read the case checks; when code gives no signal, add one to the code
 under test (as `afterAskPeerReads` does) rather than polling. To prove that
-something does not happen, count the cycles that would have done it. Product
-timers take their durations from `shared/timings.ts`; a test runs the same real
-timers on the few-millisecond set with `useTestTimings()` or `withTestTimings()`
-from `shared/testing/timings.ts`, and a spawned process with
-`--preload ./shared/testing/timings-preload.ts`. Production code never switches
-the set. `bun run check:test-waits` (static lane) fails on a new fixed sleep in a
-test file; `scripts/test-waits-allowlist.json` only shrinks. Every pausing line
-counts, including each call of a pausing helper and pauses inside one. A tick of
-at most 10 ms is exempt only directly in a loop that polls, where every
-iteration checks the thing it waits for: its condition or a conditional exit
-reads observable state, or it leaves after real work succeeds in `try`. A tick
-in a loop bounded only by a count (`i = i + 1`), a collection or elapsed time
-(`Date.now() - started < 500`), one whose exit only a counter gates, or a
-callback declared in a loop (a test body) counts. After removing sleeps, `bun scripts/check-test-waits.ts --update`
-lowers its entry.
+something does not happen, count the cycles that would have done it. Production
+time reads and scheduling go through injected ports: server `Clock`/`Scheduler`,
+web `web/src/clock.ts` (including animation frames). Drive a fake clock or await
+the real event. A rejecting deadline bounds a wait; it never makes a passing test
+advance. `bun run check:test-waits` checks every test and imported test helper.
+Browser fixed pauses and polling sleeps are forbidden, including short sleeps.
+Legacy unit pauses remain counted with reasons in
+`scripts/test-waits-allowlist.json`; legacy short unit polling ticks are counted in
+`scripts/test-short-polls-allowlist.json`. Both allowances only shrink. Direct native
+production clock readers and schedulers are counted by operation and file in
+`scripts/clock-ports-allowlist.json`; callback defaults, qualified globals, timer
+imports and current-time Date constructors are covered too. First adoption is
+checked against the immutable base; new native time outside the ports fails.
+After converting a path, `bun scripts/check-test-waits.ts --update` lowers the
+allowlists to their current counts.
+
+`bun run test` owns one Chrome for the selected browser files. Every case gets
+an isolated incognito context; closing it cannot close a sibling's targets.
+Local web runners admit at most eight contexts and World runners four,
+bounded by available cores. CPU
+canvas rendering preserves the former web fixtures' rendering mode while
+Town keeps WebGL; a saturated shared canvas GPU queue must not block input. The managed
+runner launches one Chrome even with `HERDR_WORLD_TEST_GPU=1`: it checks that
+browser's hardware renderer directly. Unavailable hardware fails the opt-in;
+the default remains calibrated software. Standalone capture/probe commands keep
+their existing hardware probe and fallback.
+The launch pipe, page messages, DOM events and frames provide readiness signals.
+Driven layout fixtures start at noon on the measurement date; transport fixtures
+hold daytime lighting. Lighting contracts select their explicit sky modes.
+Immutable fixture bundles are built once per job and reused across cases;
+`HERDR_WORLD_TEST_ASSETS` is prepared locally as well as in CI. Linux x64 uses the
+same downloaded Chrome pin as CI when `CHROME_BIN` is unset, preserving the
+sandbox through the host's installed Chrome AppArmor profile when needed.
+
+Run `bun run test:timings` for isolated sequential static, unit, World browser,
+web browser and verification measurements. It acquires the machine check slot
+before `/usr/bin/time`, so queue delay is reported separately from lane work.
+`.agents/delivery/timings.md` records uptime/load, wall time, peak memory,
+slowest ten files/cases and browser launch/context/load/frame/wait/assertion
+phases. Repeat measurements whose load exceeds 8. `--fresh-models` forces a cold
+four-worker model run; ordinary local verification only reuses a complete passing
+receipt when the tracked source inventory, every source byte and tools match.
+Setup, type/notices checks and the diagnostic control still run. CI retains its
+finer per-model input keys and trusted-main admission rules.
 
 ## Development tools
 

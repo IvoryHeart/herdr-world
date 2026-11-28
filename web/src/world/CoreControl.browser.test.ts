@@ -1,3 +1,7 @@
+import {
+  launchTestBrowser,
+  type TestBrowser,
+} from "../../../scripts/testing/browser-session";
 import { expect, test } from "bun:test";
 import { existsSync } from "node:fs";
 import { mkdir, mkdtemp, rm, writeFile } from "node:fs/promises";
@@ -227,12 +231,12 @@ for (const scene of ["launcher", "bin"] as const)
             : new Response("Not found", { status: 404 });
         },
       });
-      let child: ReturnType<typeof Bun.spawn> | undefined;
+      let child: TestBrowser | undefined;
       let connection: Awaited<ReturnType<typeof connectCapture>> | undefined;
       try {
         const profile = join(dir, "profile"),
           log = join(dir, "chrome.log");
-        child = Bun.spawn(
+        child = await launchTestBrowser(
           [
             chrome!,
             "--headless=new",
@@ -246,6 +250,7 @@ for (const scene of ["launcher", "bin"] as const)
           ],
           { stdout: "ignore", stderr: Bun.file(log) },
         );
+        await child.start();
         const exited = child.exited.then(async (code) => {
           throw new Error(
             `Chrome exited ${code}: ${await Bun.file(log).text()}`,
@@ -334,7 +339,7 @@ test.skipIf(!chrome).each([1440, 390])(
     const requested = Promise.withResolvers<void>();
     const profile = join(dir, "profile"),
       log = join(dir, "chrome.log");
-    let child: ReturnType<typeof Bun.spawn> | undefined;
+    let child: TestBrowser | undefined;
     let socket: WebSocket | undefined;
     const server = Bun.serve({
       hostname: "127.0.0.1",
@@ -394,7 +399,7 @@ test.skipIf(!chrome).each([1440, 390])(
       },
     });
     try {
-      child = Bun.spawn(
+      child = await launchTestBrowser(
         [
           chrome!,
           "--headless=new",
@@ -410,6 +415,7 @@ test.skipIf(!chrome).each([1440, 390])(
         ],
         { stdout: "ignore", stderr: Bun.file(log) },
       );
+      await child.start();
       const exited = child.exited.then(async (code) => {
         throw new Error(`Chrome exited ${code}: ${await Bun.file(log).text()}`);
       });
@@ -445,7 +451,7 @@ test.skipIf(!chrome)(
     const requested = Promise.withResolvers<void>();
     const profile = join(dir, "profile"),
       log = join(dir, "chrome.log");
-    let child: ReturnType<typeof Bun.spawn> | undefined;
+    let child: TestBrowser | undefined;
     let socket: WebSocket | undefined;
     let driver: InputDriver | undefined;
     const KEYS: Record<
@@ -570,7 +576,7 @@ test.skipIf(!chrome)(
       },
     });
     try {
-      child = Bun.spawn(
+      child = await launchTestBrowser(
         [
           chrome!,
           "--headless=new",
@@ -586,6 +592,7 @@ test.skipIf(!chrome)(
         ],
         { stdout: "ignore", stderr: Bun.file(log) },
       );
+      await child.start();
       const exited = child.exited.then(async (code) => {
         throw new Error(`Chrome exited ${code}: ${await Bun.file(log).text()}`);
       });

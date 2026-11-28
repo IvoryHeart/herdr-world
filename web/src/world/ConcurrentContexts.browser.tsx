@@ -1,7 +1,29 @@
+import { observeCondition } from "./testing/browserEvents";
 import { createRoot } from "react-dom/client";
 import { Profiler } from "react";
 import { Terminal } from "@xterm/xterm";
 import { FitAddon } from "@xterm/addon-fit";
+const writeTerminal = Terminal.prototype.write;
+let pendingWrites = 0;
+const writeWaiters = new Set<() => void>();
+Terminal.prototype.write = function (data, callback) {
+  pendingWrites++;
+  writeTerminal.call(this, data, () => {
+    callback?.();
+    if (--pendingWrites === 0) {
+      for (const resolve of writeWaiters) resolve();
+      writeWaiters.clear();
+    }
+  });
+};
+const terminalWritesDrained = () =>
+  pendingWrites === 0
+    ? Promise.resolve()
+    : new Promise<void>((resolve) => writeWaiters.add(resolve));
+const renderedFrame = () =>
+  new Promise<void>((resolve) =>
+    requestAnimationFrame(() => requestAnimationFrame(() => resolve())),
+  );
 import { decodeWorldSnapshot } from "../worldSnapshotDecode";
 import {
   bridge,
@@ -177,6 +199,7 @@ const longTasks = new PerformanceObserver((list) => {
 });
 longTasks.observe({ type: "longtask", buffered: true });
 async function beginStress(phase: string) {
+  Object.assign(window, { __concurrentStage: phase });
   stressPhase = phase;
   workAtPhaseStart = { ...window.__HERDR_WORLD_WORK__ };
   performance.mark(`stress:${phase}:begin`);
@@ -355,34 +378,12 @@ function client(host: string, generation: number | null): ConnectionClient {
   };
 }
 
-function waitForDom(
-  predicate: () => boolean,
-  label = "component",
-): Promise<void> {
-  if (predicate()) return Promise.resolve();
-  return new Promise((resolve, reject) => {
-    const observer = new MutationObserver(() => {
-      if (predicate()) {
-        observer.disconnect();
-        clearTimeout(timer);
-        resolve();
-      }
-    });
-    const timer = setTimeout(() => {
-      observer.disconnect();
-      reject(
-        new Error(
-          `Synthetic ${label} admission timed out (phase ${stressPhase ?? "none"})`,
-        ),
-      );
-    }, 10_000);
-    observer.observe(document.body, {
-      subtree: true,
-      childList: true,
-      attributes: true,
-      characterData: true,
-    });
-  });
+function waitForDom(condition: () => boolean, label = "DOM") {
+  return observeCondition(
+    condition,
+    `Synthetic ${label} admission timed out (phase ${stressPhase ?? "none"})`,
+    10_000,
+  );
 }
 
 async function run() {
@@ -488,6 +489,7 @@ async function run() {
       />
     </div>,
   );
+  Object.assign(window, { __concurrentStage: "attached-and-files" });
   await Promise.all([bothAttached.promise, filesStarted.promise]);
   // The Inspector and its file preview load lazily; measure once both are in.
   await waitForDom(
@@ -511,11 +513,13 @@ async function run() {
       });
   };
   identicalFrame();
-  await new Promise((resolve) => setTimeout(resolve, 100));
+  await terminalWritesDrained();
+  await renderedFrame();
   const stableRefreshes = alphaRefreshes;
   for (let index = 0; index < 8; index++) {
     identicalFrame();
-    await new Promise((resolve) => setTimeout(resolve, 30));
+    await terminalWritesDrained();
+    await renderedFrame();
   }
   check(
     alphaRefreshes === stableRefreshes,
@@ -731,7 +735,8 @@ async function run() {
   };
   await beginStress("noisy-output");
   emitNoise();
-  await new Promise((resolve) => setTimeout(resolve, 150));
+  await terminalWritesDrained();
+  await renderedFrame();
   await finishStress();
   for (const [turn, host] of ["alpha", "beta", "alpha"].entries()) {
     if (turn > 0) emitNoise();
@@ -742,15 +747,11 @@ async function run() {
     )!;
     input.focus();
     const began = performance.now();
-    input.dispatchEvent(
-      new KeyboardEvent("keydown", {
-        key: "a",
-        code: "KeyA",
-        keyCode: 65,
-        which: 65,
-        bubbles: true,
-      }),
-    );
+    await fetch("/input-once", {
+      method: "POST",
+      body: JSON.stringify({ host, key: "a" }),
+    });
+    Object.assign(window, { __concurrentStage: "input-" + host });
     await response.promise;
     if (host === "beta")
       measurements.healthyInputMs = performance.now() - began;
@@ -884,15 +885,10 @@ async function run() {
     '[data-host="beta"] .xterm-helper-textarea',
   )!;
   input.focus();
-  input.dispatchEvent(
-    new KeyboardEvent("keydown", {
-      key: "b",
-      code: "KeyB",
-      keyCode: 66,
-      which: 66,
-      bubbles: true,
-    }),
-  );
+  await fetch("/input-once", {
+    method: "POST",
+    body: JSON.stringify({ host: "beta", key: "b" }),
+  });
   await response.promise;
   check(
     calls.filter(

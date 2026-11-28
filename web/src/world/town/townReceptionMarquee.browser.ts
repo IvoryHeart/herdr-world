@@ -1,3 +1,4 @@
+import { clock } from "../testing/installTestClock";
 /**
  * Reception at scale in the real Town scene (#903): a closed reception is a
  * small marquee of faces whose board controls are hidden and unfocusable;
@@ -13,7 +14,7 @@ export async function checkTownReceptionMarquee(
     message: string | (() => string),
   ) => Promise<void>,
 ) {
-  const frame = () => new Promise((done) => requestAnimationFrame(done));
+  const frame = () => clock.frame();
   await waitFor(
     () =>
       window.__HERDR_TOWN_RENDERER__?.ready === true &&

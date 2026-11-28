@@ -1,3 +1,4 @@
+import { spawnTestChrome } from "./testing/browser-session";
 /**
  * Town at scale: captures the production TownCanvas with the scale scene
  * (web/src/world/town/townScaleScene.ts) at every zoom step on a laptop and a
@@ -64,7 +65,7 @@ export async function runTownScale(options: {
         : new Response("Not found", { status: 404 });
     },
   });
-  const browser = Bun.spawn(
+  const browser = spawnTestChrome(
     [
       options.chrome,
       "--headless=new",

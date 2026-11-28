@@ -57,6 +57,11 @@ transient retry and deadline/late completion, and shared-view stale-observation
 admission. It checks the signal supplied to the opener, subscription cleanup and
 notice settlement. Stale observations run through the actual lease effect while
 creation is pending; disconnected, replaced and removed owners retire intent.
+The production hook's observation token uses World's service/publication revision
+and the captured connection's browser navigation revision. Tests hold observation
+timestamps constant while each version advances, so elapsed time cannot stand in
+for a new observation. The existing model's explicit observation token covers
+this ordering; the hook regression covers its mapping to the real sources.
 Its controlled opener does not establish actual browser focus
 or cancellation wiring. The browser keeps launcher-to-Inspector rendering,
 explicit Close-button supersession, view handoff and terminal lifecycle checks.

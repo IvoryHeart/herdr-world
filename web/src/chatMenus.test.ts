@@ -1,3 +1,8 @@
+import { sharedBrowserBuild } from "./world/testing/sharedBrowserBuild";
+import {
+  launchTestBrowser,
+  type TestBrowser,
+} from "../../scripts/testing/browser-session";
 import { expect, test } from "bun:test";
 import { mkdtemp, readFile, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
@@ -37,9 +42,9 @@ for (const width of [1280, 390])
           );
         },
       });
-      let browser: ReturnType<typeof Bun.spawn> | undefined;
+      let browser: TestBrowser | undefined;
       try {
-        const build = await Bun.build({
+        const build = await sharedBrowserBuild(import.meta.path, {
           entrypoints: [join(import.meta.dir, "chatMenus.browser.tsx")],
           outdir: dir,
           target: "browser",
@@ -69,7 +74,7 @@ for (const width of [1280, 390])
         for (const asset of build.outputs)
           assets.set(`/${basename(asset.path)}`, asset);
         const log = join(dir, "browser.log");
-        browser = Bun.spawn(
+        browser = await launchTestBrowser(
           [
             chrome!,
             "--headless=new",
@@ -83,6 +88,7 @@ for (const width of [1280, 390])
           ],
           { stdout: "ignore", stderr: Bun.file(log) },
         );
+        await browser.start();
         const observed = await waitForBrowserFixture(
           requested.promise,
           result.promise,

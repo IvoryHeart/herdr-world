@@ -1,3 +1,4 @@
+import { clock } from "../../clock";
 import { useEffect } from "react";
 import type {
   UsageEntity,
@@ -425,11 +426,11 @@ export function useTownExpensesUsage(store: TownUsageStore = townUsageStore()) {
       if (document.visibilityState !== "hidden") store.request();
     };
     refresh();
-    const timer = window.setInterval(refresh, TOWN_EXPENSES_REFRESH_MS);
+    const timer = clock.setInterval(refresh, TOWN_EXPENSES_REFRESH_MS);
     window.addEventListener("focus", refresh);
     document.addEventListener("visibilitychange", refresh);
     return () => {
-      window.clearInterval(timer);
+      clock.clearInterval(timer);
       window.removeEventListener("focus", refresh);
       document.removeEventListener("visibilitychange", refresh);
     };

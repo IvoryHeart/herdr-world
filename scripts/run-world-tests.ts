@@ -2,6 +2,7 @@ import { mkdtemp, rm, mkdir } from "node:fs/promises";
 import { availableParallelism, tmpdir } from "node:os";
 import { join } from "node:path";
 import { localTestChrome } from "./test-chrome";
+import { browserSession } from "./testing/browser-session";
 import { buildWorldBrowserBundle } from "../web/src/world/testing/browserBundles";
 import { acquireCheckSlot, heldEnv } from "./check-lock";
 import {
@@ -15,6 +16,7 @@ import {
   executeWorldBrowserCases,
   worldCaseConcurrency,
   worldCaseTestArgs,
+  planWorldBrowserCases,
 } from "./world-browser-cases";
 
 // Named suites narrow the shard, or select whole files without --shard.
@@ -57,7 +59,12 @@ await mkdir(".agents/delivery", { recursive: true });
 // World runs take the browser slot. A nested runner already holds its
 // parent's slot and skips acquisition.
 const release = await acquireCheckSlot("browser", { lane: `world ${label}` });
+let session: { env: Record<string, string>; close(): Promise<void> } = {
+  env: {},
+  close: async () => {},
+};
 try {
+  session = await browserSession(chrome, { maxContexts: 4 });
   const began = performance.now();
   await buildWorldBrowserBundle("HostsFilter", directory);
   if (files.some((path) => path.includes("AnswerDeliveries.browser")))
@@ -107,7 +114,9 @@ try {
         stderr: "inherit",
         env: {
           ...process.env,
+          ...session.env,
           CHROME_BIN: chrome,
+          HERDR_CHROME_WARM: "1",
           HERDR_WORLD_TEST_ASSETS: directory,
           HERDR_TEST_EXCLUDE_WORLD_BROWSER: "0",
           ...heldEnv("browser"),
@@ -144,6 +153,39 @@ try {
         ),
       concurrency,
     );
+  } else if (
+    !testArgs.some((arg) => /^(?:-t|--test-name-pattern)(?:=|$)/.test(arg))
+  ) {
+    const parallelArg = testArgs.findIndex((arg) =>
+      /^--parallel(?:=|$)/.test(arg),
+    );
+    const requested =
+      parallelArg < 0
+        ? availableParallelism()
+        : Number(
+            testArgs[parallelArg]!.split("=")[1] ?? testArgs[parallelArg + 1],
+          );
+    if (!Number.isInteger(requested) || requested < 1)
+      throw new Error("Invalid local case concurrency");
+    const capacity = Math.min(4, requested);
+    const workers = planWorldBrowserCases(
+      files,
+      timings.cases,
+      1,
+      capacity,
+    )[0]!;
+    process.exitCode = await executeWorldBrowserCases(
+      workers,
+      files,
+      (task, worker, index) =>
+        run(
+          [`./${task.file}`],
+          `-worker-${worker + 1}-file-${index + 1}`,
+          worldCaseTestArgs(task, timings.cases),
+        ),
+      capacity,
+      capacity,
+    );
   } else {
     process.exitCode = await run(files, "");
   }
@@ -151,6 +193,7 @@ try {
     `[world-test-runner] ${label}: completed in ${((performance.now() - began) / 1000).toFixed(1)} seconds`,
   );
 } finally {
+  await session.close();
   release();
   await rm(directory, { recursive: true, force: true });
 }

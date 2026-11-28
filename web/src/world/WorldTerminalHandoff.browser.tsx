@@ -1,3 +1,5 @@
+import { withTestClock } from "./testing/testClock";
+import { clock } from "./testing/installTestClock";
 import { installTownMasterFixture } from "./testing/townMasterFixture";
 import {
   admissionClock,
@@ -89,13 +91,18 @@ let failInterestPatch = false;
 const check = (condition: boolean, message: string) => {
   if (!condition) failures.push(message);
 };
-const settle = () => new Promise((resolve) => setTimeout(resolve, 80));
+const advance = () => clock.frame();
 // ResizeObserver runs after layout. Give its React update a painted frame
 // before dispatching another arrangement or saving a geometry baseline.
-const settleWindowLayout = () =>
+const nativeFrame = () =>
   new Promise<void>((resolve) =>
-    requestAnimationFrame(() => requestAnimationFrame(() => resolve())),
+    clock.real.requestAnimationFrame!(() => resolve()),
   );
+const settleWindowLayout = async () => {
+  await clock.frame();
+  await nativeFrame();
+  await clock.frame();
+};
 function enterSearch(input: HTMLInputElement, value: string) {
   Object.getOwnPropertyDescriptor(
     HTMLInputElement.prototype,
@@ -162,7 +169,8 @@ async function until(
         `Render failed while waiting for ${typeof message === "function" ? message() : message}: ${renderError instanceof Error ? renderError.stack : String(renderError)}`,
       );
     if (condition()) return;
-    await settle();
+    await advance();
+    await nativeFrame();
   }
   throw new Error(
     `Timed out: ${typeof message === "function" ? message() : message}; titles=${JSON.stringify([...document.querySelectorAll(".world-managed-window")].map((e) => [e.getAttribute("aria-label"), e.className, e.querySelector("[data-pane-id]")?.getAttribute("data-pane-id")]))}; phases=${JSON.stringify(creationPhases)}; notice=${JSON.stringify(store.get().notice)}; mode=${store.get().navigationMode}; browser=${JSON.stringify(store.get().browserNavigation)}; selected=${store.get().selectedPaneId}; owners=${document.querySelectorAll(".world-terminal-owner").length}; parking=${document.querySelectorAll(".world-terminal-parking").length}; inspectors=${document.querySelectorAll(".workspace-inspector").length}; rail=${document.querySelector(".world-context-rail")?.className}; text=${document.body.textContent?.slice(-1200)}; calls=${JSON.stringify(calls.slice(-12))}`,
@@ -1082,7 +1090,7 @@ async function run() {
     terminalClosedListeners.add(listener);
     return () => terminalClosedListeners.delete(listener);
   };
-  await worldRuntimeStore.refresh();
+  await withTestClock(clock, worldRuntimeStore.refresh());
   __storeTesting.replaceState({
     ...store.get(),
     status: "connected",
@@ -1116,7 +1124,7 @@ async function run() {
     lastRefresh: Date.now(),
   });
   if (scenario === "shared-inspector") {
-    await runSharedInspectorChecks(check);
+    await withTestClock(clock, runSharedInspectorChecks(check));
     return;
   }
   const originalWithResolvers = Promise.withResolvers;
@@ -1126,7 +1134,7 @@ async function run() {
       writable: true,
       value: undefined,
     });
-    await store.refresh();
+    await withTestClock(clock, store.refresh());
     check(
       !store.get().error,
       "refresh failed on the declared browser baseline without Promise.withResolvers",
@@ -1325,8 +1333,8 @@ async function run() {
   );
   // Rendering/lifecycle: a launcher-created seat owns one real Inspector and
   // terminal renderer. Admission retries are covered headlessly on test time.
-  await worldRuntimeStore.refresh();
-  await browserLocalFocusEntered.promise;
+  await withTestClock(clock, worldRuntimeStore.refresh());
+  await withTestClock(clock, browserLocalFocusEntered.promise);
   await settleWindowLayout();
   check(
     ![...document.querySelectorAll(".workspace-inspector-agent-identity")].some(
@@ -1336,7 +1344,7 @@ async function run() {
   );
   browserLocalFocusGate.resolve();
   delayedPaneGet = null;
-  await browserLocalOpened;
+  await withTestClock(clock, browserLocalOpened);
   await until(
     () =>
       store.get().selectedPaneId === "created-pane-3" &&
@@ -1383,8 +1391,8 @@ async function run() {
     1,
   );
   worldRevision += 1;
-  await store.refresh();
-  await worldRuntimeStore.refresh();
+  await withTestClock(clock, store.refresh());
+  await withTestClock(clock, worldRuntimeStore.refresh());
   await until(
     () =>
       store.get().browserNavigation.workspaceId === "studio" &&
@@ -1398,7 +1406,7 @@ async function run() {
     ...store.get(),
     navigationMode,
   });
-  await settle();
+  await advance();
   const setShellActionsOpen = async (open: boolean) => {
     const trigger = () =>
       document.querySelector<HTMLButtonElement>(
@@ -1413,7 +1421,7 @@ async function run() {
         return;
       trigger()?.focus();
       trigger()?.click();
-      await settle();
+      await advance();
     }
     await until(
       () =>
@@ -1496,7 +1504,7 @@ async function run() {
           '[role="menu"][aria-label="Arrange windows"] [role="menuitem"]',
         ),
       ].find((button) => button.querySelector("strong")?.textContent === label);
-    await settle();
+    await advance();
     await until(() => {
       const choice = getChoice();
       if (choice) return choice;
@@ -1555,7 +1563,7 @@ async function run() {
     ]
       .find((button) => button.textContent === target)!
       .click();
-    await settle();
+    await advance();
   };
   if (scenario === "shell") {
     check(
@@ -1691,7 +1699,7 @@ async function run() {
       () => document.querySelector(".app")?.classList.contains("zen"),
       "Zen mode",
     );
-    await settle();
+    await advance();
     check(
       Boolean(
         sharedNavigator &&
@@ -1978,7 +1986,7 @@ async function run() {
       agent: undefined,
       display_agent: undefined,
     });
-    await store.refresh();
+    await withTestClock(clock, store.refresh());
     await store.focusQualifiedTarget({
       connectionId: "local",
       runtimeGeneration: 7,
@@ -2026,7 +2034,7 @@ async function run() {
       "Previous-tab presents Reviewer terminal",
     );
     omitNextOperationalTabPanes = "work";
-    await store.refresh();
+    await withTestClock(clock, store.refresh());
     check(
       !store.get().panes.some((pane) => pane.tab_id === "work"),
       "destination panes must be absent before the cold-tab shortcut",
@@ -2076,9 +2084,9 @@ async function run() {
     focusedTabId = "work";
     focusedPaneId = "builder-pane";
     worldRevision++;
-    await store.refresh();
+    await withTestClock(clock, store.refresh());
     omitWorldTopology = true;
-    await worldRuntimeStore.refresh();
+    await withTestClock(clock, worldRuntimeStore.refresh());
     await until(
       () =>
         worldRuntimeStore.get().connections[0]?.snapshot?.panes.length === 0,
@@ -2297,7 +2305,7 @@ async function run() {
       "notification return to Town",
     );
     omitWorldTopology = true;
-    await worldRuntimeStore.refresh();
+    await withTestClock(clock, worldRuntimeStore.refresh());
     await until(
       () => !agentTarget("Reviewer"),
       "omitted notification target committed to the rendered overview",
@@ -2333,7 +2341,7 @@ async function run() {
       () => replacedSessionReads > replacedReadsBefore,
       "notification read the replaced agent session",
     );
-    await settle();
+    await advance();
     check(
       !document.querySelector(".workspace-inspector"),
       "notification opened a replacement agent session",
@@ -2390,7 +2398,7 @@ async function run() {
           ?.textContent?.includes("Local") === true,
       "Town keeps the chosen search",
     );
-    await settle();
+    await advance();
     check(
       !!document.querySelector(".command-popover [cmdk-item]"),
       "Town's first search choice keeps the list open",
@@ -2449,10 +2457,13 @@ async function run() {
     // The Town master's chat docks in the background: its window opens, but
     // the window on top and the selection stay as they were.
     const selectedBeforeMaster = store.get().selectedPaneId;
-    await fixtureTownMaster({
-      connection_id: "local",
-      terminal_id: "reviewer-terminal",
-    });
+    await withTestClock(
+      clock,
+      fixtureTownMaster({
+        connection_id: "local",
+        terminal_id: "reviewer-terminal",
+      }),
+    );
     await until(
       () =>
         document.querySelector(
@@ -2460,7 +2471,7 @@ async function run() {
         ),
       "Town master chat opened in the background",
     );
-    await settle();
+    await advance();
     check(
       document
         .querySelector(".world-managed-window.is-active")
@@ -2468,7 +2479,7 @@ async function run() {
         store.get().selectedPaneId === selectedBeforeMaster,
       "the Town master's background open took the selection or the top",
     );
-    await fixtureTownMaster(null);
+    await withTestClock(clock, fixtureTownMaster(null));
     await setShellActionsOpen(false);
     await openAgent("Reviewer");
     await until(
@@ -2504,12 +2515,12 @@ async function run() {
       "Floating mode did not use equally sized cascaded Inspector windows",
     );
     rejectNextWorldSnapshot = true;
-    await worldRuntimeStore.refresh();
+    await withTestClock(clock, worldRuntimeStore.refresh());
     await until(
       () => worldRuntimeStore.get().status === "error",
       "transient World observation failure",
     );
-    await settle();
+    await advance();
     if (
       document.querySelectorAll('[role="dialog"][aria-label$=" Inspector"]')
         .length !== 2
@@ -2518,43 +2529,43 @@ async function run() {
         "transient World observation hid open floating Inspectors",
       );
     }
-    await worldRuntimeStore.refresh();
+    await withTestClock(clock, worldRuntimeStore.refresh());
     await until(
       () => worldRuntimeStore.get().status === "ready",
       "World observation recovered with both Inspectors",
     );
     staleNextWorldSnapshot = true;
-    await worldRuntimeStore.refresh();
+    await withTestClock(clock, worldRuntimeStore.refresh());
     await until(
       () => worldRuntimeStore.get().connections[0]?.stale === true,
       "selected World host temporarily stale",
     );
-    await settle();
+    await advance();
     check(
       document.querySelectorAll('[role="dialog"][aria-label$=" Inspector"]')
         .length === 2,
       "stale aggregate observation hid live floating Inspectors",
     );
-    await worldRuntimeStore.refresh();
+    await withTestClock(clock, worldRuntimeStore.refresh());
     await until(
       () => worldRuntimeStore.get().connections[0]?.actionable === true,
       "selected World host observation recovered",
     );
     omitWorldTopology = true;
-    await worldRuntimeStore.refresh();
+    await withTestClock(clock, worldRuntimeStore.refresh());
     await until(
       () =>
         worldRuntimeStore.get().connections[0]?.snapshot?.panes.length === 0,
       "bounded World projection omitted existing tabs",
     );
-    await settle();
+    await advance();
     check(
       document.querySelectorAll('[role="dialog"][aria-label$=" Inspector"]')
         .length === 2,
       "healthy aggregate observation hid tabs still present in focused Herdr state",
     );
     omitWorldTopology = false;
-    await worldRuntimeStore.refresh();
+    await withTestClock(clock, worldRuntimeStore.refresh());
     await until(
       () =>
         worldRuntimeStore.get().connections[0]?.snapshot?.panes.length === 2,
@@ -2588,7 +2599,7 @@ async function run() {
         cancelable: true,
       }),
     );
-    await settle();
+    await advance();
     const shortcutGrid = [
       ...document.querySelectorAll<HTMLElement>(
         '[role="dialog"][aria-label$=" Inspector"]',
@@ -2603,7 +2614,7 @@ async function run() {
     );
     document.documentElement.style.zoom = "1.2";
     window.dispatchEvent(new Event("resize"));
-    await settle();
+    await advance();
     await arrangeWindows("Columns");
     await until(() => {
       const arranged = [
@@ -2641,7 +2652,7 @@ async function run() {
     );
     document.documentElement.style.zoom = "";
     window.dispatchEvent(new Event("resize"));
-    await settle();
+    await advance();
     await settleWindowLayout();
     await fetch("/capture/desktop", { method: "POST" });
     const desktopInspectorBounds = () =>
@@ -2660,12 +2671,15 @@ async function run() {
       '[role="dialog"][aria-label="Builder Inspector"]',
     )!;
     const builderBeforeMaximize = builderArrangedWindow.getBoundingClientRect();
-    builderArrangedWindow = await windowMinimizeAcceptance({
-      frame: builderArrangedWindow,
-      calls,
-      until,
-      check,
-    });
+    builderArrangedWindow = await withTestClock(
+      clock,
+      windowMinimizeAcceptance({
+        frame: builderArrangedWindow,
+        calls,
+        until,
+        check,
+      }),
+    );
     const sessionCallsBeforeMaximize = calls.filter(({ method }) =>
       [
         "terminal.attach",
@@ -2754,12 +2768,15 @@ async function run() {
       ...document.querySelectorAll<HTMLElement>(".workspace-inspector"),
     ].find((inspector) => inspector.getBoundingClientRect().width > 0)!;
     mobileInspector = (
-      await windowMinimizeAcceptance({
-        frame: mobileInspector.closest<HTMLElement>(".world-managed-window")!,
-        calls,
-        until,
-        check,
-      })
+      await withTestClock(
+        clock,
+        windowMinimizeAcceptance({
+          frame: mobileInspector.closest<HTMLElement>(".world-managed-window")!,
+          calls,
+          until,
+          check,
+        }),
+      )
     ).querySelector<HTMLElement>(".workspace-inspector")!;
     // On a phone, the Chat view shows one composer, Chat's own: no terminal
     // key bar and no terminal composer (those belong to the Terminal view).
@@ -2802,7 +2819,7 @@ async function run() {
       () => mobileInspector.getAttribute("data-view") === "history",
       "phone window Chat view",
     );
-    await settle();
+    await advance();
     check(
       ![...document.querySelectorAll(".terminal-composer")].some(shown) &&
         ![
@@ -2825,7 +2842,7 @@ async function run() {
       () => mobileInspector.getAttribute("data-view") === "terminal",
       "phone window back on Terminal",
     );
-    await settle();
+    await advance();
     const mobileHeader = mobileInspector.querySelector<HTMLElement>(
       ".workspace-inspector-head",
     )!;
@@ -2921,7 +2938,7 @@ async function run() {
         catalogueReady: false,
       }),
     );
-    await settle();
+    await advance();
     const phoneStale = mobileInspector
       .closest(".workspace-inspector-slot")!
       .querySelector<HTMLElement>(".world-inspector-stale")!;
@@ -2938,7 +2955,7 @@ async function run() {
     );
     client.isCurrent = phoneClientCurrent;
     flushSync(() => __storeTesting.replaceState(beforePhoneDisconnect));
-    await settle();
+    await advance();
     const uploadInput = mobileInspector.querySelector<HTMLInputElement>(
       '.terminal-composer input[type="file"]',
     )!;
@@ -3003,8 +3020,8 @@ async function run() {
         .querySelector<HTMLButtonElement>(".mobile-controls-toggle")
         ?.click();
     await until(compactArrangeTrigger, "compact arrangement menu trigger");
-    await settle();
-    await settle();
+    await advance();
+    await advance();
     await settleWindowLayout();
     compactArrangeTrigger()!.click();
     await until(
@@ -3043,7 +3060,7 @@ async function run() {
         cancelable: true,
       }),
     );
-    await settle();
+    await advance();
     check(
       document.querySelectorAll('[role="dialog"][aria-label$=" Inspector"]')
         .length === 1,
@@ -3247,7 +3264,7 @@ async function run() {
     );
     delayedClosedTargetFocus.resolve();
     delayedPaneGet = null;
-    await settle();
+    await advance();
     check(
       document
         .querySelector(
@@ -3329,7 +3346,7 @@ async function run() {
       promise: delayedReviewerFocus.promise,
     };
     flushSync(() => reviewerNavigatorRow?.click());
-    await settle();
+    await advance();
     check(
       !reviewerInspectorActive(),
       "shared navigator admitted Reviewer before its exact focus completed",
@@ -3428,8 +3445,8 @@ async function run() {
         seatCreatesBeforeClick + 1,
       "Town seat creation",
     );
-    await worldRuntimeStore.refresh();
-    await sharedFocusEntered.promise;
+    await withTestClock(clock, worldRuntimeStore.refresh());
+    await withTestClock(clock, sharedFocusEntered.promise);
     await admissionClock.advance(CREATED_PANE_ADMISSION_TIMEOUT_MS);
     check(
       store.get().notice?.message === "Tab created, but Inspector focus failed",
@@ -3437,7 +3454,7 @@ async function run() {
     );
     sharedFocusGate.resolve();
     delayedPaneGet = null;
-    await sharedFocusCompleted;
+    await withTestClock(clock, sharedFocusCompleted);
     await settleWindowLayout();
     check(
       priorInspector?.isConnected === true &&
@@ -3469,7 +3486,7 @@ async function run() {
       () => rejectedPaneGets === rejectedBeforeNavigator + 1,
       "rejected shared navigator focus",
     );
-    await settle();
+    await advance();
     check(
       document
         .querySelector(
@@ -3494,7 +3511,7 @@ async function run() {
         2,
       "Builder Inspector connector",
     );
-    await settle();
+    await advance();
     const initialBuilderWindow = document.querySelector<HTMLElement>(
       '[role="dialog"][aria-label="Builder Inspector"]',
     )!;
@@ -3664,8 +3681,8 @@ async function run() {
     panes[1]!.agent_status = "done";
     panes[1]!.revision += 1;
     worldRevision += 1;
-    await worldRuntimeStore.refresh();
-    await settle();
+    await withTestClock(clock, worldRuntimeStore.refresh());
+    await advance();
     check(
       document.querySelector(
         '[role="dialog"][aria-label="Builder Inspector"]',
@@ -3675,7 +3692,7 @@ async function run() {
     panes[1]!.agent_status = "idle";
     panes[1]!.revision += 1;
     worldRevision += 1;
-    await worldRuntimeStore.refresh();
+    await withTestClock(clock, worldRuntimeStore.refresh());
     check(
       builderWindow.querySelectorAll(".workspace-inspector-head").length === 1,
       "floating Inspector rendered more than one header",
@@ -3881,7 +3898,7 @@ async function run() {
       () => store.get().selectedPaneId === "reviewer-pane",
       "floating Reviewer Inspector focus",
     );
-    await settle();
+    await advance();
     const reviewerInput = terminalInput(reviewerWindow)!;
     reviewerInput.focus();
     sendKey(reviewerInput);
@@ -3947,7 +3964,7 @@ async function run() {
       () => store.get().selectedPaneId === "builder-pane",
       "docked Builder Inspector focus",
     );
-    await settle();
+    await advance();
     const dockedInput = terminalInput(inspector ?? document)!;
     dockedInput.focus();
     const builderInputsBefore = calls.filter(
@@ -4028,8 +4045,8 @@ async function run() {
     focusedTabId = "work";
     focusedPaneId = "builder-pane";
     worldRevision++;
-    await store.refresh();
-    await worldRuntimeStore.refresh();
+    await withTestClock(clock, store.refresh());
+    await withTestClock(clock, worldRuntimeStore.refresh());
     await chooseInspectorOpening(
       "Snapped right",
       "independent resource fixture",
@@ -4253,7 +4270,7 @@ async function run() {
           ?.getAttribute("data-view") === "terminal",
       "Reviewer's Terminal view before Spaces handoff",
     );
-    await settle();
+    await advance();
     const persistentControlPlane = document.querySelector(
       ".world-control-plane",
     );
@@ -4269,9 +4286,9 @@ async function run() {
       () => document.documentElement.dataset.layout === "mobile",
       "forced compact layout",
     );
-    await settle();
-    await settle();
-    await settle();
+    await advance();
+    await advance();
+    await advance();
     await fetch("/capture/mobile", { method: "POST" });
     const visibleTerminalRows = () =>
       document.querySelector(".world-managed-window .xterm-rows")
@@ -4425,7 +4442,7 @@ async function run() {
     // The collapse toggle sits inside the menu, so its tap closed it.
     if (!document.querySelector(".app[data-mobile-more]"))
       document.querySelector<HTMLButtonElement>(".mobile-more-button")!.click();
-    await settle();
+    await advance();
     check(
       !mobileTabBar?.querySelector('button[aria-label="Arrange windows"]') &&
         document
@@ -4787,7 +4804,7 @@ async function run() {
       "Spaces handoff",
     );
     document.querySelector<HTMLButtonElement>(".command-trigger")?.click();
-    await settle();
+    await advance();
     check(
       document
         .querySelector(".command-popover")
@@ -4795,7 +4812,7 @@ async function run() {
       "Spaces Actions omitted window arrangements",
     );
     document.querySelector<HTMLButtonElement>(".command-trigger")?.click();
-    await settle();
+    await advance();
     check(
       document.querySelector(".world-control-plane") ===
         persistentControlPlane &&
@@ -4932,7 +4949,7 @@ async function run() {
       () => document.querySelector(".board") && reviewerInspectorActive(),
       "qualified Inspector conversations after Spaces handoff",
     );
-    await settle();
+    await advance();
     check(
       document.querySelector(".world-control-plane") ===
         persistentControlPlane &&
@@ -4960,8 +4977,8 @@ async function run() {
     focusedTabId = "work";
     focusedPaneId = "builder-pane";
     worldRevision++;
-    await store.refresh();
-    await worldRuntimeStore.refresh();
+    await withTestClock(clock, store.refresh());
+    await withTestClock(clock, worldRuntimeStore.refresh());
     await chooseInspectorOpening("Floating", "independent resume fixture");
     await openAgent("Builder");
     await openAgent("Reviewer");
@@ -5000,7 +5017,7 @@ async function run() {
         ).length > heldReadsBefore,
       "independent resume holds the reopened Chat read",
     );
-    await settle();
+    await advance();
 
     const reviewerInspector = document.querySelector<HTMLElement>(
       ".world-managed-window.is-active .workspace-inspector",
@@ -5014,7 +5031,7 @@ async function run() {
     );
     heldConversationRead = undefined;
     releaseConversationRead();
-    await settle();
+    await advance();
     check(
       reviewerInspector.getAttribute("data-view") === "files",
       "a late Chat read overrode the owner's Files choice",
@@ -5039,7 +5056,7 @@ async function run() {
       },
     ];
     worldRevision += 1;
-    await worldRuntimeStore.refresh();
+    await withTestClock(clock, worldRuntimeStore.refresh());
     await until(
       () =>
         document
@@ -5100,7 +5117,7 @@ async function run() {
     panes.push(siblingPane);
     tabs[0]!.pane_count = 2;
     worldRevision += 1;
-    await worldRuntimeStore.refresh();
+    await withTestClock(clock, worldRuntimeStore.refresh());
     __storeTesting.replaceState({
       ...store.get(),
       workspaces: [currentWorkspace()],
@@ -5195,7 +5212,7 @@ async function run() {
         connections: [],
       }),
     );
-    await settle();
+    await advance();
     check(
       resumeEditor.value === "Unsent resume draft" &&
         readTerminalComposerDraft(resumeDraftKey) === resumeEditor.value,
@@ -5231,7 +5248,7 @@ async function run() {
     flushSync(() =>
       __storeTesting.replaceState({ ...store.get(), status: "connected" }),
     );
-    await settle();
+    await advance();
     check(
       retainedWindows.every((window) => window.isConnected),
       "socket-open before catalogue closed an Inspector",
@@ -5246,7 +5263,7 @@ async function run() {
         })),
       }),
     );
-    await settle();
+    await advance();
     check(
       retainedRenderers.every((renderer) => renderer.isConnected),
       "same-generation unavailable owner destroyed its renderer",
@@ -5260,7 +5277,7 @@ async function run() {
         terminalAttachEpoch: beforeOutage.terminalAttachEpoch + 1,
       }),
     );
-    await settle();
+    await advance();
     check(
       retainedRenderers.every((renderer) => renderer.isConnected),
       "same-runtime reconnect replaced a renderer",
@@ -5355,8 +5372,8 @@ async function run() {
     ).length;
     delayedOldPaneFocus.resolve();
     delayedPaneGet = null;
-    await settle();
-    await settle();
+    await advance();
+    await advance();
     check(
       oldPaneGetsAfterSibling === oldPaneGetsBeforeSibling &&
         store.get().selectedPaneId === siblingPane.pane_id,
@@ -5538,7 +5555,7 @@ async function run() {
     ).length;
     delayedMobileOldFocus.resolve();
     delayedPaneGet = null;
-    await settle();
+    await advance();
     check(
       oldPaneGetsAfterMobile === oldPaneGetsBeforeMobile &&
         store.get().selectedPaneId === "builder-pane",
@@ -5552,7 +5569,7 @@ async function run() {
 
     zoomedFocusedPaneId = siblingPane.pane_id;
     worldRevision += 1;
-    await worldRuntimeStore.refresh();
+    await withTestClock(clock, worldRuntimeStore.refresh());
     __storeTesting.replaceState({
       ...store.get(),
       layout: layout(),
@@ -5591,7 +5608,7 @@ async function run() {
     ).length;
     delayedZoomOldFocus.resolve();
     delayedPaneGet = null;
-    await settle();
+    await advance();
     check(
       oldPaneGetsAfterZoom === oldPaneGetsBeforeZoom &&
         store.get().selectedPaneId === siblingPane.pane_id,
@@ -5599,7 +5616,7 @@ async function run() {
     );
     zoomedFocusedPaneId = null;
     worldRevision += 1;
-    await worldRuntimeStore.refresh();
+    await withTestClock(clock, worldRuntimeStore.refresh());
     __storeTesting.replaceState({
       ...store.get(),
       layout: layout(),
@@ -5672,7 +5689,7 @@ async function run() {
           .length === 3,
       "later floating Inspector outside the arranged set",
     );
-    await settle();
+    await advance();
     check(
       document.querySelectorAll('[role="dialog"][aria-label$=" Inspector"]')
         .length === 3,
@@ -5680,7 +5697,7 @@ async function run() {
     );
     delayedTabList = null;
     delayedOpeningList.resolve();
-    await store.refresh();
+    await withTestClock(clock, store.refresh());
     await until(
       () => store.get().tabs.some((tab) => tab.tab_id === "created-tab-3"),
       "focused tab list caught up after opening",
@@ -5791,7 +5808,7 @@ async function run() {
       },
       () => `three Inspectors in narrow Columns: ${narrowLayoutDiagnostic()}`,
     );
-    await settle();
+    await advance();
     // Every view stays one tap away: as a tab, or, in the narrowest window,
     // in the view menu that replaces the tabs.
     check(
@@ -5838,7 +5855,7 @@ async function run() {
     narrowedVisualStage.style.width = "700px";
     narrowedVisualStage.style.height = "420px";
     narrowedVisualStage.style.maxHeight = "420px";
-    await settle();
+    await advance();
     await arrangeWindows("Rows");
     await until(
       () => scrollingLayer.scrollHeight > scrollingLayer.clientHeight,
@@ -5856,7 +5873,7 @@ async function run() {
     );
     narrowedVisualStage.style.height = "340px";
     narrowedVisualStage.style.maxHeight = "340px";
-    await settle();
+    await advance();
     await arrangeWindows("Cascade");
     await until(
       () => scrollingLayer.scrollHeight > scrollingLayer.clientHeight,
@@ -5946,8 +5963,8 @@ async function run() {
       1,
     );
     worldRevision += 1;
-    await store.refresh();
-    await worldRuntimeStore.refresh();
+    await withTestClock(clock, store.refresh());
+    await withTestClock(clock, worldRuntimeStore.refresh());
     await until(
       () =>
         document.querySelectorAll('[role="dialog"][aria-label$=" Inspector"]')
@@ -5976,7 +5993,7 @@ async function run() {
       "Close all terminated a Herdr tab, pane, or session",
     );
     window.dispatchEvent(new Event("resize"));
-    await settle();
+    await advance();
     check(
       !document.querySelector(".workspace-inspector"),
       "closed Inspector reappeared through an arrangement",
@@ -6176,7 +6193,7 @@ async function run() {
     );
     // The closed terminal leaves no history entry: one system Back leaves
     // Town for the scene shown before it.
-    await settle();
+    await advance();
     check(
       !(
         typeof history.state === "object" &&
@@ -6234,7 +6251,7 @@ async function run() {
       () => spacesMore()?.getAttribute("aria-expanded") === "true",
       "direct Spaces opens More",
     );
-    await settle();
+    await advance();
     document
       .querySelector<HTMLButtonElement>('button[aria-label="Back to Town"]')!
       .click();
@@ -6292,14 +6309,14 @@ async function run() {
     ];
     await until(() => deskRows().length >= 2, "Desk Agents rows");
     deskRows()[0]?.click();
-    await new Promise((resolve) => window.setTimeout(resolve, 1500));
+    await clock.advance(1500);
     check(
       Boolean(document.querySelector(".desk.has-reading")),
       `Desk reading pane did not open: rail=${Boolean(document.querySelector(".world-context-rail.has-inspector"))} layoutContext=${Boolean(document.querySelector(".world-view-layout.has-context"))} floating=${document.querySelectorAll('[role="dialog"][aria-label$=" Inspector"]').length} inspector=${document.querySelectorAll(".workspace-inspector").length} rows=${deskRows().length} error=${document.querySelector(".desk-error")?.textContent ?? ""} width=${window.innerWidth}`,
     );
     const firstRow = deskRows()[0]!;
     firstRow.focus();
-    await settle();
+    await advance();
     firstRow.dispatchEvent(
       new KeyboardEvent("keydown", {
         key: "j",
@@ -6307,7 +6324,7 @@ async function run() {
         cancelable: true,
       }),
     );
-    await new Promise((resolve) => window.setTimeout(resolve, 900));
+    await clock.advance(900);
     const readingRow = document.querySelector<HTMLElement>(
       ".desk-row.is-reading",
     );
@@ -6325,7 +6342,7 @@ async function run() {
         cancelable: true,
       }),
     );
-    await new Promise((resolve) => window.setTimeout(resolve, 900));
+    await clock.advance(900);
     const deskActive = document.activeElement;
     check(
       Boolean(deskActive?.closest(".desk")) && !deskActive?.closest(".xterm"),
@@ -6340,7 +6357,7 @@ async function run() {
       "value",
     )?.set?.call(officeViewSelect, "town");
     officeViewSelect?.dispatchEvent(new Event("change", { bubbles: true }));
-    await settle();
+    await advance();
 
     // Reuse a shell's tab window for a readable agent while its focus request
     // is pending. The target's views determine what opens, not the shell's.
@@ -6383,7 +6400,7 @@ async function run() {
     tabs.push(reuseTab);
     panes.push(reuseShell);
     worldRevision += 1;
-    await worldRuntimeStore.refresh();
+    await withTestClock(clock, worldRuntimeStore.refresh());
     await until(() => boardTarget(reuseTab.label), "new shell tab on Board");
     boardTarget(reuseTab.label)!.dispatchEvent(
       new MouseEvent("dblclick", { bubbles: true }),
@@ -6425,7 +6442,7 @@ async function run() {
       agent_session: reuseSession,
     });
     worldRevision += 1;
-    await worldRuntimeStore.refresh();
+    await withTestClock(clock, worldRuntimeStore.refresh());
     await until(
       () => boardTarget("Open Rule Agent"),
       "readable sibling on Board",
@@ -6494,7 +6511,7 @@ async function run() {
       ],
       "local",
     );
-    await worldRuntimeStore.refresh();
+    await withTestClock(clock, worldRuntimeStore.refresh());
     // A refresh already in flight can queue this catalog's observation, so
     // wait for both its qualified node and its rendered target.
     const betaTarget = () => {
@@ -6547,7 +6564,7 @@ async function run() {
         lastTopologyObservationStartedAt: 0,
       }),
     );
-    await settle();
+    await advance();
     check(
       reuseWindow.isConnected &&
         betaWindow.isConnected &&
@@ -6565,7 +6582,7 @@ async function run() {
         terminalAttachEpoch: store.get().terminalAttachEpoch + 1,
       }),
     );
-    await settle();
+    await advance();
     check(
       reuseWindow.isConnected && betaRenderer?.isConnected === true,
       "same-runtime reconnect replaced a cross-host presentation",
@@ -6587,7 +6604,7 @@ async function run() {
       "local",
     );
     worldRevision += 1;
-    await worldRuntimeStore.refresh();
+    await withTestClock(clock, worldRuntimeStore.refresh());
     await until(
       () => !betaWindow.isConnected,
       "only the replaced host retires",
@@ -6598,7 +6615,7 @@ async function run() {
     );
     includeSecondHost = false;
     __storeTesting.applyCatalog(alphaOwners, "local");
-    await worldRuntimeStore.refresh();
+    await withTestClock(clock, worldRuntimeStore.refresh());
 
     runtimeGeneration += 1;
     worldRevision += 1;
@@ -6609,7 +6626,7 @@ async function run() {
       })),
       client.connectionId,
     );
-    await worldRuntimeStore.refresh();
+    await withTestClock(clock, worldRuntimeStore.refresh());
     await until(
       () =>
         !document.querySelector(".workspace-inspector") &&
@@ -6620,7 +6637,7 @@ async function run() {
       readTerminalComposerDraft(resumeDraftKey) === "",
       "runtime replacement did not retire the old Message draft",
     );
-    await new Promise((resolve) => window.setTimeout(resolve, 500));
+    await clock.advance(500);
     check(
       !document.querySelector(".world-selection-panel"),
       "retiring an open Inspector left its stale identity profile selected",
@@ -6645,7 +6662,7 @@ async function run() {
         })),
         "local",
       );
-      await worldRuntimeStore.refresh();
+      await withTestClock(clock, worldRuntimeStore.refresh());
       updateLayoutPreferences({ mode: "auto" });
       await until(() => boardTarget("Reviewer"), "synthetic gallery target");
       boardTarget("Reviewer")!.dispatchEvent(
@@ -6697,7 +6714,7 @@ async function run() {
           catalogueReady: false,
         }),
       );
-      await settle();
+      await advance();
       if (!(await fetch("/capture/resume-disconnected")).ok)
         throw new Error("Disconnected gallery capture failed");
       client = {
@@ -6713,7 +6730,7 @@ async function run() {
           terminalAttachEpoch: store.get().terminalAttachEpoch + 1,
         }),
       );
-      await settle();
+      await advance();
       const arm = TerminalAttachFrameWatchdog.prototype.arm;
       try {
         suppressFrameFor = "reviewer-terminal";
@@ -6747,7 +6764,7 @@ async function run() {
       galleryWindow
         .querySelector<HTMLButtonElement>('[role="alert"] button')
         ?.click();
-      await settle();
+      await advance();
     }
     root.unmount();
   }

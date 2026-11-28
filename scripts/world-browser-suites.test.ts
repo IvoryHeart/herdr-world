@@ -187,7 +187,10 @@ test("an unassigned web browser suite fails inventory validation", async () => {
   const root = await mkdtemp(join(tmpdir(), "web-inventory-"));
   try {
     for (const path of webBrowserSuites)
-      await Bun.write(join(root, path), "const chrome = Bun.env.CHROME_BIN;\n");
+      await Bun.write(
+        join(root, path),
+        `${path.startsWith("scripts/") ? "// @web-browser-suite\n" : ""}const chrome = Bun.env.CHROME_BIN;\n`,
+      );
     await Bun.write(
       join(root, "web/src/world/Sharded.test.ts"),
       "// @world-browser-suite\n",

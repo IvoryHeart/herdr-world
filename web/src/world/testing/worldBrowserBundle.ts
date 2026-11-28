@@ -2,6 +2,7 @@ import { afterAll } from "bun:test";
 import { mkdtemp, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
+import { existsSync } from "node:fs";
 import {
   buildWorldBrowserBundle,
   readWorldBrowserBundle,
@@ -16,7 +17,10 @@ export function worldBrowserBundle(entry: WorldBrowserEntry) {
   let bundle = bundles.get(entry);
   if (!bundle) {
     const preparedRoot = Bun.env.HERDR_WORLD_TEST_ASSETS;
-    if (preparedRoot) bundle = readWorldBrowserBundle(entry, preparedRoot);
+    if (preparedRoot)
+      bundle = existsSync(join(preparedRoot, entry, "index.html"))
+        ? readWorldBrowserBundle(entry, preparedRoot)
+        : buildWorldBrowserBundle(entry, preparedRoot);
     else {
       ownedRoot ??= mkdtemp(join(tmpdir(), "world-test-assets-"));
       bundle = ownedRoot.then((root) => buildWorldBrowserBundle(entry, root));

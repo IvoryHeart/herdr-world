@@ -77,7 +77,7 @@ const workflow = Bun.YAML.parse(
     };
   };
   permissions: { actions: string };
-  concurrency: { group: string; "cancel-in-progress": boolean };
+  concurrency: { group: string; "cancel-in-progress": boolean | string };
   jobs: Record<string, WorkflowJob>;
 };
 
@@ -193,6 +193,119 @@ test("the full-mode graph uses at most sixteen jobs, including every reusable ma
     expect(fullModeJobs(event)).toBeLessThanOrEqual(16);
 });
 
+test("a new PR event cancels its superseded run and closure cancels only that PR's active runs", async () => {
+  expect(workflow.concurrency.group).toContain(
+    "github.event.pull_request.number",
+  );
+  expect(workflow.concurrency["cancel-in-progress"]).toBe(
+    "${{ github.event_name == 'pull_request' }}",
+  );
+  expect(workflow.on.pull_request.types).toContain("closed");
+  const cancellation = Bun.YAML.parse(
+    readFileSync(".github/workflows/cancel-closed.yml", "utf8"),
+  ) as {
+    on: { pull_request_target: { types: string[] } };
+    permissions: Record<string, string>;
+    jobs: Record<string, WorkflowJob>;
+  };
+  expect(cancellation.on).toEqual({
+    pull_request_target: { types: ["closed"] },
+  });
+  expect(cancellation.permissions).toEqual({ actions: "write" });
+  const closed = cancellation.jobs["cancel-closed"]!;
+  expect(closed.steps).toHaveLength(1);
+  expect(closed.steps[0]!.uses).toStartWith("actions/github-script@");
+  const script = (closed.steps[0]!.with as unknown as { script: string })
+    .script;
+  const cancelled: number[] = [];
+  const source = { head_repository: { id: 7 }, head_branch: "crew/example" };
+  const github = {
+    paginate: async (_method: unknown, options: unknown) => {
+      expect(options).toEqual({
+        owner: "example",
+        repo: "world",
+        branch: "crew/example",
+        event: "pull_request",
+        per_page: 100,
+      });
+      return [
+        { id: 1, status: "queued", pull_requests: [{ number: 42 }], ...source },
+        { id: 2, status: "in_progress", pull_requests: [], ...source },
+        {
+          id: 3,
+          status: "completed",
+          pull_requests: [{ number: 42 }],
+          ...source,
+        },
+        { id: 4, status: "queued", pull_requests: [{ number: 43 }], ...source },
+        {
+          id: 5,
+          status: "queued",
+          pull_requests: [],
+          ...source,
+          head_repository: { id: 8 },
+        },
+        {
+          id: 6,
+          status: "in_progress",
+          pull_requests: [{ number: 42 }],
+          ...source,
+        },
+      ];
+    },
+    rest: {
+      actions: {
+        listWorkflowRunsForRepo: () => {},
+        cancelWorkflowRun: async ({ run_id }: { run_id: number }) => {
+          cancelled.push(run_id);
+          if (run_id === 2) throw { status: 409 };
+        },
+      },
+    },
+  };
+  await new Function("github", "context", `return (async () => {${script}})()`)(
+    github,
+    {
+      repo: { owner: "example", repo: "world" },
+      runId: 6,
+      payload: {
+        pull_request: {
+          number: 42,
+          head: { ref: "crew/example", repo: { id: 7 } },
+        },
+      },
+    },
+  );
+  expect(cancelled).toEqual([1, 2]);
+});
+
+test("advisory renderer workflows cannot start on an unrelated server or documentation change", () => {
+  for (const name of ["town-golden", "world-latency-trend"]) {
+    const side = Bun.YAML.parse(
+      readFileSync(`.github/workflows/${name}.yml`, "utf8"),
+    ) as {
+      on: { pull_request: { paths: string[] }; push: { paths: string[] } };
+    };
+    const paths = side.on.pull_request.paths;
+    expect(paths).toEqual(side.on.push.paths);
+    for (const path of [
+      "web/src/world/town/TownCanvas.tsx",
+      "web/src/clock.ts",
+    ])
+      expect(paths.some((pattern) => new Bun.Glob(pattern).match(path))).toBe(
+        true,
+      );
+    for (const path of [
+      "docs/development.md",
+      "server/src/cli/main.ts",
+      "web/src/settings.test.ts",
+    ])
+      expect(paths.some((pattern) => new Bun.Glob(pattern).match(path))).toBe(
+        false,
+      );
+  }
+});
+
 test("combined runner workloads survive unit failure but stop on cancellation", () => {
   const steps = workflow.jobs["unit-tests"].steps;
   const workloads = steps.filter(
@@ -200,7 +313,7 @@ test("combined runner workloads survive unit failure but stop on cancellation", 
       step.run === "bun run check:static --static-group=${{ matrix.group }}" ||
       step.run === "bun run security:check" ||
       step.run?.startsWith("bun scripts/test-chrome.ts") ||
-      step.run?.startsWith("bun scripts/ci-tests.ts web ") ||
+      step.run?.startsWith("bun scripts/run-browser-tests.ts --ci-web=") ||
       step.uses?.startsWith("actions/cache@"),
   );
   expect(workloads).toHaveLength(5);
@@ -464,10 +577,14 @@ test("CI exposes the protected delivery gate and runs the complete repository ch
     "synchronize",
     "reopened",
     "labeled",
+    "edited",
+    "closed",
   ]);
   expect(workflow.permissions.actions).toBe("read");
   // Every main commit retains its own run so an owner tag can await it.
-  expect(workflow.concurrency["cancel-in-progress"]).toBe(false);
+  expect(workflow.concurrency["cancel-in-progress"]).toBe(
+    "${{ github.event_name == 'pull_request' }}",
+  );
   expect(workflow.on.push).toEqual({ branches: ["main"] });
   expect(workflow.concurrency.group).toContain(
     "(github.event_name == 'push' && github.sha)",
@@ -627,7 +744,9 @@ test("no timing gates delivery: browser jobs use the pinned Chrome and delegate 
     expect(chrome).toBeGreaterThan(-1);
     expect(chrome).toBeLessThan(
       runs.findIndex((run) =>
-        /^bun scripts\/(?:ci-tests.ts web|ci-world-tests.ts) /.test(run),
+        /^bun scripts\/(?:run-browser-tests.ts --ci-web=|ci-world-tests.ts )/.test(
+          run,
+        ),
       ),
     );
   }
@@ -654,7 +773,7 @@ test("the latency trend measures the trend suites on quiet runners and reports w
   const push = trend.on.push as { branches: string[]; paths: string[] };
   expect(push.branches).toEqual(["main"]);
   for (const path of [
-    "web/src/**",
+    "web/src/world/**",
     "shared/**",
     "bun.lock",
     "scripts/run-world-tests.ts",
@@ -742,7 +861,9 @@ test("World shards and packed web suites retain their partitions and failure evi
   expect(Object.keys(worldWorkflow.jobs)).toEqual(["world-browser"]);
   const packed = workflow.jobs["unit-tests"];
   const webStep = packed.steps.find(
-    (step) => step.run === "bun scripts/ci-tests.ts web ${{ matrix.web }}/2",
+    (step) =>
+      step.run ===
+      "bun scripts/run-browser-tests.ts --ci-web=${{ matrix.web }}/2",
   )!;
   expect(
     packed.strategy?.matrix?.include?.map((row) => row.web).filter(Boolean),
@@ -764,10 +885,12 @@ test("World shards and packed web suites retain their partitions and failure evi
   ).toHaveLength(0);
   expect(
     packed.steps.find(
-      (step) => step.run === "bun scripts/ci-tests.ts web ${{ matrix.web }}/2",
+      (step) =>
+        step.run ===
+        "bun scripts/run-browser-tests.ts --ci-web=${{ matrix.web }}/2",
     ),
   ).toMatchObject({
-    run: "bun scripts/ci-tests.ts web ${{ matrix.web }}/2",
+    run: "bun scripts/run-browser-tests.ts --ci-web=${{ matrix.web }}/2",
     env: { HERDR_TEST_PARALLEL: "2", HERDR_TEST_MAX_CONCURRENCY: "2" },
   });
   expect(
@@ -907,7 +1030,9 @@ test("accepted behavioral evidence stays unfiltered whenever its protected depen
     "./.github/workflows/behavioral-verification.yml",
   );
   expect(workflow.jobs.delivery.needs).not.toContain("model-evidence");
-  expect(candidate.on.workflow_call).toBeNull();
+  expect(candidate.on.workflow_call).toEqual({
+    inputs: { "diagnostic-control": { type: "boolean", default: true } },
+  });
   expect(candidate.permissions).toEqual({ contents: "read" });
   const job = candidate.jobs.shards;
   expect(job.strategy?.matrix?.shard).toEqual(

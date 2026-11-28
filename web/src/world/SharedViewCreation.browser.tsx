@@ -1,3 +1,7 @@
+import { clock as fixtureTime } from "./testing/installTestClock";
+import { withTestClock } from "./testing/testClock";
+import { isBackPending } from "../systemBack";
+import { observeCondition } from "./testing/browserEvents";
 import { createRoot } from "react-dom/client";
 import { flushSync } from "react-dom";
 import { bridge, type ConnectionClient, type TerminalPush } from "../api";
@@ -7,7 +11,8 @@ import {
   emptyServerSessionState,
   store,
 } from "../store";
-import { creationSources } from "../creationRequests";
+import { creationSources, subscribeCreations } from "../creationRequests";
+
 import { initializeLayoutPreferences } from "../layoutPreferences";
 import { initializeShortcutPreferences } from "../shortcutPreferences";
 import type { Pane, Tab, Workspace } from "../types";
@@ -21,6 +26,11 @@ import "../styles/base.css";
 import "../styles/vendor.css";
 import { quietGreetingForTest } from "./townMasterGreeting";
 import { setTownDaylightMode } from "./town/townDaylight";
+
+const creationPhases: string[] = [];
+subscribeCreations((event) =>
+  creationPhases.push(`${event.id}:${event.phase}:${event.connectionId}`),
+);
 
 // The Town Master's greeting would sit over what these checks press.
 quietGreetingForTest();
@@ -41,22 +51,58 @@ window.addEventListener("unhandledrejection", (event) =>
 function check(condition: unknown, message: string) {
   if (!condition) failures.push(message);
 }
-const settle = () => new Promise((resolve) => setTimeout(resolve, 40));
+const advance = () => fixtureTime.advance(40);
+async function pressNative(element: HTMLElement) {
+  const rect = element.getBoundingClientRect();
+  const x = rect.left + rect.width / 2,
+    y = rect.top + rect.height / 2;
+  for (const type of ["mousePressed", "mouseReleased"]) {
+    const response = await fetch("/input", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({
+        method: "Input.dispatchMouseEvent",
+        params: { type, x, y, button: "left", clickCount: 1 },
+      }),
+    });
+    if (!response.ok) throw new Error("Native Composer input failed");
+  }
+  await advance();
+}
+async function userBack(depth = 1) {
+  await observeCondition(
+    () => !isBackPending(),
+    "previous owned history traversal landed",
+  );
+  await until(
+    () => Number(history.state?.herdrBack) >= depth,
+    "the active layers installed their Back guards",
+  );
+  const popped = new Promise<void>((resolve) =>
+    window.addEventListener("popstate", () => resolve(), { once: true }),
+  );
+  history.back();
+  await popped;
+  await advance();
+  await observeCondition(
+    () => !isBackPending(),
+    "owned history traversal landed",
+  );
+}
+
 async function until(
   condition: () => unknown,
   message: string,
   timeoutMs = 8_000,
 ) {
-  const deadline = performance.now() + timeoutMs;
-  while (performance.now() < deadline) {
-    if (condition()) return;
-    await new Promise<void>((resolve) =>
-      requestAnimationFrame(() => resolve()),
+  try {
+    await fixtureTime.until(() => !!condition(), message, timeoutMs);
+    return;
+  } catch {
+    throw new Error(
+      `Timed out: ${message}; navigation=${JSON.stringify(store.get().browserNavigation)}; selected=${store.get().selectedPaneId}; notice=${JSON.stringify(store.get().notice)}; created=${created}; lastCreated=${JSON.stringify(lastCreated)}; phases=${JSON.stringify(creationPhases)}; calls=${JSON.stringify(calls.slice(-8).map((call) => [call.host, call.method]))}; body=${document.body.innerText.slice(0, 1400)}; panes=${JSON.stringify([...document.querySelectorAll("[data-pane-id]")].map((e) => [e.getAttribute("data-pane-id"), e.getBoundingClientRect().height, e.closest(".world-terminal-parking") !== null]))}; labels=${JSON.stringify([...document.querySelectorAll(".world-new-seat-canvas-action")].map((e) => e.getAttribute("aria-label")))}`,
     );
   }
-  throw new Error(
-    `Timed out: ${message}; navigation=${JSON.stringify(store.get().browserNavigation)}; selected=${store.get().selectedPaneId}; notice=${JSON.stringify(store.get().notice)}; body=${document.body.innerText.slice(0, 1400)}; panes=${JSON.stringify([...document.querySelectorAll("[data-pane-id]")].map((e) => [e.getAttribute("data-pane-id"), e.getBoundingClientRect().height, e.closest(".world-terminal-parking") !== null]))}; labels=${JSON.stringify([...document.querySelectorAll(".world-new-seat-canvas-action")].map((e) => e.getAttribute("aria-label")))}`,
-  );
 }
 const methods = ["pane.focus", "tab.create", "workspace.create"];
 const hosts = ["alpha", "beta"];
@@ -453,7 +499,11 @@ function visiblePane(paneId: string) {
 
 async function createdInspector(count: number) {
   await until(
-    () => created === count && lastCreated && visiblePane(lastCreated.pane_id),
+    () =>
+      created === count &&
+      lastCreated &&
+      visiblePane(lastCreated.pane_id) &&
+      store.get().notice?.loading !== true,
     `created Inspector ${count}`,
   );
 }
@@ -557,7 +607,7 @@ async function run() {
       is_default: host === "alpha",
     })),
   });
-  await worldRuntimeStore.refresh();
+  await withTestClock(fixtureTime, worldRuntimeStore.refresh());
   const root = createRoot(
     document.body.appendChild(document.createElement("div")),
   );
@@ -575,7 +625,7 @@ async function run() {
     sessionArrived = true;
     betaPane.agent_session = syntheticSession;
     chatUnavailable = "missing_integration";
-    await worldRuntimeStore.refresh();
+    await withTestClock(fixtureTime, worldRuntimeStore.refresh());
     const openAgent = async (unavailable = true) => {
       const selector =
         '.town-view-shell .world-semantic-target[data-kind="agent"]';
@@ -670,9 +720,7 @@ async function run() {
       "The Chat-availability status is outside busy content and the Terminal body",
     );
     await document.fonts.ready;
-    await new Promise<void>((resolve) =>
-      requestAnimationFrame(() => resolve()),
-    );
+    await fixtureTime.frame();
     const rowBounds = waitLine()!.getBoundingClientRect();
     const actionBounds = waitLine()!
       .querySelector("button")!
@@ -698,8 +746,8 @@ async function run() {
     await until(() => !waitLine(), "Stay on Terminal ends the wait line");
     chatUnavailable = "";
     conversationChanged();
-    await worldRuntimeStore.refresh();
-    await settle();
+    await withTestClock(fixtureTime, worldRuntimeStore.refresh());
+    await advance();
     check(
       !!document.querySelector('.workspace-inspector[data-view="terminal"]'),
       "After Stay on Terminal a readable Chat does not switch the window",
@@ -718,7 +766,7 @@ async function run() {
       const before = conversationReads;
       conversationChanged();
       await until(() => conversationReads > before, `Recheck ${reason}`);
-      await settle();
+      await advance();
       check(
         !!document.querySelector(
           '.workspace-inspector[data-view="terminal"]',
@@ -750,7 +798,7 @@ async function run() {
       () => completedConversationReads > manualCompleted,
       "Late availability reply",
     );
-    await settle();
+    await advance();
     check(
       !!document.querySelector('.workspace-inspector[data-view="terminal"]') &&
         !waitLine(),
@@ -779,7 +827,7 @@ async function run() {
     );
     chatUnavailable = "";
     conversationChanged();
-    await worldRuntimeStore.refresh();
+    await withTestClock(fixtureTime, worldRuntimeStore.refresh());
     check(
       !!document.querySelector('.workspace-inspector[data-view="terminal"]'),
       "Recovery cannot override a manual Terminal choice",
@@ -824,9 +872,9 @@ async function run() {
         "Captured availability read",
       );
       focusedPane(replacement);
-      await settle();
+      await advance();
       focusedPane({ terminal_id: betaPane.terminal_id, agent: betaPane.agent });
-      await settle();
+      await advance();
       const completed = completedConversationReads;
       conversationBarrier = null;
       reply.resolve();
@@ -834,7 +882,7 @@ async function run() {
         () => completedConversationReads > completed,
         "Replaced availability reply",
       );
-      await settle();
+      await advance();
       check(
         !!document.querySelector('.workspace-inspector[data-view="terminal"]'),
         "Replacement/restoration cannot revive an automatic Chat switch",
@@ -843,7 +891,7 @@ async function run() {
     }
     sessionArrived = false;
     delete betaPane.agent_session;
-    await worldRuntimeStore.refresh();
+    await withTestClock(fixtureTime, worldRuntimeStore.refresh());
     // On the phone, a terminal opened from a Town agent's card takes two
     // Backs to leave: the first closes Composer, the second returns to Town.
     if (window.innerWidth < 640) {
@@ -876,7 +924,7 @@ async function run() {
       Object.assign(runtime.get("beta")!.panes[0]!, {
         agent_session: syntheticSession,
       });
-      await worldRuntimeStore.refresh();
+      await withTestClock(fixtureTime, worldRuntimeStore.refresh());
       await until(
         () =>
           document.querySelector('.workspace-inspector[data-view="history"]') &&
@@ -897,23 +945,34 @@ async function run() {
           ),
         "Town opened the agent's terminal",
       );
-      await worldRuntimeStore.refresh();
+      await withTestClock(fixtureTime, worldRuntimeStore.refresh());
       check(
         Boolean(
           document.querySelector('.workspace-inspector[data-view="terminal"]'),
         ),
         "A refresh replaced the manual Terminal choice",
       );
-      document
-        .querySelector<HTMLTextAreaElement>(
-          ".workspace-inspector textarea.terminal-composer-input",
-        )!
-        .click();
+      const composerInput = () =>
+        [
+          ...document.querySelectorAll<HTMLTextAreaElement>(
+            ".workspace-inspector textarea.terminal-composer-input",
+          ),
+        ].find(
+          (element) =>
+            element.getBoundingClientRect().height > 0 &&
+            !element.closest(".world-terminal-parking") &&
+            getComputedStyle(element).visibility === "visible",
+        );
+      await until(composerInput, "the visible Inspector's Composer input");
+      await pressNative(composerInput()!);
       await until(
-        () => document.querySelector(".workspace-inspector .terminal-composer"),
+        () =>
+          document.querySelector(
+            ".workspace-inspector .terminal-composer[data-open]",
+          ),
         "Composer opened in the terminal",
       );
-      history.back();
+      await userBack(2);
       await until(
         () =>
           !document.querySelector(
@@ -925,12 +984,12 @@ async function run() {
         !!document.querySelector(".workspace-inspector"),
         "the first Back closed the terminal too",
       );
-      history.back();
+      await userBack();
       await until(
         () => !document.querySelector(".workspace-inspector"),
         "the second Back did not return to Town",
       );
-      await settle();
+      await advance();
       check(
         window.location.pathname === townPath &&
           !!document.querySelector(".town-view-shell"),
@@ -987,6 +1046,12 @@ async function run() {
         document.querySelector<HTMLSelectElement>(".agent-launcher select")
           ?.value === expected?.id,
         "Room launcher changed the seat's qualified destination",
+      );
+      await until(
+        () =>
+          document.querySelector<HTMLButtonElement>(".agent-launcher-card")
+            ?.disabled === false,
+        "room launcher Terminal is ready after the previous request",
       );
       const terminal = document.querySelector<HTMLButtonElement>(
         ".agent-launcher-card",
@@ -1258,9 +1323,9 @@ async function run() {
         ).length;
         heldMutation = null;
         gate.resolve();
-        await pending;
-        await store.refresh();
-        await worldRuntimeStore.refresh();
+        await withTestClock(fixtureTime, pending);
+        await withTestClock(fixtureTime, store.refresh());
+        await withTestClock(fixtureTime, worldRuntimeStore.refresh());
         await createdInspector(before + 1);
         check(
           location.pathname === `/${to}`,
@@ -1284,7 +1349,7 @@ async function run() {
       terminal_id: "a-sibling-terminal",
     };
     alpha.panes.push(sibling);
-    await store.refresh();
+    await withTestClock(fixtureTime, store.refresh());
     await store.focusPane(first.pane_id);
     await until(
       () => alpha.attached.has(first.terminal_id),
@@ -1294,7 +1359,7 @@ async function run() {
     // independently of the selected mobile/zoomed pane.
     await store.focusPane(sibling.pane_id);
     zoomedTabId = first.tab_id;
-    await store.refresh();
+    await withTestClock(fixtureTime, store.refresh());
     await until(
       () =>
         !alpha.attached.has(first.terminal_id) && visiblePane(sibling.pane_id),
@@ -1327,7 +1392,7 @@ async function run() {
         call.params.terminal_id === first.terminal_id,
     ).length;
     zoomedTabId = null;
-    await store.refresh();
+    await withTestClock(fixtureTime, store.refresh());
     await store.focusPane(first.pane_id);
     await until(() => visiblePane(first.pane_id), "preparing source visible");
     await store.focusPane(sibling.pane_id);
@@ -1363,8 +1428,8 @@ async function run() {
         "Retained source displaced the visible mobile split pane",
       );
     zoomedTabId = first.tab_id;
-    await store.refresh();
-    await settle();
+    await withTestClock(fixtureTime, store.refresh());
+    await advance();
     check(
       alpha.attached.has(first.terminal_id),
       "Zooming the sibling detached the pending creation source",
@@ -1406,7 +1471,7 @@ async function run() {
     "Handoff creation dispatch/result counts differ",
   );
   root.unmount();
-  await settle();
+  await advance();
   check(
     [...runtime.values()].every((r) => r.attached.size === 0),
     "Unmount leaked terminal owners",

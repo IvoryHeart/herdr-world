@@ -1,0 +1,150 @@
+{
+  "version": 1,
+  "description": "Legacy short unit polling sleeps. Replace with event/fake clock; each count may only shrink.",
+  "files": {
+    "scripts/verification-checker.test.ts": {
+      "pauses": 1,
+      "reason": "Legacy unit fixture polls external progress; migrate its owner to an event or injected clock."
+    },
+    "server/src/assistant/claude-driver.test.ts": {
+      "pauses": 1,
+      "reason": "Legacy unit fixture polls external progress; migrate its owner to an event or injected clock."
+    },
+    "server/src/bridge/endpoint-terminal-session.test.ts": {
+      "pauses": 1,
+      "reason": "Legacy unit fixture polls external progress; migrate its owner to an event or injected clock."
+    },
+    "server/src/bridge/ssh-openssh.test.ts": {
+      "pauses": 1,
+      "reason": "Legacy unit fixture polls external progress; migrate its owner to an event or injected clock."
+    },
+    "server/src/bridge/ssh-tunnel.test.ts": {
+      "pauses": 1,
+      "reason": "Legacy unit fixture polls external progress; migrate its owner to an event or injected clock."
+    },
+    "server/src/bridge/terminal-bridge.test.ts": {
+      "pauses": 8,
+      "reason": "Legacy unit fixture polls external progress; migrate its owner to an event or injected clock."
+    },
+    "server/src/config/session-secret.test.ts": {
+      "pauses": 2,
+      "reason": "Legacy unit fixture polls external progress; migrate its owner to an event or injected clock."
+    },
+    "server/src/connections/agent-status-subscription.test.ts": {
+      "pauses": 1,
+      "reason": "Legacy unit fixture polls external progress; migrate its owner to an event or injected clock."
+    },
+    "server/src/connections/profile-process.test.ts": {
+      "pauses": 4,
+      "reason": "Legacy unit fixture polls external progress; migrate its owner to an event or injected clock."
+    },
+    "server/src/connections/profile-service.test.ts": {
+      "pauses": 1,
+      "reason": "Legacy unit fixture polls external progress; migrate its owner to an event or injected clock."
+    },
+    "server/src/connections/runtime.test.ts": {
+      "pauses": 5,
+      "reason": "Legacy unit fixture polls external progress; migrate its owner to an event or injected clock."
+    },
+    "server/src/connections/ssh-preflight-recovery.test.ts": {
+      "pauses": 1,
+      "reason": "Legacy unit fixture polls external progress; migrate its owner to an event or injected clock."
+    },
+    "server/src/connections/subscription-loop.test.ts": {
+      "pauses": 1,
+      "reason": "Legacy unit fixture polls external progress; migrate its owner to an event or injected clock."
+    },
+    "server/src/herdr-core/connections.test.ts": {
+      "pauses": 1,
+      "reason": "Legacy unit fixture polls external progress; migrate its owner to an event or injected clock."
+    },
+    "server/src/herdr-core/core.live.test.ts": {
+      "pauses": 1,
+      "reason": "Legacy unit fixture polls external progress; migrate its owner to an event or injected clock."
+    },
+    "server/src/herdr-core/float-shell.test.ts": {
+      "pauses": 1,
+      "reason": "Legacy unit fixture polls external progress; migrate its owner to an event or injected clock."
+    },
+    "server/src/herdr-core/logout.test.ts": {
+      "pauses": 1,
+      "reason": "Legacy unit fixture polls external progress; migrate its owner to an event or injected clock."
+    },
+    "server/src/herdr-core/process-group.test.ts": {
+      "pauses": 1,
+      "reason": "Legacy unit fixture polls external progress; migrate its owner to an event or injected clock."
+    },
+    "server/src/herdr-core/testing/desktop-pane.ts": {
+      "pauses": 1,
+      "reason": "Legacy unit fixture polls external progress; migrate its owner to an event or injected clock."
+    },
+    "server/src/herdr-core/testing/live-world.ts": {
+      "pauses": 1,
+      "reason": "Legacy unit fixture polls external progress; migrate its owner to an event or injected clock."
+    },
+    "server/src/herdr-core/watches.test.ts": {
+      "pauses": 1,
+      "reason": "Legacy unit fixture polls external progress; migrate its owner to an event or injected clock."
+    },
+    "server/src/herdr-core/windows.live.test.ts": {
+      "pauses": 1,
+      "reason": "Legacy unit fixture polls external progress; migrate its owner to an event or injected clock."
+    },
+    "server/src/herdr-core/windows.test.ts": {
+      "pauses": 1,
+      "reason": "Legacy unit fixture polls external progress; migrate its owner to an event or injected clock."
+    },
+    "server/src/herdr-core/worktrees.live.test.ts": {
+      "pauses": 1,
+      "reason": "Legacy unit fixture polls external progress; migrate its owner to an event or injected clock."
+    },
+    "server/src/herdr-core/world-read-model.test.ts": {
+      "pauses": 1,
+      "reason": "Legacy unit fixture polls external progress; migrate its owner to an event or injected clock."
+    },
+    "server/src/http/herdr-setup.test.ts": {
+      "pauses": 1,
+      "reason": "Legacy unit fixture polls external progress; migrate its owner to an event or injected clock."
+    },
+    "server/src/ide/instances.test.ts": {
+      "pauses": 1,
+      "reason": "Legacy unit fixture polls external progress; migrate its owner to an event or injected clock."
+    },
+    "server/src/ide/service.test.ts": {
+      "pauses": 2,
+      "reason": "Legacy unit fixture polls external progress; migrate its owner to an event or injected clock."
+    },
+    "server/src/ide/testing/process-tree-stand-in.ts": {
+      "pauses": 1,
+      "reason": "Legacy unit fixture polls external progress; migrate its owner to an event or injected clock."
+    },
+    "server/src/rpc/core-shared.test.ts": {
+      "pauses": 1,
+      "reason": "Legacy unit fixture polls external progress; migrate its owner to an event or injected clock."
+    },
+    "server/src/shipyard/service.test.ts": {
+      "pauses": 1,
+      "reason": "Legacy unit fixture polls external progress; migrate its owner to an event or injected clock."
+    },
+    "server/src/usage/claude-fuel-board.test.ts": {
+      "pauses": 2,
+      "reason": "Legacy unit fixture polls external progress; migrate its owner to an event or injected clock."
+    },
+    "server/src/workspace/auto-sync.test.ts": {
+      "pauses": 1,
+      "reason": "Legacy unit fixture polls external progress; migrate its owner to an event or injected clock."
+    },
+    "server/src/world/apartments.test.ts": {
+      "pauses": 1,
+      "reason": "Legacy unit fixture polls external progress; migrate its owner to an event or injected clock."
+    },
+    "web/src/components/FilePreviewPdf.test.ts": {
+      "pauses": 1,
+      "reason": "Legacy unit fixture polls external progress; migrate its owner to an event or injected clock."
+    },
+    "web/src/world/memory/libraryArtefactReader.dom.test.tsx": {
+      "pauses": 1,
+      "reason": "Legacy unit fixture polls external progress; migrate its owner to an event or injected clock."
+    }
+  }
+}

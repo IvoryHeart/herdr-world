@@ -1,3 +1,7 @@
+import {
+  launchTestBrowser,
+  type TestBrowser,
+} from "../../../../scripts/testing/browser-session";
 import { expect, test } from "bun:test";
 import { existsSync } from "node:fs";
 import { mkdtemp, rm } from "node:fs/promises";
@@ -108,12 +112,12 @@ test.skipIf(!chrome).each(["home-pan", "zoom", "desk-pan", "composer"])(
           : new Response("Not found", { status: 404 });
       },
     });
-    let child: ReturnType<typeof Bun.spawn> | undefined;
+    let child: TestBrowser | undefined;
     let connection: Awaited<ReturnType<typeof connectCapture>> | undefined;
     try {
       const profile = join(dir, "profile"),
         log = join(dir, "chrome.log");
-      child = Bun.spawn(
+      child = await launchTestBrowser(
         [
           chrome!,
           "--headless=new",
@@ -131,6 +135,7 @@ test.skipIf(!chrome).each(["home-pan", "zoom", "desk-pan", "composer"])(
         ],
         { stdout: "ignore", stderr: Bun.file(log) },
       );
+      await child.start();
       await waitForBrowserFixture(
         requested.promise,
         loaded.promise,

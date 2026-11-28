@@ -1,3 +1,5 @@
+import { withTestClock } from "./world/testing/testClock";
+import { clock } from "./world/testing/installTestClock";
 import { createRoot } from "react-dom/client";
 import { flushSync } from "react-dom";
 import { Terminal } from "@xterm/xterm";
@@ -23,7 +25,7 @@ const failures: string[] = [];
 const check = (condition: boolean, message: string) => {
   if (!condition) failures.push(message);
 };
-const settle = () => new Promise((resolve) => setTimeout(resolve, 100));
+const advance = () => clock.frame();
 
 async function run() {
   const header = document.createElement("div");
@@ -64,7 +66,10 @@ async function run() {
   });
   term.open(container);
   const write = (data: string) =>
-    new Promise<void>((resolve) => term.write(data, resolve));
+    withTestClock(
+      clock,
+      new Promise<void>((resolve) => term.write(data, resolve)),
+    );
   await write(
     Array.from({ length: 20 }, () =>
       "ABCDEFGHIJKLMNOPQRSTUVWXYZ".repeat(2),
@@ -82,7 +87,7 @@ async function run() {
         );
         term.options = terminalFontOptions(compact, scale);
         renderMenu(true);
-        await settle();
+        await advance();
         const menu = document
           .querySelector(".command-popover")!
           .getBoundingClientRect();
@@ -108,7 +113,7 @@ async function run() {
           `${label}: topbar obscured the menu`,
         );
         renderMenu(false);
-        await settle();
+        await advance();
         const screen = container.querySelector(".xterm-screen")!;
         const rect = screen.getBoundingClientRect();
         const cellWidth = rect.width / term.cols;

@@ -1,3 +1,4 @@
+import { clock as fixtureTime } from "../world/testing/installTestClock";
 import { createRoot } from "react-dom/client";
 import { OverlayScrollbarLayer } from "./OverlayScrollbarLayer";
 import "../styles/tokens.css";
@@ -8,7 +9,7 @@ const failures: string[] = [];
 function check(condition: boolean, message: string) {
   if (!condition) failures.push(message);
 }
-const settle = () => new Promise((resolve) => setTimeout(resolve, 60));
+const renderBoundary = () => fixtureTime.advance(60);
 
 async function run() {
   const host = document.createElement("div");
@@ -42,7 +43,7 @@ async function run() {
       timers.delete(id);
       timer.run();
     }
-    await settle();
+    await renderBoundary();
   };
   const movePointer = () =>
     content.dispatchEvent(
@@ -52,18 +53,20 @@ async function run() {
     !!host.querySelector(".overlay-scrollbar-layer.is-visible");
   const root = createRoot(host);
   root.render(<OverlayScrollbarLayer />);
-  await settle();
+  await renderBoundary();
   try {
     movePointer();
-    await settle();
+    await renderBoundary();
     check(!isVisible(), "Hover alone must not reveal scrollbars");
-    scroller.scrollTop = 40;
-    scroller.dispatchEvent(new Event("scroll"));
-    await settle();
+    await new Promise<void>((resolve) => {
+      scroller.addEventListener("scroll", () => resolve(), { once: true });
+      scroller.scrollTop = 40;
+    });
+    await renderBoundary();
     check(isVisible(), "Scrolling must reveal scrollbars");
     const hideTimer = [...timers.keys()];
     movePointer();
-    await settle();
+    await renderBoundary();
     check(
       JSON.stringify([...timers.keys()]) === JSON.stringify(hideTimer),
       "Pointer movement must not extend scrollbar visibility",
@@ -77,7 +80,7 @@ async function run() {
     );
     window.dispatchEvent(new Event("resize"));
     movePointer();
-    await settle();
+    await renderBoundary();
     check(!isVisible(), "Hover and resizing must not revive idle scrollbars");
     await advance(160);
     check(
@@ -91,7 +94,7 @@ async function run() {
         scroller.scrollTop = 160;
         scroller.scrollLeft = 80;
         scroller.dispatchEvent(new Event("scroll"));
-        await settle();
+        await renderBoundary();
         const vertical = host.querySelector<HTMLElement>(".is-vertical");
         const horizontal = host.querySelector<HTMLElement>(".is-horizontal");
         check(!!vertical && !!horizontal, "Both axes must render");
@@ -158,7 +161,7 @@ async function run() {
           thumb.dispatchEvent(
             new PointerEvent("pointerup", { bubbles: true, pointerId: 1 }),
           );
-          await settle();
+          await renderBoundary();
         }
       }
     }

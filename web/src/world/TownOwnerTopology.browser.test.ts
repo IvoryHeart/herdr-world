@@ -1,3 +1,8 @@
+import { waitForPage } from "./testing/browserEvents";
+import {
+  launchTestBrowser,
+  type TestBrowser,
+} from "../../../scripts/testing/browser-session";
 import { expect, test } from "bun:test";
 import { existsSync } from "node:fs";
 import { mkdir, mkdtemp, rm, writeFile } from "node:fs/promises";
@@ -233,10 +238,10 @@ test
     });
     const profile = join(dir, "profile"),
       log = join(dir, "chrome.log");
-    let child: ReturnType<typeof Bun.spawn> | undefined;
+    let child: TestBrowser | undefined;
     let connection: Awaited<ReturnType<typeof connectCapture>> | undefined;
     try {
-      child = Bun.spawn(
+      child = await launchTestBrowser(
         [
           chrome!,
           "--headless=new",
@@ -252,6 +257,7 @@ test
         ],
         { stdout: "ignore", stderr: Bun.file(log) },
       );
+      await child.start();
       const exited = child.exited.then(async (code) => {
         throw new Error(`Chrome exited ${code}: ${await Bun.file(log).text()}`);
       });
@@ -282,15 +288,10 @@ test
       };
       const frames = () =>
         evaluate(
-          "new Promise(r => requestAnimationFrame(() => requestAnimationFrame(r)))",
+          "window.__herdrTestStep ? window.__herdrTestStep() : new Promise(r => requestAnimationFrame(() => requestAnimationFrame(r)))",
         );
-      const waitFor = async (expression: string, label: string) => {
-        for (let attempt = 0; attempt < 200; attempt++) {
-          if (await evaluate<boolean>(expression)) return;
-          await Bun.sleep(50);
-        }
-        throw new Error(`timed out: ${label}`);
-      };
+      const waitFor = (expression: string, label: string) =>
+        waitForPage(command, expression, label);
       const settled = () =>
         waitFor(
           "!window.__HERDR_TOWN_RENDERER__.flying && !window.__HERDR_TOWN_RENDERER__.transitioning",
@@ -766,7 +767,7 @@ test
             "the TUI's workspace order",
           );
           await settled();
-          await Bun.sleep(300);
+          await frames();
           const after = await evaluate<{
             failures: string[];
             calls: { method: string; params: Record<string, unknown> }[];

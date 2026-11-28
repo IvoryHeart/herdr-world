@@ -1,3 +1,4 @@
+import { clock } from "../../clock";
 /**
  * A testing-only switch for Town's bus: open World with `?townBusDemo` and
  * up to four of Town's agents walk out to their stops; about 6 s later a
@@ -23,14 +24,14 @@ const RIDERS = 4;
 
 let started: number | null | undefined;
 
-/** When the demo started (performance.now()), or null; read once per page. */
+/** When the demo started (clock.monotonic()), or null; read once per page. */
 export function townBusDemoStart(): number | null {
   if (started !== undefined) return started;
   started = null;
   if (typeof location === "undefined") return started;
   const url = new URL(location.href);
   if (!url.searchParams.has(PARAM)) return started;
-  started = performance.now();
+  started = clock.monotonic();
   url.searchParams.delete(PARAM);
   history.replaceState(history.state, "", url);
   return started;
@@ -42,7 +43,7 @@ export function resetTownBusDemo() {
 }
 
 /**
- * The bin the demo shows `now` (performance.now()), `start` being when it
+ * The bin the demo shows `now` (clock.monotonic()), `start` being when it
  * began: its riders are the first agents of up to four rooms, by key, each
  * room's first (so they wait at different stops where the town has them).
  */

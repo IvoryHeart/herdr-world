@@ -7,7 +7,7 @@ required. The native launchd shim reports have been removed.
 | --- | --- |
 | Pre-commit | Read-only formatting/lint and staged agent-file guard |
 | Pre-push | Read-only formatting and privacy scan of every pushed ref, including tags |
-| Privacy | One scan for each PR open/synchronize/reopen, plus explicit bot dispatches |
+| Privacy | Mandatory step in Validation scope, including PR metadata edits; no separate workflow |
 | PR CI | Linux static, affected units, browser shards and behavioral verification; description policy remains in CI |
 | Merge queue | Fresh Linux validation of the queue's combined commit; the same required Delivery checks aggregate |
 | Native checks | Tags and nightly only, including packaging changes |
@@ -53,12 +53,21 @@ before the next starts, including on failure or cancellation. The hard 4 GiB,
 zero-swap cgroup and four-CPU quota remain authoritative; estimates do not prove
 the hosted peak, and changed workloads need new receipts before claiming fit.
 World's six runners balance individual case times across three logical queues,
-admitting at most two isolated Chrome processes per runner. Cases over 50 seconds
-are split into independent fixture/profile runs with their assertions retained.
+admitting at most two isolated browser contexts in one Chrome per runner. Cases over 50 seconds
+are split into independent fixtures with their assertions retained.
 A fallback selector owns all new/renamed cases, so stale timing names cannot drop
 coverage. `scripts/ci-world-tests.ts` owns this browser scheduling separately from
 the existing unit scheduler. Local `check:delivery` uses the pinned Linux Chrome
 and starts verification after both browser lanes to avoid CPU contention.
+Browser launch and bundle-build phases are recorded once, while each case records
+queue admission, context creation, page load, first document frame, real-event waits and synchronous
+assertion work. Job summaries and local `test:timings` retain those measurements.
+The IDE security fixture uses a generated job-only certificate trusted by its
+public-key pin and an isolated CONNECT proxy for its synthetic webview origin;
+HTTPS, cookies, CORS and service-worker checks still execute in Chrome.
+Browser ownership lives in `scripts/run-browser-tests.ts` around the unchanged
+unit/retry executors; pure unit selections never start Chrome. The model tooling
+negative control runs once on group 1 in full mode or when its tooling changes.
 Static checks never retry. `check:changed` remains an explicit local affected
 check and `check:delivery` an explicit complete local gate. Neither is a push hook.
 `check:source` is a local compatibility command, not a release gate.
@@ -108,9 +117,21 @@ twenty completed pairs. Retry-once verdicts remain required; `flaky-tests-*` acc
 
 ## Scope and scheduling
 
-CI listens to PR open/synchronize/reopen. It does not listen to `edited`.
-`labeled` starts jobs only for release previews, browser stability and latency
-opt-ins on open PRs. Unrelated labels and closed PRs start no runners.
+CI listens to PR open/synchronize/reopen and metadata edits. Privacy scans the
+introduced commits and current metadata before scope/reuse admission. Each PR has
+one concurrency group with cancellation enabled, so a newer event cancels the
+superseded run. A `closed` event runs only a small cancellation job: it snapshots
+that PR's active workflow runs and cancels them without starting any test lane.
+`labeled` starts validation only for release previews, browser stability and
+latency opt-ins on open PRs; unrelated labels skip all validation runners.
+
+The default full CI graph has sixteen jobs. A web-rendering PR can additionally
+start one Town golden report and one asset-headroom report (eighteen total);
+`latency-trend` explicitly adds two measurement jobs and its report (twenty-one
+total). PR opening/reopening also runs the single release-note label job;
+synchronize pushes do not. Their path filters cover render inputs and web build inputs respectively.
+Privacy adds no jobs, and the daily flaky reporter adds no per-push run. Optional
+release previews and diagnostic comparisons are reported separately.
 PR CI validates the proposed merge and uses one selection from
 `scripts/validation-scope.ts`. Scope includes both sides of renames and the
 complete PR, even if incremental unit scope narrows. Unknown/configuration

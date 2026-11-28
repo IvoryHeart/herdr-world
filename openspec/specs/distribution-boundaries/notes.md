@@ -14,8 +14,15 @@
 - `scripts/coverage.test.ts`
 - `quint/models.ts`
 - `scripts/ci-model-plan.ts`, `scripts/ci-model-inputs.ts`, `scripts/ci-model-cache.ts` (independent model input closures and main-only evidence reuse)
-- `scripts/ci-model-groups.ts`, `scripts/ci-model-groups.test.ts` (four time-packed runner groups, four concurrent parts, shared resource receipts and per-part cache admission)
-- `scripts/ci-world-tests.ts`, `scripts/world-browser-cases.ts`, `scripts/world-browser-cases.test.ts` (six timed case shards, two isolated Chrome processes, complete fallback selection)
+- `scripts/ci-model-groups.ts`, `scripts/ci-model-groups.test.ts` (four time-packed runner groups, memory-bounded waves of up to four parts, shared resource receipts and per-part cache admission)
+- `scripts/ci-world-tests.ts`, `scripts/world-browser-cases.ts`, `scripts/world-browser-cases.test.ts` (six timed case shards, one Chrome with two isolated contexts, complete fallback selection)
+- `scripts/testing/browser-tls.ts` (job-only generated TLS pin and bounded per-context origin tunnel for native security fixtures)
+- `scripts/testing/browser-session.ts`, `scripts/run-browser-tests.ts` (one owned Chrome, isolated context routing/lifecycle, event readiness and phase receipts)
+- `web/src/world/testing/sharedBrowserBuild.ts`, `web/src/world/testing/assertionPhases.ts`, `web/src/world/testing/browserEvents.ts` (immutable prepared bundles, retained assertions and event waits)
+- `web/src/clock.ts`, `web/src/world/testing/testClock.ts`, `web/src/world/testing/installTestClock.ts`, `web/src/world/testing/snapshotClock.ts` (injectable web time and driven test schedulers)
+- `server/src/world/snapshot.ts`, `server/src/world/snapshot-deadline.ts`, `server/src/service/world-service.ts` (existing clock/scheduler ports own snapshot deadlines and transport yields)
+- `scripts/check-test-waits.ts`, `scripts/test-waits-allowlist.ts`, `scripts/check-clock-ports.ts`, `scripts/clock-ports-allowlist.json`, `scripts/test-short-polls-allowlist.json`, `scripts/testing/inline-browser-scripts.ts` (browser wait prohibition and shrinking native production time counts)
+- `scripts/test-timings.ts`, `scripts/local-verification.ts` (queue-excluded lane measurements and conservative complete local model reuse)
 - `scripts/test-chrome.ts`, `scripts/check-delivery.ts` (local/CI Chrome pin and verification after browser lanes)
 - `scripts/ci-unit-schedule.ts`, `scripts/ci-unit-schedule.test.ts` (unit scheduling inputs independent of appended static/web/reporting work)
 - `scripts/ci-run-timing.ts`, `scripts/ci-run-timing.test.ts` (expanded job count and start/end offsets)
@@ -65,7 +72,7 @@
 - `scripts/flaky-test-policy.ts` and `scripts/flaky-test-policy.test.ts` (retry report validation, file/case identity and safe summaries)
 - `scripts/flaky-tests.ts` and `scripts/flaky-tests.test.ts` (non-blocking job summaries and consolidated flaky.json artifacts; 24-hour snapshot, same-repository source admission, ZIP data decoding and one idempotent tracking issue)
 - `scripts/ci-workflow.test.ts` (daily/manual triggers, default-branch authority and informational reporting independent of Delivery)
-- `.github/workflows/ci.yml`, `.github/workflows/world-browser.yml` (retry summaries/artifacts inside existing jobs)
+- `.github/workflows/ci.yml`, `.github/workflows/world-browser.yml` (retry summaries/artifacts and privacy inside existing jobs; cancellation on superseded heads and PR closure)
 - `.github/workflows/flaky-tests.yml` (one daily/manual default-branch issue reporter; no workflow_run or commit statuses)
 - `scripts/ci-tests.ts`, `scripts/run-tests.ts`, `scripts/run-world-tests.ts` (retry opt-in and shared browser assets)
 - `scripts/ci-unit-shards.ts`, `scripts/ci-unit-timings.json`, `scripts/ci-unit-timings.ts` (four timed unit partitions, build consumers and JUnit timing refresh)
@@ -80,6 +87,7 @@
 - `scripts/`
 - `.github/workflows/behavioral-verification.yml`, `scripts/ci-workflow.test.ts` (current-tree type/notices checks on group 1, complete model evidence, and the sixteen-job full graph budget)
 - `scripts/ci-model-plan.ts`, `scripts/ci-model-plan.test.ts`, `scripts/ci-model-groups.ts`, `scripts/ci-model-groups.test.ts` (time-balanced runner groups, memory-bounded waves with recorded peak headroom, complete cache-subset inventory and failure/cancellation admission)
+- `.github/workflows/cancel-closed.yml` (trusted base-only cancellation, no PR checkout or test execution)
 - `.github/workflows/`
 - `.githooks/`
 - `site/`

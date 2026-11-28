@@ -1,3 +1,4 @@
+import { clock as fixtureTime } from "../world/testing/installTestClock";
 import { createRoot } from "react-dom/client";
 import { flushSync } from "react-dom";
 import { bridge } from "../api";
@@ -43,18 +44,16 @@ window.fetch = ((input: RequestInfo | URL, init?: RequestInit) => {
     return new Promise<Response>((resolve) => {
       completeSetup = resolve;
       if (preview && params.get("outcome") === "error") {
-        setTimeout(
-          () =>
-            resolve(
-              Response.json(
-                {
-                  error:
-                    "Simulated download failure. No installation was attempted.",
-                },
-                { status: 502 },
-              ),
+        void fixtureTime.advance(1500).then(() =>
+          resolve(
+            Response.json(
+              {
+                error:
+                  "Simulated download failure. No installation was attempted.",
+              },
+              { status: 502 },
             ),
-          1500,
+          ),
         );
       }
     });
@@ -129,10 +128,10 @@ function render(
     ),
   );
 }
-const settle = () => new Promise((resolve) => setTimeout(resolve, 60));
+const advance = () => fixtureTime.advance(60);
 async function waitFor(predicate: () => boolean, message: string) {
   const deadline = Date.now() + 5_000;
-  while (!predicate() && Date.now() < deadline) await settle();
+  while (!predicate() && Date.now() < deadline) await advance();
   if (!predicate()) throw new Error(`Timed out waiting for ${message}`);
 }
 const primary = () =>
@@ -157,7 +156,7 @@ function check(value: unknown, message: string) {
 async function checkLogNumbers(where: string) {
   for (const width of ["", "390px", "296px"]) {
     host.style.width = width;
-    await settle();
+    await advance();
     const log = document.querySelector<HTMLElement>("ol.core-install-lines");
     if (!log) {
       failures.push(`${where}: no install log`);
@@ -227,7 +226,7 @@ async function run() {
     "fallback changes must not reset confirmation",
   );
   click(document.querySelector<HTMLButtonElement>(".herdr-setup-cancel")!);
-  await settle();
+  await advance();
   check(
     document.activeElement === primary(),
     "cancel restores review button focus",
@@ -236,7 +235,7 @@ async function run() {
   primary().dispatchEvent(
     new KeyboardEvent("keydown", { key: "Escape", bubbles: true }),
   );
-  await settle();
+  await advance();
   check(
     primary().textContent?.includes("Set up herdr-core"),
     "Escape cancels confirmation",
@@ -244,7 +243,7 @@ async function run() {
   chooseTui();
   click(primary());
   click(primary());
-  await settle();
+  await advance();
   check(posts === 1 && confirmed, "single confirmed POST with required header");
   check(primary().disabled, "busy action disabled");
   check(
@@ -257,7 +256,7 @@ async function run() {
       { status: 502 },
     ),
   );
-  await settle();
+  await advance();
   check(
     document
       .querySelector("[role=alert]")
@@ -269,10 +268,10 @@ async function run() {
     "failure can retry",
   );
   click(primary());
-  await settle();
+  await advance();
   check(posts === 2, "retry sends one request");
   completeSetup?.(Response.json({ ok: false }, { status: 200 }));
-  await settle();
+  await advance();
   check(
     document.querySelector("[role=alert]"),
     "malformed success is not accepted",
@@ -285,7 +284,7 @@ async function run() {
       render(width === 296);
       host.style.width = `${width}px`;
       host.style.padding = "0";
-      await settle();
+      await advance();
       chooseTui();
       const card = document.querySelector<HTMLElement>(".herdr-setup-card")!;
       check(
@@ -306,7 +305,7 @@ async function run() {
   state = "installed";
   key++;
   render();
-  await settle();
+  await advance();
   check(
     primary().textContent?.includes("Start Herdr"),
     "installed: start action",
@@ -336,7 +335,7 @@ async function run() {
       "Original connection details",
       scenario !== "other-connection",
     );
-    await settle();
+    await advance();
     check(
       !document.querySelector(".herdr-setup-card"),
       `${scenario}: no setup action`,
@@ -410,7 +409,7 @@ async function townPlacement() {
     const before = statusRequests;
     key++;
     show(world, aggregate);
-    await settle();
+    await advance();
     check(
       !document.querySelector(".town-herdr-setup"),
       `town ${name}: no card`,
@@ -421,7 +420,7 @@ async function townPlacement() {
   state = "running";
   key++;
   show(townWorld(failing));
-  await settle();
+  await advance();
   check(!card(), "town running: no card");
 
   state = "missing";
@@ -443,7 +442,7 @@ async function townPlacement() {
   ]) {
     stage.style.width = `${width}px`;
     stage.style.height = `${height}px`;
-    await settle();
+    await advance();
     const panel = document.querySelector<HTMLElement>(".town-herdr-setup")!;
     const outer = stage.getBoundingClientRect();
     const box = panel.getBoundingClientRect();
@@ -511,7 +510,7 @@ async function townPlacement() {
       () => card()?.querySelector("h2")?.textContent === title,
       `greeting: the ${cardState} card`,
     );
-    await settle();
+    await advance();
     const over = greeting();
     check(
       !over || apart(over, card()!),
@@ -520,7 +519,7 @@ async function townPlacement() {
     check(!over, `greeting: waits while the ${cardState} card is up`);
     show(ready);
     greet(ready);
-    await settle();
+    await advance();
     check(!card(), `greeting: ${cardState} card gone once ready`);
     check(greeting(), `greeting: opens once the ${cardState} card is gone`);
   }
@@ -531,8 +530,8 @@ async function townPlacement() {
   key++;
   show(unavailable);
   greet(unavailable);
-  await settle();
-  await settle();
+  await advance();
+  await advance();
   check(!card(), "greeting: no card when setup is unavailable");
   check(greeting(), "greeting: not held when setup is unavailable");
   allowed = true;
@@ -731,7 +730,7 @@ async function manageConnections() {
 if (preview) {
   document.documentElement.dataset.theme = params.get("theme") ?? "dark";
   render(params.has("compact"));
-  await settle();
+  await advance();
   if (params.has("confirm")) click(primary());
   if (params.has("busy")) {
     click(primary());

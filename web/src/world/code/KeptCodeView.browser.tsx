@@ -1,3 +1,4 @@
+import { clock as fixtureTime } from "../testing/installTestClock";
 import { flushSync } from "react-dom";
 import { createRoot } from "react-dom/client";
 import { worldSessionStorage } from "../../browserStorage";
@@ -33,12 +34,12 @@ console.error = (...args: unknown[]) => {
 const check = (condition: boolean, message: string) => {
   if (!condition) failures.push(message);
 };
-const settle = (ms = 80) => new Promise((resolve) => setTimeout(resolve, ms));
+const advance = (ms = 80) => fixtureTime.advance(ms);
 async function until(condition: () => boolean, message: string, ms = 5000) {
   const end = Date.now() + ms;
   while (Date.now() < end) {
     if (condition()) return true;
-    await settle(30);
+    await advance(30);
   }
   failures.push(message);
   return false;
@@ -226,7 +227,7 @@ async function run() {
 
   // Town in front: Code stays loaded, unseen, at its size.
   render("town");
-  await settle(300);
+  await advance(300);
   const keeper = $(".world-code-keeper");
   check(
     keeper?.getAttribute("data-shown") === "false" &&
@@ -248,7 +249,7 @@ async function run() {
   await unchanged("behind Town");
 
   render("code");
-  await settle(300);
+  await advance(300);
   check(
     $<HTMLIFrameElement>('.code-view-frame[data-front="true"]') === frame,
     "back in Code the same workbench is in front",
@@ -262,14 +263,14 @@ async function run() {
 
   // Spaces in front: World's views are not shown at all.
   render("town", false);
-  await settle(300);
+  await advance(300);
   render("code");
-  await settle(300);
+  await advance(300);
   await unchanged("back from Spaces");
 
   // A window resize or phone rotation only resizes it.
   host.style.width = "700px";
-  await settle(300);
+  await advance(300);
   await unchanged("after a resize");
   flushSync(() => root.unmount());
 }

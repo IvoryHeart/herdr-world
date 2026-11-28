@@ -1,3 +1,5 @@
+import { withTestClock } from "./testing/testClock";
+import { clock as fixtureTime } from "./testing/installTestClock";
 import { createRoot } from "react-dom/client";
 import { flushSync } from "react-dom";
 import { bridge } from "../api";
@@ -21,8 +23,8 @@ const failures: string[] = [];
 const check = (condition: boolean, message: string) => {
   if (!condition) failures.push(message);
 };
-const frame = () => new Promise((resolve) => requestAnimationFrame(resolve));
-const settle = async (frames = 6) => {
+const frame = () => fixtureTime.frame();
+const advance = async (frames = 6) => {
   for (let i = 0; i < frames; i++) await frame();
 };
 window.addEventListener("error", (event) => failures.push(String(event.error)));
@@ -203,7 +205,7 @@ async function startScene() {
       },
     ],
   });
-  await worldRuntimeStore.refresh();
+  await withTestClock(fixtureTime, worldRuntimeStore.refresh());
   // Hosts shows the fixture core first; beta is hidden until the last start.
   writeHostsFilter(["core-fixture"]);
   const root = document.createElement("div");
@@ -212,7 +214,7 @@ async function startScene() {
   const until = async (condition: () => unknown, label: string) => {
     for (let attempt = 0; attempt < 300; attempt++) {
       if (condition()) return;
-      await new Promise((resolve) => setTimeout(resolve, 50));
+      await fixtureTime.advance(50);
     }
     throw new Error(`timed out: ${label}`);
   };
@@ -342,14 +344,14 @@ async function findScene() {
       },
     ],
   });
-  await worldRuntimeStore.refresh();
+  await withTestClock(fixtureTime, worldRuntimeStore.refresh());
   const root = document.createElement("div");
   document.body.append(root);
   createRoot(root).render(<WorldFoundationApp />);
   const until = async (condition: () => unknown, label: string) => {
     for (let attempt = 0; attempt < 200; attempt++) {
       if (condition()) return;
-      await new Promise((resolve) => setTimeout(resolve, 50));
+      await fixtureTime.advance(50);
     }
     throw new Error(`timed out: ${label}`);
   };
@@ -396,13 +398,13 @@ async function findScene() {
       () => row(name),
       `the box finds ${name}: ${JSON.stringify([...document.querySelectorAll("[cmdk-item]")].map((item) => item.textContent))} input=${document.querySelector<HTMLInputElement>(".command-popover input")?.value}`,
     );
-    await settle();
+    await advance();
   };
   await until(
     () => document.querySelector(".town-new-seat"),
     "Town shows the core",
   );
-  await settle(10);
+  await advance(10);
   const windowShows = (address: string) =>
     document.querySelector(
       `[data-window-id] [data-core-watch="${address}"]`,
@@ -427,7 +429,7 @@ async function findScene() {
   ] as const) {
     store.clearNotice();
     await setView(where);
-    await settle(10);
+    await advance(10);
     if (where !== "spaces") await closeWindows();
     await find(name);
     if (how === "button")
@@ -435,7 +437,7 @@ async function findScene() {
         row(name)!.querySelector<HTMLElement>(".command-item-secondary")!,
       );
     else await input({ key: how === "enter" ? "Enter" : "Shift+Enter" });
-    await settle(20);
+    await advance(20);
     const shown = where === "spaces" ? spacesShows : windowShows;
     check(
       view() === where && shown(address),
@@ -443,7 +445,7 @@ async function findScene() {
     );
     if (document.querySelector(".command-popover"))
       await input({ key: "Escape" });
-    await settle();
+    await advance();
   }
 }
 async function run() {
@@ -461,7 +463,7 @@ async function run() {
     },
     async () => {},
   );
-  await store.refresh();
+  await withTestClock(fixtureTime, store.refresh());
   const world = buildWorldObject(store.get().connections);
   const root = document.createElement("div");
   document.body.append(root);
@@ -483,7 +485,7 @@ async function run() {
         />,
       ),
     );
-    await settle(10);
+    await advance(10);
     const select = document.querySelector<HTMLSelectElement>(
       ".agent-launcher select",
     );
@@ -526,7 +528,7 @@ async function run() {
     check(builder?.coreControl === true, "the builder is under core control");
     // Confirmed once: the bin gets exactly the confirmed set.
     const held = putInBin(builder, "town", false);
-    await settle();
+    await advance();
     const dialog = document.querySelector<HTMLElement>('[role="dialog"]');
     check(
       dialog?.textContent?.includes("tests (in web)") === true &&
@@ -551,7 +553,7 @@ async function run() {
     );
     // Open again for the captures.
     void putInBin(builder, "town", false);
-    await settle();
+    await advance();
     return;
   }
   failures.push(`unknown scene ${scene}`);

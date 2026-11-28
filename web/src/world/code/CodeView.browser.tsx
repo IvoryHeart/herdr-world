@@ -1,3 +1,4 @@
+import { clock as fixtureTime } from "../testing/installTestClock";
 import { flushSync } from "react-dom";
 import { createRoot } from "react-dom/client";
 import "../../styles/tokens.css";
@@ -22,12 +23,12 @@ const failures: string[] = [];
 const check = (condition: boolean, message: string) => {
   if (!condition) failures.push(message);
 };
-const settle = (ms = 80) => new Promise((resolve) => setTimeout(resolve, ms));
+const advance = (ms = 80) => fixtureTime.advance(ms);
 async function until(condition: () => boolean, message: string, ms = 3000) {
   const end = Date.now() + ms;
   while (Date.now() < end) {
     if (condition()) return true;
-    await settle(30);
+    await advance(30);
   }
   failures.push(message);
   return false;
@@ -377,10 +378,10 @@ async function run() {
   check(boxes.length === 2, "trust and terms are two separate boxes");
   check(enable.disabled, "Enable starts off");
   boxes[0]!.click();
-  await settle();
+  await advance();
   check(button("Enable", gate)!.disabled, "trust alone does not enable");
   boxes[1]!.click();
-  await settle();
+  await advance();
   check(!button("Enable", gate)!.disabled, "both boxes enable Enable");
   button("Enable", gate)!.click();
   await until(() => !$(".ide-gate"), "the gate closes once enabled");
@@ -465,7 +466,7 @@ async function run() {
   )!;
   select.value = docs.value;
   select.dispatchEvent(new Event("change", { bubbles: true }));
-  await settle();
+  await advance();
   check(
     $(".code-view-context")?.textContent?.includes("bob") === true,
     "the rail follows the chosen project",
@@ -511,7 +512,7 @@ async function run() {
     option.textContent?.includes("api"),
   )!.value;
   select.dispatchEvent(new Event("change", { bubbles: true }));
-  await settle();
+  await advance();
   check(
     $<HTMLIFrameElement>('.code-view-frame[data-front="true"]')?.getAttribute(
       "src",
@@ -644,7 +645,7 @@ async function run() {
     () => fake.state.stops.includes(SSH_INSTANCE_ID),
     "Stop asks World to stop the SSH server",
   );
-  await settle();
+  await advance();
   check(
     $(`.code-view-frame[src="/ide/${SSH_INSTANCE_ID}/"]`) === sshFrame,
     "a Stop that failed keeps the still-running server's workbench loaded",
@@ -721,7 +722,7 @@ async function run() {
     () => insecureReads > readsBeforeRetry,
     "Try again on the secure-address screen checks again",
   );
-  await settle();
+  await advance();
   check(
     $(".code-view")?.getAttribute("data-state") === "insecure-page" &&
       !$(".code-view-frame") &&
@@ -950,7 +951,7 @@ async function checkFailures(host: HTMLElement) {
   failureActions("the not-installed refusal");
   button("Try again")?.click();
   await until(() => opens.length === 2, "Try again opens again");
-  await settle();
+  await advance();
   check(
     $(".code-view")?.getAttribute("data-state") === "refused",
     "trying again refuses the same way",
@@ -978,7 +979,7 @@ async function checkFailures(host: HTMLElement) {
   button("Enable…", ideRow("code-server")!)?.click();
   await until(() => Boolean($(".ide-gate")), "Enable… opens the gate");
   $<HTMLInputElement>(".ide-gate .ide-gate-check input")?.click();
-  await settle();
+  await advance();
   button("Enable", $(".ide-gate")!)?.click();
   await until(
     () => !$(".ide-gate") && Boolean(button("Open in code-server")),
@@ -1042,7 +1043,7 @@ async function checkFailures(host: HTMLElement) {
     option.textContent?.includes("docs"),
   )!.value;
   select.dispatchEvent(new Event("change", { bubbles: true }));
-  await settle();
+  await advance();
   button("Open in code-server")?.click();
   await until(
     () => $(".code-view-refusal")?.getAttribute("data-code") === "windows",

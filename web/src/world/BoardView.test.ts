@@ -1,3 +1,8 @@
+import { sharedBrowserBuild } from "./testing/sharedBrowserBuild";
+import {
+  launchTestBrowser,
+  type TestBrowser,
+} from "../../../scripts/testing/browser-session";
 import { captureScene } from "./testing/captureScene";
 import { registerCaptureReadinessTests } from "./testing/captureReadinessBrowser";
 registerCaptureReadinessTests();
@@ -117,13 +122,13 @@ test.skipIf(!chrome).each([
         return new Response("Not found", { status: 404 });
       },
     });
-    let browser: ReturnType<typeof Bun.spawn> | undefined;
+    let browser: TestBrowser | undefined;
     let socket: WebSocket | undefined;
     let cdp:
       | ((method: string, params?: object) => Promise<Record<string, unknown>>)
       | undefined;
     try {
-      const build = await Bun.build({
+      const build = await sharedBrowserBuild(import.meta.path, {
         entrypoints: [join(import.meta.dir, "BoardView.browser.tsx")],
         outdir: dir,
         target: "browser",
@@ -132,7 +137,7 @@ test.skipIf(!chrome).each([
       for (const output of build.outputs)
         assets.set(`/${basename(output.path)}`, output);
       const browserLog = join(dir, "browser.log");
-      browser = Bun.spawn(
+      browser = await launchTestBrowser(
         [
           chrome!,
           "--headless=new",
@@ -151,6 +156,7 @@ test.skipIf(!chrome).each([
         ],
         { stdout: "ignore", stderr: Bun.file(browserLog) },
       );
+      await browser.start();
       // Headless Chrome clamps a narrow window to 500 CSS px. Set the actual
       // viewport before navigation; all setup remains in the startup deadline.
       const requested = (async () => {

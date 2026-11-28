@@ -1,3 +1,4 @@
+import { clock } from "../../clock";
 import { bridge } from "../../api";
 import type {
   AgentAddress,
@@ -72,13 +73,13 @@ const bridgeLink: MoveLink = {
   back: (waitMs) =>
     new Promise((done) => {
       let stop = () => {};
-      const timer = setTimeout(() => {
+      const timer = clock.setTimeout(() => {
         stop();
         done(false);
       }, waitMs);
       stop = bridge.onStatus((status) => {
         if (status !== "connected") return;
-        clearTimeout(timer);
+        clock.clearTimeout(timer);
         queueMicrotask(() => stop());
         done(true);
       });

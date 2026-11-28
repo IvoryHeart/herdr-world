@@ -1,3 +1,4 @@
+import { clock as fixtureTime } from "./testing/installTestClock";
 import { createRoot } from "react-dom/client";
 import { STARTER_PROFILES } from "../../../shared/agentProfile";
 import { bridge } from "../api";
@@ -46,7 +47,7 @@ async function until(test: () => unknown, what: string) {
   const deadline = performance.now() + 8_000;
   while (!test()) {
     if (performance.now() > deadline) throw new Error(`timed out: ${what}`);
-    await new Promise((resolve) => setTimeout(resolve, 25));
+    await fixtureTime.advance(25);
   }
 }
 const closeButton = (label: string) =>
@@ -61,7 +62,7 @@ async function run() {
   createRoot(host).render(
     <FeatureHosts slot="dialogs" world={world} onOpen={() => undefined} />,
   );
-  await new Promise((resolve) => setTimeout(resolve, 100));
+  await fixtureTime.advance(100);
   check(!$(".apartments-dialog") && !$(".memory-library"), "opened unasked");
 
   openApartments("ada");

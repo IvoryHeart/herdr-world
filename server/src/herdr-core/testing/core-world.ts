@@ -25,6 +25,8 @@ import type {
 import { createCoreConnections } from "../connections";
 import { localCoreTransport } from "../transport";
 import { FakeCore, type FakeCoreOptions } from "./fake-core";
+import { until, notifyCoreFixtureChange } from "./events";
+export { until } from "./events";
 
 /**
  * One World service's core side against an in-process core: the real
@@ -44,10 +46,13 @@ export async function coreWorld(
   const changedAt: number[] = [];
   const core = createCoreConnections({
     logger: silentLogger,
-    changed: () => {},
+    changed: () => {
+      notifyCoreFixtureChange();
+    },
     observed: (id) => {
       changes.push(id);
       changedAt.push(Date.now());
+      notifyCoreFixtureChange();
     },
     profiles: () => service,
     transportFor: (profile) => localCoreTransport(profile.core_state_dir),
@@ -100,9 +105,16 @@ export async function coreWorld(
     });
     await until(() => core.manager.status(id).state === "ready");
   };
+  const watched = new WeakSet<object>();
+  const stopWatching: (() => void)[] = [];
   const lease = (id = "box") => {
     const value = core.manager.readyRuntimeLease(id);
     if (!value) throw new Error("no ready lease");
+    if (!watched.has(value.runtime)) {
+      watched.add(value.runtime);
+      // The ordered mirror signals immediately; World publication is coalesced.
+      stopWatching.push(value.runtime.watch(notifyCoreFixtureChange));
+    }
     return value;
   };
   /** The read model's rows, as World's snapshot reads them. */
@@ -136,20 +148,10 @@ export async function coreWorld(
     settle: () =>
       until(() => lease().runtime.core.mirror.cursor === fake.currentSeq),
     async dispose() {
+      for (const stop of stopWatching) stop();
       await core.stop();
       fake.kill(socket);
       rmSync(root, { recursive: true, force: true });
     },
   };
-}
-
-export async function until(
-  predicate: () => boolean | Promise<boolean>,
-  ms = 3_000,
-) {
-  const deadline = Date.now() + ms;
-  while (!(await predicate())) {
-    if (Date.now() > deadline) throw new Error("condition not reached");
-    await Bun.sleep(2);
-  }
 }

@@ -1,3 +1,8 @@
+import { sharedBrowserBuild } from "./testing/sharedBrowserBuild";
+import {
+  launchTestBrowser,
+  type TestBrowser,
+} from "../../../scripts/testing/browser-session";
 import { connectCapture } from "./testing/connectCapture";
 import { captureScene, resizeCapture } from "./testing/captureScene";
 import { captureResumeViewports } from "./testing/resumeVisualCapture";
@@ -157,9 +162,9 @@ test
         );
       },
     });
-    let browser: ReturnType<typeof Bun.spawn> | undefined;
+    let browser: TestBrowser | undefined;
     try {
-      const build = await Bun.build({
+      const build = await sharedBrowserBuild(import.meta.path, {
         entrypoints: [
           join(import.meta.dir, "WorldTerminalHandoff.browser.tsx"),
         ],
@@ -243,7 +248,7 @@ test
         assets.set(`/${basename(output.path)}`, output);
       }
       const browserLog = join(dir, "browser.log");
-      browser = Bun.spawn(
+      browser = await launchTestBrowser(
         [
           chrome!,
           "--headless=new",
@@ -262,6 +267,7 @@ test
         ],
         { stdout: "ignore", stderr: Bun.file(browserLog) },
       );
+      await browser.start();
       const observed = await waitForBrowserFixture(
         pageRequested.promise,
         result.promise,

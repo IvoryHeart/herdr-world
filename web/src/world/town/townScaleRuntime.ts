@@ -1,3 +1,4 @@
+import { clock } from "../../clock";
 /**
  * The Town scale scene as a page-local runtime, so `?scene=town-scale` can
  * be tried and not only looked at. Its three synthetic hosts answer the
@@ -88,7 +89,7 @@ export class TownScaleRuntime {
   private messageAt = new Map<string, number>();
 
   constructor(
-    private readonly now = () => Date.now(),
+    private readonly now = () => clock.now(),
     private readonly answerWorkMs = SCENE_ANSWER_WORK_MS,
   ) {
     const loaded = this.now();
@@ -290,7 +291,7 @@ export class TownScaleRuntime {
           "working",
           "Running the migration",
         );
-        setTimeout(() => {
+        clock.setTimeout(() => {
           const current = this.connections.find(
             (c) => c.connectionId === connectionId,
           );

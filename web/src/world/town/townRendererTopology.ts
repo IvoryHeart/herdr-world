@@ -1,3 +1,4 @@
+import { clock } from "../../clock";
 /**
  * The Town renderer's ground and buildings as the layout changes (see
  * townRenderer.ts for the rest of the frame). What was drawn stays until its
@@ -742,8 +743,8 @@ export function createTownTopology(ctx: TownTopologyContext) {
     const layout = ctx.layout();
     if (!layout || !ground) return false;
     const into = ground;
-    const began = performance.now();
-    const spent = () => performance.now() - began >= MATERIALIZE_BUDGET_MS;
+    const began = clock.monotonic();
+    const spent = () => clock.monotonic() - began >= MATERIALIZE_BUDGET_MS;
     const view = viewRect(0);
     const near = viewRect(200);
     if (urgent)

@@ -1,3 +1,4 @@
+import { spawnTestChrome } from "./testing/browser-session";
 /**
  * Help pictures: captures each help entry's control (web/src/help/) from
  * the production components with the website's synthetic scene, at phone
@@ -122,7 +123,7 @@ export async function runHelpPictures(options: {
         : new Response("Not found", { status: 404 });
     },
   });
-  const browser = Bun.spawn(
+  const browser = spawnTestChrome(
     [
       options.chrome,
       "--headless=new",

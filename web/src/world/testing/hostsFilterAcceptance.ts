@@ -1,3 +1,7 @@
+import {
+  launchTestBrowser,
+  type TestBrowser,
+} from "../../../../scripts/testing/browser-session";
 import { expect, test } from "bun:test";
 import { mkdtemp, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
@@ -65,9 +69,9 @@ export function registerHostsFilterTests(group: HostFilterGroup) {
             );
           },
         });
-        let browser: ReturnType<typeof Bun.spawn> | undefined;
+        let browser: TestBrowser | undefined;
         try {
-          browser = Bun.spawn(
+          browser = await launchTestBrowser(
             [
               chrome!,
               "--headless=new",
@@ -81,6 +85,7 @@ export function registerHostsFilterTests(group: HostFilterGroup) {
             ],
             { stdout: "ignore", stderr: Bun.file(join(dir, "browser.log")) },
           );
+          await browser.start();
           const observed = await waitForBrowserFixture(
             pageRequested.promise,
             result.promise,

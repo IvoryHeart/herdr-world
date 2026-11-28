@@ -1,3 +1,5 @@
+import { clock as fixtureTime } from "./testing/installTestClock";
+import { withTestClock } from "./testing/testClock";
 import { createRoot } from "react-dom/client";
 import { bridge } from "../api";
 import { publishedHostGrouping } from "../../../shared/hostGrouping";
@@ -236,7 +238,7 @@ async function run() {
   });
   observed.snapshot = publish(before);
   observed.started = publish(started);
-  await worldRuntimeStore.refresh();
+  await withTestClock(fixtureTime, worldRuntimeStore.refresh());
   const root = document.createElement("div");
   document.body.append(root);
   createRoot(root).render(<WorldFoundationApp />);
@@ -248,7 +250,7 @@ async function run() {
       document.querySelectorAll(".town-room-plaque").length > 0
     )
       return;
-    await new Promise((resolve) => setTimeout(resolve, 50));
+    await fixtureTime.advance(50);
   }
   failures.push("Town never drew the owner topology");
 }

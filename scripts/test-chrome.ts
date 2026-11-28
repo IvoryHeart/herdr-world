@@ -11,6 +11,7 @@ import {
 import { homedir, tmpdir } from "node:os";
 import { dirname, join } from "node:path";
 import pin from "../tools/chrome/test-chrome.json";
+import { spawnTestChromeSync } from "./testing/browser-session";
 
 /**
  * The Chrome that CI's browser suites and the latency trend run on: one
@@ -99,7 +100,6 @@ function localChromeSandbox(chrome: string) {
   writeFileSync(launcher, chromeProfileLauncher(chrome, aaExec), {
     mode: 0o755,
   });
-  smokeTestChrome(launcher);
   return launcher;
 }
 
@@ -154,7 +154,7 @@ function allowSandbox(chrome: string) {
 export function smokeTestChrome(chrome: string) {
   const profile = mkdtempSync(join(tmpdir(), "test-chrome-smoke-"));
   try {
-    const result = Bun.spawnSync(
+    const result = spawnTestChromeSync(
       [
         chrome,
         "--headless=new",
@@ -204,7 +204,8 @@ if (import.meta.main) {
           `  sudo apparmor_parser -r /etc/apparmor.d/herdr-test-chrome`,
       );
   }
-  smokeTestChrome(chrome);
+  // The runner validates HTML on its one owned Chrome. A separate smoke
+  // process here would duplicate the per-job launch and cold-start cost.
   console.info(describeMachine(chrome));
   if (Bun.env.GITHUB_ENV)
     appendFileSync(Bun.env.GITHUB_ENV, `CHROME_BIN=${chrome}\n`);

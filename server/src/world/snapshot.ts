@@ -42,7 +42,8 @@ import type { ConnectionId } from "../connections/types";
 import type { WorldWatchlist } from "./watchlist";
 import type { WorldRuntimeStatus } from "./runtime-registry";
 import type { WorldHost } from "../../../shared/hosts";
-
+import { systemClock, systemScheduler, type Scheduler } from "../service/clock";
+import { settleSnapshotObservations } from "./snapshot-deadline";
 const MAX_WORKSPACES = 512;
 const MAX_TABS = 2_048;
 const MAX_PANES = 4_096;
@@ -146,7 +147,7 @@ export class WorldSnapshotService<Runtime extends RuntimeWithOperations> {
 
   constructor(
     private readonly registry: Registry<Runtime>,
-    private readonly now: () => number = Date.now,
+    private readonly now: () => number = systemClock.now,
     private readonly onLateObservation?: (
       connectionId: string,
       generation: number,
@@ -159,6 +160,7 @@ export class WorldSnapshotService<Runtime extends RuntimeWithOperations> {
     private readonly onFreshObservation?: observation.Fresh,
     private readonly onCompleteObservation?: observation.Complete,
     incarnation?: string,
+    private readonly scheduler: Scheduler = systemScheduler,
   ) {
     this.observation = new WorldObservation(incarnation);
   }
@@ -300,15 +302,14 @@ export class WorldSnapshotService<Runtime extends RuntimeWithOperations> {
         : this.fallback(status);
       if (accepting) completed.set(status.id, connection);
     });
-    let deadline: ReturnType<typeof setTimeout> | undefined;
-    await Promise.race([
-      Promise.all(observations),
-      new Promise<void>((resolve) => {
-        deadline = setTimeout(resolve, this.responseDeadlineMs);
-      }),
-    ]);
-    accepting = false;
-    if (deadline) clearTimeout(deadline);
+    await settleSnapshotObservations(
+      observations,
+      this.scheduler,
+      this.responseDeadlineMs,
+      () => {
+        accepting = false;
+      },
+    );
     const gathered = statuses.map((status) => {
       const connection = completed.get(status.id);
       if (connection) return connection;
@@ -569,7 +570,9 @@ export class WorldSnapshotService<Runtime extends RuntimeWithOperations> {
       // Break that microtask chain before host projection/digest work so native
       // terminal input and socket replies get an ordinary event-loop turn.
       // Revalidate the lease after yielding before publishing any topology.
-      await new Promise((resolve) => setTimeout(resolve, 0));
+      await new Promise<void>((resolve) => {
+        this.scheduler.schedule(resolve, 0);
+      });
       if (!this.current(work)) {
         outcome = { error: "connection changed during snapshot" };
       } else if (!this.admitted(work)) {

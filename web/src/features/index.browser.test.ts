@@ -1,4 +1,5 @@
 /// <reference lib="es2021.promise" />
+import { sharedBrowserBuild } from "../world/testing/sharedBrowserBuild";
 import { expect, test } from "bun:test";
 import { mkdtemp, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
@@ -13,6 +14,9 @@ import {
 import { assetUrlImports } from "../world/testing/assetUrlImports";
 import { buildWorldBrowserBundle } from "../world/testing/browserBundles";
 import { stopChrome, withBrowserDeadline } from "../browserChrome";
+import { launchTestBrowser } from "../../../scripts/testing/browser-session";
+import { connectCapture } from "../world/testing/connectCapture";
+import { waitForPage } from "../world/testing/browserEvents";
 
 test("generated web index runs in every browser build path", async () => {
   const chrome = process.env.CHROME_BIN;
@@ -36,7 +40,7 @@ test("generated web index runs in every browser build path", async () => {
     },
   });
   const run = async (label: string, url = server.url.href) => {
-    const child = Bun.spawn(
+    const child = await launchTestBrowser(
       [
         chrome,
         "--headless=new",
@@ -51,17 +55,32 @@ test("generated web index runs in every browser build path", async () => {
       ],
       { stdout: "pipe", stderr: "ignore" },
     );
+    await child.start();
+    let page: Awaited<ReturnType<typeof connectCapture>> | undefined;
     try {
-      const [html, code] = await withBrowserDeadline(
-        Promise.all([new Response(child.stdout).text(), child.exited]),
+      page = await connectCapture(child.devtoolsPort);
+      await waitForPage(
+        page.command,
+        "document.body?.textContent.includes('span:web-feature')",
         label,
-        45_000,
+        45000,
       );
-      expect(code).toBe(0);
+      const html = (
+        await withBrowserDeadline(
+          page.command("Runtime.evaluate", {
+            expression: "document.documentElement.outerHTML",
+            returnByValue: true,
+          }),
+          label,
+          45000,
+        )
+      ).result.value;
       expect(html).toContain("<body>span:web-feature");
       console.info(`PASS ${label}: span:web-feature`);
     } finally {
+      page?.close();
       await stopChrome(child);
+      expect(await child.exited).toBe(0);
     }
   };
   const vite = await createServer({
@@ -140,7 +159,7 @@ test("generated web index runs in every browser build path", async () => {
       ["build-pages.ts film", filmBuildConfig, [rawSvg, assetUrlImports]],
       ["film-render.ts", filmBuildConfig, [rawSvg, assetUrlImports]],
     ] as const) {
-      const result = await Bun.build({
+      const result = await sharedBrowserBuild(import.meta.path, {
         ...config,
         plugins: [...("plugins" in config ? config.plugins : []), ...plugins],
         entrypoints: [entry],

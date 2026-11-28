@@ -130,15 +130,17 @@ export async function executeWorldBrowserCases(
   files: readonly string[],
   run: (task: WorldCaseTask, worker: number, index: number) => Promise<number>,
   concurrency = WORLD_BROWSER_WORKERS,
+  capacity = WORLD_BROWSER_WORKERS,
 ): Promise<number> {
   assert(
-    workers.length <= WORLD_BROWSER_WORKERS,
-    "Too many World case workers",
+    Number.isInteger(capacity) &&
+      capacity > 0 &&
+      capacity <= WORLD_BROWSER_SHARDS * WORLD_BROWSER_WORKERS,
+    "Invalid World worker capacity",
   );
+  assert(workers.length <= capacity, "Too many World case workers");
   assert(
-    Number.isInteger(concurrency) &&
-      concurrency > 0 &&
-      concurrency <= WORLD_BROWSER_WORKERS,
+    Number.isInteger(concurrency) && concurrency > 0 && concurrency <= capacity,
     "Invalid World case concurrency",
   );
   let active = 0;

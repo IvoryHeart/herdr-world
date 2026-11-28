@@ -174,10 +174,6 @@
       "pauses": 1,
       "reason": "Not converted yet; its area sweep (#1419) replaces these with waits on the real signal."
     },
-    "server/src/workspace/html-preview.browser.test.ts": {
-      "pauses": 4,
-      "reason": "Not converted yet; its area sweep (#1419) replaces these with waits on the real signal."
-    },
     "server/src/workspace/last-step-turns.test.ts": {
       "pauses": 2,
       "reason": "Not converted yet; its area sweep (#1419) replaces these with waits on the real signal."
@@ -202,10 +198,6 @@
       "pauses": 1,
       "reason": "Not converted yet; its area sweep (#1419) replaces these with waits on the real signal."
     },
-    "web/src/annotations.browser.tsx": {
-      "pauses": 68,
-      "reason": "Not converted yet; its area sweep (#1419) replaces these with waits on the real signal."
-    },
     "web/src/api.test.ts": {
       "pauses": 31,
       "reason": "Not converted yet; its area sweep (#1419) replaces these with waits on the real signal."
@@ -214,152 +206,28 @@
       "pauses": 4,
       "reason": "Not converted yet; its area sweep (#1419) replaces these with waits on the real signal."
     },
-    "web/src/chatMenus.browser.tsx": {
-      "pauses": 26,
-      "reason": "Not converted yet; its area sweep (#1419) replaces these with waits on the real signal."
-    },
-    "web/src/components/AgentChat.browser.tsx": {
-      "pauses": 160,
-      "reason": "Not converted yet; its area sweep (#1419) replaces these with waits on the real signal."
-    },
-    "web/src/components/AgentHistoryDrawer.browser.tsx": {
-      "pauses": 42,
-      "reason": "Not converted yet; its area sweep (#1419) replaces these with waits on the real signal."
-    },
-    "web/src/components/AgentLaunch.browser.tsx": {
-      "pauses": 28,
-      "reason": "Not converted yet; its area sweep (#1419) replaces these with waits on the real signal."
-    },
-    "web/src/components/HerdrSetupCard.browser.tsx": {
-      "pauses": 27,
-      "reason": "Not converted yet; its area sweep (#1419) replaces these with waits on the real signal."
-    },
-    "web/src/components/InspectorPaneMap.browser.tsx": {
-      "pauses": 11,
-      "reason": "Not converted yet; its area sweep (#1419) replaces these with waits on the real signal."
-    },
     "web/src/components/ModalDialogs.test.ts": {
       "pauses": 5,
-      "reason": "Not converted yet; its area sweep (#1419) replaces these with waits on the real signal."
-    },
-    "web/src/components/OverlayScrollbarLayer.browser.tsx": {
-      "pauses": 12,
-      "reason": "Not converted yet; its area sweep (#1419) replaces these with waits on the real signal."
-    },
-    "web/src/components/TerminalThemeDialog.browser.tsx": {
-      "pauses": 16,
-      "reason": "Not converted yet; its area sweep (#1419) replaces these with waits on the real signal."
-    },
-    "web/src/components/ThemedSelect.browser.tsx": {
-      "pauses": 12,
-      "reason": "Not converted yet; its area sweep (#1419) replaces these with waits on the real signal."
-    },
-    "web/src/components/VisualPreview.browser.tsx": {
-      "pauses": 6,
-      "reason": "Not converted yet; its area sweep (#1419) replaces these with waits on the real signal."
-    },
-    "web/src/components/WindowArrangementMenu.browser.tsx": {
-      "pauses": 13,
       "reason": "Not converted yet; its area sweep (#1419) replaces these with waits on the real signal."
     },
     "web/src/components/WorkspaceInspectorViewSelect.test.ts": {
       "pauses": 1,
       "reason": "Not converted yet; its area sweep (#1419) replaces these with waits on the real signal."
     },
-    "web/src/configuration.browser.tsx": {
-      "pauses": 33,
-      "reason": "Not converted yet; its area sweep (#1419) replaces these with waits on the real signal."
-    },
-    "web/src/diffViewer.browser.tsx": {
-      "pauses": 5,
-      "reason": "Not converted yet; its area sweep (#1419) replaces these with waits on the real signal."
-    },
-    "web/src/filePreviewNavigation.browser.tsx": {
-      "pauses": 30,
-      "reason": "Not converted yet; its area sweep (#1419) replaces these with waits on the real signal."
-    },
-    "web/src/layerStack.browser.tsx": {
-      "pauses": 57,
-      "reason": "Not converted yet; its area sweep (#1419) replaces these with waits on the real signal."
-    },
-    "web/src/mobileTerminal.browser.tsx": {
-      "pauses": 106,
-      "reason": "Not converted yet; its area sweep (#1419) replaces these with waits on the real signal."
-    },
-    "web/src/mobileTerminal.test.ts": {
-      "pauses": 2,
-      "reason": "Not converted yet; its area sweep (#1419) replaces these with waits on the real signal."
-    },
-    "web/src/sourceFileInspector.browser.tsx": {
-      "pauses": 11,
-      "reason": "Not converted yet; its area sweep (#1419) replaces these with waits on the real signal."
-    },
     "web/src/store.test.ts": {
       "pauses": 1,
-      "reason": "Not converted yet; its area sweep (#1419) replaces these with waits on the real signal."
-    },
-    "web/src/systemBack.browser.tsx": {
-      "pauses": 75,
       "reason": "Not converted yet; its area sweep (#1419) replaces these with waits on the real signal."
     },
     "web/src/systemBack.test.ts": {
       "pauses": 2,
       "reason": "Not converted yet; its area sweep (#1419) replaces these with waits on the real signal."
     },
-    "web/src/taskPush.browser.tsx": {
-      "pauses": 7,
-      "reason": "Not converted yet; its area sweep (#1419) replaces these with waits on the real signal."
-    },
     "web/src/terminalEndpointPresentation.test.ts": {
       "pauses": 5,
       "reason": "Not converted yet; its area sweep (#1419) replaces these with waits on the real signal."
     },
-    "web/src/terminalLinks.browser.tsx": {
-      "pauses": 14,
-      "reason": "Not converted yet; its area sweep (#1419) replaces these with waits on the real signal."
-    },
     "web/src/terminalResize.test.ts": {
       "pauses": 10,
-      "reason": "Not converted yet; its area sweep (#1419) replaces these with waits on the real signal."
-    },
-    "web/src/uiScale.browser.tsx": {
-      "pauses": 4,
-      "reason": "Not converted yet; its area sweep (#1419) replaces these with waits on the real signal."
-    },
-    "web/src/uiScale.test.ts": {
-      "pauses": 1,
-      "reason": "Not converted yet; its area sweep (#1419) replaces these with waits on the real signal."
-    },
-    "web/src/world/code/CodeView.browser.tsx": {
-      "pauses": 12,
-      "reason": "Not converted yet; its area sweep (#1419) replaces these with waits on the real signal."
-    },
-    "web/src/world/code/KeptCodeView.browser.tsx": {
-      "pauses": 7,
-      "reason": "Not converted yet; its area sweep (#1419) replaces these with waits on the real signal."
-    },
-    "web/src/world/ConcurrentContexts.browser.tsx": {
-      "pauses": 4,
-      "reason": "Not converted yet; its area sweep (#1419) replaces these with waits on the real signal."
-    },
-    "web/src/world/CoreControl.browser.tsx": {
-      "pauses": 2,
-      "reason": "Not converted yet; its area sweep (#1419) replaces these with waits on the real signal."
-    },
-    "web/src/world/CoreSharedState.browser.tsx": {
-      "pauses": 13,
-      "reason": "Not converted yet; its area sweep (#1419) replaces these with waits on the real signal."
-    },
-    "web/src/world/CoreTerminalWatch.browser.tsx": {
-      "pauses": 9,
-      "reason": "Not converted yet; its area sweep (#1419) replaces these with waits on the real signal."
-    },
-    "web/src/world/DeskView.browser.tsx": {
-      "pauses": 52,
-      "reason": "Not converted yet; its area sweep (#1419) replaces these with waits on the real signal."
-    },
-    "web/src/world/FeatureHosts.browser.tsx": {
-      "pauses": 3,
       "reason": "Not converted yet; its area sweep (#1419) replaces these with waits on the real signal."
     },
     "web/src/world/memory/artefactShelf.test.ts": {
@@ -370,59 +238,7 @@
       "pauses": 2,
       "reason": "Not converted yet; its area sweep (#1419) replaces these with waits on the real signal."
     },
-    "web/src/world/memory/MemoryLibrary.browser.tsx": {
-      "pauses": 1,
-      "reason": "Not converted yet; its area sweep (#1419) replaces these with waits on the real signal."
-    },
-    "web/src/world/memory/MemoryLibraryLifecycle.browser.tsx": {
-      "pauses": 6,
-      "reason": "Not converted yet; its area sweep (#1419) replaces these with waits on the real signal."
-    },
-    "web/src/world/ProductionContexts.browser.tsx": {
-      "pauses": 2,
-      "reason": "Not converted yet; its area sweep (#1419) replaces these with waits on the real signal."
-    },
-    "web/src/world/SharedViewCreation.browser.tsx": {
-      "pauses": 11,
-      "reason": "Not converted yet; its area sweep (#1419) replaces these with waits on the real signal."
-    },
-    "web/src/world/testing/testClock.ts": {
-      "pauses": 1,
-      "reason": "Not converted yet; its area sweep (#1419) replaces these with waits on the real signal."
-    },
-    "web/src/world/town/TownBoard.browser.tsx": {
-      "pauses": 4,
-      "reason": "Not converted yet; its area sweep (#1419) replaces these with waits on the real signal."
-    },
-    "web/src/world/town/townBusTrip.browser.ts": {
-      "pauses": 1,
-      "reason": "Not converted yet; its area sweep (#1419) replaces these with waits on the real signal."
-    },
-    "web/src/world/town/TownCanvas.browser.tsx": {
-      "pauses": 38,
-      "reason": "Not converted yet; its area sweep (#1419) replaces these with waits on the real signal."
-    },
-    "web/src/world/town/townCenter.browser.ts": {
-      "pauses": 1,
-      "reason": "Not converted yet; its area sweep (#1419) replaces these with waits on the real signal."
-    },
-    "web/src/world/town/townEdgeArrows.browser.ts": {
-      "pauses": 1,
-      "reason": "Not converted yet; its area sweep (#1419) replaces these with waits on the real signal."
-    },
     "web/src/world/town/townMoves.test.ts": {
-      "pauses": 1,
-      "reason": "Not converted yet; its area sweep (#1419) replaces these with waits on the real signal."
-    },
-    "web/src/world/town/townPlaces.browser.ts": {
-      "pauses": 2,
-      "reason": "Not converted yet; its area sweep (#1419) replaces these with waits on the real signal."
-    },
-    "web/src/world/town/townRoomPlates.browser.ts": {
-      "pauses": 3,
-      "reason": "Not converted yet; its area sweep (#1419) replaces these with waits on the real signal."
-    },
-    "web/src/world/town/townRoomPlates.test.ts": {
       "pauses": 1,
       "reason": "Not converted yet; its area sweep (#1419) replaces these with waits on the real signal."
     },
@@ -438,28 +254,8 @@
       "pauses": 1,
       "reason": "Not converted yet; its area sweep (#1419) replaces these with waits on the real signal."
     },
-    "web/src/world/TownOwnerTopology.browser.test.ts": {
-      "pauses": 2,
-      "reason": "Not converted yet; its area sweep (#1419) replaces these with waits on the real signal."
-    },
-    "web/src/world/TownOwnerTopology.browser.tsx": {
-      "pauses": 1,
-      "reason": "Not converted yet; its area sweep (#1419) replaces these with waits on the real signal."
-    },
-    "web/src/world/useSpacesTabWindowArrangement.browser.tsx": {
-      "pauses": 10,
-      "reason": "Not converted yet; its area sweep (#1419) replaces these with waits on the real signal."
-    },
-    "web/src/world/windows/WindowFrame.browser.tsx": {
-      "pauses": 18,
-      "reason": "Not converted yet; its area sweep (#1419) replaces these with waits on the real signal."
-    },
     "web/src/world/WorldInspectorResourceResume.test.ts": {
       "pauses": 9,
-      "reason": "Not converted yet; its area sweep (#1419) replaces these with waits on the real signal."
-    },
-    "web/src/world/WorldTerminalHandoff.browser.tsx": {
-      "pauses": 94,
       "reason": "Not converted yet; its area sweep (#1419) replaces these with waits on the real signal."
     }
   }

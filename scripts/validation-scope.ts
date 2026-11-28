@@ -60,6 +60,7 @@ export type ValidationSelection = {
   worldShards: number[];
   web: string[];
   verification: boolean;
+  diagnosticControl?: boolean;
   packaging: boolean;
 };
 
@@ -214,6 +215,13 @@ export function selectValidation(
     graph.files.has(boot);
   return {
     full,
+    diagnosticControl:
+      full ||
+      paths.some((path) =>
+        /^(?:verification\/|tools\/quint\/|scripts\/(?:verification|ci-verification|ci-model))/.test(
+          path,
+        ),
+      ),
     tooling,
     documentation: false,
     reason: full

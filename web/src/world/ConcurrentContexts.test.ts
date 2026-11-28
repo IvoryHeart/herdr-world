@@ -1,3 +1,8 @@
+import { sharedBrowserBuild } from "./testing/sharedBrowserBuild";
+import {
+  launchTestBrowser,
+  type TestBrowser,
+} from "../../../scripts/testing/browser-session";
 import { expect, test } from "bun:test";
 import { mkdtemp, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
@@ -137,6 +142,24 @@ test.skipIf(!chrome).each([1440, 390])(
           await Promise.all(run.pending);
           return Response.json({ count: run.pending.length });
         }
+        if (path === "/input-once") {
+          const { host, key } = await request.json();
+          if (!["alpha", "beta"].includes(host) || !["a", "b"].includes(key))
+            return new Response("Invalid synthetic input", { status: 400 });
+          await driver!.call("Runtime.evaluate", {
+            expression: `document.querySelector('[data-host="${host}"] .xterm-helper-textarea').focus(); new Promise(resolve => requestAnimationFrame(() => requestAnimationFrame(resolve)))`,
+            awaitPromise: true,
+          });
+          for (const type of ["keyDown", "keyUp"])
+            await driver!.call("Input.dispatchKeyEvent", {
+              type,
+              key,
+              code: `Key${key.toUpperCase()}`,
+              text: type === "keyDown" ? key : undefined,
+              windowsVirtualKeyCode: key.toUpperCase().charCodeAt(0),
+            });
+          return new Response("sent");
+        }
         if (path === "/result") {
           result.resolve(await request.json());
           return new Response("ok");
@@ -157,9 +180,9 @@ test.skipIf(!chrome).each([1440, 390])(
         },
       },
     });
-    let browser: ReturnType<typeof Bun.spawn> | undefined;
+    let browser: TestBrowser | undefined;
     try {
-      const build = await Bun.build({
+      const build = await sharedBrowserBuild(import.meta.path, {
         entrypoints: [join(import.meta.dir, "ConcurrentContexts.browser.tsx")],
         outdir: dir,
         target: "browser",
@@ -189,7 +212,7 @@ test.skipIf(!chrome).each([1440, 390])(
       expect(build.success).toBe(true);
       for (const output of build.outputs)
         assets.set(`/${basename(output.path)}`, output);
-      browser = Bun.spawn(
+      browser = await launchTestBrowser(
         [
           chrome!,
           "--headless=new",
@@ -204,6 +227,7 @@ test.skipIf(!chrome).each([1440, 390])(
         ],
         { stdout: "ignore", stderr: Bun.file(join(dir, "browser.log")) },
       );
+      await browser.start();
       const observed = await waitForBrowserFixture(
         pageRequested.promise,
         result.promise,

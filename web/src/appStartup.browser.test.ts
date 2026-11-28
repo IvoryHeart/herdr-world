@@ -1,3 +1,7 @@
+import {
+  launchTestBrowser,
+  type TestBrowser,
+} from "../../scripts/testing/browser-session";
 import { expect, test } from "bun:test";
 import { mkdtemp, mkdir, rm } from "node:fs/promises";
 import { join, resolve } from "node:path";
@@ -27,7 +31,7 @@ test.skipIf(!chrome).each(["app", "title-spinner", "board-text"] as const)(
       fetch: () => Response.json({}),
     });
     const target = backend.url.origin;
-    let child: ReturnType<typeof Bun.spawn> | undefined;
+    let child: TestBrowser | undefined;
     let vite: Awaited<ReturnType<typeof createServer>> | undefined;
     try {
       vite = await createServer({
@@ -176,7 +180,7 @@ test.skipIf(!chrome).each(["app", "title-spinner", "board-text"] as const)(
       const address = vite.resolvedUrls?.local[0];
       if (!address) throw new Error("Missing isolated dev URL");
       expect([8787, 8788, 8789]).not.toContain(Number(new URL(address).port));
-      child = Bun.spawn(
+      child = await launchTestBrowser(
         [
           chrome!,
           "--headless=new",
@@ -199,6 +203,7 @@ test.skipIf(!chrome).each(["app", "title-spinner", "board-text"] as const)(
         ],
         { stdout: "ignore", stderr: "ignore" },
       );
+      await child.start();
       const observed = await waitForBrowserFixture(
         pageRequested.promise,
         result.promise,

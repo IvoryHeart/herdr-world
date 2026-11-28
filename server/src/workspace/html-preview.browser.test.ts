@@ -1,3 +1,9 @@
+import { sharedBrowserBuild } from "../../../web/src/world/testing/sharedBrowserBuild";
+import { waitForPage } from "../../../web/src/world/testing/browserEvents";
+import {
+  launchTestBrowser,
+  type TestBrowser,
+} from "../../../scripts/testing/browser-session";
 import { herdrRuntimeFixture } from "../adapters/testing/runtime";
 import {
   runProcessWithInputTimeout,
@@ -140,10 +146,10 @@ test.skipIf(!chrome)(
           : new Response("Not found", { status: 404 });
       },
     });
-    let child: ReturnType<typeof Bun.spawn> | undefined;
+    let child: TestBrowser | undefined;
     let socket: WebSocket | undefined;
     try {
-      const build = await Bun.build({
+      const build = await sharedBrowserBuild(import.meta.path, {
         entrypoints: [
           join(
             import.meta.dir,
@@ -175,7 +181,7 @@ test.skipIf(!chrome)(
       expect(build.success).toBe(true);
       for (const asset of build.outputs)
         assets.set(`/${basename(asset.path)}`, asset);
-      child = Bun.spawn(
+      child = await launchTestBrowser(
         [
           chrome!,
           "--headless=new",
@@ -189,6 +195,7 @@ test.skipIf(!chrome)(
         ],
         { stdout: "ignore", stderr: Bun.file(join(dir, "browser.log")) },
       );
+      await child.start();
       const port = await waitForChromePort(
         child,
         join(dir, "profile"),
@@ -247,9 +254,25 @@ test.skipIf(!chrome)(
         "/import.css": "h1{letter-spacing:3px}",
         "/inline.css": "h1{word-spacing:5px}",
       };
+      const contextEvents = new EventTarget();
       socket.onmessage = (event) => {
         const message = JSON.parse(String(event.data));
         receive(message);
+        if (
+          [
+            "Runtime.executionContextCreated",
+            "Runtime.executionContextsCleared",
+            "Page.frameNavigated",
+            "Page.lifecycleEvent",
+            "Page.domContentEventFired",
+            "Page.loadEventFired",
+            "Target.attachedToTarget",
+            "Target.detachedFromTarget",
+          ].includes(message.method)
+        )
+          queueMicrotask(() =>
+            contextEvents.dispatchEvent(new Event("change")),
+          );
         if (message.method === "Target.detachedFromTarget") {
           for (const [frameId, context] of contexts) {
             if (context.sessionId === message.params.sessionId)
@@ -271,6 +294,12 @@ test.skipIf(!chrome)(
             : Promise.resolve();
           const setup = Promise.all([
             cdp("Runtime.enable", {}, message.params.sessionId),
+            cdp("Page.enable", {}, message.params.sessionId),
+            cdp(
+              "Page.setLifecycleEventsEnabled",
+              { enabled: true },
+              message.params.sessionId,
+            ),
             cdp("Fetch.enable", intercept, message.params.sessionId),
           ]).then(async () => {
             if (hold) {
@@ -340,22 +369,64 @@ test.skipIf(!chrome)(
             returnByValue: true,
           },
           context?.sessionId,
-        );
+        ).catch((error) => {
+          if (error instanceof Error)
+            error.message += `: ${expression.slice(0, 160)}`;
+          throw error;
+        });
         if (result.exceptionDetails)
           throw new Error(JSON.stringify(result.exceptionDetails));
         return result.result.value;
       };
-      const wait = async (expression: string, contextId?: FrameContext) => {
-        await withBrowserDeadline(
+      const wait = (
+        expression: string,
+        contextId?: FrameContext,
+        scripts = true,
+      ) => {
+        if (!contextId && scripts) return waitForPage(cdp, expression);
+        // Sandboxed documents block page callbacks. Their actual CDP lifecycle
+        // events drive observations without requiring script permission.
+        return withBrowserDeadline(
           (async () => {
-            while (!(await evaluate(expression, contextId)))
-              await Bun.sleep(25);
+            for (;;) {
+              const next = Promise.withResolvers<void>();
+              const changed = () => next.resolve();
+              contextEvents.addEventListener("change", changed);
+              try {
+                if (await evaluate(expression, contextId)) return;
+                await next.promise;
+              } finally {
+                contextEvents.removeEventListener("change", changed);
+              }
+            }
           })(),
-          expression,
+          `HTML frame: ${expression}`,
         );
+      };
+      const advanceBrowserTime = async (budget: number) => {
+        const expired = Promise.withResolvers<void>();
+        const onMessage = (event: MessageEvent) => {
+          if (
+            JSON.parse(String(event.data)).method ===
+            "Emulation.virtualTimeBudgetExpired"
+          )
+            expired.resolve();
+        };
+        socket!.addEventListener("message", onMessage);
+        try {
+          await cdp("Emulation.setVirtualTimePolicy", {
+            policy: "pauseIfNetworkFetchesPending",
+            budget,
+          });
+          await withBrowserDeadline(expired.promise, "Virtual browser time");
+          await cdp("Emulation.setVirtualTimePolicy", { policy: "advance" });
+        } finally {
+          socket!.removeEventListener("message", onMessage);
+        }
       };
       await cdp("Runtime.enable");
       await cdp("Page.enable");
+      await cdp("Page.setLifecycleEventsEnabled", { enabled: true });
       await cdp("Fetch.enable", intercept);
       await cdp("Target.setAutoAttach", {
         autoAttach: true,
@@ -392,19 +463,26 @@ test.skipIf(!chrome)(
         await withBrowserDeadline(
           (async () => {
             while (!context) {
-              for (const candidate of contexts.values()) {
-                const url = await evaluate("location.href", candidate).catch(
-                  () => "",
-                );
-                if (
-                  url.includes("/file/download") ||
-                  url.endsWith("/policy.html")
-                ) {
-                  context = candidate;
-                  break;
+              const next = Promise.withResolvers<void>();
+              const changed = () => next.resolve();
+              contextEvents.addEventListener("change", changed);
+              try {
+                for (const candidate of contexts.values()) {
+                  const url = await evaluate("location.href", candidate).catch(
+                    () => "",
+                  );
+                  if (
+                    url.includes("/file/download") ||
+                    url.endsWith("/policy.html")
+                  ) {
+                    context = candidate;
+                    break;
+                  }
                 }
+                if (!context) await next.promise;
+              } finally {
+                contextEvents.removeEventListener("change", changed);
               }
-              if (!context) await Bun.sleep(25);
             }
           })(),
           "HTML frame context",
@@ -621,7 +699,7 @@ test.skipIf(!chrome)(
         });
       }
       // Observe delayed refresh/navigation and popup attempts after trusted clicks.
-      await Bun.sleep(250);
+      await advanceBrowserTime(250);
       expect(
         (await targets()).filter((target) => target.type === "page").length,
       ).toBe(pagesBefore);
@@ -636,6 +714,8 @@ test.skipIf(!chrome)(
       await cdp("Page.navigate", { url });
       await wait(
         'document.readyState === "complete" && !!document.querySelector("h1")',
+        undefined,
+        false,
       );
       expect(
         await evaluate('getComputedStyle(document.querySelector("h1")).color'),
@@ -646,8 +726,10 @@ test.skipIf(!chrome)(
       });
       await wait(
         'document.readyState === "complete" && !!document.querySelector("#top")',
+        undefined,
+        false,
       );
-      await Bun.sleep(250);
+      await advanceBrowserTime(250);
       expect(await evaluate("location.href")).toBe(
         new URL("/policy.html", server.url).href,
       );

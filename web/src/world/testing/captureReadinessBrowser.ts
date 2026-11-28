@@ -1,3 +1,7 @@
+import {
+  launchTestBrowser,
+  type TestBrowser,
+} from "../../../../scripts/testing/browser-session";
 import { expect, test } from "bun:test";
 import { mkdtemp, rm, readFile, mkdir, readdir } from "node:fs/promises";
 import { tmpdir, loadavg } from "node:os";
@@ -75,7 +79,7 @@ export function registerCaptureReadinessTests() {
           return new Response("Not found", { status: 404 });
         },
       });
-      let child: ReturnType<typeof Bun.spawn> | undefined;
+      let child: TestBrowser | undefined;
       let connection: Awaited<ReturnType<typeof connectCapture>> | undefined;
       try {
         const build = await Bun.build({
@@ -109,7 +113,7 @@ export function registerCaptureReadinessTests() {
           assets.set(`/${basename(output.path)}`, output);
         const log = join(dir, "chrome.log"),
           profile = join(dir, "profile");
-        child = Bun.spawn(
+        child = await launchTestBrowser(
           [
             chrome!,
             "--headless=new",
@@ -122,6 +126,7 @@ export function registerCaptureReadinessTests() {
           ],
           { stdout: "ignore", stderr: Bun.file(log) },
         );
+        await child.start();
         const port = await waitForChromePort(child, profile, log);
         connection = await connectCapture(port);
         const command = connection.command;
