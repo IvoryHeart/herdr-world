@@ -18,8 +18,7 @@
 - `web/src/world/town/townLens.test.ts`
 - `web/src/world/usage/UsageLens.tsx`, `web/src/world/usage/usageModel.ts`, `web/src/world/usage/UsageBreakdown.tsx`
 - `web/src/world/town/TownObservatory.tsx`
-- `web/src/world/usage/usageModel.test.ts`
-- `web/src/world/usage/UsageScreens.dom.test.ts`
+- `web/src/world/usage/usageModel.test.ts`, `web/src/world/usage/UsageScreens.dom.test.ts`
 - `web/src/world/town/townObservatory.test.ts`
 - `web/src/world/usage/UsageLens.browser.tsx`
 - `web/src/world/TownView.tsx`
@@ -36,6 +35,7 @@
 - `web/src/world/town/townLayout.ts`; civic row on every form factor (#1351): `web/src/world/town/townLots.ts`, `web/src/world/town/townLibraryLot.ts`, `web/src/world/town/townObservatoryLot.ts`; the library and observatory signs (a phone hangs the library's below the observatory's, right of the center plaque): `web/src/world/town/townCivicSigns.ts`; places: `web/src/world/town/townPlaces.ts`, `web/src/world/PlaceWindow.tsx`
 - Bin and bus: `web/src/world/town/TownBusLayer.tsx` (the next trip's route report, the bus's speed and distance plate), `web/src/world/town/townBus.ts` (`townTourRouteM`, `townBusSign`, metres per pixel; `townBinStopOf`/`townBinStopAt`, the drop stop as a building corner), `web/src/world/town/townBinDrop.ts` and `TownCanvas.tsx` (the stop a drag was dropped on, kept as the bin entry's `stop` in `shared/bin.ts`), `web/src/world/town/townBusDrive.ts` (`townBusTimeline`, `townBusLeft`), `web/src/world/bin/binStore.ts` (`binBusClock`, the countdown labels); tests `townBus.test.ts`, `townBusCountdown.dom.test.ts`, `web/src/world/bin/binStore.test.ts`
 - `server/src/world/observability.ts`
+- Landmark art directions (#1117, [guide](../../../../docs/design/town-art.md)): `web/src/world/town/townArtKit.ts`, `web/src/world/town/townArtStyles.ts`, `web/src/world/town/townArtLandmarks.ts`; the testing-only `?townArt=storybook|harbour|paper` switch: `web/src/world/town/townArtDirection.ts`, test `web/src/world/town/townArtDirection.test.ts`
 
 **Tests:**
 

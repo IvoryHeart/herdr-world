@@ -13,6 +13,13 @@
  * on the slipway, the flags and the crates.
  */
 
+import {
+  artLighthouse,
+  artPier,
+  artWarehouseHouse,
+  artWarehouseYard,
+  townArtLandmark,
+} from "./townArtLandmarks";
 import { TOWN_TILE as T } from "./townLayout";
 import {
   TOWN_WAREHOUSE_HOUSE_ROWS,
@@ -483,6 +490,11 @@ export function paintTownPier(
   slipway: { x: number; w: number },
   bollards: readonly number[],
 ): TownCanvas {
+  const art = townArtLandmark(
+    `pier:${w}:${slipway.x}:${slipway.w}:${bollards.join(",")}`,
+    (style) => artPier(style, w, slipway, bollards),
+  );
+  if (art) return art;
   if (pierCache?.w === w) return pierCache.canvas;
   const { canvas, rect, disc } = painter(w, TOWN_PIER_ART.h);
   const top = TOWN_PIER_ART.deck;
@@ -540,6 +552,8 @@ export function paintTownPier(
  * dark; the DOM layer lights it in main's colour.
  */
 export function paintTownLighthouse(): TownCanvas {
+  const art = townArtLandmark("lighthouse", artLighthouse);
+  if (art) return art;
   const { canvas, rect } = painter(20, 28);
   paintLighthouse(rect, 0, 26);
   return canvas;
@@ -579,6 +593,14 @@ let warehouseYard: TownCanvas | null = null;
 
 /** The warehouse: TOWN_WAREHOUSE_WIDTH tiles wide, its loading door on its bottom row. */
 export function paintTownWarehouseHouse(): TownCanvas {
+  const art = townArtLandmark("warehouse-house", (style) =>
+    artWarehouseHouse(
+      style,
+      TOWN_WAREHOUSE_WIDTH * T,
+      TOWN_WAREHOUSE_HOUSE_ROWS * T,
+    ),
+  );
+  if (art) return art;
   warehouseHouse ??= paintHouse(
     TOWN_WAREHOUSE_WIDTH * T,
     TOWN_WAREHOUSE_HOUSE_ROWS * T,
@@ -588,6 +610,14 @@ export function paintTownWarehouseHouse(): TownCanvas {
 
 /** The yard: stone setts, a loading line and a hand cart at its right end. */
 export function paintTownWarehouseYard(): TownCanvas {
+  const art = townArtLandmark("warehouse-yard", (style) =>
+    artWarehouseYard(
+      style,
+      TOWN_WAREHOUSE_WIDTH * T,
+      TOWN_WAREHOUSE_YARD_ROWS * T,
+    ),
+  );
+  if (art) return art;
   warehouseYard ??= paintYard(
     TOWN_WAREHOUSE_WIDTH * T,
     TOWN_WAREHOUSE_YARD_ROWS * T,

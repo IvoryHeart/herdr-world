@@ -10,6 +10,11 @@
  * dialog shows the same house as its banner (townLibraryBanner).
  */
 
+import {
+  artLibraryHouse,
+  artLibraryYard,
+  townArtLandmark,
+} from "./townArtLandmarks";
 import { TOWN_TILE as T } from "./townLayout";
 import {
   TOWN_LIBRARY_HOUSE_ROWS,
@@ -69,6 +74,10 @@ function painter(W: number, H: number) {
 
 /** The hall: TOWN_LIBRARY_WIDTH tiles wide, its door on its bottom row. */
 export function paintTownLibraryHouse(): TownCanvas {
+  const art = townArtLandmark("library-house", (style) =>
+    artLibraryHouse(style, TOWN_LIBRARY_WIDTH * T, TOWN_LIBRARY_HOUSE_ROWS * T),
+  );
+  if (art) return art;
   if (!house)
     house = paintHouse(TOWN_LIBRARY_WIDTH * T, TOWN_LIBRARY_HOUSE_ROWS * T);
   return house;
@@ -76,6 +85,10 @@ export function paintTownLibraryHouse(): TownCanvas {
 
 /** The reading garden in front of the door. */
 export function paintTownLibraryYard(): TownCanvas {
+  const art = townArtLandmark("library-yard", (style) =>
+    artLibraryYard(style, TOWN_LIBRARY_WIDTH * T, TOWN_LIBRARY_YARD_ROWS * T),
+  );
+  if (art) return art;
   if (!yard)
     yard = paintYard(TOWN_LIBRARY_WIDTH * T, TOWN_LIBRARY_YARD_ROWS * T);
   return yard;
