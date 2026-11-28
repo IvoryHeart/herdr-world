@@ -10,6 +10,7 @@ let factory: SurfaceFactory = () => ({
   destroy() {},
 });
 
+/** @internal Direct surface access for raster-port conformance checks. */
 export function createTownRenderSurface(): TownRenderSurface {
   return factory();
 }
