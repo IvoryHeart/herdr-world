@@ -6,8 +6,10 @@ import { resolve } from "node:path";
 import { modelCache, modelCacheKeys } from "./ci-model-cache";
 import {
   DIAGNOSTIC_CONTROL_JOB,
+  MODEL_GROUP_MEMORY_MIB,
   MODEL_GROUP_WORKERS,
   diagnosticControlGroup,
+  modelPartPeakMiB,
   verificationGroup,
 } from "./ci-model-plan";
 import { runVerificationShard } from "./ci-verification";
@@ -47,11 +49,17 @@ export function runModelGroup(
   execute = (index: number, workerSignal: AbortSignal) =>
     runVerificationShard(root, index, workerSignal),
 ) {
+  // Parts start while their recorded peaks fit the group's cgroup memory.
   return runVerificationPool(
     misses(root, group),
     MODEL_GROUP_WORKERS,
     signal,
     execute,
+    undefined,
+    {
+      weight: (index) => modelPartPeakMiB[index - 1]!,
+      budget: MODEL_GROUP_MEMORY_MIB,
+    },
   );
 }
 

@@ -6,19 +6,38 @@ import {
   verificationGroups,
   verificationGroup,
   modelPartSeconds,
+  modelPartPeakMiB,
+  MODEL_GROUP_MEMORY_MIB,
   MODEL_GROUP_WORKERS,
+  simulateModelGroup,
 } from "./ci-model-plan";
 
-test("four time-packed runners execute every immutable model part exactly once", () => {
+test("four runners packed by peak memory and time execute every immutable model part exactly once", () => {
   expect(verificationGroups).toHaveLength(4);
   expect(MODEL_GROUP_WORKERS).toBe(4);
+  expect(MODEL_GROUP_MEMORY_MIB).toBe(4096);
+  expect(modelPartPeakMiB).toHaveLength(verificationJobs.length);
   expect(verificationGroups.flat().sort((a, b) => a - b)).toEqual(
     verificationJobs.map((_, i) => i + 1),
   );
-  const loads = verificationGroups.map((indices) =>
-    indices.reduce((sum, i) => sum + modelPartSeconds[i - 1]!, 0),
+  const pools = verificationGroups.map(simulateModelGroup);
+  const longestPart = Math.max(...modelPartSeconds);
+  for (const pool of pools) {
+    // Concurrent parts never hold more than the group's cgroup memory...
+    expect(pool.maxMiB).toBeLessThanOrEqual(MODEL_GROUP_MEMORY_MIB);
+    // ...and every runner still finishes close to the single longest part.
+    expect(pool.seconds).toBeLessThanOrEqual(longestPart + 15);
+  }
+  // No two of the four parts that peak near 2 GiB share a runner.
+  const heavy = modelPartPeakMiB.flatMap((peak, i) =>
+    peak >= 1700 ? [i + 1] : [],
   );
-  expect(Math.max(...loads) - Math.min(...loads)).toBeLessThanOrEqual(15);
+  expect(heavy).toHaveLength(4);
+  expect(
+    verificationGroups.map(
+      (group) => group.filter((i) => heavy.includes(i)).length,
+    ),
+  ).toEqual([1, 1, 1, 1]);
   for (const group of verificationGroups)
     expect(group.map((i) => modelPartSeconds[i - 1])).toEqual(
       group.map((i) => modelPartSeconds[i - 1]).sort((a, b) => b! - a!),

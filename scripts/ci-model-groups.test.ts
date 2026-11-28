@@ -18,6 +18,7 @@ import {
   DIAGNOSTIC_CONTROL_JOB,
   diagnosticControlGroup,
   verificationGroup,
+  verificationGroups,
   verificationJob,
 } from "./ci-model-plan";
 import { readVerificationResources } from "./verification-resources";
@@ -25,7 +26,11 @@ import { readVerificationResources } from "./verification-resources";
 test("the production group runs four parts concurrently and omits only validated cache hits", async () => {
   const root = await mkdtemp(resolve(tmpdir(), "packed-model-pool-"));
   try {
-    const indices = verificationGroup(1);
+    // The group with the most parts; its first four after the hit fit memory.
+    const group = verificationGroups
+      .map((indices, i) => [indices.length, i + 1] as const)
+      .sort((a, b) => b[0] - a[0])[0]![1];
+    const indices = verificationGroup(group);
     await mkdir(
       resolve(root, `.agents/verification/runs/ci-shard-${indices[0]}-reused`),
       { recursive: true },
@@ -43,7 +48,7 @@ test("the production group runs four parts concurrently and omits only validated
     const barrier = Promise.withResolvers<void>();
     await runModelGroup(
       root,
-      1,
+      group,
       new AbortController().signal,
       async (index) => {
         started.push(index);
