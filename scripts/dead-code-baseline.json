@@ -240,7 +240,6 @@
       "scripts/verification-setup.ts#checkerDirectory",
       "scripts/verification-setup.ts#quintCli",
       "scripts/verification-setup.ts#setupVerification",
-      "scripts/verification-setup.ts#verificationCacheDirectory",
       "scripts/wait-for-quiet.ts#idleShare",
       "scripts/wait-for-quiet.ts#parseStat",
       "scripts/wait-for-quiet.ts#waitForQuiet",

@@ -1,22 +1,24 @@
 import { expect, test } from "bun:test";
 import {
-  CLOCK_MODULES,
   compare,
+  formatAllowlist,
+  lowered,
+  parseAllowlist,
+  scanFiles,
+  scanSource,
+  timingSwitchesOutsideTests,
+} from "./check-test-waits";
+import {
+  CLOCK_MODULES,
   compareProductionClock,
   directClockUses,
-  formatAllowlist,
   formatClockAllowlist,
   loweredClock,
   parseClockAllowlist,
   productionClockFile,
   scanProductionClock,
-  lowered,
-  parseAllowlist,
-  scanFiles,
-  scanSource,
-  TEST_FILE,
-  timingSwitchesOutsideTests,
-} from "./check-test-waits";
+} from "./production-clock";
+import { TEST_FILE } from "./source-ast";
 
 const lines = (text: string) => scanSource("a.test.ts", text).pauses;
 
