@@ -27,8 +27,8 @@ comes fresh out of the University to work.
   deleted. The town center keeps New agent and the Town master; its ring loses
   Profiles and its Buildings ring gains the University. Three ways to use it
   are drawn for review (design § 1): profile cards, college doors, or a roster
-  and editor; each hires in 2 clicks and edits in 3, against 3 and 4–5 from
-  the town center today.
+  and editor. Each hires in 2 clicks (Flow 3: from a room; 3 from the
+  University) and edits in 3, against 3 and 4–5 from the town center today.
 - **One college per harness.** Every harness World supports today has a
   college: the eight it reads conversations from (Claude Code, Codex, Kimi
   Code, Grok, Pi, omp, Muse, Antigravity) and the others in its integration
