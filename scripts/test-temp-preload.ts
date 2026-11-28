@@ -20,10 +20,12 @@ plugin({
   name: "test-file-deadline",
   setup(build) {
     build.onLoad({ filter: /\.(?:test|spec)\.[cm]?[jt]sx?$/ }, ({ path }) => {
-      // Static imports evaluate before the injected prefix can run.
+      // Start before static imports or any of this file's evaluation can run.
       fileDeadline(path);
       return {
-        contents: `import { afterAll as __fileDeadlineAfterAll } from "bun:test"; import { fileDeadline as __startFileDeadline } from ${JSON.stringify(deadlineModule)}; const __clearFileDeadline = __startFileDeadline(${JSON.stringify(path)});\n${readFileSync(path, "utf8")}\n__fileDeadlineAfterAll(__clearFileDeadline);`,
+        // Only the loader publishes a start. A footer preserves source line numbers
+        // and registers cleanup without rewriting the marker during evaluation.
+        contents: `${readFileSync(path, "utf8")}\n;import { afterAll as __fileDeadlineAfterAll } from "bun:test"; import { clearFileDeadline as __clearFileDeadline } from ${JSON.stringify(deadlineModule)}; __fileDeadlineAfterAll(() => __clearFileDeadline(${JSON.stringify(path)}));`,
         loader: path.endsWith("x") ? "tsx" : "ts",
       };
     });

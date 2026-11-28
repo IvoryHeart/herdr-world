@@ -622,9 +622,12 @@ Town side workflows include the shared store/API/layout inputs as render inputs.
 ## Test file deadlines and fixture time
 
 Every test file has a 120-second real-time deadline starting in the module loader,
-covering imported dependency evaluation, setup, cases and teardown. The injected
-prefix reuses the loader's marker without restarting its timer. The parent runner
-owns the timer and kills a hung
+covering imported dependency evaluation, setup, cases and teardown. Only the loader
+publishes a start marker; an injected footer removes it after teardown without
+shifting source line numbers. Filesystem events wake the parent, but expiry
+rechecks the marker and its unique start token: a missed removal cannot time out a
+completed file, and a replacement keeps its own original start time. The parent
+runner owns the timer and kills a hung
 batch with exit 124, naming the file. Worker file markers use the existing
 run-owned temporary folder and are removed with it; they are not application
 storage. A stopped Jest/page clock cannot stop this deadline. The optional

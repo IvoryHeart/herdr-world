@@ -1,6 +1,9 @@
 import {
   mkdtempSync,
   mkdirSync,
+  closeSync,
+  fstatSync,
+  openSync,
   readFileSync,
   renameSync,
   rmSync,
@@ -9,29 +12,41 @@ import {
 } from "node:fs";
 import { join } from "node:path";
 import { tmpdir } from "node:os";
-import { createHash } from "node:crypto";
+import { createHash, randomUUID } from "node:crypto";
 
 /** A wrapper-owned real-time boundary; stopped clocks cannot stop it. */
 export const FILE_TIMEOUT_MS = 120_000;
 export const FILE_DEADLINES_ENV = "HERDR_TEST_FILE_DEADLINES";
 
 /** File workers publish atomic markers; Bun parallel workers have no IPC channel. */
-export function fileDeadline(file: string) {
+function fileMarker(file: string) {
   const directory = process.env[FILE_DEADLINES_ENV];
   if (!directory)
     throw new Error("File deadlines require scripts/run-tests.ts");
-  // The loader starts the deadline before imports; evaluation reuses that marker.
   const identity = createHash("sha256").update(file).digest("hex");
-  const marker = join(directory, `${identity}.json`);
-  writeFileSync(marker + ".tmp", JSON.stringify({ file }));
+  return join(directory, `${identity}.json`);
+}
+
+export function fileDeadline(file: string) {
+  const marker = fileMarker(file);
+  writeFileSync(marker + ".tmp", JSON.stringify({ file, token: randomUUID() }));
   renameSync(marker + ".tmp", marker);
-  return () => rmSync(marker, { force: true });
+}
+
+export function clearFileDeadline(file: string) {
+  rmSync(fileMarker(file), { force: true });
 }
 
 /** Native file events wake the parent, outside all test clocks and workers. */
 export function watchTestFiles(
   directory: string,
   expired: (file: string, limit: number) => void,
+  observe: (changed: (filename: string | null) => void) => () => void = (
+    changed,
+  ) => {
+    const observer = watch(directory, (_event, filename) => changed(filename));
+    return () => observer.close();
+  },
 ) {
   const limit = Number(
     process.env.HERDR_TEST_FILE_TIMEOUT_MS || FILE_TIMEOUT_MS,
@@ -40,26 +55,60 @@ export function watchTestFiles(
     throw new Error(`HERDR_TEST_FILE_TIMEOUT_MS must be 1..${FILE_TIMEOUT_MS}`);
   mkdirSync(directory, { recursive: true });
   let closed = false;
-  const timers = new Map<string, ReturnType<typeof setTimeout>>();
-  const observer = watch(directory, (_event, filename) => {
+  type Marker = { file: string; token: string; startedAt: number };
+  const timers = new Map<
+    string,
+    { token: string; timer: ReturnType<typeof setTimeout> }
+  >();
+  const readMarker = (marker: string): Marker | undefined => {
+    let descriptor: number | undefined;
+    try {
+      descriptor = openSync(marker, "r");
+      return {
+        ...JSON.parse(readFileSync(descriptor, "utf8")),
+        // Filesystem time cannot be frozen by Bun's Date/performance/hrtime mocks.
+        // Read one inode so a concurrent rename cannot mix two generations.
+        startedAt: fstatSync(descriptor).mtimeMs,
+      };
+    } catch {
+      return undefined;
+    } finally {
+      if (descriptor !== undefined) closeSync(descriptor);
+    }
+  };
+  const disarm = (marker: string) => {
+    clearTimeout(timers.get(marker)?.timer);
+    timers.delete(marker);
+  };
+  const arm = (marker: string, entry: Marker) => {
+    if (timers.get(marker)?.token === entry.token) return;
+    disarm(marker);
+    timers.set(marker, {
+      token: entry.token,
+      timer: setTimeout(
+        () => {
+          disarm(marker);
+          // Watch events can be coalesced or lost. The marker and its start token,
+          // rather than a remembered event, decide whether this file is still live.
+          const current = readMarker(marker);
+          if (current?.token === entry.token) expired(current.file, limit);
+          else if (current) arm(marker, current);
+        },
+        Math.max(0, entry.startedAt + limit - Date.now()),
+      ),
+    });
+  };
+  const stopObserving = observe((filename) => {
     if (closed || !filename?.endsWith(".json")) return;
     const marker = join(directory, filename);
-    try {
-      const { file } = JSON.parse(readFileSync(marker, "utf8"));
-      if (!timers.has(marker))
-        timers.set(
-          marker,
-          setTimeout(() => expired(file, limit), limit),
-        );
-    } catch {
-      clearTimeout(timers.get(marker));
-      timers.delete(marker);
-    }
+    const entry = readMarker(marker);
+    if (entry) arm(marker, entry);
+    else disarm(marker);
   });
   return () => {
     closed = true;
-    observer.close();
-    for (const timer of timers.values()) clearTimeout(timer);
+    stopObserving();
+    for (const { timer } of timers.values()) clearTimeout(timer);
     timers.clear();
   };
 }
