@@ -101,12 +101,37 @@ export type ConcurrentWork = {
   liveCardObservations: number;
 };
 
+/**
+ * Cards Board mounts near the screen at 1440 pixels, per Chrome major. Card
+ * sizes follow the browser's text layout, so a release can fit another card
+ * per host column: Chrome 156, pinned in CI, stays within 1280 (1248 on a
+ * desktop), and Chrome 157 mounts 1312 (2026-11-28). A failure to cull would mount all 32,768 rooms. An
+ * unmeasured release gets the strictest ceiling until it is measured here.
+ */
+const WIDE_CARD_CEILINGS: Record<number, number> = { 156: 1280, 157: 1312 };
+
+/** @internal The card-observer ceiling for one width and Chrome major. */
+export function cardObserverCeiling(width: number, chromeMajor?: number) {
+  if (width !== 1440) return 80;
+  return (
+    WIDE_CARD_CEILINGS[chromeMajor ?? 0] ??
+    Math.min(...Object.values(WIDE_CARD_CEILINGS))
+  );
+}
+
+/** The Chrome major in a `--version` line or user agent. */
+export function chromeMajor(version: string): number | undefined {
+  const match = /(?:Chrome|Chromium)(?:\/|[^/\d]*\s)(\d+)\./.exec(version);
+  return match ? Number(match[1]) : undefined;
+}
+
 /** ConcurrentContexts: dense load at either width, per stress phase. */
 export function concurrentWorkViolations(
   measured: ConcurrentWork,
   width: number,
+  browserMajor?: number,
 ): string[] {
-  const cards = width === 1440 ? 1280 : 80;
+  const cards = cardObserverCeiling(width, browserMajor);
   const violations = [
     ...workViolations(
       measured.worldWorkByPhase,

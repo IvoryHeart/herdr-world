@@ -1,5 +1,7 @@
 import { expect, test } from "bun:test";
 import {
+  cardObserverCeiling,
+  chromeMajor,
   concurrentWorkViolations,
   productionWorkCeilings,
   TOWN_IDLE_WORK_CEILINGS,
@@ -195,4 +197,28 @@ test("Town has no allowance for unused Board topology preparation", () => {
       "Town",
     ),
   ).toEqual(["Town refresh: board.host-project 1 > 0"]);
+});
+
+test("card ceilings follow the measured Chrome release, strictest when unmeasured", () => {
+  expect(chromeMajor("Google Chrome for Testing 156.0.8078.80")).toBe(156);
+  expect(chromeMajor("Google Chrome 157.0.8103.50")).toBe(157);
+  expect(chromeMajor("HeadlessChrome/157.0.8103.50 Safari/537.36")).toBe(157);
+  expect(chromeMajor("not a browser")).toBeUndefined();
+  expect(cardObserverCeiling(1440, 156)).toBe(1280);
+  expect(cardObserverCeiling(1440, 157)).toBe(1312);
+  expect(cardObserverCeiling(1440, 158)).toBe(1280);
+  expect(cardObserverCeiling(1440)).toBe(1280);
+  expect(cardObserverCeiling(390, 157)).toBe(80);
+  const wide = measured();
+  wide.boardObserverWorkByPhase.render = { observe: 1312 };
+  wide.boardObserverWorkByPhase["outside-stress"] = { unobserve: 1312 };
+  expect(concurrentWorkViolations(wide, 1440, 157)).toEqual([]);
+  expect(concurrentWorkViolations(wide, 1440, 156)).toEqual([
+    "card observers render: observe 1312 > 1280",
+    "card observers outside-stress: unobserve 1312 > 1280",
+  ]);
+  wide.boardObserverWorkByPhase.render = { observe: 1313 };
+  expect(concurrentWorkViolations(wide, 1440, 157)).toContain(
+    "card observers render: observe 1313 > 1312",
+  );
 });
