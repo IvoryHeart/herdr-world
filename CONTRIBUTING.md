@@ -614,6 +614,13 @@ raise needed. Trim the feature or request a separate owner-approved PR changing
 only the budget data and its reason history before merging; feature PRs must
 not edit the budget or `scripts/check-web-assets.mjs`. Lowering the budget needs
 no raise approval. Per-file, help-picture and startup limits stay unchanged.
+The startup limits count what opening `/town` loads: the entry, the World app
+chunk and the Town view, each JavaScript file once. The same check fails when
+the startup load includes xterm, when unused Shiki or Pierre themes or Shiki's
+JavaScript regex engine are shipped, or when a common grammar (JavaScript, CSS,
+Markdown, shell, SQL, C, Java) loses its own chunk. To see what a build ships,
+`bun scripts/web-bundle-report.ts` builds into a temporary folder and prints the
+largest files, packages, app folders and views; it writes nothing to the tree.
 
 Source files may not regrow. `bun run check:size` (part of `check` and the
 static lane) allows at most 1000 lines per non-test source file; larger files are

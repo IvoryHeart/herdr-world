@@ -8,7 +8,15 @@ import {
   collectAssetStats,
   DEVTOOLS_MARKER,
   devtoolsAssets,
+  groupedGrammarLeaks,
   initialAssetFiles,
+  JS_REGEX_ENGINE_MARKER,
+  jsRegexEngineFiles,
+  STARTUP_SOURCES,
+  startupAssetFiles,
+  startupXtermFiles,
+  unusedThemeChunks,
+  XTERM_MARKER,
   pdfAssetFiles,
   parseBundleBudget,
 } from "./check-web-assets.mjs";
@@ -163,6 +171,130 @@ describe("initial web asset budget", () => {
         app: { isEntry: true, file: "app.js", imports: ["missing"] },
       }),
     ).toThrow("Missing Vite manifest chunk");
+  });
+});
+
+describe("startup web asset budget", () => {
+  const [app, town] = STARTUP_SOURCES;
+  const manifest = {
+    "index.html": {
+      isEntry: true,
+      file: "index.js",
+      imports: ["_runtime.js"],
+      dynamicImports: [app],
+    },
+    "_runtime.js": { file: "runtime.js" },
+    [app]: {
+      isDynamicEntry: true,
+      file: "app.js",
+      css: ["app.css"],
+      imports: ["_runtime.js"],
+      dynamicImports: [town, "src/world/CoreTerminalWatch.tsx"],
+    },
+    [town]: { isDynamicEntry: true, file: "town.js", imports: ["_pixi.js"] },
+    "_pixi.js": { file: "pixi.js" },
+    "src/world/CoreTerminalWatch.tsx": {
+      isDynamicEntry: true,
+      file: "watch.js",
+    },
+  };
+
+  test("counts the World app and Town, which every first load fetches, but no lazy feature", () => {
+    expect(STARTUP_SOURCES).toEqual([
+      "src/world/WorldFoundationApp.tsx",
+      "src/world/TownView.tsx",
+    ]);
+    expect(startupAssetFiles(manifest).sort()).toEqual([
+      "app.css",
+      "app.js",
+      "index.js",
+      "pixi.js",
+      "runtime.js",
+      "town.js",
+    ]);
+    // The entry-only count misses both.
+    expect(initialAssetFiles(manifest).sort()).toEqual([
+      "index.js",
+      "runtime.js",
+    ]);
+  });
+
+  test("fails closed when the World app or Town chunk is missing", () => {
+    const withoutTown = { ...manifest };
+    delete withoutTown[town];
+    expect(() => startupAssetFiles(withoutTown)).toThrow(
+      `Missing Vite startup chunk: ${town}`,
+    );
+    expect(() => startupAssetFiles({ [app]: manifest[app] })).toThrow(
+      "no entry points",
+    );
+  });
+
+  test("names a startup file that carries xterm", () => {
+    expect(
+      startupXtermFiles([
+        { name: "app.js", content: `x;throw new Error("${XTERM_MARKER}.")` },
+        { name: "town.js", content: "class Terminal{}" },
+      ]),
+    ).toEqual(["app.js"]);
+  });
+});
+
+describe("unused highlighter code is not shipped", () => {
+  const theme = (path) => `../node_modules/.bun/x/node_modules/${path}`;
+
+  test("only Pierre's default dark and light diff themes are emitted", () => {
+    expect(
+      unusedThemeChunks({
+        [theme("@pierre/theme/dist/pierre-dark.mjs")]: { file: "a.js" },
+        [theme("@pierre/theme/dist/pierre-light.mjs")]: { file: "b.js" },
+        "src/shiki.ts": { file: "c.js" },
+      }),
+    ).toEqual([]);
+    expect(
+      unusedThemeChunks({
+        [theme("@pierre/theme/dist/pierre-dark.mjs")]: { file: "a.js" },
+        [theme("@pierre/theme/dist/pierre-dark-soft.mjs")]: { file: "b.js" },
+        [theme("@shikijs/themes/dist/nord.mjs")]: { file: "c.js" },
+      }),
+    ).toEqual([
+      theme("@pierre/theme/dist/pierre-dark-soft.mjs"),
+      theme("@shikijs/themes/dist/nord.mjs"),
+    ]);
+  });
+
+  test("names an asset that carries Shiki's JavaScript regex engine", () => {
+    expect(
+      jsRegexEngineFiles([
+        { name: "diff.js", content: "createJavaScriptRegexEngine" },
+        { name: "worker.js", content: `"${JS_REGEX_ENGINE_MARKER} x"` },
+      ]),
+    ).toEqual(["worker.js"]);
+  });
+
+  test("a common grammar never fetches a grammar group", () => {
+    const lang = (name) => theme(`@shikijs/langs/dist/${name}.mjs`);
+    const manifest = {
+      _group: { name: "syntax-extra", file: "extra.js", imports: ["_js"] },
+      _js: { name: "javascript", file: "javascript.js" },
+      [lang("shellscript")]: { isDynamicEntry: true, file: "sh.js" },
+    };
+    expect(
+      groupedGrammarLeaks(manifest, ["javascript", "shellscript"]),
+    ).toEqual([]);
+    // A group that took in the grammar it embeds, or a grammar importing a group.
+    expect(
+      groupedGrammarLeaks(
+        {
+          ...manifest,
+          [lang("shellscript")]: {
+            ...manifest[lang("shellscript")],
+            imports: ["_group"],
+          },
+        },
+        ["javascript", "shellscript", "css"],
+      ),
+    ).toEqual(["shellscript -> extra.js", "css (no chunk of its own)"]);
   });
 });
 

@@ -2,7 +2,7 @@ import { Cpu, X } from "lucide-react";
 import { AgentIcon } from "../components/AgentIcon";
 import { AgentMark } from "../components/AgentMark";
 import { agentMarkKind } from "./agentMarks";
-import { coreInspectorTerminal } from "./CoreTerminalWatch";
+import { coreInspectorTerminal } from "./coreInspectorTerminal";
 import { type SpacesCoreChoice, spacesCoreLeaf } from "./spacesCore";
 import type { WorldObject } from "./worldObject";
 import "./spacesCoreTerminal.css";

@@ -4,13 +4,14 @@ import { createRoot } from "react-dom/client";
 import { flushSync } from "react-dom";
 import { bridge } from "../api";
 import { type CoreTerminalPush, MIN_WATCH_SCALE } from "../coreWatch";
-import { useState } from "react";
+import { lazy, Suspense, useState } from "react";
+import { CoreTerminalWatch } from "./CoreTerminalWatch";
 import {
-  CoreTerminalWatch,
+  CoreWatchLoading,
   type CoreWatchTarget,
   coreInspectorTerminal,
   useCoreTerminalDrafts,
-} from "./CoreTerminalWatch";
+} from "./coreInspectorTerminal";
 import type { WorldObjectNode } from "./worldObject";
 import {
   activateTerminalComposerDraftScope,
@@ -85,7 +86,8 @@ const viewport = async (width: number, height: number) => {
   await presentTestFrame(fixtureTime);
 };
 /** A real key press (CDP), into whatever has focus. */
-const press = (key: string) => fetch(`/key?key=${encodeURIComponent(key)}`);
+const press = (key: string, ctrl = false) =>
+  fetch(`/key?key=${encodeURIComponent(key)}${ctrl ? "&ctrl" : ""}`);
 /** Real text input (CDP), as a phone keyboard inserts it. */
 const insert = (text: string) =>
   fetch(`/insert?text=${encodeURIComponent(text)}`);
@@ -346,8 +348,103 @@ async function run() {
   await twoInspectors();
   await reconnects();
   await earlyKeys();
+  await loadingKeys();
   await minimized();
 }
+
+/**
+ * Keys typed in the Terminal tab while the watch's code (and xterm) is still
+ * downloading, Ctrl+C included: the tab's stand-in keeps them as the terminal
+ * would send them, and they go once, before later keys, when the watch has
+ * loaded and opened.
+ */
+async function loadingKeys() {
+  let release = () => {};
+  const loaded = new Promise<void>((resolve) => {
+    release = resolve;
+  });
+  const SlowWatch = lazy(() =>
+    loaded.then(() => ({ default: CoreTerminalWatch })),
+  );
+  const typed: string[] = [];
+  const root = document.createElement("div");
+  document.body.append(root);
+  const app = createRoot(root);
+  const from = calls.length;
+  (document.activeElement as HTMLElement | null)?.blur();
+  flushSync(() =>
+    app.render(
+      <div
+        className="workspace-inspector"
+        style={{ position: "fixed", inset: 0 }}
+      >
+        <Suspense
+          fallback={<CoreWatchLoading title="loading" active typed={typed} />}
+        >
+          <SlowWatch
+            target={{
+              connectionId: "core-fixture",
+              generation: 1,
+              address: "t8",
+            }}
+            title="loading"
+            typedEarly={typed}
+          />
+        </Suspense>
+      </div>,
+    ),
+  );
+  await frames(2);
+  check(
+    document.activeElement === root.querySelector("[data-core-watch-loading]"),
+    "the loading tab takes focus as its terminal would",
+  );
+  await press("a");
+  await press("c", true);
+  await until(() => typed.length >= 2);
+  check(
+    typed.join("") === "a\x03" && !root.querySelector(".core-watch-host"),
+    `keys typed while the watch loads are kept, Ctrl+C too: ${JSON.stringify(typed)}`,
+  );
+  release();
+  const watch = () =>
+    calls
+      .slice(from)
+      .find(
+        (c) => c.method === "world.core.watch" && c.params.address === "t8",
+      );
+  await until(() => watch() !== undefined);
+  const key = String(watch()?.params.stream);
+  const typedOn = () =>
+    calls
+      .slice(from)
+      .filter(
+        (c) =>
+          c.method === "world.core.input" &&
+          c.params.stream === key &&
+          !c.params.automatic,
+      )
+      .map((c) => atob(String(c.params.data)))
+      .join("");
+  await until(() => typedOn().length > 0);
+  check(
+    document.activeElement === xtermInputIn(root),
+    "the loaded terminal takes focus",
+  );
+  await press("b");
+  await until(() => typedOn().length > 2);
+  // A replayed duplicate would follow within a few frames of the drain.
+  await frames(6);
+  check(
+    typedOn() === "a\x03b",
+    `the kept key goes once, before later keys: ${JSON.stringify(typedOn())}`,
+  );
+  flushSync(() => app.unmount());
+  root.remove();
+}
+
+const xtermInputIn = (root: HTMLElement) =>
+  root.querySelector<HTMLTextAreaElement>(".core-watch-host textarea");
 
 /**
  * A key typed before the watch answers (over a slow SSH host, say) waits
@@ -785,7 +882,8 @@ async function reconnects() {
   const latest = () => watches()[watches().length - 1]?.params.generation;
   const before = watches().length;
   flushSync(() => createRoot(root).render(<Harness />));
-  await frames(2);
+  // The Terminal tab loads the watch (and xterm) lazily.
+  await until(() => watches().length > before);
   check(
     watches().length === before + 1 && latest() === 1,
     "the tab watches the current generation",

@@ -15,6 +15,8 @@ test("brand icons and sharing images have the declared dimensions", async () => 
     ]),
     ["web/public/herdr-world-icon-maskable-192.png", 192, 192],
     ["web/public/herdr-world-icon-maskable-512.png", 512, 512],
+    // Shown at 26×26 in Settings › Integrations; 2× is enough.
+    ["web/public/herdr-icon.png", 52, 52],
     ["site/herdr-world-og.png", 1200, 630],
     ["site/github-social-preview.png", 1280, 640],
   ];
