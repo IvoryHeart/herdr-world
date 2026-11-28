@@ -67,10 +67,7 @@ await rm(phasesFile, { force: true });
 // World runs take the browser slot. A nested runner already holds its
 // parent's slot and skips acquisition.
 const release = await acquireCheckSlot("browser", { lane: `world ${label}` });
-const localCapacity = Math.min(
-  availableParallelism(),
-  worldBrowserCasePlan.flat().length,
-);
+const localCapacity = Math.min(availableParallelism(), 8);
 let session: { env: Record<string, string>; close(): Promise<void> } = {
   env: {},
   close: async () => {},
