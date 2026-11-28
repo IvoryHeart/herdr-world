@@ -3,6 +3,7 @@ import { Window } from "happy-dom";
 import { act, createElement } from "react";
 import type { AgentWorktreeObservation } from "../../../shared/agentWorktree";
 import type { ConnectionClient } from "../api";
+import { waitForElement } from "./testing/waitForElement";
 
 if (process.env.WORLD_RESOURCE_RESUME_DOM_TEST !== "1") {
   test("real Inspector resource children retain their tree through delayed readmission", async () => {
@@ -258,6 +259,23 @@ if (process.env.WORLD_RESOURCE_RESUME_DOM_TEST !== "1") {
           await new Promise((resolve) => setImmediate(resolve));
       });
     };
+    // Wait on the DOM for what loads in real time (the lazy Files and
+    // Changes views). React work inside act() waits for act to end, so the
+    // wait runs outside it and act() then settles what it committed.
+    const renderedWhen = async (find: () => unknown, message: string) => {
+      Object.assign(globalThis, { IS_REACT_ACT_ENVIRONMENT: false });
+      try {
+        await waitForElement(
+          target,
+          () => (find() ? target : null),
+          message,
+          10_000,
+        );
+      } finally {
+        Object.assign(globalThis, { IS_REACT_ACT_ENVIRONMENT: true });
+      }
+      await settle();
+    };
     const rows = () =>
       [...target.querySelectorAll(".file-row")].map((row) => row.textContent);
     const worktreeViewsHeld = () =>
@@ -270,8 +288,12 @@ if (process.env.WORLD_RESOURCE_RESUME_DOM_TEST !== "1") {
     };
     try {
       await renderState();
-      for (let turn = 0; turn < 30 && rows().length !== 3; turn++)
-        await settle();
+      // The lazy Files and Changes views load in real time: wait on the DOM.
+      await renderedWhen(
+        () =>
+          rows().length === 3 ? target.querySelector(".diff-tree-file") : null,
+        "Files and Changes never showed the worktree",
+      );
       expect(rows().length).toBe(3);
       expect(target.querySelector(".diff-tree-file")?.textContent).toContain(
         "CHANGE.md",
@@ -335,7 +357,16 @@ if (process.env.WORLD_RESOURCE_RESUME_DOM_TEST !== "1") {
             pane_id: "pane",
           });
       });
-      await settle();
+      await renderedWhen(
+        () =>
+          rows().length === 1 &&
+          target
+            .querySelector(".diff-tree-file")
+            ?.textContent?.includes("NEW-CHANGE.md")
+            ? target
+            : null,
+        "Files and Changes never showed the replacement",
+      );
       expect(rows().length).toBe(1);
       expect(rows()[0]).toContain("NEW.md");
       expect(target.querySelector(".diff-tree-file")?.textContent).toContain(
@@ -349,5 +380,6 @@ if (process.env.WORLD_RESOURCE_RESUME_DOM_TEST !== "1") {
       await act(async () => root.unmount());
       browser.happyDOM.abort();
     }
-  });
+    // Importing the Inspector's module graph is most of this case's time.
+  }, 12000);
 }
