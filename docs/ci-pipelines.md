@@ -44,6 +44,14 @@ workflows and matrix expansions for default full PR, merge-queue and manual runs
 more than sixteen fails. Optional release previews and browser diagnostics are
 outside that default graph. Browser repartitioning must satisfy the same total
 job budget; a `max-parallel` limit alone does not reduce the count.
+Model groups retain all 26 immutable parts on four runners. Within each runner,
+parts run in waves of at most four, packed by the clean baseline's payload
+`memory.peak` receipts as well as duration. Each reservation rounds 125% of the
+recorded peak up to 64 MiB; another 256 MiB stays available for group overhead.
+Cache misses are repacked under the same admission rule. A wave drains completely
+before the next starts, including on failure or cancellation. The hard 4 GiB,
+zero-swap cgroup and four-CPU quota remain authoritative; estimates do not prove
+the hosted peak, and changed workloads need new receipts before claiming fit.
 World's six runners balance individual case times across three logical queues,
 admitting at most two isolated Chrome processes per runner. Cases over 50 seconds
 are split into independent fixture/profile runs with their assertions retained.

@@ -4,7 +4,11 @@ import { existsSync, appendFileSync } from "node:fs";
 import { mkdir, readdir, readFile, writeFile } from "node:fs/promises";
 import { resolve } from "node:path";
 import { modelCache, modelCacheKey } from "./ci-model-cache";
-import { MODEL_GROUP_WORKERS, verificationGroup } from "./ci-model-plan";
+import {
+  MODEL_GROUP_WORKERS,
+  modelGroupWaves,
+  verificationGroup,
+} from "./ci-model-plan";
 import { runVerificationShard } from "./ci-verification";
 import { runVerificationPool } from "./verification-pool";
 import {
@@ -27,19 +31,15 @@ function misses(root: string, group: number) {
 }
 
 /** @internal */
-export function runModelGroup(
+export async function runModelGroup(
   root: string,
   group: number,
   signal: AbortSignal,
   execute = (index: number, workerSignal: AbortSignal) =>
     runVerificationShard(root, index, workerSignal),
 ) {
-  return runVerificationPool(
-    misses(root, group),
-    MODEL_GROUP_WORKERS,
-    signal,
-    execute,
-  );
+  for (const wave of modelGroupWaves(misses(root, group)))
+    await runVerificationPool(wave, MODEL_GROUP_WORKERS, signal, execute);
 }
 
 /** One cgroup receipt accounts for every part run together, including failures. @internal */

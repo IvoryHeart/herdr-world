@@ -186,7 +186,15 @@ mandatory on every group runner. Local canonical commands remain unfiltered.
 Each Linux model CI group executes in an isolated cgroup with hard 4 GiB memory,
 zero swap and four CPUs of quota (`tools/quint/model-resources.json`), with four
 TLC workers (`tools/quint/tlc-ci.json`). The owner approved this model-only CPU
-change on 2026-11-26. The explicit local `verification:resources` command retains
+change on 2026-11-26. Four model parts cannot all assume that full memory budget
+at once: `scripts/ci-model-plan.ts` packs each runner's misses into waves of up
+to four parts using recorded subtree peaks with 25% headroom, rounded up to
+64 MiB, plus 256 MiB reserved for group overhead. A whole wave drains before
+the next begins; failure or cancellation stops further admission. Exhaustive
+cache-subset packing checks and real-pool admission/failure tests guard that
+boundary. Hosted resource receipts are still required: recorded peaks are
+estimates, and a passing ordinary local two-worker gate does not establish CI
+group memory fit. The explicit local `verification:resources` command retains
 its original two-CPU envelope (`resources.json`) and one TLC worker; ordinary local canonical execution is unchanged.
 The CI aggregate preserves every per-runner accounting record rather than
 claiming a single global peak across separate machines. The payload subtree's `memory.peak`, enforced

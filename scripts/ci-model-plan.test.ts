@@ -7,7 +7,44 @@ import {
   verificationGroup,
   modelPartSeconds,
   MODEL_GROUP_WORKERS,
+  modelGroupWaves,
+  modelPartMemoryBytes,
+  MODEL_GROUP_RESERVE_BYTES,
 } from "./ci-model-plan";
+import limits from "../tools/quint/model-resources.json";
+
+test("every cache subset fits the shared memory envelope, including the hosted OOM group", () => {
+  for (const indices of verificationGroups) {
+    // Cache hits can remove any subset. Exhaust the actual admission plans.
+    for (let mask = 0; mask < 2 ** indices.length; mask++) {
+      const selected = indices.filter((_, bit) => mask & (1 << bit));
+      const waves = modelGroupWaves(selected);
+      expect(waves.flat().sort((a, b) => a - b)).toEqual(
+        selected.toSorted((a, b) => a - b),
+      );
+      for (const wave of waves) {
+        expect(wave.length).toBeLessThanOrEqual(MODEL_GROUP_WORKERS);
+        expect(
+          MODEL_GROUP_RESERVE_BYTES +
+            wave.reduce((sum, index) => sum + modelPartMemoryBytes(index), 0),
+        ).toBeLessThanOrEqual(limits.memoryMaxBytes);
+      }
+    }
+  }
+  // Two ~2 GiB parts already exceed the envelope after headroom; a fixed
+  // two-worker pool would also be unsafe. These must run in separate waves.
+  expect(modelGroupWaves([2, 6, 7])).toEqual([[6], [2], [7]]);
+  expect(modelGroupWaves(verificationGroup(4)).length).toBeGreaterThan(1);
+  expect(
+    Math.max(
+      ...verificationGroups.flatMap((group) =>
+        modelGroupWaves(group).map((wave) => wave.length),
+      ),
+    ),
+  ).toBe(4);
+  expect(() => modelGroupWaves([1, 1])).toThrow("Duplicate model part");
+  expect(() => modelGroupWaves([27])).toThrow("Invalid verification shard");
+});
 
 test("four time-packed runners execute every immutable model part exactly once", () => {
   expect(verificationGroups).toHaveLength(4);

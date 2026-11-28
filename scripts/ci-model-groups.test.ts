@@ -10,7 +10,13 @@ import {
 import { tmpdir } from "node:os";
 import { resolve } from "node:path";
 import { retainGroupResources, runModelGroup } from "./ci-model-groups";
-import { verificationGroup } from "./ci-model-plan";
+import {
+  MODEL_GROUP_RESERVE_BYTES,
+  modelGroupWaves,
+  modelPartMemoryBytes,
+  verificationGroup,
+} from "./ci-model-plan";
+import limits from "../tools/quint/model-resources.json";
 import { readVerificationResources } from "./verification-resources";
 
 test("the production group runs four parts concurrently and omits only validated cache hits", async () => {
@@ -49,6 +55,76 @@ test("the production group runs four parts concurrently and omits only validated
     expect(started.sort((a, b) => a - b)).toEqual(
       indices.slice(1).sort((a, b) => a - b),
     );
+  } finally {
+    await rm(root, { recursive: true, force: true });
+  }
+});
+
+test("actual group admission drains each memory-bounded wave before refilling slots", async () => {
+  const root = await mkdtemp(resolve(tmpdir(), "packed-model-admission-"));
+  try {
+    for (let group = 1; group <= 4; group++) {
+      const started: number[] = [];
+      const active = new Set<number>();
+      const waves = modelGroupWaves(verificationGroup(group));
+      await runModelGroup(
+        root,
+        group,
+        new AbortController().signal,
+        async (index) => {
+          started.push(index);
+          active.add(index);
+          try {
+            expect(active.size).toBeLessThanOrEqual(4);
+            expect(
+              MODEL_GROUP_RESERVE_BYTES +
+                [...active].reduce(
+                  (sum, part) => sum + modelPartMemoryBytes(part),
+                  0,
+                ),
+            ).toBeLessThanOrEqual(limits.memoryMaxBytes);
+            // Yield with every admitted part active to exercise the real pool.
+            await Promise.resolve();
+          } finally {
+            active.delete(index);
+          }
+        },
+      );
+      expect(started).toEqual(waves.flat());
+      expect(active.size).toBe(0);
+    }
+  } finally {
+    await rm(root, { recursive: true, force: true });
+  }
+});
+
+test("failure and cancellation stop later memory waves and drain started parts", async () => {
+  const root = await mkdtemp(resolve(tmpdir(), "packed-model-failure-"));
+  try {
+    for (const cancel of [false, true]) {
+      const control = new AbortController();
+      const first = modelGroupWaves(verificationGroup(4))[0]!;
+      const started: number[] = [];
+      let active = 0;
+      const failure = new Error("synthetic model failure");
+      await expect(
+        runModelGroup(root, 4, control.signal, async (index) => {
+          started.push(index);
+          active++;
+          try {
+            await Promise.resolve();
+            if (index === first[0]) {
+              if (cancel) control.abort(failure);
+              else throw failure;
+            }
+          } finally {
+            active--;
+          }
+        }),
+      ).rejects.toThrow(failure.message);
+      expect(started).toEqual(first);
+      expect(active).toBe(0);
+    }
   } finally {
     await rm(root, { recursive: true, force: true });
   }

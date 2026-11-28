@@ -79,6 +79,7 @@
 - `server/src/config/service-uninstall.test.ts`
 - `scripts/`
 - `.github/workflows/behavioral-verification.yml`, `scripts/ci-workflow.test.ts` (current-tree type/notices checks on group 1, complete model evidence, and the sixteen-job full graph budget)
+- `scripts/ci-model-plan.ts`, `scripts/ci-model-plan.test.ts`, `scripts/ci-model-groups.ts`, `scripts/ci-model-groups.test.ts` (time-balanced runner groups, memory-bounded waves with recorded peak headroom, complete cache-subset inventory and failure/cancellation admission)
 - `.github/workflows/`
 - `.githooks/`
 - `site/`
