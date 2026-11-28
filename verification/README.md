@@ -168,10 +168,11 @@ The explicit agent-tooling exception and unrelated ordinary docs skip it. See
 [the CI guide](../docs/ci-pipelines.md#shared-suite-plan-and-sharding). Local
 pre-push uses the same complete-PR classification for non-browser units only;
 browser suites and behavioral verification run in CI. The explicit local
-`check:delivery` runs the complete `verification:gate` after its test lanes, or
-reuses a receipt from a gate that passed on identical inputs (every model
-part's cache key and the gate command); `HERDR_VERIFICATION_FRESH=1` always
-runs it.
+`check:delivery` runs the complete `verification:gate` after its test lanes.
+Setup, the Quint typecheck and the notices check always run; the model runs
+and the diagnostic control may reuse a receipt from a pass on identical inputs
+(every model part's cache key and the gate command);
+`HERDR_VERIFICATION_FRESH=1` always runs them.
 
 CI gives every accepted model its own job (`scripts/ci-model-plan.ts`).
 IDE lifecycle has four jobs (replay and three exhaustive groups); core runtime
