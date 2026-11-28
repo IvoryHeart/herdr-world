@@ -1,7 +1,14 @@
 import { publishedHostGrouping } from "../../../shared/hostGrouping";
 import { herdrRuntimeFixture } from "../../../server/src/adapters/testing/runtime";
 import { parseObservationBase } from "../../../server/src/world/observation-v1";
-import { WorldSnapshotService } from "../../../server/src/world/snapshot";
+import {
+  SNAPSHOT_RESPONSE_DEADLINE_MS,
+  WorldSnapshotService,
+} from "../../../server/src/world/snapshot";
+import {
+  type Scheduler,
+  systemScheduler,
+} from "../../../server/src/service/clock";
 
 export class InputDriver {
   private id = 0;
@@ -74,42 +81,95 @@ export function createDenseSnapshotFixture({
   >();
   let attention = false;
   const stalledIds = maximumScale ? ids.slice(1) : ids.slice(-3);
-  const service = new WorldSnapshotService({
-    list: () =>
-      ids.map((id) => ({
-        id,
-        label: id,
-        source: "fixture",
-        is_default: id === ids[0],
-        state: "ready" as const,
+  // The stalled refresh's response deadline runs in test time: it expires as
+  // soon as every host but the stalled ones has been observed, instead of
+  // after 20 real seconds. `expiredDeadlines` records each expired delay.
+  let stalling = false;
+  const entered = new Set<string>();
+  const observing = new Set<string>();
+  const heldDeadlines = new Set<() => void>();
+  const expiredDeadlines: number[] = [];
+  const expireWhenOnlyStalledRemain = () => {
+    if (
+      !stalling ||
+      observing.size > 0 ||
+      stalledIds.some((id) => !entered.has(id))
+    )
+      return;
+    // A macrotask later, so the last observed host's reply is gathered first.
+    systemScheduler.schedule(() => {
+      for (const expire of [...heldDeadlines]) expire();
+    }, 0);
+  };
+  const scheduler: Scheduler = {
+    schedule(callback, delayMs) {
+      if (!stalling || delayMs !== SNAPSHOT_RESPONSE_DEADLINE_MS)
+        return systemScheduler.schedule(callback, delayMs);
+      const expire = () => {
+        heldDeadlines.delete(expire);
+        expiredDeadlines.push(delayMs);
+        callback();
+      };
+      heldDeadlines.add(expire);
+      expireWhenOnlyStalledRemain();
+      return { cancel: () => heldDeadlines.delete(expire) };
+    },
+  };
+  const service = new WorldSnapshotService(
+    {
+      list: () =>
+        ids.map((id) => ({
+          id,
+          label: id,
+          source: "fixture",
+          is_default: id === ids[0],
+          state: "ready" as const,
+          generation: 7,
+        })),
+      readyRuntimeLease: (connectionId) => ({
+        connectionId,
         generation: 7,
-      })),
-    readyRuntimeLease: (connectionId) => ({
-      connectionId,
-      generation: 7,
-      isCurrent: () => true,
-      runtime: {
-        ...herdrRuntimeFixture({
-          async call(method: string) {
-            await stalls.get(connectionId)?.promise;
-            if (method === "workspace.list") return { workspaces };
-            if (method === "tab.list") return { tabs };
-            if (method === "pane.list")
-              return {
-                panes:
-                  attention && connectionId === "alpha"
-                    ? panes.map((pane) => ({
-                        ...pane,
-                        agent_status: "working",
-                      }))
-                    : panes,
-              };
-            return { agents: [] };
-          },
-        }),
-      },
-    }),
-  });
+        isCurrent: () => true,
+        runtime: {
+          ...herdrRuntimeFixture({
+            async call(method: string) {
+              const stall = stalls.get(connectionId);
+              if (stall) {
+                entered.add(connectionId);
+                expireWhenOnlyStalledRemain();
+                await stall.promise;
+              } else if (stalling && method === "workspace.list")
+                observing.add(connectionId);
+              if (method === "workspace.list") return { workspaces };
+              if (method === "tab.list") return { tabs };
+              if (method === "pane.list")
+                return {
+                  panes:
+                    attention && connectionId === "alpha"
+                      ? panes.map((pane) => ({
+                          ...pane,
+                          agent_status: "working",
+                        }))
+                      : panes,
+                };
+              return { agents: [] };
+            },
+          }),
+        },
+      }),
+    },
+    undefined,
+    undefined,
+    undefined,
+    undefined,
+    (connectionId) => {
+      if (!observing.delete(connectionId)) return;
+      expireWhenOnlyStalledRemain();
+    },
+    undefined,
+    undefined,
+    scheduler,
+  );
   // The service publishes the grouping of the hosts it holds.
   service.publishWith({
     values: () => ({}),
@@ -130,6 +190,7 @@ export function createDenseSnapshotFixture({
     },
     startStalledAttentionRefresh() {
       attention = true;
+      stalling = true;
       service.invalidate("alpha");
       for (const id of stalledIds) {
         stalls.set(id, Promise.withResolvers<void>());
@@ -137,9 +198,13 @@ export function createDenseSnapshotFixture({
       }
     },
     release() {
+      // Released hosts answer, so no deadline is expired for them.
+      stalling = false;
       for (const stall of stalls.values()) stall.resolve();
     },
     stalledIds,
+    /** The response deadlines that expired while the stalled hosts held. */
+    expiredDeadlines,
   };
 }
 

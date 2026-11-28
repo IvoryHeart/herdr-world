@@ -1,5 +1,6 @@
 import { sendWorldSnapshotReply } from "../../../../server/src/bridge/world-snapshot-reply";
 import { WorldSnapshotAdmission } from "../../../../server/src/bridge/world-snapshot-admission";
+import { SNAPSHOT_RESPONSE_DEADLINE_MS } from "../../../../server/src/world/snapshot";
 import { serveStatic } from "../../../../server/src/http/static-files";
 import { expect, test } from "bun:test";
 import { mkdtemp, rm } from "node:fs/promises";
@@ -396,7 +397,6 @@ export function registerProductionContextTests(group: ProductionContextGroup) {
               if (diagnostic) serviceTasks.push(task);
               const refresh = ++revision === 2;
               if (refresh) fixture!.startStalledAttentionRefresh();
-              const began = Date.now();
               const snapshotResult = await fixture!.snapshot(request.params);
               task.endAt = Date.now();
               if (refresh) {
@@ -409,8 +409,12 @@ export function registerProductionContextTests(group: ProductionContextGroup) {
                       host.connection_id === "alpha" ||
                       (host.unchanged === true && !("snapshot" in host)),
                   );
+                // The reply came because the 20 s response deadline expired
+                // (in test time) while the stalled hosts held.
                 stalledResponseVerified =
-                  Date.now() - began >= 19900 &&
+                  fixture!.expiredDeadlines.includes(
+                    SNAPSHOT_RESPONSE_DEADLINE_MS,
+                  ) &&
                   fixture!.stalledIds.every((id) =>
                     snapshotResult.connections.some(
                       (connection) =>
@@ -544,8 +548,9 @@ export function registerProductionContextTests(group: ProductionContextGroup) {
               (Bun.env.WORLD_TRACE_PREFIX ? "&trace=1" : ""),
           )
           .catch(() => {});
-        // Keep both observation/render phases and the deliberate 20-second stall
-        // in the original fixture budget. Input latency has separate budgets.
+        // Keep both observation/render phases and the stalled refresh (its 20 s
+        // response deadline expires in test time) in the original fixture
+        // budget. Input latency has separate budgets.
         const observed = await waitForBrowserFixture(
           pageRequested.promise,
           result.promise,

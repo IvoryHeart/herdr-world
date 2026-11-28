@@ -88,7 +88,7 @@
     "server/src/world/agent-move.ts": 1,
     "server/src/world/apartments.ts": 2,
     "server/src/world/relations.ts": 1,
-    "server/src/world/snapshot.ts": 2,
+    "server/src/world/snapshot.ts": 1,
     "server/src/world/world-cli-asks.ts": 1,
     "server/src/world/world-cli-service.ts": 3,
     "web/src/activeTerminalInput.ts": 1,
