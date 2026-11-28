@@ -15,6 +15,7 @@ import {
   modelGroupWaves,
   modelPartMemoryBytes,
   verificationGroup,
+  verificationGroups,
 } from "./ci-model-plan";
 import limits from "../tools/quint/model-resources.json";
 import { readVerificationResources } from "./verification-resources";
@@ -22,7 +23,13 @@ import { readVerificationResources } from "./verification-resources";
 test("the production group runs four parts concurrently and omits only validated cache hits", async () => {
   const root = await mkdtemp(resolve(tmpdir(), "packed-model-pool-"));
   try {
-    const indices = verificationGroup(1);
+    // Exercise a four-part wave after a real cache hit, independently of which
+    // runner owns that wave in the current measured packing.
+    const group =
+      verificationGroups.findIndex((indices) =>
+        modelGroupWaves(indices.slice(1)).some((wave) => wave.length === 4),
+      ) + 1;
+    const indices = verificationGroup(group);
     await mkdir(
       resolve(root, `.agents/verification/runs/ci-shard-${indices[0]}-reused`),
       { recursive: true },
@@ -40,7 +47,7 @@ test("the production group runs four parts concurrently and omits only validated
     const barrier = Promise.withResolvers<void>();
     await runModelGroup(
       root,
-      1,
+      group,
       new AbortController().signal,
       async (index) => {
         started.push(index);

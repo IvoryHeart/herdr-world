@@ -86,7 +86,7 @@
 - `server/src/config/service-uninstall.test.ts`
 - `scripts/`
 - `.github/workflows/behavioral-verification.yml`, `scripts/ci-workflow.test.ts` (current-tree type/notices checks on group 1, complete model evidence, and the sixteen-job full graph budget)
-- `scripts/ci-model-plan.ts`, `scripts/ci-model-plan.test.ts`, `scripts/ci-model-groups.ts`, `scripts/ci-model-groups.test.ts` (time-balanced runner groups, memory-bounded waves with recorded peak headroom, complete cache-subset inventory and failure/cancellation admission)
+- `scripts/ci-model-plan.ts`, `scripts/ci-model-plan.test.ts`, `scripts/ci-model-groups.ts`, `scripts/ci-model-groups.test.ts` (memory-safe waves distributed by recorded wave wall time, diagnostic allowance on runner 1, complete cache-subset inventory and failure/cancellation admission)
 - `.github/workflows/cancel-closed.yml` (trusted base-only cancellation, no PR checkout or test execution)
 - `.github/workflows/`
 - `.githooks/`

@@ -882,11 +882,12 @@ test.each(["unit", "web"])(
 
 test("full-mode inventory matches exhaustive graph selection without source-import work", () => {
   const root = process.cwd();
-  const { tracked, deleted, changed } = gitChanges(root, "origin/main");
+  // CI unit checkouts have HEAD but need not fetch any remote-tracking refs.
+  const { tracked, deleted, changed } = gitChanges(root, "HEAD");
   const graph = buildGraph(root, tracked, deleted);
-  const coverage = readCoverageScope(root, "origin/main");
+  const coverage = readCoverageScope(root, "HEAD");
   expect(fullValidationSelection(root)).toEqual(selectValidation(graph, []));
-  expect(repositorySelection(root, "origin/main")).toEqual(
+  expect(repositorySelection(root, "HEAD")).toEqual(
     selectValidation(graph, changed, coverage.owns, changed, coverage.models),
   );
 });

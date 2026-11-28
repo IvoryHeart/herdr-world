@@ -22,17 +22,18 @@ export const verificationJobs = verificationModels.flatMap((model) => {
   return parts.map((part) => ({ model, part, id: `${model}-${part}` }));
 });
 
-// Resource-step seconds from clean main run 46077711273 (2026-11-27).
+// Per-part elapsed seconds from CI run 46131651059 (2026-11-28), rounded.
+// These include the contention within an admitted wave on a four-CPU runner.
 // Stable part IDs remain cache owners, independent of runner grouping.
 /** @internal */
 export const modelPartSeconds = [
-  31, 108, 188, 115, 32, 119, 56, 96, 94, 39, 89, 21, 42, 25, 27, 23, 19, 12,
-  15, 15, 11, 28, 19, 15, 31, 60,
+  53, 167, 157, 232, 50, 134, 81, 112, 231, 94, 83, 53, 65, 47, 76, 43, 32, 10,
+  29, 36, 13, 44, 15, 29, 53, 100,
 ];
 
 export const MODEL_GROUP_WORKERS = 4;
 
-// Payload-subtree memory.peak receipts for the same 26 parts in clean main
+// Payload-subtree memory.peak receipts for the 26 parts in clean main
 // run 46077711273 (4 GiB, four CPUs, TLC CI settings). This is a scheduling
 // estimate, not an enforced per-part limit; the group's cgroup is authoritative.
 const modelPartPeakBytes: Record<string, number> = {
@@ -108,19 +109,26 @@ export function modelGroupWaves(indices: readonly number[]) {
   return waves;
 }
 
-/** Longest first, balanced by recorded work across four runner groups. @internal */
+/** Pack memory waves first, then balance their elapsed time across runners. @internal */
 export const verificationGroups = (() => {
   assert.equal(modelPartSeconds.length, verificationJobs.length);
   const groups = Array.from({ length: 4 }, () => [] as number[]);
-  const loads = groups.map(() => 0);
-  for (const index of verificationJobs
-    .map((_, index) => index)
-    .sort((a, b) => modelPartSeconds[b]! - modelPartSeconds[a]!)) {
+  // Only runner 1 executes the diagnostic control (18 seconds in that run).
+  const loads = [18, 0, 0, 0];
+  // Summing serial part times hid the three heavyweight memory waves on the
+  // old fourth runner. A wave's longest part determines when it drains.
+  for (const wave of modelGroupWaves(
+    verificationJobs.map((_, index) => index + 1),
+  )) {
     const group = loads.indexOf(Math.min(...loads));
-    groups[group]!.push(index + 1);
-    loads[group]! += modelPartSeconds[index]!;
+    groups[group]!.push(...wave);
+    loads[group]! += Math.max(
+      ...wave.map((index) => modelPartSeconds[index - 1]!),
+    );
   }
-  return groups;
+  return groups.map((group) =>
+    group.sort((a, b) => modelPartSeconds[b - 1]! - modelPartSeconds[a - 1]!),
+  );
 })();
 
 export function verificationGroup(index: number) {

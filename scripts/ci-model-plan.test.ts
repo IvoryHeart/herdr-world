@@ -33,7 +33,7 @@ test("every cache subset fits the shared memory envelope, including the hosted O
   }
   // Two ~2 GiB parts already exceed the envelope after headroom; a fixed
   // two-worker pool would also be unsafe. These must run in separate waves.
-  expect(modelGroupWaves([2, 6, 7])).toEqual([[6], [2], [7]]);
+  expect(modelGroupWaves([2, 6, 7])).toEqual([[2], [6], [7]]);
   expect(modelGroupWaves(verificationGroup(4)).length).toBeGreaterThan(1);
   expect(
     Math.max(
@@ -46,16 +46,21 @@ test("every cache subset fits the shared memory envelope, including the hosted O
   expect(() => modelGroupWaves([27])).toThrow("Invalid verification shard");
 });
 
-test("four time-packed runners execute every immutable model part exactly once", () => {
+test("four memory-packed runners balance wave wall time and execute every immutable model part exactly once", () => {
   expect(verificationGroups).toHaveLength(4);
   expect(MODEL_GROUP_WORKERS).toBe(4);
   expect(verificationGroups.flat().sort((a, b) => a - b)).toEqual(
     verificationJobs.map((_, i) => i + 1),
   );
-  const loads = verificationGroups.map((indices) =>
-    indices.reduce((sum, i) => sum + modelPartSeconds[i - 1]!, 0),
+  const loads = verificationGroups.map((indices, group) =>
+    modelGroupWaves(indices).reduce(
+      (sum, wave) =>
+        sum + Math.max(...wave.map((i) => modelPartSeconds[i - 1]!)),
+      group === 0 ? 18 : 0,
+    ),
   );
-  expect(Math.max(...loads) - Math.min(...loads)).toBeLessThanOrEqual(15);
+  expect(Math.max(...loads)).toBeLessThanOrEqual(250);
+  expect(Math.max(...loads) - Math.min(...loads)).toBeLessThanOrEqual(30);
   for (const group of verificationGroups)
     expect(group.map((i) => modelPartSeconds[i - 1])).toEqual(
       group.map((i) => modelPartSeconds[i - 1]).sort((a, b) => b! - a!),
